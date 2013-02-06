@@ -20,7 +20,7 @@ while (<>) {
     next unless /"title": "([^"]+)"/;
     my $title = $1;
     if (/\{\[[a-f0-9]{4}\]\}/) {
-        my $is_pua = /8ff0|9868|90fd|997b|99e3|9ad7|9afd/;
+        my $is_pua = /95ef|9769|fec6|8fa3|8ff0|9868|90fd|997b|99e3|9ad7|9afd/;
         tr!\x{FF21}-\x{FF3A}\x{FF41}-\x{FF5A}!A-Za-z!;
         s!˙!．!g; # middle dot
         s< "\{\[ ($compat) \]\}" >
