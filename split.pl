@@ -1,11 +1,11 @@
 use File::Slurp;
 mkdir "raw";
 <>;
-local $/ = "\n\t}, \n";
+local $/ = "\n\t},\n";
 while (<>) {
-    chop; chop; chop;
-    s/^\t//mg;
+    s/[,\]]\s*$//;
     next unless /"title": "([^"]+)"/;
     my $title = $1;
-    write_file("raw/$title.json" => $_);
+    my $file = "raw/$title.json";
+    write_file($file => $_);
 }
