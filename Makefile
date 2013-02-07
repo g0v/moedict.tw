@@ -13,6 +13,6 @@ symlink ::
 	-ln -s moedict-webkit/* .
 
 data :: moedict-data/dict-revised.json
-	echo perl split.pl $<
+	echo perl raw.pl $<
 	echo perl uni.pl $<
 	echo perl pua.pl $<
