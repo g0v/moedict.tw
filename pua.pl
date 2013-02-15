@@ -28,6 +28,10 @@ while (<>) {
          < '"'.($map{"x$1"} || $map{$1}) . '"' >egx;
         s< \{\[ ($re) \]\} >< $map{$1} >egx;
         $title = $1 if /"title": "([^"]+)"/;
+
+        # Explicit blacklist variants for now; use utf8<>big5 check later
+        next if $title =~ /[勸奏寬慎曼璜簧聚負鬲咎它差慨沒瓜縣衷釵黃夢害廣旨獲稹考豪風欖蔻示衽垂華周善米契]/;
+
         unlink "pua/$title.json";
         write_file("pua/$title.json" => {binmode => ':utf8'} => $_);
         warn "Found pua/$title.json\n";
