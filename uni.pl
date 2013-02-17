@@ -21,14 +21,13 @@ while (<>) {
     my $title = $1;
     if (/\{\[[a-f0-9]{4}\]\}/) {
         my $is_pua = /95ef|9769|fec6|8fa3|8ff0|9868|90fd|997b|99e3|9ad7|9afd/;
-        tr!\x{FF21}-\x{FF3A}\x{FF41}-\x{FF5A}!A-Za-z!;
-        s!˙!．!g; # middle dot
         s< "\{\[ ($compat) \]\}" >
          < '"'.($map{"x$1"} || $map{$1}) . '"' >egx;
         s< \{\[ ($re) \]\} >< $map{$1} >egx;
         $title = $1 if /"title": "([^"]+)"/;
 
-        # Explicit blacklist variants for now; use utf8<>big5 check later
+        # Explicit blacklist variants.
+        next if $title =~ /[\x{E0100}-\x{E010F}]/;
         next if $title =~ /[勸奏寬慎曼璜簧聚負鬲咎它差慨沒瓜縣衷釵黃夢害廣旨獲稹考豪風欖蔻示衽垂華周善米契]/;
 
         write_file("uni/$title.json" => {binmode => ':utf8'} => $_);
