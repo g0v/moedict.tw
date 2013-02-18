@@ -20,6 +20,7 @@ while (<>) {
     next unless /"title": "([^"]+)"/;
     my $title = $1;
     if (/\{\[[a-f0-9]{4}\]\}/) {
+        next if $title =~ /\{\[(?:$compat)\]\}/;
         my $is_pua = /95ef|9769|fec6|8fa3|8ff0|9868|90fd|997b|99e3|9ad7|9afd/;
         next unless $is_pua;
         s< "\{\[ ($compat) \]\}" >
@@ -29,7 +30,6 @@ while (<>) {
 
         # Explicit blacklist variants.
         next if $title =~ /[\x{E0100}-\x{E010F}]/;
-        next if $title =~ /[勸奏寬慎曼璜簧聚負鬲咎它差慨沒瓜縣衷釵黃夢害廣旨獲稹考豪風欖蔻示衽垂華周善米契]/;
 
         unlink "pua/$title.json";
         write_file("pua/$title.json" => {binmode => ':utf8'} => $_);
