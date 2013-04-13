@@ -1,3 +1,6 @@
+import ::
+	curl -i -H "Content-Type: application/json" -X PUT -d @moedict-epub/dict-revised.pua.json http://127.0.0.1:3000/collections/entries
+
 all ::
 	echo "Not yet fully automated"
 
