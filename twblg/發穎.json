@@ -1,0 +1,16 @@
+{
+  "heteronyms": [
+    {
+      "trs": "huat-ínn",
+      "definitions": [
+        {
+          "def": "發芽、萌芽。植物的種子發出芽。",
+          "example": [
+              {"twblg":"樹仔發穎矣！","trs":"Tshiū-á huat-ínn--ah!","translation":"樹發芽了！"}
+          ],
+          "type": "動"
+        }
+    }
+  ],
+  "title": "發穎"
+}
