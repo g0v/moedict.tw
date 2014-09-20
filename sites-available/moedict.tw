@@ -1,0 +1,70 @@
+server {
+    listen         80;
+    server_name moedict.tw *.moedict.tw;
+    root /var/www/moedict-webkit;
+    index index.html;
+    charset_types text/html text/xml text/plain application/javascript application/rss+xml application/json;
+
+location / {
+	if ( $arg__escaped_fragment_ ) {
+              proxy_pass http://localhost:3000/!$arg__escaped_fragment_;
+	}
+}
+
+include /var/www/moedict-webkit/moedict/nginx.conf;
+
+#rewrite ^/$ /stop-taiwan-sopa/index.html;
+rewrite ^/stop-taiwan-sopa/*$ /stop-taiwan-sopa/index.html;
+
+        location ^~ /lookup/ {
+                proxy_pass http://106.186.112.203:8080;
+#	  proxy_pass http://su-lip.magistry.fr;
+		add_header Access-Control-Allow-Origin *;
+		add_header Access-Control-Max-Age 31536000;
+		add_header Strict-Transport-Security max-age=31536000;
+		proxy_ignore_headers X-Accel-Expires Expires Cache-Control Set-Cookie;
+	      proxy_cache my-cache;
+	      proxy_cache_valid  200 302  60m;
+	      proxy_cache_valid  404      60m;
+              expires 60m;
+              add_header Cache-Control public;
+        }
+
+#        location ^~ /dodo/log/ {
+#                rewrite /dodo/log(.*)$ '/' break;
+#                proxy_pass http://localhost:8080;
+#        }
+#        location ^~ /mlt/ {
+#                rewrite /mlt/(.+)$ '/moedict/revised/$1/_mlt?pretty=1&mlt_fields=title,heteronyms.definitions.def&search_size=20' break;
+#                proxy_pass http://localhost:9200;
+#        }
+#        location ^~ /def/ {
+#                rewrite /def/(.+)$ '/moedict/revised/_search?q=heteronyms.definitions.def:"$1"' break;
+#                proxy_pass http://localhost:9200;
+#        }
+
+        location ~* "^/[^/.]*([=@0-9]|[^\x00-\x7f])[^/.]*(/[1-9][0-9]*)?$" {
+              proxy_pass http://localhost:3000;
+	      proxy_cache my-cache;
+	      proxy_cache_valid  200 302  60m;
+	      proxy_cache_valid  404      60m;
+		add_header Access-Control-Allow-Origin *;
+		add_header Access-Control-Max-Age 31536000;
+		add_header Strict-Transport-Security max-age=31536000;
+              expires 60m;
+              add_header Cache-Control public;
+        }
+        location ~* "^/[^/.]*([=@0-9]|[^\x00-\x7f])[^/.]*(/[1-9][0-9]*)?(?:\.html|\.png)$" {
+               proxy_pass http://localhost:3000;
+               expires  24h;
+               add_header Cache-Control public;
+		add_header Access-Control-Allow-Origin *;
+		add_header Access-Control-Max-Age 31536000;
+		add_header Strict-Transport-Security max-age=31536000;
+        }
+
+    location @missing {
+        rewrite ^ /error/404 break;
+    }
+}
+
