@@ -1,0 +1,1 @@
+javascript:$("head").prepend("<style type='text/css'> @font-face {font-family:'一秒變思源';src:local('☺'),url('https://www.moedict.tw/SourceHanSansTW.ttf?subset=" + encodeURIComponent($('body').text().replace(/\s+/g, '').length) + "') format('truetype');}body{font-family:'一秒變思源' !important}</style>");void(0);
