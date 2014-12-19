@@ -16,7 +16,8 @@ sub done {
 options $_ => sub { done(shift()) } for ('', '*');
 
 use Encode;
-get '/SourceHanSansTW.ttf' => sub { my $c = shift;
+for my $locale (qw[ TW CN ]) {
+get "/SourceHanSans$locale.ttf" => sub { my $c = shift;
     my $subset = $c->param('subset');
     my $weight = $c->param('weight');
     my $variant = 'Regular';
@@ -38,15 +39,16 @@ get '/SourceHanSansTW.ttf' => sub { my $c = shift;
     $x{$_}++ for split //, $subset;
 my $id = int(rand() * 100000);
 open my $fh, ">:utf8", "/tmp/$id.pe";
-print $fh qq[Open("./SourceHanSansTW-$variant.ttf")\n];
+print $fh qq[Open("./SourceHanSans$locale-$variant.ttf")\n];
 print $fh qq[Select(0u3000)\n];
 print $fh sprintf qq[SelectMore(0u%04x) #%s\n], $_, chr $_ for grep { $_ > 10000 } map ord, sort keys %x;
 print $fh "$_\n" for qw[SelectInvert() Clear()];
 print $fh qq[Generate("/tmp/$id.ttf")\n];
 close $fh;
 system("fontforge" => -script => "/tmp/$id.pe");
-send_file($c, "/tmp/$id.ttf", 'application/x-font-ttf', "SourceHanSansTW-$variant.ttf");
+send_file($c, "/tmp/$id.ttf", 'application/x-font-ttf', "SourceHanSans$locale-$variant.ttf");
 };
+}
 
 sub send_file {
     my ($c, $path, $content_type, $filename) = @_;
