@@ -392,11 +392,8 @@ export function InlineStyles({ r2Endpoint }: InlineStylesProps) {
 			margin-right: 4px;
 		}
 		.ui-tooltip .entry-item ol {
-			margin: 8px 0 0 20px;
-			padding: 0;
-		}
-		.ui-tooltip .entry-item ol.margin-modified {
-			margin-top: 4px;
+			margin: .4em 0 0 20px;
+			padding-top: 1em;
 		}
 		`
 			}}

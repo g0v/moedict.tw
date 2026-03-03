@@ -148,8 +148,7 @@ async function buildEntryTooltipHTML(rawToken: string): Promise<string> {
       if (!listHtml) {
         return '';
       }
-      const listClass = partOfSpeech ? ' class="margin-modified"' : '';
-      return `<div class="entry-item">${partOfSpeech}<ol${listClass}>${listHtml}</ol></div>`;
+      return `<div class="entry-item">${partOfSpeech}<ol>${listHtml}</ol></div>`;
     })
     .join('');
 
