@@ -4,7 +4,7 @@ import { useRadicalTooltip } from '../hooks/useRadicalTooltip';
 import { cleanTextForTTS, speakText } from '../utils/tts-utils';
 import { getAudioUrl, playAudioUrl } from '../utils/audio-utils';
 import { rightAngle } from '../utils/ruby2hruby';
-import { decorateRuby, formatBopomofo, formatPinyin } from '../utils/bopomofo-pinyin-utils';
+import { decorateRuby } from '../utils/bopomofo-pinyin-utils';
 import { convertPinyinByLang, isParallelPinyin, trsToBpmf } from '../utils/pinyin-preference-utils';
 import { addStarWord, addToLRU, hasStarWord, removeStarWord, writeLastLookup } from '../utils/word-record-utils';
 import { fetchDictionaryEntry, readCachedDictionaryEntry } from '../utils/dictionary-cache';
@@ -373,10 +373,10 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
       <StrokeAnimation title={title} visible={strokesVisible} lang={lang} />
 
       {heteronyms.map((heteronym, idx) => {
-        const rawPinyin = heteronym.pinyin || heteronym.trs || '';
-        const displayPinyin = convertPinyinByLang(lang, rawPinyin, false);
-        const displayBpmf = heteronym.bopomofo || (lang === 't' ? trsToBpmf(lang, rawPinyin) : '');
-        const parallelPinyin = isParallelPinyin(lang);
+        // const rawPinyin = heteronym.pinyin || heteronym.trs || '';
+        // const displayPinyin = convertPinyinByLang(lang, rawPinyin, false);
+        // const displayBpmf = heteronym.bopomofo || (lang === 't' ? trsToBpmf(lang, rawPinyin) : '');
+        // const parallelPinyin = isParallelPinyin(lang);
         const rubyData = decorateRuby({
           LANG: lang,
           title,
@@ -486,53 +486,6 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
               )}
             </h1>
 
-            {(heteronym.bopomofo || heteronym.pinyin || rubyData.bAlt || rubyData.pAlt) && (
-              <div className={`bopomofo ${rubyData.cnSpecific}`}>
-                {heteronym.alt && (
-                  <div lang="zh-Hans" className="cn-specific">
-                    <span className="xref part-of-speech">简</span>
-                    <span className="xref">{heteronym.alt}</span>
-                  </div>
-                )}
-
-                {rubyData.cnSpecific && rubyData.pinyin && rubyData.bopomofo && (
-                  <small className="alternative cn-specific">
-                    <span
-                      className="pinyin"
-                      dangerouslySetInnerHTML={{ __html: formatPinyin(convertPinyinByLang(lang, rubyData.pinyin, false)) }}
-                    />
-                    <span className="bopomofo" dangerouslySetInnerHTML={{ __html: formatBopomofo(rubyData.bopomofo) }} />
-                  </small>
-                )}
-
-                <div className="main-pronunciation">
-                  {displayBpmf && (
-                    <span className="bpmf" dangerouslySetInnerHTML={{ __html: formatBopomofo(displayBpmf) }} />
-                  )}
-                  {displayPinyin && (
-                    <span
-                      className="pinyin"
-                      dangerouslySetInnerHTML={{ __html: formatPinyin(displayPinyin) }}
-                    />
-                  )}
-                </div>
-
-                {(rubyData.bAlt || rubyData.pAlt) && (
-                  <small className="alternative">
-                    {rubyData.pAlt && parallelPinyin && (
-                      <span className="pinyin" dangerouslySetInnerHTML={{ __html: formatPinyin(rubyData.pAlt) }} />
-                    )}
-                    {rubyData.bAlt && <span className="bopomofo" dangerouslySetInnerHTML={{ __html: formatBopomofo(rubyData.bAlt) }} />}
-                    {rubyData.pAlt && (
-                      <span
-                        className="pinyin"
-                        dangerouslySetInnerHTML={{ __html: formatPinyin(convertPinyinByLang(lang, rubyData.pAlt, false)) }}
-                      />
-                    )}
-                  </small>
-                )}
-              </div>
-            )}
 
             {Array.from(groups.entries()).map(([type, items], groupIdx) => {
               const posTags = splitPartOfSpeech(type);
