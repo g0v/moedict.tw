@@ -158,8 +158,18 @@ export function computeLangSwitchPath(
     return path;
   }
 
-  // 跨語言：查 xref
+  // 跨語言：從 xref 查對應條目名稱，再處理前綴
   let targetWord = lookupXref(fromLang, toLang, fromWord);
+
+  // 台語/客語 → 兩岸：若 xref 沒有 c，改查華語對應詞再套 ~ 前綴
+  if (!targetWord && (fromLang === 't' || fromLang === 'h') && toLang === 'c') {
+    targetWord = lookupXref(fromLang, 'a', fromWord);
+    if (targetWord) {
+      const path = `/${LANG_PREFIX.c}${targetWord}`;
+      console.log('[xref-switch] t/h→c via 華語', { path, targetWord });
+      return path;
+    }
+  }
 
   // Fallback：目標語言的 LRU
   if (!targetWord) {
