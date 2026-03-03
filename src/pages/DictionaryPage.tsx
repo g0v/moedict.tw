@@ -5,9 +5,9 @@ import { cleanTextForTTS, speakText } from '../utils/tts-utils';
 import { getAudioUrl, playAudioUrl } from '../utils/audio-utils';
 import { rightAngle } from '../utils/ruby2hruby';
 import { decorateRuby } from '../utils/bopomofo-pinyin-utils';
-import { convertPinyinByLang, isParallelPinyin, trsToBpmf } from '../utils/pinyin-preference-utils';
 import { addStarWord, addToLRU, hasStarWord, removeStarWord, writeLastLookup } from '../utils/word-record-utils';
 import { fetchDictionaryEntry, readCachedDictionaryEntry } from '../utils/dictionary-cache';
+import { setCurrentXrefs } from '../utils/xref-switch-utils';
 import { StrokeAnimation } from '../components/StrokeAnimation';
 
 export type DictionaryLang = 'a' | 't' | 'h' | 'c';
@@ -277,6 +277,7 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
     if (!state.entry) return;
     addToLRU(queryWord, lang);
     writeLastLookup(queryWord, lang);
+    setCurrentXrefs(queryWord, lang, state.entry.xrefs ?? []);
   }, [state.entry, queryWord, lang]);
 
   useEffect(() => {

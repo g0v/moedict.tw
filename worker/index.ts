@@ -78,6 +78,35 @@ export default {
         });
       }
 
+      // 跨語言 xref 索引 API（從 DICTIONARY R2 讀取各語系 xref.json）
+      const xrefMatch = url.pathname.match(/^\/api\/xref\/([athc])\.json$/);
+      if (xrefMatch) {
+        const lang = xrefMatch[1];
+        const key = `${lang}/xref.json`;
+        const obj = await env.DICTIONARY.get(key);
+
+        if (!obj) {
+          return new Response('{}', {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json; charset=utf-8',
+              'Cache-Control': 'public, max-age=3600',
+              ...corsHeaders,
+            },
+          });
+        }
+
+        const content = await obj.text();
+        return new Response(content, {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'public, max-age=3600',
+            ...corsHeaders,
+          },
+        });
+      }
+
       // 筆順 JSON 代理（/api/stroke-json/{codepoint}.json）
       if (url.pathname.startsWith('/api/stroke-json/')) {
         return handleStrokeAPI(request, url, corsHeaders);

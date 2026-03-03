@@ -7,6 +7,8 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { toggleUserPrefPanel } from './user-pref';
+import { computeLangSwitchPathAsync, LANG_PREFIX } from '../utils/xref-switch-utils';
+import { readLRUWords } from '../utils/word-record-utils';
 
 type Lang = 'a' | 't' | 'h' | 'c';
 
@@ -461,6 +463,27 @@ function inferLangFromPath(pathname: string): Lang {
 	return 'a';
 }
 
+/**
+ * 從當前路徑取出純字詞（不含語言前綴），
+ * 若是分類、星號、部首等特殊頁面則回傳空字串
+ */
+function extractWordFromPath(pathname: string, lang: Lang): string {
+	let raw = pathname.slice(1); // 去掉開頭 /
+	if (lang === 't' || lang === 'h' || lang === 'c') {
+		raw = raw.slice(1); // 去掉 ', :, ~
+	}
+	// 分類(=)、星號(=*)、部首(@) 等非字詞頁面
+	if (!raw || raw.startsWith('=') || raw.startsWith('@')) return '';
+	return raw;
+}
+
+const LANG_DEFAULTS: Record<Lang, string> = {
+	a: '萌',
+	t: '發穎',
+	h: '發芽',
+	c: '萌',
+};
+
 function getStarredPath(lang: Lang): string {
 	if (lang === 't') return "/'=*";
 	if (lang === 'h') return '/:=*';
@@ -645,6 +668,32 @@ export function NavbarNormal({ currentLang }: NavbarNormalProps) {
 		toggleUserPrefPanel();
 	}, []);
 
+	/**
+	 * 語言選項點擊：依照原 press-lang 邏輯計算目標路徑
+	 * - a ↔ c：保留字詞，只加/去 ~ 前綴
+	 * - 其他跨語言：從 xrefs 找對應詞，再 fallback LRU/預設
+	 */
+	const handleLangOptionClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>, toLang: Lang) => {
+		if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+		e.preventDefault();
+
+		const fromLang = resolvedLang;
+		const fromWord = extractWordFromPath(location.pathname, fromLang);
+
+		if (!fromWord) {
+			// 非字詞頁面：直接用目標語言的 LRU 或預設詞
+			const lru = readLRUWords(toLang);
+			const word = lru[0] ?? LANG_DEFAULTS[toLang];
+			navigate(`/${LANG_PREFIX[toLang]}${word}`);
+			return;
+		}
+
+		// 非同步查詢 xref（確保 xref.json 已載入）
+		void computeLangSwitchPathAsync(fromLang, toLang, fromWord).then((targetPath) => {
+			navigate(targetPath);
+		});
+	}, [resolvedLang, location.pathname, navigate]);
+
 	const handleSubmenuToggle = useCallback((e: React.MouseEvent<HTMLAnchorElement>, key: string) => {
 		e.preventDefault();
 		e.stopPropagation();
@@ -693,7 +742,7 @@ export function NavbarNormal({ currentLang }: NavbarNormalProps) {
 												role="menuitem"
 												href={option.path}
 												className={`lang-option ${option.key}`}
-												onClick={(e) => handleLinkClick(e, option.path)}
+												onClick={(e) => handleLangOptionClick(e, option.key)}
 											>
 												{option.label}
 											</a>
