@@ -8,30 +8,59 @@ import { useEffect, useState } from 'react';
 
 interface AssetLoaderProps {
 	r2Endpoint?: string;
+	onCriticalStylesReady?: () => void;
 }
 
 /**
  * 載入 CSS 檔案
  */
-function loadCSS(href: string, id?: string): void {
-	if (!href) return;
+function loadCSS(href: string, id?: string): Promise<void> {
+	return new Promise((resolve) => {
+		if (!href) {
+			resolve();
+			return;
+		}
 	
-	// 檢查是否已經載入過
-	if (id) {
-		const existing = document.querySelector(`link[data-asset-id="${id}"]`);
-		if (existing) return;
-	} else {
-		const existing = document.querySelector(`link[href="${href}"]`);
-		if (existing) return;
-	}
+		// 檢查是否已經載入過
+		if (id) {
+			const existing = document.querySelector(`link[data-asset-id="${id}"]`) as HTMLLinkElement | null;
+			if (existing) {
+				if ((existing.sheet as CSSStyleSheet | null) || existing.dataset.loaded === 'true') {
+					resolve();
+				} else {
+					existing.addEventListener('load', () => resolve(), { once: true });
+					existing.addEventListener('error', () => resolve(), { once: true });
+				}
+				return;
+			}
+		} else {
+			const existing = document.querySelector(`link[href="${href}"]`) as HTMLLinkElement | null;
+			if (existing) {
+				if ((existing.sheet as CSSStyleSheet | null) || existing.dataset.loaded === 'true') {
+					resolve();
+				} else {
+					existing.addEventListener('load', () => resolve(), { once: true });
+					existing.addEventListener('error', () => resolve(), { once: true });
+				}
+				return;
+			}
+		}
 
-	const link = document.createElement('link');
-	link.rel = 'stylesheet';
-	link.href = href;
-	if (id) {
-		link.setAttribute('data-asset-id', id);
-	}
-	document.head.appendChild(link);
+		const link = document.createElement('link');
+		link.rel = 'stylesheet';
+		link.href = href;
+		if (id) {
+			link.setAttribute('data-asset-id', id);
+		}
+		link.onload = () => {
+			link.dataset.loaded = 'true';
+			resolve();
+		};
+		link.onerror = () => {
+			resolve();
+		};
+		document.head.appendChild(link);
+	});
 }
 
 /**
@@ -93,8 +122,9 @@ function preloadFont(href: string, as: string = 'font', type: string = 'font/wof
 /**
  * 資源載入組件
  */
-export function AssetLoader({ r2Endpoint }: AssetLoaderProps) {
+export function AssetLoader({ r2Endpoint, onCriticalStylesReady }: AssetLoaderProps) {
 	const [assetsLoaded, setAssetsLoaded] = useState(false);
+	const [criticalStylesNotified, setCriticalStylesNotified] = useState(false);
 
 	useEffect(() => {
 		if (assetsLoaded) return;
@@ -120,8 +150,14 @@ export function AssetLoader({ r2Endpoint }: AssetLoaderProps) {
 			const basePath = endpoint || '/assets';
 
 			// 載入 CSS 檔案
-			loadCSS(`${basePath}/styles.css`, 'styles-css');
-			loadCSS(`${basePath}/css/cupertino/jquery-ui-1.10.4.custom.css`, 'jquery-ui-css');
+			await Promise.all([
+				loadCSS(`${basePath}/styles.css`, 'styles-css'),
+				loadCSS(`${basePath}/css/cupertino/jquery-ui-1.10.4.custom.css`, 'jquery-ui-css'),
+			]);
+			if (!criticalStylesNotified) {
+				onCriticalStylesReady?.();
+				setCriticalStylesNotified(true);
+			}
 
 			// 預載入字體
 			preloadFont(`${basePath}/fonts/fontawesome-webfont.woff`, 'font', 'font/woff');
@@ -143,7 +179,7 @@ export function AssetLoader({ r2Endpoint }: AssetLoaderProps) {
 		};
 
 		loadAssets();
-	}, [r2Endpoint, assetsLoaded]);
+	}, [r2Endpoint, assetsLoaded, onCriticalStylesReady, criticalStylesNotified]);
 
 	return null;
 }

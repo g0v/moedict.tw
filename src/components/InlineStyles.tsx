@@ -7,13 +7,21 @@ import { useEffect, useState } from 'react';
 
 interface InlineStylesProps {
 	r2Endpoint?: string;
+	onReady?: () => void;
 }
 
 /**
  * 內聯樣式組件
  */
-export function InlineStyles({ r2Endpoint }: InlineStylesProps) {
+export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 	const [endpoint, setEndpoint] = useState(r2Endpoint || '');
+	const [readyNotified, setReadyNotified] = useState(false);
+
+	useEffect(() => {
+		if (r2Endpoint) {
+			setEndpoint(r2Endpoint.replace(/\/$/, ''));
+		}
+	}, [r2Endpoint]);
 
 	useEffect(() => {
 		if (!endpoint) {
@@ -31,6 +39,13 @@ export function InlineStyles({ r2Endpoint }: InlineStylesProps) {
 				});
 		}
 	}, [endpoint]);
+
+	useEffect(() => {
+		if (endpoint && !readyNotified) {
+			onReady?.();
+			setReadyNotified(true);
+		}
+	}, [endpoint, onReady, readyNotified]);
 
 	if (!endpoint) return null;
 
