@@ -221,9 +221,13 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
 
   useEffect(() => {
     if (!queryWord) {
+      setStrokesVisible(false);
       setState({ loading: false, entry: null, terms: [], error: '未提供字詞' });
       return;
     }
+
+    // 切字或切語言時先關閉筆順，避免重渲染時重複初始化動畫
+    setStrokesVisible(false);
 
     const applyResponse = (result: { ok: boolean; status: number; data: unknown }) => {
       const payload = result.data as DictionaryAPIResponse | DictionaryErrorResponse;
@@ -255,7 +259,6 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
       error: null,
     }));
     setPlayingAudioId(null);
-    setStrokesVisible(false);
 
     fetchDictionaryEntry(queryWord, lang, controller.signal)
       .then((result) => {

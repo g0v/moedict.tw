@@ -61,12 +61,31 @@ async function fetchR2Endpoint(): Promise<string> {
 	}
 }
 
+function extractStrokeWords(input: string): string {
+	// 移除 HTML 與常見 entity，避免把 tag 字元當作筆順字元請求。
+	const plain = input
+		.replace(/<[^>]*>/g, '')
+		.replace(/&nbsp;|&#160;/gi, ' ')
+		.replace(/&amp;/gi, '&')
+		.replace(/&lt;/gi, '<')
+		.replace(/&gt;/gi, '>')
+		.replace(/&quot;/gi, '"')
+		.replace(/&#39;/gi, "'");
+	const withoutParen = plain.replace(/[（(].*/, '').trim();
+	// 筆順資料僅處理漢字，過濾非漢字可避免產生 ASCII/符號請求風暴。
+	return Array.from(withoutParen)
+		.filter((ch) => /\p{Script=Han}/u.test(ch))
+		.join('');
+}
+
 export function StrokeAnimation({ title, visible, lang = 'a' }: StrokeAnimationProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
+	const runIdRef = useRef(0);
 	const [historicalVisible, setHistoricalVisible] = useState(false);
 	const [historicalData, setHistoricalData] = useState<HistoricalEntry[]>([]);
 	const [loadingHistorical, setLoadingHistorical] = useState(false);
 	const [r2Endpoint, setR2Endpoint] = useState<string | null>(null);
+	const [containerKey, setContainerKey] = useState(0);
 
 	// 取得 R2 endpoint
 	useEffect(() => {
@@ -77,12 +96,18 @@ export function StrokeAnimation({ title, visible, lang = 'a' }: StrokeAnimationP
 	useEffect(() => {
 		if (!visible || !containerRef.current || r2Endpoint === null) return;
 
+		const currentRunId = ++runIdRef.current;
 		const container = containerRef.current;
-		// 清除舊內容（同原 $('#strokes').html('').show!）
+		// 清除舊內容（同原 $('#strokes').html('').show!），並記錄批次資訊便於追查重入
 		container.innerHTML = '';
+		console.debug('[StrokeAnimation] init run', {
+			runId: currentRunId,
+			title,
+			lang,
+			containerKey,
+		});
 
-		// 取字詞（去除英文括弧部分，同原 title - /[（(].*/）
-		const words = title.replace(/[（(].*/, '').trim();
+		const words = extractStrokeWords(title);
 		if (!words) return;
 
 		let cancelled = false;
@@ -110,6 +135,13 @@ export function StrokeAnimation({ title, visible, lang = 'a' }: StrokeAnimationP
 					console.warn('[StrokeAnimation] jquery.strokeWords 未成功載入');
 					return;
 				}
+				if (cancelled || currentRunId !== runIdRef.current) {
+					console.debug('[StrokeAnimation] stale run ignored before draw', {
+						runId: currentRunId,
+						activeRunId: runIdRef.current,
+					});
+					return;
+				}
 
 				// 執行筆順動畫（同原 $('#strokes').strokeWords(words, {url, dataType, -svg})）
 				// 透過本機 Worker 代理，解決 CORS 問題（/api/stroke-json/{cp}.json）
@@ -117,6 +149,12 @@ export function StrokeAnimation({ title, visible, lang = 'a' }: StrokeAnimationP
 					url: '/api/stroke-json/',
 					dataType: 'json',
 					svg: false,
+				});
+				console.debug('[StrokeAnimation] draw started', {
+					runId: currentRunId,
+					rawTitle: title,
+					words,
+					length: Array.from(words).length,
 				});
 			} catch (err) {
 				if (!cancelled) {
@@ -129,15 +167,20 @@ export function StrokeAnimation({ title, visible, lang = 'a' }: StrokeAnimationP
 
 		return () => {
 			cancelled = true;
+			console.debug('[StrokeAnimation] cleanup run', { runId: currentRunId });
 		};
-	}, [visible, title, r2Endpoint]);
+	}, [visible, title, r2Endpoint, lang, containerKey]);
 
 	// 當隱藏時清除動畫內容
 	useEffect(() => {
 		if (!visible && containerRef.current) {
+			runIdRef.current += 1;
+			// 強制重建容器，避免舊批次非同步 append 回同一 DOM。
+			setContainerKey((prev) => prev + 1);
 			containerRef.current.innerHTML = '';
 			setHistoricalVisible(false);
 			setHistoricalData([]);
+			console.debug('[StrokeAnimation] hidden reset', { runId: runIdRef.current });
 		}
 	}, [visible]);
 
@@ -204,7 +247,7 @@ export function StrokeAnimation({ title, visible, lang = 'a' }: StrokeAnimationP
 			</a>
 
 			{/* 筆順動畫容器（同原 <div id="strokes">） */}
-			<div ref={containerRef} id="strokes" lang={lang} />
+			<div key={containerKey} ref={containerRef} id="strokes" lang={lang} />
 
 			{/* 歷代書體展示區：各書體一個 section，橫向展示各字 GIF */}
 			{historicalVisible && historicalData.length > 0 && (

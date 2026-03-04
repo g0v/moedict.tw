@@ -15,10 +15,12 @@ export async function handleStrokeAPI(
   url: URL,
   corsHeaders: Record<string, string>
 ): Promise<Response> {
+  const routePrefix = '/api/stroke-json/';
   // 取出 codepoint 部分，例如 /api/stroke-json/840b.json → 840b.json
-  const cp = url.pathname.replace('/api/stroke-json/', '');
+  const cp = decodeURIComponent(url.pathname.slice(routePrefix.length));
 
-  if (!cp || !/^[0-9a-f]+\.json$/i.test(cp)) {
+  // 僅接受單一路徑段，避免多段路徑造成重複請求或錯誤路由
+  if (!cp || cp.includes('/') || !/^[0-9a-f]{4,6}\.json$/i.test(cp)) {
     return new Response(
       JSON.stringify({ error: 'Bad Request', message: '無效的 codepoint 格式' }),
       {
