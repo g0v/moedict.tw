@@ -40,6 +40,13 @@ let _word = '';
 let _lang: DictionaryLang = 'a';
 let _xrefs: XrefEntry[] = [];
 
+function normalizeWordToken(word: string): string {
+  return String(word || '')
+    .trim()
+    .replace(/^`+/, '')
+    .replace(/~+$/, '');
+}
+
 /** 從 /api/xref/{lang}.json 載入並快取該語言的 xref 資料 */
 async function loadXrefForLang(lang: DictionaryLang): Promise<void> {
   if (XREF_LOADED.has(lang) || XREF_LOADING.has(lang)) return;
@@ -67,9 +74,12 @@ export function setCurrentXrefs(
   lang: DictionaryLang,
   xrefs: XrefEntry[]
 ): void {
-  _word = word;
+  _word = normalizeWordToken(word);
   _lang = lang;
-  _xrefs = xrefs ?? [];
+  _xrefs = (xrefs ?? []).map((xref) => ({
+    ...xref,
+    words: (xref.words ?? []).map((w) => normalizeWordToken(w)).filter(Boolean),
+  }));
   console.log('[xref-switch] setCurrentXrefs', { word, lang, xrefsCount: _xrefs.length, xrefs: _xrefs });
   // 背景預載入目前語言的 xref，讓使用者點選語言切換時已有快取
   void loadXrefForLang(lang);
@@ -84,17 +94,25 @@ function lookupXref(
   toLang: DictionaryLang,
   fromWord: string
 ): string {
+  const normalizedFromWord = normalizeWordToken(fromWord);
+
   // 1. 從客戶端載入的 xref.json 查
   const xrefData = XREF_CACHE[fromLang];
   if (xrefData) {
     const toLangMap = xrefData[toLang];
     if (toLangMap) {
-      const raw = toLangMap[fromWord];
-      if (raw) {
+      const candidates = [normalizedFromWord, `\`${normalizedFromWord}`];
+      let raw = '';
+      for (const key of candidates) {
+        raw = toLangMap[key] ?? '';
+        if (raw) break;
+      }
+      if (raw && normalizedFromWord) {
         const words = raw.split(',').map((w) => w.trim()).filter(Boolean);
         if (words.length > 0) {
-          console.log('[xref-switch] lookupXref hit (xref.json)', { fromLang, toLang, fromWord, result: words[0] });
-          return words[0];
+          const normalizedTarget = normalizeWordToken(words[0]);
+          console.log('[xref-switch] lookupXref hit (xref.json)', { fromLang, toLang, fromWord, result: normalizedTarget });
+          return normalizedTarget;
         }
       }
       console.log('[xref-switch] lookupXref miss (xref.json)', { fromLang, toLang, fromWord, hasToLangMap: true, raw: raw ?? '(no key)' });
@@ -109,8 +127,9 @@ function lookupXref(
   if (_word === fromWord && _lang === fromLang) {
     for (const xref of _xrefs) {
       if (xref.lang === toLang && xref.words.length > 0) {
-        console.log('[xref-switch] lookupXref hit (entry.xrefs)', { fromLang, toLang, fromWord, result: xref.words[0] });
-        return xref.words[0];
+        const normalizedTarget = normalizeWordToken(xref.words[0]);
+        console.log('[xref-switch] lookupXref hit (entry.xrefs)', { fromLang, toLang, fromWord, result: normalizedTarget });
+        return normalizedTarget;
       }
     }
     console.log('[xref-switch] lookupXref miss (entry.xrefs)', { fromWord: _word, fromLang: _lang, fromWordMatch: _word === fromWord, xrefs: _xrefs });
@@ -124,9 +143,9 @@ function lookupXref(
 /** 將可能被 URL 編碼的詞解碼，避免 xref 查詢與 entry.xrefs 比對失敗 */
 function decodeWord(word: string): string {
   try {
-    return decodeURIComponent(word);
+    return normalizeWordToken(decodeURIComponent(word));
   } catch {
-    return word;
+    return normalizeWordToken(word);
   }
 }
 

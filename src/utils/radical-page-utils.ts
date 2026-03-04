@@ -81,11 +81,12 @@ export function normalizeRows(raw: unknown): string[][] {
 
 export function normalizeTooltipId(rawId: string): string {
   const decoded = decodeSafe(String(rawId || ''));
-  return decoded
+  const normalized = decoded
     .replace(/^\.(?:\/)?/, '')
     .replace(/^\//, '')
     .replace(/^#/, '')
     .trim();
+  return normalized.replace(/^([~':!]?)[`]+/, '$1').replace(/~+$/, '');
 }
 
 export function getTokenByLang(lang: RadicalLang, token: string): string {

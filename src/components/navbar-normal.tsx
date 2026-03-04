@@ -474,7 +474,7 @@ function extractWordFromPath(pathname: string, lang: Lang): string {
 	}
 	// 分類(=)、星號(=*)、部首(@) 等非字詞頁面
 	if (!raw || raw.startsWith('=') || raw.startsWith('@')) return '';
-	return raw;
+	return raw.replace(/^`+/, '').replace(/~+$/, '');
 }
 
 const LANG_DEFAULTS: Record<Lang, string> = {

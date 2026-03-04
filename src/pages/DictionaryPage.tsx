@@ -135,6 +135,13 @@ function getLangName(lang: DictionaryLang): string {
   return '華語';
 }
 
+function normalizeXrefWord(word: string): string {
+  return String(word || '')
+    .trim()
+    .replace(/^`+/, '')
+    .replace(/~+$/, '');
+}
+
 interface HakkaReading {
   dialect: string;
   readingHtml: string;
@@ -665,9 +672,10 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
               <span className="xref part-of-speech">{getLangName(xref.lang)}</span>
               <span className="xref">
                 {xref.words.map((xrefWord, idx) => {
-                  const to = `/${getLangTokenPrefix(xref.lang)}${xrefWord}`;
+                  const normalizedXrefWord = normalizeXrefWord(xrefWord);
+                  const to = `/${getLangTokenPrefix(xref.lang)}${normalizedXrefWord}`;
                   return (
-                    <span key={`${xref.lang}-${xrefWord}-${idx}`}>
+                    <span key={`${xref.lang}-${normalizedXrefWord}-${idx}`}>
                       {idx > 0 ? '、' : ''}
                       <a
                         href={to}
@@ -677,7 +685,7 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
                           navigate(to);
                         }}
                       >
-                        {xrefWord}
+                        {normalizedXrefWord}
                       </a>
                     </span>
                   );
