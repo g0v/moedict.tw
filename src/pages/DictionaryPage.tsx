@@ -5,6 +5,7 @@ import { cleanTextForTTS, speakText } from '../utils/tts-utils';
 import { getAudioUrl, playAudioUrl } from '../utils/audio-utils';
 import { rightAngle } from '../utils/ruby2hruby';
 import { decorateRuby } from '../utils/bopomofo-pinyin-utils';
+import { convertPinyinByLang } from '../utils/pinyin-preference-utils';
 import { addStarWord, addToLRU, hasStarWord, removeStarWord, writeLastLookup } from '../utils/word-record-utils';
 import { fetchDictionaryEntry, readCachedDictionaryEntry } from '../utils/dictionary-cache';
 import { setCurrentXrefs } from '../utils/xref-switch-utils';
@@ -103,6 +104,15 @@ function untag(input: string): string {
   return input.replace(/<[^>]*>/g, '');
 }
 
+function escapeHtml(input: string): string {
+  return String(input || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function formatTranslation(value: string[] | string): string {
   return untag(Array.isArray(value) ? value.join(', ') : value);
 }
@@ -123,6 +133,54 @@ function getLangName(lang: DictionaryLang): string {
   if (lang === 'h') return '客語';
   if (lang === 'c') return '兩岸';
   return '華語';
+}
+
+interface HakkaReading {
+  dialect: string;
+  readingHtml: string;
+  variant: number;
+}
+
+function formatHakkaReadingHtml(reading: string, convertForSi: boolean): string {
+  const source = convertForSi ? convertPinyinByLang('h', reading, false) : reading;
+  return escapeHtml(source)
+    .replace(/¹/g, '<sup>1</sup>')
+    .replace(/²/g, '<sup>2</sup>')
+    .replace(/³/g, '<sup>3</sup>')
+    .replace(/⁴/g, '<sup>4</sup>')
+    .replace(/⁵/g, '<sup>5</sup>');
+}
+
+function parseHakkaReadings(rawPinyin: string, audioId?: string): HakkaReading[] {
+  if (!audioId) return [];
+  const source = String(rawPinyin || '');
+  if (!source) return [];
+
+  const readings: HakkaReading[] = [];
+  const dialectOrder = '四海大平安南';
+  const matcher = /([四海大平安南])[\u20DE\u20DF](\S+)/g;
+  let match: RegExpExecArray | null = matcher.exec(source);
+
+  while (match) {
+    const dialect = match[1] || '';
+    const reading = match[2] || '';
+    const variant = dialectOrder.indexOf(dialect) + 1;
+    if (dialect && reading && variant > 0) {
+      readings.push({
+        dialect,
+        readingHtml: formatHakkaReadingHtml(reading, dialect === '四'),
+        variant,
+      });
+    }
+    match = matcher.exec(source);
+  }
+
+  return readings;
+}
+
+function getHakkaVariantAudioUrl(variant: number, audioId: string): string {
+  const base = 'https://a7ff62cf9d5b13408e72-351edcddf20c69da65316dd74d25951e.ssl.cf1.rackcdn.com/';
+  return `${base}/${variant}-${audioId}.ogg`;
 }
 
 type TTSLabel = '英' | '德' | '法';
@@ -377,17 +435,25 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
       <StrokeAnimation title={title} visible={strokesVisible} lang={lang} />
 
       {heteronyms.map((heteronym, idx) => {
-        // const rawPinyin = heteronym.pinyin || heteronym.trs || '';
-        // const displayPinyin = convertPinyinByLang(lang, rawPinyin, false);
-        // const displayBpmf = heteronym.bopomofo || (lang === 't' ? trsToBpmf(lang, rawPinyin) : '');
-        // const parallelPinyin = isParallelPinyin(lang);
-        const rubyData = decorateRuby({
-          LANG: lang,
-          title,
-          bopomofo: heteronym.bopomofo,
-          pinyin: heteronym.pinyin,
-          trs: heteronym.trs,
-        });
+        const rubyData =
+          lang === 'h'
+            ? {
+                ruby: '',
+                youyin: '',
+                bAlt: '',
+                pAlt: '',
+                cnSpecific: '',
+                pinyin: '',
+                bopomofo: '',
+              }
+            : decorateRuby({
+                LANG: lang,
+                title,
+                bopomofo: heteronym.bopomofo,
+                pinyin: heteronym.pinyin,
+                trs: heteronym.trs,
+              });
+        const hakkaReadings = lang === 'h' ? parseHakkaReadings(heteronym.pinyin || heteronym.trs || '', heteronym.audio_id) : [];
 
         const definitions = Array.isArray(heteronym.definitions) ? heteronym.definitions : [];
         const groups = groupDefinitions(definitions);
@@ -455,13 +521,14 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
 
             <h1 className="title" data-title={title}>
               {(() => {
+                if (lang === 'h') return <span dangerouslySetInnerHTML={{ __html: title }} />;
                 const htmlRuby = rubyData.ruby || '';
                 if (!htmlRuby) return <span dangerouslySetInnerHTML={{ __html: title }} />;
                 const hruby = rightAngle(htmlRuby);
                 return <span dangerouslySetInnerHTML={{ __html: hruby }} />;
               })()}
               {rubyData.youyin && <small className="youyin">{rubyData.youyin}</small>}
-              {heteronym.audio_id && (
+              {lang !== 'h' && heteronym.audio_id && (
                 <span className="audioBlock">
                   <i
                     role="button"
@@ -489,6 +556,46 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
                 </span>
               )}
             </h1>
+            {hakkaReadings.length > 0 && (
+              <div className="bopomofo">
+                <span className="pinyin">
+                  {hakkaReadings.map((item) => {
+                    const audioKey = `${heteronym.audio_id}:${item.variant}`;
+                    return (
+                      <span key={`${title}-${idx}-${item.variant}`}>
+                        <span className="audioBlock">
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            aria-label={playingAudioId === audioKey ? '停止播放' : '播放發音'}
+                            className={`${playingAudioId === audioKey ? 'icon-stop' : 'icon-play'} part-of-speech`}
+                            title={playingAudioId === audioKey ? '停止播放' : '播放發音'}
+                            style={{ cursor: 'pointer', fontSize: '1.4em' }}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              playAudioUrl(getHakkaVariantAudioUrl(item.variant, heteronym.audio_id!), (playing) => {
+                                setPlayingAudioId(playing ? audioKey : null);
+                              });
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                playAudioUrl(getHakkaVariantAudioUrl(item.variant, heteronym.audio_id!), (playing) => {
+                                  setPlayingAudioId(playing ? audioKey : null);
+                                });
+                              }
+                            }}
+                          >
+                            {item.dialect}
+                          </span>
+                        </span>
+                        <span dangerouslySetInnerHTML={{ __html: item.readingHtml }} />
+                      </span>
+                    );
+                  })}
+                </span>
+              </div>
+            )}
 
 
             {Array.from(groups.entries()).map(([type, items], groupIdx) => {
