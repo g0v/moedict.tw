@@ -175,9 +175,9 @@ async function buildEntryTooltipHTML(rawToken: string): Promise<string> {
   }
   const youyinHtml = rubyData.youyin ? `<small class="youyin">${escapeHtml(stripTags(rubyData.youyin))}</small>` : '';
 
+  const showPinyin = lang !== 'h';
   let pronunciationHtml = '';
-  if (lang !== 'h' && (heteronym?.bopomofo || heteronym?.pinyin || rubyData.bAlt || rubyData.pAlt)) {
-    const showPinyin = lang !== 'h';
+  if (showPinyin && (heteronym?.bopomofo || heteronym?.pinyin || rubyData.bAlt || rubyData.pAlt)) {
     const cnClass = rubyData.cnSpecific ? ` ${rubyData.cnSpecific}` : '';
     const altCnBlock =
       rubyData.cnSpecific && rubyData.pinyin && rubyData.bopomofo
