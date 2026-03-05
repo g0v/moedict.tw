@@ -81,6 +81,7 @@ function extractStrokeWords(input: string): string {
 export function StrokeAnimation({ title, visible, lang = 'a' }: StrokeAnimationProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const runIdRef = useRef(0);
+	const historicalRunIdRef = useRef(0);
 	const [historicalVisible, setHistoricalVisible] = useState(false);
 	const [historicalData, setHistoricalData] = useState<HistoricalEntry[]>([]);
 	const [loadingHistorical, setLoadingHistorical] = useState(false);
@@ -173,20 +174,33 @@ export function StrokeAnimation({ title, visible, lang = 'a' }: StrokeAnimationP
 
 	// 當隱藏時清除動畫內容
 	useEffect(() => {
-		if (!visible && containerRef.current) {
+		if (!visible) {
 			runIdRef.current += 1;
+			historicalRunIdRef.current += 1;
 			// 強制重建容器，避免舊批次非同步 append 回同一 DOM。
 			setContainerKey((prev) => prev + 1);
-			containerRef.current.innerHTML = '';
+			if (containerRef.current) {
+				containerRef.current.innerHTML = '';
+			}
 			setHistoricalVisible(false);
 			setHistoricalData([]);
+			setLoadingHistorical(false);
 			console.debug('[StrokeAnimation] hidden reset', { runId: runIdRef.current });
 		}
 	}, [visible]);
 
+	// 切換字詞/語言時，重設歷代書體狀態，避免沿用上一次顯示狀態
+	useEffect(() => {
+		historicalRunIdRef.current += 1;
+		setHistoricalVisible(false);
+		setHistoricalData([]);
+		setLoadingHistorical(false);
+	}, [title, lang]);
+
 	// 歷代書體：依序 fetch 每個字的書體資料
 	const handleHistoricalClick = useCallback(async () => {
 		if (loadingHistorical) return;
+		const runId = ++historicalRunIdRef.current;
 
 		// 清除 #strokes 內的 section（同原 $('#strokes section').remove!）
 		if (containerRef.current) {
@@ -206,13 +220,16 @@ export function StrokeAnimation({ title, visible, lang = 'a' }: StrokeAnimationP
 				const resp = await fetch(
 					`https://www.moedict.tw/api/web/word/${encodeURIComponent(ch)}`
 				);
+				if (runId !== historicalRunIdRef.current) return;
 				const json = (await resp.json()) as { data?: CharStrokeData };
 				results.push({ char: ch, data: json.data ?? null });
 			} catch {
+				if (runId !== historicalRunIdRef.current) return;
 				results.push({ char: ch, data: null });
 			}
 		}
 
+		if (runId !== historicalRunIdRef.current) return;
 		setHistoricalData(results);
 		setHistoricalVisible(true);
 		setLoadingHistorical(false);

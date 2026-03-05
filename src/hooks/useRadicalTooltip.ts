@@ -224,6 +224,7 @@ interface TooltipTarget {
 
 function resolveTooltipTarget(target: EventTarget | null): TooltipTarget | null {
   if (!(target instanceof Element)) return null;
+  if (target.closest('.single-char-stroke-trigger')) return null;
 
   const customAnchor = target.closest(`[${ATTR}]`);
   if (customAnchor instanceof HTMLAnchorElement) {

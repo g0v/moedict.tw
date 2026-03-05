@@ -229,6 +229,11 @@ function buildDictionaryTitle(word: string, lang: DictionaryLang): string {
   return cleanWord ? `${cleanWord} - ${brand}` : brand;
 }
 
+function isSingleCharTerm(input: string): boolean {
+  const plain = untag(String(input || '')).replace(/\s+/g, '').trim();
+  return Array.from(plain).length === 1;
+}
+
 function normalizeXrefWord(word: string): string {
   return String(word || '')
     .trim()
@@ -466,6 +471,12 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
     setIsStarred(!current);
   }, [lang, storageWord]);
 
+  const toggleStrokeAnimation = useCallback((event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setStrokesVisible((v) => !v);
+  }, []);
+
   const onContentClick = (event: MouseEvent<HTMLDivElement>): void => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
@@ -529,6 +540,7 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
   if (!entry) return null;
 
   const title = entry.title || queryWord;
+  const isSingleCharTitle = isSingleCharTerm(title);
   const heteronyms = Array.isArray(entry.heteronyms) ? entry.heteronyms : [];
   const translation = entry.translation ?? {};
   const english = translation.English ?? entry.English;
@@ -587,16 +599,10 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
                 style={{ color: 'white' }}
                 role="button"
                 tabIndex={0}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setStrokesVisible((v) => !v);
-                }}
+                onClick={toggleStrokeAnimation}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setStrokesVisible((v) => !v);
+                    toggleStrokeAnimation(e);
                   }
                 }}
               />
@@ -627,13 +633,29 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
             )}
 
             <h1 className="title" data-title={title}>
-              {(() => {
-                if (lang === 'h') return <span dangerouslySetInnerHTML={{ __html: title }} />;
-                const htmlRuby = rubyData.ruby || '';
-                if (!htmlRuby) return <span dangerouslySetInnerHTML={{ __html: title }} />;
-                const hruby = rightAngle(htmlRuby);
-                return <span dangerouslySetInnerHTML={{ __html: hruby }} />;
-              })()}
+              <span
+                className={isSingleCharTitle ? 'single-char-stroke-trigger' : undefined}
+                role={isSingleCharTitle ? 'button' : undefined}
+                tabIndex={isSingleCharTitle ? 0 : undefined}
+                onClick={isSingleCharTitle ? toggleStrokeAnimation : undefined}
+                onKeyDown={
+                  isSingleCharTitle
+                    ? (event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          toggleStrokeAnimation(event);
+                        }
+                      }
+                    : undefined
+                }
+              >
+                {(() => {
+                  if (lang === 'h') return <span dangerouslySetInnerHTML={{ __html: title }} />;
+                  const htmlRuby = rubyData.ruby || '';
+                  if (!htmlRuby) return <span dangerouslySetInnerHTML={{ __html: title }} />;
+                  const hruby = rightAngle(htmlRuby);
+                  return <span dangerouslySetInnerHTML={{ __html: hruby }} />;
+                })()}
+              </span>
               {rubyData.youyin && <small className="youyin">{rubyData.youyin}</small>}
               {lang !== 'h' && heteronym.audio_id && (
                 <span className="audioBlock">
