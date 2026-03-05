@@ -16,6 +16,11 @@ const RESULT_LINK_SELECTOR = '.result a[href]:not(.xref)';
 const LOADING_HTML = '<div class="entry"><div class="entry-item"><div class="def">載入中…</div></div></div>';
 const EMPTY_HTML = '<div class="entry"><div class="entry-item"><div class="def">找不到內容</div></div></div>';
 
+function previewDebugText(input: string, max = 120): string {
+  const normalized = String(input || '').replace(/\s+/g, ' ').trim();
+  return normalized.length > max ? `${normalized.slice(0, max)}...` : normalized;
+}
+
 function buildTitleSection(label: string, href: string): string {
   const safeLabel = escapeHtml(label);
   const safeHref = escapeHtml(href);
@@ -118,6 +123,11 @@ async function buildEntryTooltipHTML(rawToken: string): Promise<string> {
   const token = normalizeTooltipId(rawToken).replace(/^\//, '');
   if (!token) return EMPTY_HTML;
   const lang = getLangFromToken(token);
+  console.debug('[tooltip-entry] token resolved', {
+    rawToken,
+    normalizedToken: token,
+    lang,
+  });
 
   const entry = await fetchJsonByToken<DictionaryEntryResponse>(token);
   if (!entry) {
@@ -153,7 +163,10 @@ async function buildEntryTooltipHTML(rawToken: string): Promise<string> {
     .join('');
 
   let titleHtml = '';
-  if (rubyData.ruby) {
+  if (lang === 'h') {
+    const safeTitle = escapeHtml(title);
+    titleHtml = `<span class="h1"><a href="./#:${safeTitle}">${safeTitle}</a></span>`;
+  } else if (rubyData.ruby) {
     const hruby = rightAngle(rubyData.ruby);
     titleHtml = `<span class="h1">${hruby}</span>`;
   } else {
@@ -163,19 +176,30 @@ async function buildEntryTooltipHTML(rawToken: string): Promise<string> {
   const youyinHtml = rubyData.youyin ? `<small class="youyin">${escapeHtml(stripTags(rubyData.youyin))}</small>` : '';
 
   let pronunciationHtml = '';
-  if (heteronym?.bopomofo || heteronym?.pinyin || rubyData.bAlt || rubyData.pAlt) {
+  if (lang !== 'h' && (heteronym?.bopomofo || heteronym?.pinyin || rubyData.bAlt || rubyData.pAlt)) {
+    const showPinyin = lang !== 'h';
     const cnClass = rubyData.cnSpecific ? ` ${rubyData.cnSpecific}` : '';
     const altCnBlock =
       rubyData.cnSpecific && rubyData.pinyin && rubyData.bopomofo
-        ? `<small class="alternative cn-specific"><span class="pinyin">${formatPinyin(rubyData.pinyin)}</span><span class="bopomofo">${formatBopomofo(rubyData.bopomofo)}</span></small>`
+        ? `<small class="alternative cn-specific">${showPinyin ? `<span class="pinyin">${formatPinyin(rubyData.pinyin)}</span>` : ''}<span class="bopomofo">${formatBopomofo(rubyData.bopomofo)}</span></small>`
         : '';
     const mainBpmf = heteronym?.bopomofo ? `<span class="bopomofo">${formatBopomofo(heteronym.bopomofo)}</span>` : '';
-    const mainPinyin = heteronym?.pinyin || heteronym?.trs ? `<span class="pinyin">${formatPinyin(heteronym.pinyin || heteronym.trs || '')}</span>` : '';
+    const mainPinyin = showPinyin && (heteronym?.pinyin || heteronym?.trs)
+      ? `<span class="pinyin">${formatPinyin(heteronym.pinyin || heteronym.trs || '')}</span>`
+      : '';
     const altBlock =
       rubyData.bAlt || rubyData.pAlt
-        ? `<small class="alternative">${rubyData.pAlt ? `<span class="pinyin">${formatPinyin(rubyData.pAlt)}</span>` : ''}${rubyData.bAlt ? `<span class="bopomofo">${formatBopomofo(rubyData.bAlt)}</span>` : ''}</small>`
+        ? `<small class="alternative">${showPinyin && rubyData.pAlt ? `<span class="pinyin">${formatPinyin(rubyData.pAlt)}</span>` : ''}${rubyData.bAlt ? `<span class="bopomofo">${formatBopomofo(rubyData.bAlt)}</span>` : ''}</small>`
         : '';
     pronunciationHtml = `<div class="bopomofo${cnClass}">${altCnBlock}<div class="main-pronunciation">${mainBpmf}${mainPinyin}</div>${altBlock}</div>`;
+    console.debug('[tooltip-entry] pronunciation decision', {
+      token,
+      lang,
+      showPinyin,
+      hasBopomofo: Boolean(heteronym?.bopomofo),
+      hasPinyin: Boolean(heteronym?.pinyin || heteronym?.trs),
+      pronunciationPreview: previewDebugText(pronunciationHtml),
+    });
   }
 
   const content = itemsHtml || '<div class="entry-item"><div class="def">找不到內容</div></div>';
@@ -314,6 +338,11 @@ export function useRadicalTooltip(): void {
       if (!html) {
         if (id.startsWith('entry:')) {
           const entryTarget = id.slice(6).trim() || anchor.getAttribute('href') || '';
+          console.debug('[tooltip-entry] entry route', {
+            id,
+            entryTarget,
+            anchorHref: anchor.getAttribute('href') || '',
+          });
           html = await buildEntryTooltipHTML(entryTarget);
         } else if (shouldUseRadicalTooltip(id)) {
           html = await buildRadicalTooltipHTML(id);
