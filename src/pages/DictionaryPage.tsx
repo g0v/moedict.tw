@@ -216,6 +216,19 @@ function getLangName(lang: DictionaryLang): string {
   return '華語';
 }
 
+function getDictionaryBrand(lang: DictionaryLang): string {
+  if (lang === 't') return '台語萌典';
+  if (lang === 'h') return '客語萌典';
+  if (lang === 'c') return '兩岸萌典';
+  return '萌典';
+}
+
+function buildDictionaryTitle(word: string, lang: DictionaryLang): string {
+  const cleanWord = untag(String(word || '')).trim();
+  const brand = getDictionaryBrand(lang);
+  return cleanWord ? `${cleanWord} - ${brand}` : brand;
+}
+
 function normalizeXrefWord(word: string): string {
   return String(word || '')
     .trim()
@@ -362,6 +375,11 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
       document.body.classList.remove(langClass);
     };
   }, [lang]);
+
+  useEffect(() => {
+    const titleWord = state.entry?.title || queryWord;
+    document.title = buildDictionaryTitle(titleWord, lang);
+  }, [state.entry?.title, queryWord, lang]);
 
   useRadicalTooltip();
 
