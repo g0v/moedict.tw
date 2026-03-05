@@ -96,7 +96,7 @@ export function About({ assetBaseUrl }: AboutProps) {
 				<p>定義裡的每個字詞都可以點擊連到說明。</p>
 				<p>
 					源碼、其他平台版本、API 及原始資料等，均可在{' '}
-					<a target="_blank" href="https://github.com/g0v/moedict-webkit/" rel="noopener noreferrer">
+					<a target="_blank" href="https://github.com/g0v/cf-moedict-webkit-neo" rel="noopener noreferrer">
 						GitHub
 					</a>{' '}
 					取得。
