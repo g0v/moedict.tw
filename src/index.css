@@ -155,3 +155,52 @@ body.lang-t .iconic-circle { background: #744; }
   margin-right: 4px;
   background: #eee;
 }
+
+/* 台語例句特殊卡片版型（對齊原案） */
+body.lang-t .result .entry-item .example {
+  display: inline-block;
+  clear: both;
+  width: auto;
+  border: 1px solid #d7d7d7;
+  background: #eee;
+  padding: 8px 10px;
+  margin: 6px 10px 6px 0;
+  vertical-align: top;
+}
+
+body.lang-t .result .entry-item .example .h1 {
+  display: inline-block;
+  font-size: 185%;
+  line-height: 1.2;
+}
+
+body.lang-t .result .entry-item .example .h1 hruby {
+  display: block;
+}
+
+body.lang-t .result .entry-item .example .h1 rt,
+body.lang-t .result .entry-item .example .h1 [annotation]:before,
+body.lang-t .result .entry-item .example .h1 [annotation]:after {
+  font-size: 100%;
+}
+
+body.lang-t .result .entry-item .example .mandarin {
+  display: block;
+  margin-top: 0.65em;
+  margin-left: 0.9em;
+  text-indent: -0.9em;
+  font-size: 92%;
+  line-height: 1.4;
+}
+
+body.lang-t .result .entry-item .example .mandarin * {
+  text-indent: 0;
+}
+
+body.lang-t .result .entry-item .example .mandarin::before {
+  content: "（";
+}
+
+body.lang-t .result .entry-item .example .mandarin::after {
+  content: "）";
+}

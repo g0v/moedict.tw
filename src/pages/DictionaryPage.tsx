@@ -29,6 +29,7 @@ interface Heteronym {
   trs?: string;
   alt?: string;
   audio_id?: string;
+  synonyms?: string[] | string;
   definitions?: Definition[];
 }
 
@@ -86,6 +87,13 @@ function toStringArray(value: string[] | string | undefined): string[] {
   return Array.isArray(value) ? value.filter(Boolean) : [value];
 }
 
+function splitCommaSeparatedItems(value: string[] | string | undefined): string[] {
+  return toStringArray(value)
+    .flatMap((item) => String(item || '').split(/,+/))
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function normalizeHref(rawHref: string): string | null {
   const href = rawHref.trim();
   if (!href) return null;
@@ -119,6 +127,79 @@ function formatTranslation(value: string[] | string): string {
 
 function formatExampleIcon(input: string): string {
   return input.replace('例⃝', '<span class="specific">例</span>');
+}
+
+function previewDebugText(input: string, max = 120): string {
+  const normalized = String(input || '').replace(/\s+/g, ' ').trim();
+  return normalized.length > max ? `${normalized.slice(0, max)}...` : normalized;
+}
+
+function convertTaiwaneseRubyMarkers(input: string): string {
+  const source = String(input || '');
+  if (!source.includes('\uFFF9')) return source;
+
+  let markerCount = 0;
+  const converted = source.replace(
+    /\uFFF9([\s\S]*?)\uFFFA([\s\S]*?)(?:\uFFFB([\s\S]*?))?(?=\uFFF9|$)/g,
+    (_match, han, trs, mandarin) => {
+    markerCount += 1;
+    const mandarinPart = mandarin
+      ? `<br><span class="rt mandarin">${mandarin}</span>`
+      : '';
+    return `<span class="ruby"><span class="rb"><span class="ruby"><span class="rb">${han}</span><br><span class="rt trs pinyin">${trs}</span></span></span></span>${mandarinPart}`;
+    },
+  );
+  console.debug('[taiwanese-ruby] marker conversion', {
+    markerCount,
+    sourcePreview: previewDebugText(source),
+    convertedPreview: previewDebugText(converted),
+  });
+  return converted;
+}
+
+function parseTaiwaneseRubyLine(rawHtml: string): { headingHtml: string; mandarinHtml: string | null } | null {
+  const convertedHtml = convertTaiwaneseRubyMarkers(rawHtml);
+  if (!convertedHtml || !/class\s*=\s*["'][^"']*\bruby\b/i.test(convertedHtml)) {
+    console.debug('[taiwanese-ruby] no ruby node detected', {
+      rawPreview: previewDebugText(rawHtml),
+      convertedPreview: previewDebugText(convertedHtml),
+    });
+    return null;
+  }
+  if (typeof DOMParser === 'undefined') return null;
+
+  try {
+    const sanitized = convertedHtml.replace(/<\/?b>/g, '');
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<div id="wrap">${sanitized}</div>`, 'text/html');
+    const wrap = doc.getElementById('wrap');
+    if (!wrap) return null;
+
+    const titleHtml = wrap.querySelector('.ruby .ruby .rb')?.innerHTML?.trim() || '';
+    const bopomofo = wrap.querySelector('.trs.pinyin')?.getAttribute('title') || '';
+    const py = (wrap.querySelector('.upper')?.textContent || wrap.querySelector('.trs.pinyin')?.textContent || '').trim();
+    if (!titleHtml) return null;
+
+    const { ruby } = decorateRuby({
+      LANG: 't',
+      title: titleHtml,
+      bopomofo: bopomofo || undefined,
+      py: py || undefined,
+    });
+    const headingHtml = rightAngle(ruby);
+    const mandarinHtml = wrap.querySelector('.mandarin')?.innerHTML?.trim() || null;
+    console.debug('[taiwanese-ruby] parsed values', {
+      titleHtml,
+      py,
+      bopomofo,
+      mandarinHtml,
+      rawPreview: previewDebugText(rawHtml),
+    });
+    return { headingHtml, mandarinHtml };
+  } catch {
+    console.debug('[taiwanese-ruby] parse failed', { rawPreview: previewDebugText(rawHtml) });
+    return null;
+  }
 }
 
 function getLangTokenPrefix(lang: DictionaryLang): string {
@@ -461,6 +542,7 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
                 trs: heteronym.trs,
               });
         const hakkaReadings = lang === 'h' ? parseHakkaReadings(heteronym.pinyin || heteronym.trs || '', heteronym.audio_id) : [];
+        const dialectSynonyms = (lang === 't' || lang === 'h') ? splitCommaSeparatedItems(heteronym.synonyms) : [];
 
         const definitions = Array.isArray(heteronym.definitions) ? heteronym.definitions : [];
         const groups = groupDefinitions(definitions);
@@ -623,18 +705,52 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
                           </p>
                         ) : null}
                         {toStringArray(def.example).map((text, exampleIdx) => (
-                          <div
-                            key={`example-${exampleIdx}`}
-                            className="example"
-                            dangerouslySetInnerHTML={{ __html: formatExampleIcon(text) }}
-                          />
+                          (() => {
+                            const html = formatExampleIcon(text);
+                            const parsedRubyLine = lang === 't' ? parseTaiwaneseRubyLine(html) : null;
+                            if (!parsedRubyLine) {
+                              return (
+                                <div key={`example-${exampleIdx}`} className="example" dangerouslySetInnerHTML={{ __html: html }} />
+                              );
+                            }
+                            return (
+                              <div key={`example-${exampleIdx}`} className="example">
+                                <span className="h1" dangerouslySetInnerHTML={{ __html: parsedRubyLine.headingHtml }} />
+                                {parsedRubyLine.mandarinHtml && (
+                                  <span className="mandarin" dangerouslySetInnerHTML={{ __html: parsedRubyLine.mandarinHtml }} />
+                                )}
+                              </div>
+                            );
+                          })()
                         ))}
-                        {toStringArray(def.quote).map((text, quoteIdx) => (
-                          <div key={`quote-${quoteIdx}`} className="quote" dangerouslySetInnerHTML={{ __html: text }} />
-                        ))}
-                        {toStringArray(def.link).map((text, linkIdx) => (
-                          <div key={`link-${linkIdx}`} className="quote" dangerouslySetInnerHTML={{ __html: text }} />
-                        ))}
+                        {toStringArray(def.quote).map((text, quoteIdx) => {
+                          const parsedRubyLine = lang === 't' ? parseTaiwaneseRubyLine(text) : null;
+                          if (!parsedRubyLine) {
+                            return <div key={`quote-${quoteIdx}`} className="quote" dangerouslySetInnerHTML={{ __html: text }} />;
+                          }
+                          return (
+                            <div key={`quote-${quoteIdx}`} className="quote">
+                              <span className="h1" dangerouslySetInnerHTML={{ __html: parsedRubyLine.headingHtml }} />
+                              {parsedRubyLine.mandarinHtml && (
+                                <span className="mandarin" dangerouslySetInnerHTML={{ __html: parsedRubyLine.mandarinHtml }} />
+                              )}
+                            </div>
+                          );
+                        })}
+                        {toStringArray(def.link).map((text, linkIdx) => {
+                          const parsedRubyLine = lang === 't' ? parseTaiwaneseRubyLine(text) : null;
+                          if (!parsedRubyLine) {
+                            return <div key={`link-${linkIdx}`} className="link" dangerouslySetInnerHTML={{ __html: text }} />;
+                          }
+                          return (
+                            <div key={`link-${linkIdx}`} className="link">
+                              <span className="h1" dangerouslySetInnerHTML={{ __html: parsedRubyLine.headingHtml }} />
+                              {parsedRubyLine.mandarinHtml && (
+                                <span className="mandarin" dangerouslySetInnerHTML={{ __html: parsedRubyLine.mandarinHtml }} />
+                              )}
+                            </div>
+                          );
+                        })}
                         {toStringArray(def.synonyms).length > 0 && (
                           <div className="synonyms">
                             <span className="part-of-speech">似</span>
@@ -653,6 +769,19 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
                 </div>
               );
             })}
+            {dialectSynonyms.length > 0 && (
+              <div className="synonyms">
+                <span className="part-of-speech">似</span>
+                <span>
+                  {dialectSynonyms.map((item, idx) => (
+                    <span key={`t-synonym-${idx}`}>
+                      {idx > 0 ? '、' : ''}
+                      <span dangerouslySetInnerHTML={{ __html: item }} />
+                    </span>
+                  ))}
+                </span>
+              </div>
+            )}
           </div>
         );
       })}
