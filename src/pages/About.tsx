@@ -33,6 +33,7 @@ interface AboutProps {
  */
 export function About({ assetBaseUrl }: AboutProps) {
 	const [r2Endpoint, setR2Endpoint] = useState<string>('');
+	const [bookmarkHint, setBookmarkHint] = useState<string>('');
 
 	useEffect(() => {
 		// 如果沒有傳入 assetBaseUrl，從 API 取得
@@ -457,19 +458,32 @@ export function About({ assetBaseUrl }: AboutProps) {
 				</div>
 			)}
 
-			{/* 加入搜尋列按鈕 */}
+			{/* 加入書籤按鈕 */}
 			<div style={{ position: 'fixed', bottom: '10px', right: '10px', zIndex: 1 }} className="web-only">
 				<a
 					id="opensearch"
-					onClick={(e) => {
+					onClick={async (e) => {
 						e.preventDefault();
-						// TODO: 實現加入搜尋列功能
+						const url = window.location.href;
+						try {
+							await navigator.clipboard.writeText(url);
+							setBookmarkHint('已複製網址，請按 Cmd+D (Mac) 或 Ctrl+D (Windows) 加入書籤');
+						} catch {
+							setBookmarkHint('請按 Cmd+D (Mac) 或 Ctrl+D (Windows) 將此頁加入書籤');
+						}
+						setTimeout(() => setBookmarkHint(''), 4000);
 					}}
 					className="btn btn-default btn-info"
 					href="#"
+					title="將此頁加入瀏覽器書籤"
 				>
-					<i className="icon icon-plus-sign"></i> 加入搜尋列
+					<i className="icon icon-plus-sign"></i> 加入書籤
 				</a>
+				{bookmarkHint && (
+					<div style={{ marginTop: 6, fontSize: 12, color: 'var(--color-fg-muted)', maxWidth: 260 }}>
+						{bookmarkHint}
+					</div>
+				)}
 			</div>
 		</div>
 	);
