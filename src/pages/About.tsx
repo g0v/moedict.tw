@@ -64,9 +64,11 @@ export function About({ assetBaseUrl }: AboutProps) {
 	useEffect(() => {
 		document.body.id = 'moedict';
 		document.body.className = 'about web';
+		document.title = '關於本站 - 萌典';
 		return () => {
 			document.body.id = '';
 			document.body.className = '';
+			document.title = '萌典';
 		};
 	}, []);
 
