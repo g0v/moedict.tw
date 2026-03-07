@@ -291,7 +291,7 @@ export function useRadicalTooltip(): void {
           }
           currentId = '';
           currentAnchor = null;
-        }, 120);
+        }, 50);
       });
       document.body.appendChild(element);
       tooltipEl = element;
