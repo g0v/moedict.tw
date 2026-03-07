@@ -1,4 +1,4 @@
-# cf-moedict-webkit-neo
+# moedict.tw
 
 萌典（moedict）前端重構專案，使用 React + TypeScript + Vite，部署於 Cloudflare Workers。
 
@@ -9,7 +9,7 @@
 所以想參與協作，不一定要先建立完整開發環境；像啄木鳥一樣持續實測與提報錯誤，也非常有幫助。
 
 - 線上實測頁面：https://dev.moedict.tw/
-- 錯誤回報頁面：https://github.com/g0v/cf-moedict-webkit-neo/issues
+- 錯誤回報頁面：https://github.com/g0v/moedict.tw/issues
 
 ### 回報問題
 
@@ -151,3 +151,13 @@ npx wrangler deploy
 - `commands/upload_dictionary.sh`
 
 這兩支腳本可作為參考，但若你使用自訂 bucket 名稱，請先調整腳本中的 bucket 設定，或直接使用上面的 `rclone sync` 指令。
+
+## 資料更新提示
+
+若未來要從教育部同步最新資料，建議先閱讀下列三個專案的 `README.md`，確認資料來源、處理流程與產物格式後再進行更新：
+
+- https://github.com/g0v/moedict-webkit
+- https://github.com/g0v/moedict-process
+- https://github.com/g0v/moedict-data
+
+建議更新順序可先從 `moedict-data`（原始/整理資料）→ `moedict-process`（資料轉換流程）→ `moedict-webkit`（前端與打包整合）開始檢查。
