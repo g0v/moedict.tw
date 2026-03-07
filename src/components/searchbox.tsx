@@ -437,24 +437,26 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
 				return;
 			}
 
+			if (e.key === 'ArrowUp' && !isMobileViewport) {
+				if (!loadingSuggestions && suggestions.length > 0) {
+					e.preventDefault();
+					focusSuggestionByIndex(suggestions.length - 1);
+				}
+				return;
+			}
+
 			if (e.key === 'Enter') {
 				e.preventDefault();
-				if (!loadingSuggestions && suggestions.length > 0) {
-					handleSelectSuggestion(suggestions[0]);
-					return;
-				}
-
-				const form = e.currentTarget.closest('form');
-				if (form) {
-					form.requestSubmit();
-				}
+				// 僅在使用者以方向鍵選到候選詞後（focus 進入列表）才由候選項目處理 Enter。
+				// 在輸入框直接按 Enter 時不執行任何跳轉，避免誤進入第一筆結果。
+				return;
 			} else if (e.key === 'Escape') {
 				setShowMobileResults(false);
 				setIsContainerActive(false);
 				inputRef.current?.blur();
 			}
 		},
-		[focusSuggestionByIndex, handleSelectSuggestion, isMobileViewport, loadingSuggestions, suggestions]
+		[focusSuggestionByIndex, isMobileViewport, loadingSuggestions, suggestions]
 	);
 
 	const shouldShowMobileToggle = isMobileViewport && hasActiveSearch && isContainerActive;
