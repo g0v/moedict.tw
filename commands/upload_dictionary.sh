@@ -15,7 +15,7 @@ if ! command -v rclone &> /dev/null; then
 fi
 
 # 檢查字典資料夾是否存在
-DICTIONARY_DIR="../data/dictionary"
+DICTIONARY_DIR="./data/dictionary"
 if [ ! -d "$DICTIONARY_DIR" ]; then
     echo "❌ 錯誤: dictionary 資料夾不存在"
     exit 1
@@ -23,7 +23,7 @@ fi
 
 # R2 Storage 配置
 R2_REMOTE="r2"
-R2_BUCKET="moedict-dictionary"
+R2_BUCKET="moedict-dictionary-preview" # or "moedict-dictionary"
 
 # pack 資料夾（字詞 bucket 資料）
 PACK_FOLDERS=("pack" "pcck" "phck" "ptck")
