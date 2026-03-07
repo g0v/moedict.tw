@@ -182,9 +182,16 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 		}
 
 		.ui-autocomplete.search-results .ui-menu-item {
-			padding: 8px 12px;
+			padding: 1px;
 			cursor: pointer;
 			border-bottom: 1px solid #eee;
+		}
+
+		.ui-autocomplete.search-results .ui-menu-item:hover a {
+			margin: -1px;
+			border: 1px solid #74b2e2;
+			background: #e4f1fb;
+			color: #0070a3;
 		}
 
 		.ui-autocomplete.search-results .ui-menu-item a,
