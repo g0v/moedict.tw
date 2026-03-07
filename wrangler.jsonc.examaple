@@ -15,12 +15,6 @@
 	},
 	"r2_buckets": [
 		{
-			"binding": "FONTS",
-			"bucket_name": "<your-fonts-bucket>",
-			"preview_bucket_name": "<your-fonts-bucket-preview>",
-			"remote": true
-		},
-		{
 			"binding": "MOEDICT_ASSETS",
 			"bucket_name": "<your-assets-bucket>",
 			"preview_bucket_name": "<your-assets-bucket-preview>",
