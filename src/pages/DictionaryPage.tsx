@@ -74,6 +74,48 @@ function groupDefinitions(definitions: Definition[]): Map<string, Definition[]> 
   return grouped;
 }
 
+function normalizeComparableText(input: string | undefined): string {
+  return String(input || '')
+    .replace(/\s+/gu, ' ')
+    .trim();
+}
+
+function normalizeComparableStringArray(value: string[] | string | undefined): string[] {
+  return toStringArray(value).map((item) => normalizeComparableText(item));
+}
+
+function getHeteronymSignature(heteronym: Heteronym): string {
+  // 以穩定 key 順序產生簽章，僅用於「完全相同資料」去重
+  const normalized = {
+    bopomofo: normalizeComparableText(heteronym.bopomofo),
+    pinyin: normalizeComparableText(heteronym.pinyin),
+    trs: normalizeComparableText(heteronym.trs),
+    alt: normalizeComparableText(heteronym.alt),
+    audio_id: normalizeComparableText(heteronym.audio_id),
+    synonyms: normalizeComparableStringArray(heteronym.synonyms),
+    definitions: (Array.isArray(heteronym.definitions) ? heteronym.definitions : []).map((def) => ({
+      type: normalizeComparableText(def.type),
+      def: normalizeComparableText(def.def),
+      example: normalizeComparableStringArray(def.example),
+      quote: normalizeComparableStringArray(def.quote),
+      link: normalizeComparableStringArray(def.link),
+      synonyms: normalizeComparableStringArray(def.synonyms),
+      antonyms: normalizeComparableStringArray(def.antonyms),
+    })),
+  };
+  return JSON.stringify(normalized);
+}
+
+function dedupeHeteronyms(heteronyms: Heteronym[]): Heteronym[] {
+  const seen = new Set<string>();
+  return heteronyms.filter((heteronym) => {
+    const signature = getHeteronymSignature(heteronym);
+    if (seen.has(signature)) return false;
+    seen.add(signature);
+    return true;
+  });
+}
+
 function splitPartOfSpeech(typeText: string): string[] {
   if (!typeText) return [];
   return typeText
@@ -541,7 +583,7 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
 
   const title = entry.title || queryWord;
   const isSingleCharTitle = isSingleCharTerm(title);
-  const heteronyms = Array.isArray(entry.heteronyms) ? entry.heteronyms : [];
+  const heteronyms = dedupeHeteronyms(Array.isArray(entry.heteronyms) ? entry.heteronyms : []);
   const translation = entry.translation ?? {};
   const english = translation.English ?? entry.English;
   const deutsch = translation.Deutsch ?? entry.Deutsch;
