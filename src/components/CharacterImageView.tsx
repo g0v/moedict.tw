@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CharacterGrid } from './CharacterGrid';
 import { fetchDictionaryEntry, type DictionaryLang } from '../utils/dictionary-cache';
 
 interface CharacterImageViewProps {
@@ -14,6 +13,20 @@ interface TermSegment {
   part: string;
   href: string | null;
   def: string;
+}
+
+function mergeEnglishTerms(terms: string[]): string[] {
+  const merged: string[] = [];
+  for (const term of terms) {
+    const token = String(term || '');
+    if (!token) continue;
+    if (/^[A-Za-z]+$/.test(token) && merged.length > 0 && /^[A-Za-z]+$/.test(merged[merged.length - 1])) {
+      merged[merged.length - 1] += token;
+      continue;
+    }
+    merged.push(token);
+  }
+  return merged;
 }
 
 function expandDef(def: string): string {
@@ -55,13 +68,14 @@ export function CharacterImageView({ queryWord, terms, lang, langTokenPrefix }: 
   const navigate = useNavigate();
   const [segments, setSegments] = useState<TermSegment[]>([]);
   const [shareSupported] = useState(() => typeof navigator !== 'undefined' && !!navigator.share);
+  const mergedTerms = useMemo(() => mergeEnglishTerms(terms), [terms]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadSegments() {
       const results: TermSegment[] = [];
-      for (const part of terms) {
+      for (const part of mergedTerms) {
         try {
           const response = await fetchDictionaryEntry(part, lang);
           if (cancelled) return;
@@ -78,7 +92,7 @@ export function CharacterImageView({ queryWord, terms, lang, langTokenPrefix }: 
 
     loadSegments();
     return () => { cancelled = true; };
-  }, [terms, lang, langTokenPrefix]);
+  }, [mergedTerms, lang, langTokenPrefix]);
 
   const handleShare = useCallback(async () => {
     const url = window.location.href;
@@ -111,7 +125,10 @@ export function CharacterImageView({ queryWord, terms, lang, langTokenPrefix }: 
   return (
     <div className="result charimg-result">
       <center>
-        <CharacterGrid text={queryWord} size={queryWord.length > 1 ? 160 : 240} />
+        <img src={`https://www.moedict.tw/${queryWord}.png`}
+          alt={queryWord}
+          style={{ width: queryWord.length > 1 ? 160 : 240 }}
+        />
 
         <div className="charimg-share" style={{ margin: 15 }}>
           <button
@@ -145,10 +162,16 @@ export function CharacterImageView({ queryWord, terms, lang, langTokenPrefix }: 
                       href={segment.href}
                       onClick={(e) => handleTermClick(e, segment.href!)}
                     >
-                      <CharacterGrid text={segment.part} size={160} />
+                      <img src={`https://www.moedict.tw/${segment.part}.png`}
+                        alt={segment.part}
+                        style={{ width: 160, height: 160 }}
+                      />
                     </a>
                   ) : (
-                    <CharacterGrid text={segment.part} size={160} />
+                    <img src={`https://www.moedict.tw/${segment.part}.png`}
+                      alt={segment.part}
+                      style={{ width: 160, height: 160 }}
+                    />
                   )}
                 </td>
                 <td
