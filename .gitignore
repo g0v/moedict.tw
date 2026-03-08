@@ -31,3 +31,4 @@ dist-ssr
 !.env.example
 
 wrangler.jsonc
+public/search-index

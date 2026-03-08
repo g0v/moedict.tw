@@ -9,6 +9,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { toggleUserPrefPanel } from './user-pref';
 import { computeLangSwitchPathAsync, LANG_PREFIX } from '../utils/xref-switch-utils';
 import { readLRUWords } from '../utils/word-record-utils';
+import { FullTextSearch } from './full-text-search';
 
 type Lang = 'a' | 't' | 'h' | 'c';
 
@@ -440,20 +441,6 @@ const LANG_SPECIAL_PAGES: Record<Lang, MenuItem[]> = {
 };
 
 /**
- * 根據語言獲取搜尋查詢附加條件
- */
-function getSearchQueryAddition(lang: Lang): string {
-	const searchConfig = {
-		a: '-"臺灣台語萌典" -"兩岸萌典" -"臺灣客語萌典" -"推特" -"moedict tw lab" -"moedict tw dodo"',
-		t: '+"臺灣台語萌典" -"兩岸萌典" -"臺灣客語萌典" -"推特" -"moedict tw lab" -"moedict tw dodo"',
-		h: '+"臺灣客語萌典" -"臺灣台語萌典" -"兩岸萌典" -"推特" -"moedict tw lab" -"moedict tw dodo"',
-		c: '+"兩岸萌典" -"臺灣台語萌典" -"臺灣客語萌典" -"推特" -"moedict tw lab" -"moedict tw dodo"'
-	};
-
-	return searchConfig[lang] || searchConfig.a;
-}
-
-/**
  * 從當前路徑推斷語言
  */
 function inferLangFromPath(pathname: string): Lang {
@@ -560,7 +547,6 @@ export function NavbarNormal({ currentLang }: NavbarNormalProps) {
 	const resolvedLang = currentLang || inferLangFromPath(location.pathname);
 	const starredPath = getStarredPath(resolvedLang);
 	const currentLangOption = LANG_OPTIONS.find(opt => opt.key === resolvedLang);
-	const escAttr = (s: string) => (s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
 	const [dropdownInitialized, setDropdownInitialized] = useState(false);
 	const [r2Endpoint, setR2Endpoint] = useState<string>('');
 	const [openSubmenus, setOpenSubmenus] = useState<Record<string, boolean>>({});
@@ -829,16 +815,8 @@ export function NavbarNormal({ currentLang }: NavbarNormalProps) {
 
 				{/* 右側區域 - 下載連結、搜尋框、社群連結 */}
 				<ul className="nav pull-right hidden-xs" style={{ display: 'flex' }}>
-					{/* Google 站內搜尋 */}
-					<li style={{ display: 'inline-block' }} className="web-inline-only">
-						<div id="gcse">
-							<span
-								className={`lang-${resolvedLang}-only`}
-								dangerouslySetInnerHTML={{
-									__html: `<gcse:search webSearchQueryAddition="${escAttr(getSearchQueryAddition(resolvedLang))}"></gcse:search>`
-								}}
-							/>
-						</div>
+					<li className="navbar-fulltext-search-item web-inline-only">
+						<FullTextSearch currentLang={resolvedLang} />
 					</li>
 
 					<li style={{ display: 'inline-block' }}>

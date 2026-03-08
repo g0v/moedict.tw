@@ -137,6 +137,8 @@ wrangler auth login
 npm run dev
 ```
 
+補充：`npm run dev` 與 `npm run build` 會先根據 `data/dictionary/*ck/*.txt` 自動產生 `public/search-index/*.json`，供右上角的靜態全文檢索使用。
+
 部署：
 
 ```bash

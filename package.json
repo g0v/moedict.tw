@@ -4,6 +4,9 @@
 	"version": "0.0.0",
 	"type": "module",
 	"scripts": {
+		"predev": "npm run build-search-index",
+		"prebuild": "npm run build-search-index",
+		"build-search-index": "node scripts/build-search-index.mjs",
 		"dev": "vite",
 		"build": "tsc -b && vite build",
 		"lint": "eslint .",
@@ -13,6 +16,7 @@
 	},
 	"dependencies": {
 		"@cf-wasm/resvg": "^0.1.24",
+		"fuse.js": "^7.1.0",
 		"react": "^19.1.1",
 		"react-dom": "^19.1.1",
 		"react-router-dom": "^7.13.1"
