@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
 type Lang = 'a' | 't' | 'h' | 'c';
-type PrefKey = 'phonetics' | 'pinyin_a' | 'pinyin_t' | 'pinyin_h' | 'font';
+type PrefKey = 'phonetics' | 'pinyin_a' | 'pinyin_t' | 'pinyin_h';
 
 interface PrefOption {
 	value: string;
@@ -45,12 +45,6 @@ const PINYIN_H_OPTIONS: PrefOption[] = [
 	{ value: 'PFS', label: '客語白話字' },
 ];
 
-const FONT_OPTIONS: PrefOption[] = [
-	{ value: 'kai', label: '楷書' },
-	{ value: 'song', label: '宋體' },
-	{ value: 'heiti', label: '黑體' },
-];
-
 function inferLangFromPath(pathname: string): Lang {
 	if (pathname.startsWith("/'")) return 't';
 	if (pathname.startsWith('/:')) return 'h';
@@ -82,10 +76,6 @@ function getJQuery(): JQueryFn | null {
 
 function isPanelHidden(panel: HTMLElement): boolean {
 	return window.getComputedStyle(panel).display === 'none';
-}
-
-function applyFontBodyAttr(value: string): void {
-	document.body.setAttribute('data-font-pref', value);
 }
 
 function applyPhoneticsBodyAttr(value: string): void {
@@ -186,7 +176,6 @@ export function UserPref() {
 	const [pinyinA, setPinyinA] = useState(() => getStoredPref('pinyin_a', 'HanYu'));
 	const [pinyinT, setPinyinT] = useState(() => getStoredPref('pinyin_t', 'TL'));
 	const [pinyinH, setPinyinH] = useState(() => getStoredPref('pinyin_h', 'TH'));
-	const [font, setFont] = useState(() => getStoredPref('font', 'kai'));
 
 	useEffect(() => {
 		const classList = document.body.classList;
@@ -201,11 +190,6 @@ export function UserPref() {
 		applyPhoneticsBodyAttr(phonetics);
 		setStoredPref('phonetics', phonetics);
 	}, [phonetics]);
-
-	useEffect(() => {
-		applyFontBodyAttr(font);
-		setStoredPref('font', font);
-	}, [font]);
 
 	const closePanel = useCallback(() => {
 		hideUserPrefPanel();
@@ -264,13 +248,6 @@ export function UserPref() {
 						options={PHONETICS_OPTIONS}
 						value={phonetics}
 						onChange={setPhonetics}
-					/>
-					<PrefList
-						name="font"
-						label="字體"
-						options={FONT_OPTIONS}
-						value={font}
-						onChange={setFont}
 					/>
 				</ul>
 				<button className="btn btn-primary btn-block btn-close" type="button" onClick={closePanel}>
