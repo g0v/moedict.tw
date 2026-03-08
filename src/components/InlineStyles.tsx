@@ -368,6 +368,20 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 			display: none;
 		}
 
+		/* 字體偏好：宋體 */
+		body[data-font-pref='song'] .result .h1,
+		body[data-font-pref='song'] .ui-tooltip h1,
+		body[data-font-pref='song'] .ui-tooltip .h1 {
+			font-family: "Biaodian Pro Serif CNS", "Numeral LF Serif", "MOEDICT", "Fira Sans OT", "Georgia", "Times New Roman", "Songti TC", "宋體-繁", "SimSun", "新宋體", "NSimSun", "cwTex 明體", "Adobe 明體 Std", PMingLiU, MingLiU, serif, "HanaMinA", "HanaMinB", "HAN NOM A", "HAN NOM B", "Han Songti CNS", serif !important;
+		}
+
+		/* 字體偏好：黑體 */
+		body[data-font-pref='heiti'] .result .h1,
+		body[data-font-pref='heiti'] .ui-tooltip h1,
+		body[data-font-pref='heiti'] .ui-tooltip .h1 {
+			font-family: "Biaodian Pro Sans CNS", "Noto Sans", "Geneva", "Segoe UI", "MOEDICT", "Fira Sans OT", "Helvetica Neue", "Helvetica", "Arial", "Zhuyin Heiti", "Noto Sans CJK TC", "Source Han Sans TW", "Noto Sans T Chinese", "Source Han Sans TWHK", "Microsoft Jhenghei", "微軟正黑體", "Source Han Sans", "Source Han Sans HK", "Lantinghei TC", "Heiti TC", "黑體-繁", "Lihei Pro", "儷黑 Pro", sans-serif, "HanaMinA", "HanaMinB", "HAN NOM A", "HAN NOM B", "Han Heiti CNS", sans-serif !important;
+		}
+
 		/* 部首頁與 Tooltip 對齊原專案 */
 		.stroke-list .stroke-char {
 			margin-right: 6px;
@@ -390,6 +404,14 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 				padding-bottom: 0.3em !important;
 				border-bottom: none !important;
 				color: #000 !important;
+			}
+			body[data-font-pref='song'] .ui-tooltip .title .h1,
+			body[data-font-pref='song'] .ui-tooltip .title h1 {
+				font-family: "Biaodian Pro Serif CNS", "Numeral LF Serif", "MOEDICT", "Fira Sans OT", "Georgia", "Times New Roman", "Songti TC", "宋體-繁", "SimSun", "新宋體", "NSimSun", "cwTex 明體", "Adobe 明體 Std", PMingLiU, MingLiU, serif, "HanaMinA", "HanaMinB", "HAN NOM A", "HAN NOM B", "Han Songti CNS", serif !important;
+			}
+			body[data-font-pref='heiti'] .ui-tooltip .title .h1,
+			body[data-font-pref='heiti'] .ui-tooltip .title h1 {
+				font-family: "Biaodian Pro Sans CNS", "Noto Sans", "Geneva", "Segoe UI", "MOEDICT", "Fira Sans OT", "Helvetica Neue", "Helvetica", "Arial", "Zhuyin Heiti", "Noto Sans CJK TC", "Source Han Sans TW", "Noto Sans T Chinese", "Source Han Sans TWHK", "Microsoft Jhenghei", "微軟正黑體", "Source Han Sans", "Source Han Sans HK", "Lantinghei TC", "Heiti TC", "黑體-繁", "Lihei Pro", "儷黑 Pro", sans-serif, "HanaMinA", "HanaMinB", "HAN NOM A", "HAN NOM B", "Han Heiti CNS", sans-serif !important;
 			}
 			.ui-tooltip .title .h1 a,
 			.ui-tooltip .title h1 a,
