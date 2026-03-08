@@ -21,6 +21,17 @@ export function getAudioUrl(lang: DictionaryLang, audioId: string): string {
 }
 
 let currentAudio: HTMLAudioElement | null = null;
+let currentToken = 0;
+let currentRequestKey: string | null = null;
+
+function buildAudioCandidates(url: string): string[] {
+  const match = url.match(/^(.*)\.(\w+)(\?.*)?$/);
+  if (!match) return [url];
+  const base = match[1];
+  const query = match[3] || '';
+  // iPad Safari 對 ogg 支援不穩，先嘗試 mp3，再退回 ogg
+  return [`${base}.mp3${query}`, `${base}.ogg${query}`];
+}
 
 /**
  * 播放音檔 URL（使用 HTML5 Audio）
@@ -28,6 +39,8 @@ let currentAudio: HTMLAudioElement | null = null;
  */
 export function playAudioUrl(url: string, onStateChange?: (playing: boolean) => void): void {
   if (typeof window === 'undefined') return;
+  const token = ++currentToken;
+  const requestKey = url;
 
   const stop = () => {
     if (currentAudio) {
@@ -35,17 +48,23 @@ export function playAudioUrl(url: string, onStateChange?: (playing: boolean) => 
       currentAudio.currentTime = 0;
       currentAudio = null;
     }
+    currentRequestKey = null;
     onStateChange?.(false);
   };
 
-  if (currentAudio && currentAudio.src === url) {
+  if (currentAudio && currentRequestKey === requestKey) {
     stop();
     return;
   }
 
   stop();
-  const audio = new Audio(url);
+  const audio = new Audio();
+  // iOS Safari 友善設定
+  audio.preload = 'none';
+  audio.setAttribute('playsinline', 'true');
+  audio.setAttribute('webkit-playsinline', 'true');
   currentAudio = audio;
+  currentRequestKey = requestKey;
 
   audio.addEventListener('ended', () => {
     if (currentAudio === audio) {
@@ -61,16 +80,27 @@ export function playAudioUrl(url: string, onStateChange?: (playing: boolean) => 
     }
   });
 
-  audio
-    .play()
-    .then(() => {
-      onStateChange?.(true);
-    })
-    .catch((err) => {
-      console.warn('[Audio] 播放失敗:', err);
+  const candidates = buildAudioCandidates(url);
+  void (async () => {
+    for (const candidate of candidates) {
+      if (currentToken !== token || currentAudio !== audio) return;
+      try {
+        audio.src = candidate;
+        audio.load();
+        await audio.play();
+        if (currentToken !== token || currentAudio !== audio) return;
+        onStateChange?.(true);
+        return;
+      } catch (err) {
+        console.warn('[Audio] 播放失敗，嘗試下一種格式:', candidate, err);
+      }
+    }
+    if (currentToken === token && currentAudio === audio) {
       currentAudio = null;
+      currentRequestKey = null;
       onStateChange?.(false);
-    });
+    }
+  })();
 }
 
 /**
@@ -82,4 +112,5 @@ export function stopAudio(): void {
     currentAudio.currentTime = 0;
     currentAudio = null;
   }
+  currentRequestKey = null;
 }
