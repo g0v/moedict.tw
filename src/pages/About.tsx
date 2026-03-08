@@ -5,6 +5,7 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { applyHeadByPath, applyHeadToDocument, resolveHeadByPath } from '../ssr/head';
 import './About.css';
 
 // 動態載入外部樣式
@@ -64,11 +65,11 @@ export function About({ assetBaseUrl }: AboutProps) {
 	useEffect(() => {
 		document.body.id = 'moedict';
 		document.body.className = 'about web';
-		document.title = '關於本站 - 萌典';
+		applyHeadByPath('/about');
 		return () => {
 			document.body.id = '';
 			document.body.className = '';
-			document.title = '萌典';
+			applyHeadToDocument(resolveHeadByPath('/'));
 		};
 	}, []);
 

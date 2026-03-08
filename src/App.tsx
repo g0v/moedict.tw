@@ -6,6 +6,7 @@ import { MiddlePoint } from './MiddlePoint'
 import { DictionaryA } from './pages/Dictionary-a'
 import { Layout } from './components/Layout'
 import { readLastLookup } from './utils/word-record-utils'
+import { applyHeadByPath } from './ssr/head'
 import './App.css'
 
 /**
@@ -75,6 +76,16 @@ function ScrollToTop() {
   return null;
 }
 
+function HeadManager() {
+  const location = useLocation();
+
+  useEffect(() => {
+    applyHeadByPath(location.pathname);
+  }, [location.pathname]);
+
+  return null;
+}
+
 /**
  * URL 解碼組件：監聽 URL 變化，當發現被編碼時自動還原
  * 注意：主要的攔截邏輯已經在 main.tsx 中設置，這裡只處理路由變化後的檢查
@@ -122,6 +133,7 @@ function App() {
   return (
     <BrowserRouter>
       <ScrollToTop />
+      <HeadManager />
       <URLDecoder />
       <Routes>
         {/* About 頁面使用 about layout */}

@@ -1,11 +1,152 @@
 import { handleDictionaryAPI } from '../src/api/handleDictionaryAPI';
+import { lookupDictionaryEntry } from '../src/api/handleDictionaryAPI';
 import { handleListAPI } from '../src/api/handleListAPI';
 import { handleStrokeAPI } from '../src/api/handleStrokeAPI';
+import { escapeHeadContent, resolveHeadByPath } from '../src/ssr/head';
 
 interface Env {
 	ASSET_BASE_URL?: string;
 	DICTIONARY_BASE_URL?: string;
 	DICTIONARY: R2Bucket;
+  ASSETS?: Fetcher;
+}
+
+type DictionaryLang = 'a' | 't' | 'h' | 'c';
+
+interface DictionaryDefinition {
+  def?: string;
+}
+
+interface DictionaryHeteronym {
+  definitions?: DictionaryDefinition[];
+}
+
+interface DictionaryEntryLike {
+  heteronyms?: DictionaryHeteronym[];
+}
+
+function stripTags(input: string): string {
+  return String(input || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function parseDictionaryRoute(pathname: string): { lang: DictionaryLang; text: string } | null {
+  const raw = decodeURIComponent(String(pathname || '').replace(/^\/+/, '').replace(/\/+$/, ''));
+  if (!raw) return null;
+  if (raw === 'about' || raw === 'about.html') return null;
+  if (raw.startsWith('@') || raw.startsWith('~@')) return null;
+  if (raw.startsWith('=')) return null;
+  if (raw.startsWith("'=*") || raw.startsWith(':=*') || raw.startsWith('~=*') || raw.startsWith('=*')) return null;
+  if (raw.startsWith("'=") || raw.startsWith(':=') || raw.startsWith('~=')) return null;
+  if (raw.startsWith("'")) return { lang: 't', text: raw.slice(1) };
+  if (raw.startsWith(':')) return { lang: 'h', text: raw.slice(1) };
+  if (raw.startsWith('~')) return { lang: 'c', text: raw.slice(1) };
+  return { lang: 'a', text: raw };
+}
+
+function buildDefinitionDescription(entry: DictionaryEntryLike | null): string | null {
+  if (!entry?.heteronyms || entry.heteronyms.length === 0) return null;
+  const defs: string[] = [];
+  for (const heteronym of entry.heteronyms) {
+    const definitions = Array.isArray(heteronym.definitions) ? heteronym.definitions : [];
+    for (const definition of definitions) {
+      const clean = stripTags(definition.def || '');
+      if (!clean) continue;
+      defs.push(clean.replace(/[。．\s]+$/g, ''));
+      if (defs.length >= 4) break;
+    }
+    if (defs.length >= 4) break;
+  }
+  if (defs.length === 0) return null;
+  const sentence = `${defs.join('。')}。`;
+  return sentence.length > 180 ? `${sentence.slice(0, 179)}…` : sentence;
+}
+
+async function injectHeadMetadata(html: string, pathname: string, env: Env): Promise<string> {
+  const head = resolveHeadByPath(pathname);
+  const dictionaryRoute = parseDictionaryRoute(pathname);
+  if (dictionaryRoute?.text) {
+    const entry = await lookupDictionaryEntry(dictionaryRoute.text, dictionaryRoute.lang, env);
+    const richDescription = buildDefinitionDescription(entry as DictionaryEntryLike | null);
+    if (richDescription) {
+      head.description = richDescription;
+      head.ogDescription = richDescription;
+    }
+  }
+
+  const title = escapeHeadContent(head.title);
+  const description = escapeHeadContent(head.description);
+  const ogTitle = escapeHeadContent(head.ogTitle);
+  const ogDescription = escapeHeadContent(head.ogDescription);
+  const ogUrl = escapeHeadContent(head.ogUrl);
+  const ogImage = escapeHeadContent(head.ogImage);
+  const ogImageType = escapeHeadContent(head.ogImageType);
+  const ogImageWidth = escapeHeadContent(head.ogImageWidth);
+  const ogImageHeight = escapeHeadContent(head.ogImageHeight);
+  const twitterImage = escapeHeadContent(head.twitterImage);
+  const twitterSite = escapeHeadContent(head.twitterSite);
+  const twitterCreator = escapeHeadContent(head.twitterCreator);
+
+  return html
+    .replace(/<title>[\s\S]*?<\/title>/i, `<title>${title}</title>`)
+    .replace(/<meta\s+name=["']description["'][^>]*>/i, `<meta name="description" content="${description}" />`)
+    .replace(/<meta\s+property=["']og:title["'][^>]*>/i, `<meta property="og:title" content="${ogTitle}" />`)
+    .replace(/<meta\s+property=["']og:description["'][^>]*>/i, `<meta property="og:description" content="${ogDescription}" />`)
+    .replace(/<meta\s+property=["']og:url["'][^>]*>/i, `<meta property="og:url" content="${ogUrl}" />`)
+    .replace(/<meta\s+property=["']og:image["'][^>]*>/i, `<meta property="og:image" content="${ogImage}" />`)
+    .replace(/<meta\s+property=["']og:image:type["'][^>]*>/i, `<meta property="og:image:type" content="${ogImageType}" />`)
+    .replace(/<meta\s+property=["']og:image:width["'][^>]*>/i, `<meta property="og:image:width" content="${ogImageWidth}" />`)
+    .replace(/<meta\s+property=["']og:image:height["'][^>]*>/i, `<meta property="og:image:height" content="${ogImageHeight}" />`)
+    .replace(/<meta\s+name=["']twitter:title["'][^>]*>/i, `<meta name="twitter:title" content="${ogTitle}" />`)
+    .replace(/<meta\s+name=["']twitter:description["'][^>]*>/i, `<meta name="twitter:description" content="${ogDescription}" />`)
+    .replace(/<meta\s+name=["']twitter:image["'][^>]*>/i, `<meta name="twitter:image" content="${twitterImage}" />`)
+    .replace(/<meta\s+name=["']twitter:site["'][^>]*>/i, `<meta name="twitter:site" content="${twitterSite}" />`)
+    .replace(/<meta\s+name=["']twitter:creator["'][^>]*>/i, `<meta name="twitter:creator" content="${twitterCreator}" />`);
+}
+
+function isViteInternalRequest(url: URL): boolean {
+  const { pathname, searchParams } = url;
+  if (pathname.startsWith('/@') || pathname.startsWith('/node_modules/')) return true;
+  return (
+    searchParams.has('html-proxy') ||
+    searchParams.has('import') ||
+    searchParams.has('raw') ||
+    searchParams.has('url') ||
+    searchParams.has('worker_file')
+  );
+}
+
+function shouldRenderHtmlShell(request: Request, url: URL): boolean {
+  const { pathname } = url;
+  if (request.method !== 'GET' && request.method !== 'HEAD') return false;
+  if (pathname.startsWith('/api/')) return false;
+  if (pathname.startsWith('/assets/')) return false;
+  if (isViteInternalRequest(url)) return false;
+  if (/\.[a-zA-Z0-9]+$/.test(pathname) && pathname !== '/about.html' && pathname !== '/index.html') return false;
+  return true;
+}
+
+async function passThroughAssets(request: Request, env: Env): Promise<Response | null> {
+  if (!env.ASSETS) return null;
+  return env.ASSETS.fetch(request);
+}
+
+async function renderHtmlShell(request: Request, env: Env, pathname: string): Promise<Response | null> {
+  if (!env.ASSETS) return null;
+  const shellUrl = new URL('/', request.url);
+  const shellResponse = await env.ASSETS.fetch(new Request(shellUrl.toString(), request));
+  if (!shellResponse.ok) return null;
+
+  if (request.method === 'HEAD') {
+    const headers = new Headers(shellResponse.headers);
+    headers.set('Content-Type', 'text/html; charset=utf-8');
+    return new Response(null, { status: shellResponse.status, headers });
+  }
+
+  const html = await shellResponse.text();
+  const rewritten = await injectHeadMetadata(html, pathname, env);
+  const headers = new Headers(shellResponse.headers);
+  headers.set('Content-Type', 'text/html; charset=utf-8');
+  return new Response(rewritten, { status: shellResponse.status, headers });
 }
 
 export default {
@@ -144,7 +285,17 @@ export default {
       });
     }
 
-    // 代理 R2 靜態資源請求（字體、CSS、圖片等）
+    if (shouldRenderHtmlShell(request, url)) {
+      const shellResponse = await renderHtmlShell(request, env, url.pathname);
+      if (shellResponse) return shellResponse;
+    }
+
+    const staticResponse = await passThroughAssets(request, env);
+    if (staticResponse && staticResponse.status !== 404) {
+      return staticResponse;
+    }
+
+    // ASSETS 找不到時，才回退到 R2 代理舊版靜態資源（字體、圖片等）
     if (env.ASSET_BASE_URL && url.pathname.startsWith('/assets/')) {
       const assetPath = url.pathname.replace('/assets/', '');
       const assetUrl = `${env.ASSET_BASE_URL}/${assetPath}${url.search}`;
@@ -183,6 +334,8 @@ export default {
         return new Response('代理請求失敗', { status: 502 });
       });
     }
+
+    if (staticResponse) return staticResponse;
 
 		return new Response(null, { status: 404 });
   },

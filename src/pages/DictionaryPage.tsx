@@ -10,6 +10,7 @@ import { addStarWord, addToLRU, hasStarWord, removeStarWord, writeLastLookup } f
 import { fetchDictionaryEntry, readCachedDictionaryEntry } from '../utils/dictionary-cache';
 import { setCurrentXrefs } from '../utils/xref-switch-utils';
 import { StrokeAnimation } from '../components/StrokeAnimation';
+import { applyHeadToDocument, getDictionaryHead } from '../ssr/head';
 import { CharacterImageView } from '../components/CharacterImageView';
 
 export type DictionaryLang = 'a' | 't' | 'h' | 'c';
@@ -259,19 +260,6 @@ function getLangName(lang: DictionaryLang): string {
   return '華語';
 }
 
-function getDictionaryBrand(lang: DictionaryLang): string {
-  if (lang === 't') return '台語萌典';
-  if (lang === 'h') return '客語萌典';
-  if (lang === 'c') return '兩岸萌典';
-  return '萌典';
-}
-
-function buildDictionaryTitle(word: string, lang: DictionaryLang): string {
-  const cleanWord = untag(String(word || '')).trim();
-  const brand = getDictionaryBrand(lang);
-  return cleanWord ? `${cleanWord} - ${brand}` : brand;
-}
-
 function isSingleCharTerm(input: string): boolean {
   const plain = untag(String(input || '')).replace(/\s+/g, '').trim();
   return Array.from(plain).length === 1;
@@ -426,7 +414,7 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
 
   useEffect(() => {
     const titleWord = state.entry?.title || queryWord;
-    document.title = buildDictionaryTitle(titleWord, lang);
+    applyHeadToDocument(getDictionaryHead(titleWord, lang));
   }, [state.entry?.title, queryWord, lang]);
 
   useRadicalTooltip();
