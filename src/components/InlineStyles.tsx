@@ -187,7 +187,9 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 			border-bottom: 1px solid #eee;
 		}
 
-		.ui-autocomplete.search-results .ui-menu-item:hover a {
+		.ui-autocomplete.search-results .ui-menu-item:hover a,
+		.ui-autocomplete.search-results .ui-menu-item a:focus {
+			outline: none;
 			margin: -1px;
 			border: 1px solid #74b2e2;
 			background: #e4f1fb;
