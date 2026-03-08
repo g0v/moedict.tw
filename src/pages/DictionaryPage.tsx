@@ -10,6 +10,7 @@ import { addStarWord, addToLRU, hasStarWord, removeStarWord, writeLastLookup } f
 import { fetchDictionaryEntry, readCachedDictionaryEntry } from '../utils/dictionary-cache';
 import { setCurrentXrefs } from '../utils/xref-switch-utils';
 import { StrokeAnimation } from '../components/StrokeAnimation';
+import { CharacterImageView } from '../components/CharacterImageView';
 
 export type DictionaryLang = 'a' | 't' | 'h' | 'c';
 
@@ -548,33 +549,12 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
 
   if (state.terms.length > 0) {
     return (
-      <div className="result">
-        <h1 className="title">未找到完整詞條：{queryWord}</h1>
-        <div className="entry">
-          <div className="entry-item">
-            <p>可嘗試以下分字：</p>
-            <ul>
-              {state.terms.map((term) => {
-                const to = `/${langTokenPrefix}${term}`;
-                return (
-                  <li key={term}>
-                    <a
-                      href={to}
-                      data-radical-id={`entry:${to}`}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        navigate(to);
-                      }}
-                    >
-                      {term}
-                    </a>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        </div>
-      </div>
+      <CharacterImageView
+        queryWord={queryWord}
+        terms={state.terms}
+        lang={lang}
+        langTokenPrefix={langTokenPrefix}
+      />
     );
   }
 

@@ -358,3 +358,38 @@ body.lang-t .result .entry-item .example .mandarin::before {
 body.lang-t .result .entry-item .example .mandarin::after {
   content: "）";
 }
+
+/* ===== 字圖 (Character Image View) ===== */
+
+.charimg-result {
+  padding: 20px 0;
+}
+
+.charimg-share {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.charimg-share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 20px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #f9f9f9;
+  color: #333;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.charimg-share-btn:hover {
+  background: #eee;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.moetext td {
+  vertical-align: top;
+}
