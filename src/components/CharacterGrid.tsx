@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 interface CharacterGridProps {
   text: string;
@@ -33,66 +33,61 @@ function drawBackground(ctx: CanvasRenderingContext2D, x: number, y: number, dim
 }
 
 export function CharacterGrid({ text, size = 160 }: CharacterGridProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chars = Array.from(text).slice(0, 50);
-
-  // Calculate grid dimensions (same algorithm as old text2dim)
-  const len = Math.min(chars.length, 50);
-  let w = len;
-  if (w > 4) w = Math.ceil(len / Math.sqrt(len * 0.5));
-  const h = Math.min(Math.ceil(len / w), w);
-
+  const canvasRefs = useRef<Array<HTMLCanvasElement | null>>([]);
+  const chars = useMemo(() => Array.from(text).slice(0, 50), [text]);
   const cellSize = size;
-  const canvasW = w * cellSize;
-  const canvasH = h * cellSize;
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = canvasW * dpr;
-    canvas.height = canvasH * dpr;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.scale(dpr, dpr);
-
     const cellDim = cellSize * 0.94;
     const margin = cellSize * 0.03;
     const fontSize = cellDim * 0.94;
 
-    let charIdx = 0;
-    for (let row = 0; row < h && charIdx < chars.length; row++) {
-      for (let col = 0; col < w && charIdx < chars.length; col++) {
-        const x = margin + col * cellSize;
-        const y = margin + row * cellSize;
-        drawBackground(ctx, x, y, cellDim);
+    chars.forEach((ch, index) => {
+      const canvas = canvasRefs.current[index];
+      if (!canvas) return;
 
-        ctx.font = `${fontSize}px "Source Han Serif TC", "Noto Serif CJK TC", serif`;
-        ctx.fillStyle = '#000';
-        ctx.textBaseline = 'alphabetic';
+      canvas.width = cellSize * dpr;
+      canvas.height = cellSize * dpr;
 
-        const ch = chars[charIdx];
-        const offsetY = cellDim * 0.82;
-        const offsetX = cellDim * 0.06;
-        ctx.fillText(ch, x + offsetX, y + offsetY);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, cellSize, cellSize);
 
-        charIdx++;
-      }
-    }
-  }, [text, cellSize, canvasW, canvasH, w, h, chars]);
+      drawBackground(ctx, margin, margin, cellDim);
+      ctx.font = `${fontSize}px "Source Han Serif TC", "Noto Serif CJK TC", serif`;
+      ctx.fillStyle = '#000';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(ch, margin + cellDim * 0.06, margin + cellDim * 0.82);
+    });
+  }, [chars, cellSize]);
 
   return (
-    <canvas
-      ref={canvasRef}
+    <div
       style={{
-        width: canvasW,
-        height: canvasH,
-        borderRadius: 10,
-        boxShadow: '#d4d4d4 0 3px 3px',
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: Math.max(6, Math.round(cellSize * 0.06)),
+        justifyContent: 'center',
       }}
-    />
+    >
+      {chars.map((ch, index) => (
+        <canvas
+          key={`${ch}-${index}`}
+          ref={(el) => {
+            canvasRefs.current[index] = el;
+          }}
+          style={{
+            width: cellSize,
+            height: cellSize,
+            borderRadius: 10,
+            boxShadow: '#d4d4d4 0 3px 3px',
+            flex: '0 0 auto',
+          }}
+        />
+      ))}
+    </div>
   );
 }
