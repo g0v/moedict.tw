@@ -8,7 +8,7 @@ interface Env {
 	ASSET_BASE_URL?: string;
 	DICTIONARY_BASE_URL?: string;
 	DICTIONARY: R2Bucket;
-  ASSETS?: Fetcher;
+  ASSETS?: Fetcher | R2Bucket;
 }
 
 type DictionaryLang = 'a' | 't' | 'h' | 'c';
@@ -126,14 +126,18 @@ function shouldRenderHtmlShell(request: Request, url: URL): boolean {
 }
 
 async function passThroughAssets(request: Request, env: Env): Promise<Response | null> {
-  if (!env.ASSETS) return null;
-  return env.ASSETS.fetch(request);
+  const fetcher = getAssetsFetcher(env);
+  if (fetcher) {
+    return fetcher(request);
+  }
+  return getAssetFromBucket(request, env);
 }
 
 async function renderHtmlShell(request: Request, env: Env, pathname: string): Promise<Response | null> {
-  if (!env.ASSETS) return null;
+  const fetcher = getAssetsFetcher(env);
+  if (!fetcher) return null;
   const shellUrl = new URL('/', request.url);
-  const shellResponse = await env.ASSETS.fetch(new Request(shellUrl.toString(), request));
+  const shellResponse = await fetcher(new Request(shellUrl.toString(), request));
   if (!shellResponse.ok) return null;
 
   if (request.method === 'HEAD') {
@@ -147,6 +151,44 @@ async function renderHtmlShell(request: Request, env: Env, pathname: string): Pr
   const headers = new Headers(shellResponse.headers);
   headers.set('Content-Type', 'text/html; charset=utf-8');
   return new Response(rewritten, { status: shellResponse.status, headers });
+}
+
+function getAssetsFetcher(env: Env): ((request: Request) => Promise<Response>) | null {
+  const candidate = env.ASSETS;
+  if (!candidate || typeof candidate !== 'object' || !('fetch' in candidate)) return null;
+  if (typeof candidate.fetch !== 'function') return null;
+  return candidate.fetch.bind(candidate);
+}
+
+function getAssetsBucket(env: Env): R2Bucket | null {
+  const candidate = env.ASSETS;
+  if (!candidate || typeof candidate !== 'object' || !('get' in candidate)) return null;
+  if (typeof candidate.get !== 'function') return null;
+  return candidate as R2Bucket;
+}
+
+async function getAssetFromBucket(request: Request, env: Env): Promise<Response | null> {
+  const bucket = getAssetsBucket(env);
+  if (!bucket) return null;
+
+  const url = new URL(request.url);
+  if (!url.pathname.startsWith('/assets/')) return null;
+  if (request.method !== 'GET' && request.method !== 'HEAD') return null;
+
+  const key = url.pathname.replace(/^\/assets\//, '');
+  if (!key) return null;
+
+  const object = await bucket.get(key);
+  if (!object) return new Response('Not Found', { status: 404 });
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+
+  if (request.method === 'HEAD') {
+    return new Response(null, { status: 200, headers });
+  }
+  return new Response(object.body, { status: 200, headers });
 }
 
 export default {
