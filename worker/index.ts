@@ -230,6 +230,35 @@ export default {
         });
       }
 
+      // 全文檢索索引 API（從 DICTIONARY R2 讀取 search-index/{lang}.json）
+      const searchIndexMatch = url.pathname.match(/^\/api\/search-index\/([athc])\.json$/);
+      if (searchIndexMatch) {
+        const lang = searchIndexMatch[1];
+        const key = `search-index/${lang}.json`;
+        const obj = await env.DICTIONARY.get(key);
+        if (!obj) {
+          return new Response(
+            JSON.stringify({ error: 'Not Found', message: `找不到全文索引：${key}` }),
+            {
+              status: 404,
+              headers: {
+                'Content-Type': 'application/json; charset=utf-8',
+                ...corsHeaders,
+              },
+            },
+          );
+        }
+        const content = await obj.text();
+        return new Response(content, {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'public, max-age=3600',
+            ...corsHeaders,
+          },
+        });
+      }
+
       // Sidebar 搜尋索引 API（從 DICTIONARY R2 讀取各語系 index.json）
       const indexMatch = url.pathname.match(/^\/api\/index\/([athc])\.json$/);
       if (indexMatch) {

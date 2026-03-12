@@ -74,7 +74,7 @@ function buildSnippet(result: FuseResult<SearchDoc>): string {
 }
 
 async function loadSearchState(lang: Lang): Promise<SearchState> {
-	const response = await fetch(`/search-index/${lang}.json`, {
+	const response = await fetch(`/api/search-index/${lang}.json`, {
 		headers: { Accept: 'application/json' },
 	});
 

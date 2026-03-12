@@ -3,7 +3,8 @@ import path from 'node:path';
 
 const ROOT_DIR = path.resolve(import.meta.dirname, '..');
 const SOURCE_ROOT = path.join(ROOT_DIR, 'data', 'dictionary');
-const OUTPUT_ROOT = path.join(ROOT_DIR, 'public', 'search-index');
+const OUTPUT_ROOT = path.join(ROOT_DIR, 'data', 'dictionary', 'search-index');
+const LEGACY_PUBLIC_OUTPUT_ROOT = path.join(ROOT_DIR, 'public', 'search-index');
 
 const LANG_SOURCE_DIRS = {
 	a: 'pack',
@@ -143,6 +144,7 @@ async function buildLangIndex(lang, sourceDirName) {
 }
 
 async function main() {
+	await fs.rm(LEGACY_PUBLIC_OUTPUT_ROOT, { recursive: true, force: true });
 	await fs.mkdir(OUTPUT_ROOT, { recursive: true });
 	for (const [lang, sourceDirName] of Object.entries(LANG_SOURCE_DIRS)) {
 		await buildLangIndex(lang, sourceDirName);
