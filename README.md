@@ -78,7 +78,13 @@ rclone sync data/assets/ r2:<your-assets-bucket>/ \
 
 #### 4.2 上傳所有字典資料
 
-請同步整個 `data/dictionary`（不是只傳 `pack`）：
+請先產生全文檢索索引，再同步整個 `data/dictionary`（不是只傳 `pack`）：
+
+```bash
+npm run build-search-index
+```
+
+接著上傳：
 
 ```bash
 rclone sync data/dictionary/ r2:<your-dictionary-bucket>/ \
@@ -86,8 +92,12 @@ rclone sync data/dictionary/ r2:<your-dictionary-bucket>/ \
 ```
 
 說明：
+- `search-index/` 不是原始資料的一部分，而是由 `npm run build-search-index` 根據 `data/dictionary/*ck/*.txt` 動態產生。
 - 專案會使用 `pack/pcck/phck/ptck`，也會讀取 `a/`、`c/` 與根目錄下 `@*.json`、`=*.json` 等檔案。
+- 若未先產生 `search-index/` 就直接同步 `data/dictionary/`，正式環境的右上角全文搜尋會缺資料。
 - 只上傳部分目錄會導致部首表、分類索引或搜尋功能不完整。
+- 全文檢索索引現在會產生在 `data/dictionary/search-index/`，並由 Worker 透過 `/api/search-index/*.json` 從 `DICTIONARY` bucket 讀取。
+- 因此部署前除了字典資料本體，也必須把 `search-index/` 一起上傳到 `DICTIONARY` bucket；若漏傳，右上角全文搜尋會失效。
 
 ### 5. 建立 `wrangler.jsonc`
 
@@ -137,7 +147,10 @@ wrangler auth login
 npm run dev
 ```
 
-補充：`npm run dev` 與 `npm run build` 會先根據 `data/dictionary/*ck/*.txt` 自動產生 `public/search-index/*.json`，供右上角的靜態全文檢索使用。
+補充：
+- `npm run dev` 與 `npm run build` 會先根據 `data/dictionary/*ck/*.txt` 自動產生 `data/dictionary/search-index/*.json`。
+- 這些索引檔不會打包進 Workers assets，避免單一檔案超過 Cloudflare Workers 靜態資產 25 MiB 限制。
+- 正式部署前若字典資料有更新，請先執行 `npm run build-search-index`，再執行 `sh commands/upload_dictionary.sh` 上傳最新的 `search-index/`。
 
 部署：
 
@@ -153,6 +166,7 @@ npx wrangler deploy
 - `commands/upload_dictionary.sh`
 
 這兩支腳本可作為參考，但若你使用自訂 bucket 名稱，請先調整腳本中的 bucket 設定，或直接使用上面的 `rclone sync` 指令。
+其中 `commands/upload_dictionary.sh` 目前也會一併上傳 `data/dictionary/search-index/`；若沒有先產生該目錄，腳本會提示先執行 `npm run build-search-index`。
 
 ## 資料更新提示
 
