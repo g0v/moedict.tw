@@ -2,7 +2,7 @@
 
 # 上傳字典資料到 R2 Storage 的腳本
 # 使用 rclone sync 上傳 pack/pcck/phck/ptck（字詞資料）
-# 以及 a/t/h/c（索引、部首、分類、xref 等）與 search-index 到 moedict-dictionary
+# 以及 a/t/h/c（索引、部首、分類、xref 等）、search-index、translation-data 到 moedict-dictionary
 
 set -e  # 遇到錯誤時退出
 
@@ -31,6 +31,8 @@ PACK_FOLDERS=("pack" "pcck" "phck" "ptck")
 # 語言子目錄（含 index.json, xref.json, @.json, =.json 等）
 LANG_FOLDERS=("a" "c" "h" "t")
 SEARCH_INDEX_DIR="$DICTIONARY_DIR/search-index"
+TRANSLATION_DATA_DIR="$DICTIONARY_DIR/translation-data"
+
 
 # 檢查所有 pack 資料夾是否存在
 for folder in "${PACK_FOLDERS[@]}"; do
@@ -54,6 +56,12 @@ if [ ! -d "$SEARCH_INDEX_DIR" ]; then
     exit 1
 fi
 
+# 檢查翻譯資料資料夾是否存在
+if [ ! -d "$TRANSLATION_DATA_DIR" ]; then
+    echo "❌ 錯誤: $TRANSLATION_DATA_DIR 資料夾不存在"
+    exit 1
+fi
+
 echo "📁 準備上傳以下資料夾:"
 for folder in "${PACK_FOLDERS[@]}"; do
     file_count=$(find "$DICTIONARY_DIR/$folder" -name "*.txt" | wc -l)
@@ -65,6 +73,8 @@ for folder in "${LANG_FOLDERS[@]}"; do
 done
 search_index_count=$(find "$SEARCH_INDEX_DIR" -name "*.json" | wc -l)
 echo "  - search-index ($search_index_count 個 .json 檔案)"
+translation_data_count=$(find "$TRANSLATION_DATA_DIR" -name "*.xml" | wc -l)
+echo "  - translation-data ($translation_data_count 個 .xml 檔案)"
 
 echo ""
 echo "🔄 開始同步上傳..."
@@ -105,6 +115,12 @@ echo "📤 正在上傳 search-index/ (全文檢索索引)..."
 rclone_upload "$SEARCH_INDEX_DIR" "$R2_REMOTE:$R2_BUCKET/search-index"
 echo "✅ search-index/ 上傳完成"
 
+# 上傳翻譯資料
+echo ""
+echo "📤 正在上傳 translation-data/ (翻譯語料)..."
+rclone_upload "$TRANSLATION_DATA_DIR" "$R2_REMOTE:$R2_BUCKET/translation-data"
+echo "✅ translation-data/ 上傳完成"
+
 echo ""
 echo "🎉 所有字典資料上傳完成！"
 echo ""
@@ -119,6 +135,8 @@ for folder in "${LANG_FOLDERS[@]}"; do
 done
 search_index_count=$(find "$SEARCH_INDEX_DIR" -name "*.json" | wc -l)
 echo "  - search-index/: $search_index_count 個 JSON 檔案"
+translation_data_count=$(find "$TRANSLATION_DATA_DIR" -name "*.xml" | wc -l)
+echo "  - translation-data/: $translation_data_count 個 XML 檔案"
 
 echo ""
 echo "🔗 R2 Storage 路徑: $R2_REMOTE:$R2_BUCKET"

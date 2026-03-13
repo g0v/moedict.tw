@@ -211,6 +211,39 @@ export default {
       });
     }
 
+    // 特殊路由：CFDict XML（從字典 R2 讀取）
+    if (url.pathname === '/translation-data/cfdict.xml') {
+      const origin = request.headers.get('Origin');
+      const corsHeaders = {
+        'Access-Control-Allow-Origin': origin || '*',
+        'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      };
+      const bucket = env.DICTIONARY;
+      const key = 'translation-data/cfdict.xml';
+      const obj = await bucket.get(key);
+      if (!obj) {
+        return new Response('Not Found', {
+          status: 404,
+          headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+            ...corsHeaders,
+          },
+        });
+      }
+      const headers = new Headers();
+      obj.writeHttpMetadata(headers);
+      headers.set('Content-Type', 'application/xml; charset=utf-8');
+      headers.set('Content-Disposition', 'attachment; filename="cfdict.xml"');
+      headers.set('Cache-Control', 'public, max-age=86400');
+      headers.set('etag', obj.httpEtag);
+      Object.entries(corsHeaders).forEach(([k, v]) => headers.set(k, v));
+      if (request.method === 'HEAD') {
+        return new Response(null, { status: 200, headers });
+      }
+      return new Response(obj.body, { status: 200, headers });
+    }
+
 
     if (url.pathname.startsWith('/api/')) {
       console.log('🔍 [Index] 處理 API 請求:', url.pathname);
