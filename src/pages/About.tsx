@@ -179,7 +179,7 @@ export function About({ assetBaseUrl }: AboutProps) {
 					、{' '}
 					<a
 						target="_blank"
-						href="http://www.handedict.de/chinesisch_deutsch.php"
+						href="https://handedict.zydeo.net/en/download"
 						rel="noopener noreferrer"
 					>
 						HanDeDict
