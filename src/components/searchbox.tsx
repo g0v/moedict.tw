@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { prefetchDictionaryEntry } from '../utils/dictionary-cache';
+import { removeBopomofo } from '../utils/bopomofo-pinyin-utils'
 
 type Lang = 'a' | 't' | 'h' | 'c';
 
@@ -116,7 +117,7 @@ function extractTermFromPath(pathname: string): string {
 }
 
 function resolveSearchInput(input: string, fallbackLang: Lang): { lang: Lang; term: string } | null {
-	const trimmed = input.trim();
+	const trimmed = removeBopomofo(input.trim());
 	if (!trimmed) return null;
 
 	const { lang: parsedLang, cleanTerm } = parseSearchTerm(trimmed);
