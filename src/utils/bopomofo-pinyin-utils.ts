@@ -224,3 +224,8 @@ export function formatPinyin(pinyin: string): string {
   if (!pinyin) return '';
   return pinyin.replace(/([āáǎàōóǒòēéěèīíǐìūúǔùǖǘǚǜ])/g, '<span class="tone">$1</span>');
 }
+
+// 去除注音符號
+export function removeBopomofo(str: string) {
+  return str.replace(/[\u3105-\u312F\u31A0-\u31BF\u02D9\u02CA\u02C7\u02CB]/g, '');
+}
