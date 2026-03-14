@@ -439,7 +439,7 @@ export function About({ assetBaseUrl }: AboutProps) {
 						<img
 							alt="Google Play 下載"
 							title="Google Play 下載"
-							src="/assets/css/google_play.jpg"
+							src="/images/google_play.jpg"
 							width="135"
 							height="46"
 						/>
@@ -453,7 +453,7 @@ export function About({ assetBaseUrl }: AboutProps) {
 						<img
 							alt="App Store 下載"
 							title="App Store 下載"
-							src="/assets/css/Download_on_the_App_Store_Badge_HK_TW_135x40.png"
+							src="/images/Download_on_the_App_Store_Badge_HK_TW_135x40.png"
 							width="155"
 							height="46"
 						/>
