@@ -25,7 +25,7 @@ test.describe('mobile safe-area layout', () => {
       };
     });
 
-    expect(boxes.mainMarginTop).toBe('124px');
+    expect(boxes.mainMarginTop).toBe('179px');
     expect(boxes.heading.y).toBeGreaterThanOrEqual(boxes.queryBox.y + boxes.queryBox.height);
   });
 });

@@ -136,7 +136,8 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 		@media only screen and (max-width: 767px) {
 			#main-content {
 				margin-left: 0;
-				margin-top: calc(65px + var(--moe-safe-area-top));
+				/* 預留空間給固定的搜尋框 + 持續顯示的自動聯想 (#112) */
+				margin-top: calc(120px + var(--moe-safe-area-top));
 			}
 		}
 
