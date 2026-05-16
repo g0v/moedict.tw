@@ -38,6 +38,30 @@ test.describe('mobile sidebar search toggle', () => {
     viewport: { width: 375, height: 700 },
   });
 
+  test('keeps the contain-list toggle available after landing on a word page', async ({ page }) => {
+    await page.goto('/%E8%90%8C');
+
+    await expect(page.locator('#query')).toHaveValue('萌', { timeout: 15_000 });
+    await expect(page.getByRole('button', { name: /列出所有含有「萌」的詞/ })).toBeVisible({
+      timeout: 10_000,
+    });
+  });
+
+  test('expands the contain-list results when submitting the mobile search', async ({ page }) => {
+    await page.goto('/');
+
+    const input = page.locator('#query');
+    await expect(input).toBeVisible({ timeout: 15_000 });
+    await input.fill('萌');
+    await input.press('Enter');
+
+    await expect(page.locator('#sidebar-search-results')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('button', { name: /列出所有含有「萌」的詞/ })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+  });
+
   test('keeps the results toggle from blurring the searchbox first (#108)', async ({ page }) => {
     await page.goto('/%E8%90%8C');
 

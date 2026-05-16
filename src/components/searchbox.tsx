@@ -928,22 +928,35 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
 		[activeSearch, isMobileViewport, navigate, rememberSearchValue, searchValue]
 	);
 
+	const submitSearch = useCallback(() => {
+		const resolved = resolveSearchInput(searchValue, resolvedLang);
+		if (!resolved) return;
+
+		preserveSuggestionsOnNextNavigationRef.current = false;
+		setSuggestionQueryOverride(null);
+		setIsContainerActive(true);
+		if (isMobileViewport) {
+			setShowMobileResults(true);
+		}
+
+		if (hasLegacyPatternOperators(resolved.term)) return;
+		if (resolved.lang === 't' && isTaiwaneseRomanizedInput(resolved.term)) return;
+		if (resolved.lang === 'h' && isHakkaRomanizedInput(resolved.term)) return;
+		if (isHanYuRomanizationQuery(resolved.term, resolved.lang)) return;
+
+		const path = formatSearchTerm(resolved.term, resolved.lang);
+		if (path !== location.pathname) {
+			navigate(path);
+		}
+	}, [isMobileViewport, location.pathname, navigate, resolvedLang, searchValue]);
+
 	// 處理提交
-		const handleSubmit = useCallback(
-			(e: React.FormEvent<HTMLFormElement>) => {
-				e.preventDefault();
-				const resolved = resolveSearchInput(searchValue, resolvedLang);
-				if (!resolved) return;
-				if (hasLegacyPatternOperators(resolved.term)) return;
-				if (resolved.lang === 't' && isTaiwaneseRomanizedInput(resolved.term)) return;
-				if (resolved.lang === 'h' && isHakkaRomanizedInput(resolved.term)) return;
-				if (isHanYuRomanizationQuery(resolved.term, resolved.lang)) return;
-				preserveSuggestionsOnNextNavigationRef.current = false;
-				setSuggestionQueryOverride(null);
-				const path = formatSearchTerm(resolved.term, resolved.lang);
-				navigate(path);
-			},
-		[navigate, resolvedLang, searchValue]
+	const handleSubmit = useCallback(
+		(e: React.FormEvent<HTMLFormElement>) => {
+			e.preventDefault();
+			submitSearch();
+		},
+		[submitSearch]
 	);
 
 	const focusSuggestionByIndex = useCallback((index: number) => {
@@ -1086,10 +1099,7 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
 
 			if (e.key === 'Enter') {
 				e.preventDefault();
-				preserveSuggestionsOnNextNavigationRef.current = false;
-				setSuggestionQueryOverride(null);
-				// 僅在使用者以方向鍵選到候選詞後（focus 進入列表）才由候選項目處理 Enter。
-				// 在輸入框直接按 Enter 時不執行任何跳轉，避免誤進入第一筆結果。
+				submitSearch();
 				return;
 			} else if (e.key === 'Escape') {
 				preserveSuggestionsOnNextNavigationRef.current = false;
@@ -1099,10 +1109,10 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
 				inputRef.current?.blur();
 			}
 		},
-		[focusSuggestionByIndex, isMobileViewport, loadingSuggestions, suggestions]
+		[focusSuggestionByIndex, isMobileViewport, loadingSuggestions, submitSearch, suggestions]
 	);
 
-	const shouldShowMobileToggle = isMobileViewport && hasActiveSearch && (isContainerActive || showMobileResults);
+	const shouldShowMobileToggle = isMobileViewport && hasActiveSearch;
 	const shouldRenderResultList = hasActiveSearch && (!isMobileViewport ? isContainerActive : showMobileResults);
 	const shouldShowSearchClear = searchValue.length > 0;
 
