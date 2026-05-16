@@ -27,6 +27,7 @@ const PREFETCH_MIN_TERM_LENGTH = 2;
 const PREFETCH_DELAY_MS = 120;
 const MOBILE_BREAKPOINT_QUERY = '(max-width: 767px)';
 const MOBILE_TOGGLE_BLUR_GUARD_MS = 350;
+const MOBILE_SEARCH_HISTORY_LIMIT = 50;
 const INDEX_CACHE = new Map<Lang, string[]>();
 const INDEX_PROMISE_CACHE = new Map<Lang, Promise<string[]>>();
 const TAIWANESE_PINYIN_CACHE = new Map<string, string[]>();
@@ -583,7 +584,9 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
 	const mobileToggleGuardTimerRef = useRef<number | null>(null);
 	const mobileToggleInteractionRef = useRef(false);
 	const isComposingRef = useRef(false);
+	const compositionStartValueRef = useRef('');
 	const preserveSuggestionsOnNextNavigationRef = useRef(false);
+	const searchHistoryRef = useRef<string[]>([]);
 	const [searchValue, setSearchValue] = useState('');
 	const [suggestionQueryOverride, setSuggestionQueryOverride] = useState<ReturnType<typeof resolveSearchInput>>(null);
 	const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
@@ -791,27 +794,70 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
 		[location.pathname, navigate, resolvedLang]
 	);
 
+	const rememberSearchValue = useCallback(
+		(value: string) => {
+			const history = searchHistoryRef.current;
+			if (history[history.length - 1] === value) return;
+
+			history.push(value);
+			if (history.length > MOBILE_SEARCH_HISTORY_LIMIT) {
+				history.shift();
+			}
+		},
+		[]
+	);
+
 	// 處理輸入變化：同步更新路由
 	const handleInputChange = useCallback(
 		(e: React.ChangeEvent<HTMLInputElement>) => {
 			const value = e.currentTarget.value;
+			const nativeEvent = e.nativeEvent as InputEvent;
+			const isComposingInput =
+				isComposingRef.current ||
+				nativeEvent.isComposing ||
+				nativeEvent.inputType === 'insertCompositionText';
+
+			if (isComposingInput) {
+				setSearchValue(value);
+				return;
+			}
+
+			if (value !== searchValue) {
+				rememberSearchValue(searchValue);
+			}
 			preserveSuggestionsOnNextNavigationRef.current = false;
 			setSuggestionQueryOverride(null);
 			setSearchValue(value);
 			syncRouteWithInput(value, true);
 		},
-		[syncRouteWithInput]
+		[rememberSearchValue, searchValue, syncRouteWithInput]
 	);
 
 	// 處理輸入法開始
 	const handleInputCompositionStart = useCallback(() => {
 		isComposingRef.current = true;
-	}, []);
+		compositionStartValueRef.current = searchValue;
+	}, [searchValue]);
 
 	// 處理輸入法結束
-	const handleInputCompositionEnd = useCallback(() => {
-		isComposingRef.current = false;
-	}, []);
+	const handleInputCompositionEnd = useCallback(
+		(e: React.CompositionEvent<HTMLInputElement>) => {
+			isComposingRef.current = false;
+			const value = e.currentTarget.value;
+			const previousValue = compositionStartValueRef.current;
+			compositionStartValueRef.current = value;
+
+			if (value !== previousValue) {
+				rememberSearchValue(previousValue);
+			}
+
+			preserveSuggestionsOnNextNavigationRef.current = false;
+			setSuggestionQueryOverride(null);
+			setSearchValue(value);
+			syncRouteWithInput(value, true);
+		},
+		[rememberSearchValue, syncRouteWithInput]
+	);
 
 	// container 取得 focus（任何子元素 focus 都算）
 	const handleContainerFocus = useCallback(() => {
@@ -860,6 +906,10 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
 				setSuggestionQueryOverride(null);
 			}
 
+			if (suggestion.value !== searchValue) {
+				rememberSearchValue(searchValue);
+			}
+
 			setSearchValue(suggestion.value);
 			if (isMobileViewport) {
 				setShowMobileResults(false);
@@ -875,25 +925,38 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
 			const path = formatSearchTerm(suggestion.value, suggestion.lang);
 			navigate(path);
 		},
-		[activeSearch, isMobileViewport, navigate]
+		[activeSearch, isMobileViewport, navigate, rememberSearchValue, searchValue]
 	);
 
+	const submitSearch = useCallback(() => {
+		const resolved = resolveSearchInput(searchValue, resolvedLang);
+		if (!resolved) return;
+
+		preserveSuggestionsOnNextNavigationRef.current = false;
+		setSuggestionQueryOverride(null);
+		setIsContainerActive(true);
+		if (isMobileViewport) {
+			setShowMobileResults(true);
+		}
+
+		if (hasLegacyPatternOperators(resolved.term)) return;
+		if (resolved.lang === 't' && isTaiwaneseRomanizedInput(resolved.term)) return;
+		if (resolved.lang === 'h' && isHakkaRomanizedInput(resolved.term)) return;
+		if (isHanYuRomanizationQuery(resolved.term, resolved.lang)) return;
+
+		const path = formatSearchTerm(resolved.term, resolved.lang);
+		if (path !== location.pathname) {
+			navigate(path);
+		}
+	}, [isMobileViewport, location.pathname, navigate, resolvedLang, searchValue]);
+
 	// 處理提交
-		const handleSubmit = useCallback(
-			(e: React.FormEvent<HTMLFormElement>) => {
-				e.preventDefault();
-				const resolved = resolveSearchInput(searchValue, resolvedLang);
-				if (!resolved) return;
-				if (hasLegacyPatternOperators(resolved.term)) return;
-				if (resolved.lang === 't' && isTaiwaneseRomanizedInput(resolved.term)) return;
-				if (resolved.lang === 'h' && isHakkaRomanizedInput(resolved.term)) return;
-				if (isHanYuRomanizationQuery(resolved.term, resolved.lang)) return;
-				preserveSuggestionsOnNextNavigationRef.current = false;
-				setSuggestionQueryOverride(null);
-				const path = formatSearchTerm(resolved.term, resolved.lang);
-				navigate(path);
-			},
-		[navigate, resolvedLang, searchValue]
+	const handleSubmit = useCallback(
+		(e: React.FormEvent<HTMLFormElement>) => {
+			e.preventDefault();
+			submitSearch();
+		},
+		[submitSearch]
 	);
 
 	const focusSuggestionByIndex = useCallback((index: number) => {
@@ -969,6 +1032,48 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
 		armMobileToggleBlurGuard();
 	}, [armMobileToggleBlurGuard]);
 
+	const handleMobileBack = useCallback(() => {
+		setShowMobileResults(false);
+		setIsContainerActive(false);
+		setSuggestionQueryOverride(null);
+		preserveSuggestionsOnNextNavigationRef.current = false;
+
+		let previousValue = searchHistoryRef.current.pop();
+		while (previousValue === searchValue) {
+			previousValue = searchHistoryRef.current.pop();
+		}
+
+		if (previousValue !== undefined) {
+			setSearchValue(previousValue);
+			if (previousValue.trim().length > 0) {
+				syncRouteWithInput(previousValue, true);
+			}
+			window.requestAnimationFrame(() => {
+				inputRef.current?.focus();
+			});
+			return;
+		}
+
+		inputRef.current?.focus();
+	}, [searchValue, syncRouteWithInput]);
+
+	const handleMobileClear = useCallback(() => {
+		if (searchValue.length > 0) {
+			rememberSearchValue(searchValue);
+		}
+		preserveSuggestionsOnNextNavigationRef.current = false;
+		setSuggestionQueryOverride(null);
+		setSearchValue('');
+		setShowMobileResults(false);
+		window.requestAnimationFrame(() => {
+			inputRef.current?.focus();
+		});
+	}, [rememberSearchValue, searchValue]);
+
+	const handleMobileControlPointerDown = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+		event.preventDefault();
+	}, []);
+
 	// 輸入框鍵盤事件
 	const handleInputKeyDown = useCallback(
 		(e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -994,10 +1099,7 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
 
 			if (e.key === 'Enter') {
 				e.preventDefault();
-				preserveSuggestionsOnNextNavigationRef.current = false;
-				setSuggestionQueryOverride(null);
-				// 僅在使用者以方向鍵選到候選詞後（focus 進入列表）才由候選項目處理 Enter。
-				// 在輸入框直接按 Enter 時不執行任何跳轉，避免誤進入第一筆結果。
+				submitSearch();
 				return;
 			} else if (e.key === 'Escape') {
 				preserveSuggestionsOnNextNavigationRef.current = false;
@@ -1007,11 +1109,12 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
 				inputRef.current?.blur();
 			}
 		},
-		[focusSuggestionByIndex, isMobileViewport, loadingSuggestions, suggestions]
+		[focusSuggestionByIndex, isMobileViewport, loadingSuggestions, submitSearch, suggestions]
 	);
 
-	const shouldShowMobileToggle = isMobileViewport && hasActiveSearch && (isContainerActive || showMobileResults);
+	const shouldShowMobileToggle = isMobileViewport && hasActiveSearch;
 	const shouldRenderResultList = hasActiveSearch && (!isMobileViewport ? isContainerActive : showMobileResults);
+	const shouldShowSearchClear = searchValue.length > 0;
 
 	return (
 		<div
@@ -1021,21 +1124,45 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
 			onFocus={handleContainerFocus}
 			onBlur={handleContainerBlur}
 		>
-			<form onSubmit={handleSubmit} className="search-form">
-				<input
-					ref={inputRef}
-					id="query"
-					type="search"
-					className="query"
-					autoComplete="off"
-					placeholder="請輸入欲查詢的字詞"
-					value={searchValue}
-					onChange={handleInputChange}
-					onCompositionStart={handleInputCompositionStart}
-					onCompositionEnd={handleInputCompositionEnd}
-					onKeyDown={handleInputKeyDown}
-				/>
-			</form>
+			<div className="mobile-search-bar">
+				<button
+					type="button"
+					className="mobile-search-back"
+					aria-label="回到上一個搜尋"
+					onPointerDown={handleMobileControlPointerDown}
+					onClick={handleMobileBack}
+				>
+					<span className="mobile-search-back-chevron" aria-hidden="true" />
+				</button>
+				<form onSubmit={handleSubmit} className="search-form">
+					<div className="search-input-wrap">
+						<input
+							ref={inputRef}
+							id="query"
+							type="search"
+							className="query"
+							autoComplete="off"
+							placeholder="請輸入欲查詢的字詞"
+							value={searchValue}
+							onChange={handleInputChange}
+							onCompositionStart={handleInputCompositionStart}
+							onCompositionEnd={handleInputCompositionEnd}
+							onKeyDown={handleInputKeyDown}
+						/>
+						{shouldShowSearchClear && (
+							<button
+								type="button"
+								className="mobile-search-clear"
+								aria-label="清除搜尋字詞"
+								onPointerDown={handleMobileControlPointerDown}
+								onClick={handleMobileClear}
+							>
+								<span aria-hidden="true">×</span>
+							</button>
+						)}
+					</div>
+				</form>
+			</div>
 			{shouldShowMobileToggle && (
 				<button
 					type="button"
