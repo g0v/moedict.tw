@@ -28,6 +28,7 @@ const PREFETCH_DELAY_MS = 120;
 const MOBILE_BREAKPOINT_QUERY = '(max-width: 767px)';
 const MOBILE_TOGGLE_BLUR_GUARD_MS = 350;
 const MOBILE_SEARCH_HISTORY_LIMIT = 50;
+const MOBILE_SEARCH_HAS_QUERY_CLASS = 'document-mobile-search-has-query';
 const INDEX_CACHE = new Map<Lang, string[]>();
 const INDEX_PROMISE_CACHE = new Map<Lang, Promise<string[]>>();
 const TAIWANESE_PINYIN_CACHE = new Map<string, string[]>();
@@ -656,6 +657,17 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
 	useEffect(() => {
 		setShowMobileResults(false);
 	}, [activeSearchLang, activeSearchTerm, isMobileViewport]);
+
+	useEffect(() => {
+		if (typeof document === 'undefined') return;
+
+		const hasQuery = isMobileViewport && searchValue.trim().length > 0;
+		document.documentElement.classList.toggle(MOBILE_SEARCH_HAS_QUERY_CLASS, hasQuery);
+
+		return () => {
+			document.documentElement.classList.remove(MOBILE_SEARCH_HAS_QUERY_CLASS);
+		};
+	}, [isMobileViewport, searchValue]);
 
 	// 清理 blur timer
 	useEffect(() => {
