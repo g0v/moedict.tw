@@ -767,45 +767,47 @@ export function NavbarNormal({ currentLang }: NavbarNormalProps) {
 						<FullTextSearch currentLang={resolvedLang} />
 					</li>
 
-					<li style={{ display: 'inline-block' }}>
-						<a
-							href="https://racklin.github.io/moedict-desktop/download.html"
-							target="_blank"
-							rel="noopener noreferrer"
-							title="桌面版下載(可離線使用)"
-							aria-label="桌面版下載(可離線使用)"
-							style={{ color: '#ccc' }}
-						>
-							<SvgIcon name="download" size="1em" className={styled.navIcon} aria-hidden="true" />
-						</a>
-					</li>
-
 					{!isCapacitorApp() && (
-						<li style={{ display: 'inline-block' }}>
-							<a
-								href="https://play.google.com/store/apps/details?id=org.audreyt.dict.moe"
-								target="_blank"
-								rel="noopener noreferrer"
-								title="Google Play 下載"
-								aria-label="Google Play 下載"
-								style={{ color: '#ccc' }}
-							>
-								<SvgIcon name="android" size="1em" className={styled.navIcon} aria-hidden="true" />
-							</a>
-						</li>
+						<>
+							<li style={{ display: 'inline-block' }}>
+								<a
+									href="https://racklin.github.io/moedict-desktop/download.html"
+									target="_blank"
+									rel="noopener noreferrer"
+									title="桌面版下載(可離線使用)"
+									aria-label="桌面版下載(可離線使用)"
+									style={{ color: '#ccc' }}
+								>
+									<SvgIcon name="download" size="1em" className={styled.navIcon} aria-hidden="true" />
+								</a>
+							</li>
+
+							<li style={{ display: 'inline-block' }}>
+								<a
+									href="https://play.google.com/store/apps/details?id=org.audreyt.dict.moe"
+									target="_blank"
+									rel="noopener noreferrer"
+									title="Google Play 下載"
+									aria-label="Google Play 下載"
+									style={{ color: '#ccc' }}
+								>
+									<SvgIcon name="android" size="1em" className={styled.navIcon} aria-hidden="true" />
+								</a>
+							</li>
+							<li style={{ display: 'inline-block' }}>
+								<a
+									href="http://itunes.apple.com/app/id1434947403"
+									target="_blank"
+									rel="noopener noreferrer"
+									title="App Store 下載"
+									aria-label="App Store 下載"
+									style={{ color: '#ccc' }}
+								>
+									<SvgIcon name="apple" size="1em" className={styled.navIcon} aria-hidden="true" />
+								</a>
+							</li>
+						</>
 					)}
-					<li style={{ display: 'inline-block' }}>
-						<a
-							href="http://itunes.apple.com/app/id1434947403"
-							target="_blank"
-							rel="noopener noreferrer"
-							title="App Store 下載"
-							aria-label="App Store 下載"
-							style={{ color: '#ccc' }}
-						>
-							<SvgIcon name="apple" size="1em" className={styled.navIcon} aria-hidden="true" />
-						</a>
-					</li>
 
 					<li>
 						<Link to="/about" title="關於本站" aria-label="關於本站">
