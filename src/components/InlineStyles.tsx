@@ -194,7 +194,7 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 				bottom: auto !important;
 				padding: 15px !important;
 				padding-bottom: 3px !important;
-				z-index: 1040 !important;
+				z-index: 11 !important;
 				border-right: none !important;
 			}
 
