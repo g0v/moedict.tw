@@ -28,6 +28,10 @@ function isMenuNode(item: MenuItem): item is MenuNode {
 	return 'children' in item;
 }
 
+function isCapacitorApp() {
+	return typeof window !== 'undefined' && Boolean((window as Window & { Capacitor?: unknown }).Capacitor);
+}
+
 /**
  * 語言選項配置
  */
@@ -776,18 +780,20 @@ export function NavbarNormal({ currentLang }: NavbarNormalProps) {
 						</a>
 					</li>
 
-					<li style={{ display: 'inline-block' }}>
-						<a
-							href="https://play.google.com/store/apps/details?id=org.audreyt.dict.moe"
-							target="_blank"
-							rel="noopener noreferrer"
-							title="Google Play 下載"
-							aria-label="Google Play 下載"
-							style={{ color: '#ccc' }}
-						>
-							<SvgIcon name="android" size="1em" className={styled.navIcon} aria-hidden="true" />
-						</a>
-					</li>
+					{!isCapacitorApp() && (
+						<li style={{ display: 'inline-block' }}>
+							<a
+								href="https://play.google.com/store/apps/details?id=org.audreyt.dict.moe"
+								target="_blank"
+								rel="noopener noreferrer"
+								title="Google Play 下載"
+								aria-label="Google Play 下載"
+								style={{ color: '#ccc' }}
+							>
+								<SvgIcon name="android" size="1em" className={styled.navIcon} aria-hidden="true" />
+							</a>
+						</li>
+					)}
 					<li style={{ display: 'inline-block' }}>
 						<a
 							href="http://itunes.apple.com/app/id1434947403"

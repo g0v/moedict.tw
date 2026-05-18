@@ -228,28 +228,32 @@ export function About({ assetBaseUrl }: AboutProps) {
 					</a>
 					網站。字體e筆書寫：張炳煌教授。字體選用：郭晉銓博士。
 				</p>
-				<p className="web-only">
-					<a
-						target="_blank"
-						href="https://play.google.com/store/apps/details?id=org.audreyt.dict.moe"
-						rel="noopener noreferrer"
-					>
-						Android
-					</a>
-					、{' '}
-					<a target="_blank" href="http://itunes.apple.com/app/id1434947403" rel="noopener noreferrer">
-						Apple iOS
-					</a>{' '}
-					及{' '}
-					<a
-						target="_blank"
-						href="https://marketplace.firefox.com/app/%E8%90%8C%E5%85%B8"
-						rel="noopener noreferrer"
-					>
-						Firefox OS
-					</a>{' '}
-					離線版包含下列第三方元件：
-				</p>
+				{showWebOnlyActions ? (
+					<p className="web-only">
+						<a
+							target="_blank"
+							href="https://play.google.com/store/apps/details?id=org.audreyt.dict.moe"
+							rel="noopener noreferrer"
+						>
+							Android
+						</a>
+						、{' '}
+						<a target="_blank" href="http://itunes.apple.com/app/id1434947403" rel="noopener noreferrer">
+							Apple iOS
+						</a>{' '}
+						及{' '}
+						<a
+							target="_blank"
+							href="https://marketplace.firefox.com/app/%E8%90%8C%E5%85%B8"
+							rel="noopener noreferrer"
+						>
+							Firefox OS
+						</a>{' '}
+						離線版包含下列第三方元件：
+					</p>
+				) : (
+					<p>本 App 包含下列第三方元件：</p>
+				)}
 				<ul>
 					<li>
 						jQuery 及 jQuery UI 由 jQuery Foundation 提供，採用{' '}
