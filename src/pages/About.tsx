@@ -263,9 +263,9 @@ export function About({ assetBaseUrl }: AboutProps) {
 						授權。
 					</li>
 					<li>
-						Cordova 由 Apache 基金會提供，採用{' '}
-						<a target="_blank" href="https://www.apache.org/licenses/LICENSE-2.0" rel="noopener noreferrer">
-							Apache 2.0
+						Capacitor 由 Ionic 提供，採用{' '}
+						<a target="_blank" href="https://github.com/ionic-team/capacitor/blob/main/LICENSE" rel="noopener noreferrer">
+							MIT
 						</a>{' '}
 						授權。
 					</li>
