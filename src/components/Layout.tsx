@@ -3,13 +3,14 @@
  * 根據 layout 類型切換不同的頁面結構
  */
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NavbarAbout } from './navbar-about';
 import { NavbarNormal } from './navbar-normal';
 import { Sidebar } from './sidebar';
 import { AssetLoader } from './AssetLoader';
 import { InlineStyles } from './InlineStyles';
 import { UserPref } from './user-pref';
+import { useSwipeNavigation } from '../hooks/useSwipeNavigation';
 
 type Lang = 'a' | 't' | 'h' | 'c';
 
@@ -28,6 +29,8 @@ interface LayoutProps {
 export function Layout({ layout, children, currentLang, r2Endpoint }: LayoutProps) {
 	const [criticalCssReady, setCriticalCssReady] = useState(false);
 	const [inlineStylesReady, setInlineStylesReady] = useState(false);
+	const mainRef = useRef<HTMLElement | null>(null);
+	useSwipeNavigation(mainRef);
 
 	useEffect(() => {
 		if (r2Endpoint) {
@@ -51,7 +54,7 @@ export function Layout({ layout, children, currentLang, r2Endpoint }: LayoutProp
 			{layout === 'about' ? (
 				<div className="app-shell">
 					<NavbarAbout r2Endpoint={r2Endpoint} />
-					<main id="main-content" className="about-layout">
+					<main id="main-content" className="about-layout" ref={mainRef}>
 						{children}
 					</main>
 				</div>
@@ -60,7 +63,7 @@ export function Layout({ layout, children, currentLang, r2Endpoint }: LayoutProp
 					<NavbarNormal currentLang={currentLang} />
 					<Sidebar currentLang={currentLang} />
 					<UserPref />
-					<main id="main-content">
+					<main id="main-content" ref={mainRef}>
 						{children}
 					</main>
 				</div>
