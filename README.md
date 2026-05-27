@@ -227,7 +227,7 @@ bun install
 ```
 
 如果只要產生分語系 StarDict 格式：
-```SKIP_MOBI=1 bun run build-stardict-html```
+```SKIP_MOBI=1 bun run build-reader-formats```
 
 如同步要產生 Kindle 格式，另外需安裝其中一種 `.mobi` 轉檔工具：
 - `ebook-convert`（Calibre）
