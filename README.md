@@ -211,3 +211,84 @@ bunx playwright install
 ```bash
 bun run test
 ```
+
+## 匯出閱讀器字典檔（多格式、分語系）
+
+此專案根目錄 `LICENSE` 為 **CC0 1.0 Universal**。就著作權與資料庫權利而言，將字典資料轉為不同閱讀器格式（如 StarDict 與 Kindle `.mobi`）再散布，原則上屬於 CC0 允許範圍。
+
+但仍請注意：
+- 這不是法律意見；若要商業大量散布，建議再由法律專業確認。
+- CC0 文字本身也寫明：不自動處理商標、專利、人格權、隱私等其他權利。
+
+### 1) 安裝依賴
+
+```bash
+bun install
+```
+
+另外需安裝其中一種 `.mobi` 轉檔工具：
+- `ebook-convert`（Calibre）
+- `kindlegen`
+
+安裝方式（擇一）：
+
+```bash
+# macOS（Homebrew）
+brew install --cask calibre
+
+# Windows（winget）
+winget install calibre.calibre
+
+# Windows（Chocolatey）
+choco install calibre
+
+# Ubuntu / Debian
+sudo apt update
+sudo apt install -y calibre
+```
+
+安裝後，重開終端機，先確認：
+
+```bash
+ebook-convert --version
+```
+
+補充：
+- `kindlegen` 已停止維護，通常需自行下載舊版二進位檔；若無特殊需求，建議優先使用 `ebook-convert`。
+- 若工具不在系統 PATH，可在執行時指定：
+
+```bash
+MOBI_CONVERTER=/path/to/ebook-convert bun run build-reader-formats
+```
+
+### 2) 產生字典檔（同一腳本輸出多格式）
+
+```bash
+bun run build-reader-formats
+```
+
+產出路徑（已在 `.gitignore` 排除）：
+- StarDict（每語系各三檔）：
+  - `build/stardict/a/moedict-a-html.dict`
+  - `build/stardict/a/moedict-a-html.idx`
+  - `build/stardict/a/moedict-a-html.ifo`
+  - `build/stardict/t/moedict-t-html.dict`
+  - `build/stardict/t/moedict-t-html.idx`
+  - `build/stardict/t/moedict-t-html.ifo`
+  - `build/stardict/h/moedict-h-html.dict`
+  - `build/stardict/h/moedict-h-html.idx`
+  - `build/stardict/h/moedict-h-html.ifo`
+  - `build/stardict/c/moedict-c-html.dict`
+  - `build/stardict/c/moedict-c-html.idx`
+  - `build/stardict/c/moedict-c-html.ifo`
+- Kindle `.mobi`（每語系各一檔）：
+  - `build/kindle/a/moedict-a-kindle.mobi`
+  - `build/kindle/t/moedict-t-kindle.mobi`
+  - `build/kindle/h/moedict-h-kindle.mobi`
+  - `build/kindle/c/moedict-c-kindle.mobi`
+
+### 3) 匯入閱讀器
+
+- 有些相容StarDict格式之閱讀器，需要同一組檔案同目錄放置（至少 `.dict + .idx + .ifo`），請依需求選單一語系匯入（`a`/`t`/`h`/`c`）。
+- Kindle 請直接使用對應語系的 `.mobi` 檔案匯入。
+若目標裝置要求壓縮版，可再自行把 `.dict` 轉為 `.dict.dz`（不影響 `.idx/.ifo` 結構）。
