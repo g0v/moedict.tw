@@ -7,6 +7,7 @@ const ROOT_DIR = path.resolve(import.meta.dirname, '..');
 const SOURCE_ROOT = path.join(ROOT_DIR, 'data', 'dictionary');
 const OUTPUT_ROOT = path.join(ROOT_DIR, 'build', 'stardict');
 const KINDLE_OUTPUT_ROOT = path.join(ROOT_DIR, 'build', 'kindle');
+const CALIBRE_CONFIG_DIR = path.join(KINDLE_OUTPUT_ROOT, '.calibre-config');
 
 const LANG_SOURCE_DIRS = {
 	a: 'pack',
@@ -25,6 +26,11 @@ const LANG_LABELS = {
 const BOOK_PREFIX = 'moedict';
 const MOBI_CONVERTER = process.env.MOBI_CONVERTER || '';
 const SKIP_MOBI = process.env.SKIP_MOBI === '1';
+const MOBI_RECORDS_PER_CHUNK = Number.parseInt(process.env.MOBI_RECORDS_PER_CHUNK || '1000', 10);
+const SELECTED_LANGS = (process.env.READER_FORMAT_LANGS || '')
+	.split(',')
+	.map((lang) => lang.trim())
+	.filter(Boolean);
 
 function decodePackedKey(input) {
 	return input
@@ -51,6 +57,10 @@ function renderMarkedHtml(input) {
 	text = text.replaceAll('~', '');
 	text = text.replace(/\r?\n/g, '<br>');
 	return text.trim();
+}
+
+function renderXhtmlFragment(input) {
+	return input.replace(/<br>/g, '<br />');
 }
 
 function nonEmptyHtml(input) {
@@ -161,8 +171,15 @@ async function collectRecords() {
 		h: [],
 		c: [],
 	};
+	const langEntries = SELECTED_LANGS.length > 0
+		? Object.entries(LANG_SOURCE_DIRS).filter(([lang]) => SELECTED_LANGS.includes(lang))
+		: Object.entries(LANG_SOURCE_DIRS);
 
-	for (const [lang, sourceDirName] of Object.entries(LANG_SOURCE_DIRS)) {
+	if (langEntries.length === 0) {
+		throw new Error(`沒有可產生的語系：${SELECTED_LANGS.join(', ')}`);
+	}
+
+	for (const [lang, sourceDirName] of langEntries) {
 		const sourceDir = path.join(SOURCE_ROOT, sourceDirName);
 		const bucketFiles = await getBucketFiles(sourceDir);
 		console.log(`[build-reader-formats] loading ${lang}: ${bucketFiles.length} buckets`);
@@ -246,7 +263,7 @@ async function writeStarDictFiles(lang, records) {
 		`wordcount=${records.length}`,
 		`idxfilesize=${idxBuffer.length}`,
 		'sametypesequence=h',
-		`description=Generated from moedict.tw ${LANG_LABELS[lang]} data (CC0) with simplified HTML formatting.`,
+		`description=Generated from moedict.tw ${LANG_LABELS[lang]} data with simplified HTML formatting.`,
 		`date=${new Date().toISOString().slice(0, 10)}`,
 		'',
 	].join('\n');
@@ -257,25 +274,45 @@ async function writeStarDictFiles(lang, records) {
 	console.log(`[build-reader-formats] wrote: ${path.relative(ROOT_DIR, ifoPath)}`);
 }
 
-function executeCommand(command, args) {
+function executeCommand(command, args, options = {}) {
 	return new Promise((resolve, reject) => {
-		const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+		const child = spawn(command, args, {
+			stdio: ['ignore', 'pipe', 'pipe'],
+			env: {
+				...process.env,
+				CALIBRE_CONFIG_DIRECTORY: CALIBRE_CONFIG_DIR,
+			},
+		});
 		let stdout = '';
 		let stderr = '';
+		const label = options.label || path.basename(command);
+		const startedAt = Date.now();
+		const heartbeat = setInterval(() => {
+			const elapsedSeconds = Math.round((Date.now() - startedAt) / 1000);
+			console.log(`[build-reader-formats] still running ${label} (${elapsedSeconds}s)`);
+		}, 30_000);
 
 		child.stdout.on('data', (chunk) => {
-			stdout += String(chunk);
+			const text = String(chunk);
+			stdout += text;
+			process.stdout.write(text);
 		});
 		child.stderr.on('data', (chunk) => {
-			stderr += String(chunk);
+			const text = String(chunk);
+			stderr += text;
+			process.stderr.write(text);
 		});
-		child.on('error', (error) => reject(error));
+		child.on('error', (error) => {
+			clearInterval(heartbeat);
+			reject(error);
+		});
 		child.on('close', (code) => {
+			clearInterval(heartbeat);
 			if (code === 0) {
 				resolve({ stdout, stderr });
 				return;
 			}
-			reject(new Error(`${command} exited with code ${code}\n${stderr || stdout}`));
+			reject(new Error(`${label} exited with code ${code}\n${stderr || stdout}`));
 		});
 	});
 }
@@ -313,43 +350,99 @@ async function resolveMobiConverter() {
 	return null;
 }
 
-function renderMobiHtml(lang, records) {
+function renderMobiChunkHtml(lang, records, chunkIndex, chunkCount) {
 	const title = `${LANG_LABELS[lang]}字典`;
 	const items = records
-		.map((record) => `<hr><h2>${escapeHtml(record.word)}</h2><p>${record.article}</p>`)
+		.map((record) => `<hr /><h2>${escapeHtml(record.word)}</h2><p>${renderXhtmlFragment(record.article)}</p>`)
 		.join('\n');
 
 	return [
-		'<!doctype html>',
-		'<html>',
+		'<?xml version="1.0" encoding="utf-8"?>',
+		'<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">',
+		'<html xmlns="http://www.w3.org/1999/xhtml">',
 		'<head>',
-		'<meta charset="utf-8">',
 		`<title>${escapeHtml(title)}</title>`,
 		'</head>',
 		'<body>',
-		`<h1>${escapeHtml(title)}</h1>`,
+		`<h1>${escapeHtml(title)} ${chunkIndex + 1}/${chunkCount}</h1>`,
 		items,
 		'</body>',
 		'</html>',
 	].join('\n');
 }
 
+function renderOpf(lang, baseName, chunkFiles) {
+	const title = `${LANG_LABELS[lang]}字典`;
+	const manifestItems = chunkFiles
+		.map((file, index) => `<item id="chunk-${index}" href="${file}" media-type="application/xhtml+xml" />`)
+		.join('\n    ');
+	const spineItems = chunkFiles
+		.map((_file, index) => `<itemref idref="chunk-${index}" />`)
+		.join('\n    ');
+
+	return [
+		'<?xml version="1.0" encoding="utf-8"?>',
+		'<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="bookid" version="2.0">',
+		'  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">',
+		`    <dc:title>${escapeHtml(title)}</dc:title>`,
+		'    <dc:language>zh-TW</dc:language>',
+		`    <dc:identifier id="bookid">urn:moedict:${baseName}</dc:identifier>`,
+		'  </metadata>',
+		'  <manifest>',
+		`    ${manifestItems}`,
+		'  </manifest>',
+		'  <spine>',
+		`    ${spineItems}`,
+		'  </spine>',
+		'</package>',
+	].join('\n');
+}
+
 async function writeMobiFiles(lang, records, converter) {
 	const outputDir = path.join(KINDLE_OUTPUT_ROOT, lang);
 	await fsp.mkdir(outputDir, { recursive: true });
+	await fsp.mkdir(CALIBRE_CONFIG_DIR, { recursive: true });
 
 	const baseName = `${BOOK_PREFIX}-${lang}-kindle`;
-	const htmlPath = path.join(outputDir, `${baseName}.html`);
+	const sourceDir = path.join(outputDir, 'source');
+	const opfPath = path.join(sourceDir, `${baseName}.opf`);
 	const mobiPath = path.join(outputDir, `${baseName}.mobi`);
+	const recordsPerChunk = Number.isFinite(MOBI_RECORDS_PER_CHUNK) && MOBI_RECORDS_PER_CHUNK > 0
+		? MOBI_RECORDS_PER_CHUNK
+		: 1000;
+	const chunkCount = Math.ceil(records.length / recordsPerChunk);
+	const chunkFiles = [];
 
-	await fsp.writeFile(htmlPath, renderMobiHtml(lang, records), 'utf8');
+	await fsp.rm(sourceDir, { recursive: true, force: true });
+	await fsp.mkdir(sourceDir, { recursive: true });
+	console.log(
+		`[build-reader-formats] preparing Kindle source for ${lang}: ${records.length} entries, ${chunkCount} XHTML chunks`,
+	);
+
+	for (let index = 0; index < chunkCount; index += 1) {
+		const chunkRecords = records.slice(index * recordsPerChunk, (index + 1) * recordsPerChunk);
+		const chunkFile = `chunk-${String(index + 1).padStart(4, '0')}.xhtml`;
+		chunkFiles.push(chunkFile);
+		await fsp.writeFile(
+			path.join(sourceDir, chunkFile),
+			renderMobiChunkHtml(lang, chunkRecords, index, chunkCount),
+			'utf8',
+		);
+	}
+
+	await fsp.writeFile(opfPath, renderOpf(lang, baseName, chunkFiles), 'utf8');
+	console.log(`[build-reader-formats] converting Kindle mobi for ${lang} with ${converter.type}`);
 
 	if (converter.type === 'ebook-convert') {
-		await executeCommand(converter.command, [htmlPath, mobiPath, '--title', `${LANG_LABELS[lang]}字典`]);
+		await executeCommand(
+			converter.command,
+			[opfPath, mobiPath, '--title', `${LANG_LABELS[lang]}字典`],
+			{ label: `${converter.type} (${lang})` },
+		);
 	} else if (converter.type === 'kindlegen') {
-		await executeCommand(converter.command, [htmlPath, '-o', `${baseName}.mobi`]);
+		await executeCommand(converter.command, [opfPath, '-o', `${baseName}.mobi`], { label: `${converter.type} (${lang})` });
 	} else {
-		await executeCommand(converter.command, [htmlPath, mobiPath]);
+		await executeCommand(converter.command, [opfPath, mobiPath], { label: `${converter.type} (${lang})` });
 	}
 
 	console.log(`[build-reader-formats] wrote: ${path.relative(ROOT_DIR, mobiPath)}`);
@@ -365,7 +458,10 @@ async function main() {
 	}
 
 	const recordsByLang = await collectRecords();
-	for (const lang of Object.keys(LANG_SOURCE_DIRS)) {
+	const langs = SELECTED_LANGS.length > 0
+		? SELECTED_LANGS.filter((lang) => Object.hasOwn(LANG_SOURCE_DIRS, lang))
+		: Object.keys(LANG_SOURCE_DIRS);
+	for (const lang of langs) {
 		await writeStarDictFiles(lang, recordsByLang[lang]);
 		if (converter) {
 			await writeMobiFiles(lang, recordsByLang[lang], converter);

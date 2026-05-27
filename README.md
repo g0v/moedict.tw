@@ -229,6 +229,12 @@ bun install
 如果只要產生分語系 StarDict 格式：
 ```SKIP_MOBI=1 bun run build-reader-formats```
 
+如果只要產生特定語系，可用逗號分隔：
+```bash
+READER_FORMAT_LANGS=h bun run build-reader-formats
+READER_FORMAT_LANGS=a,t SKIP_MOBI=1 bun run build-reader-formats
+```
+
 如同步要產生 Kindle 格式，另外需安裝其中一種 `.mobi` 轉檔工具：
 - `ebook-convert`（Calibre）
 - `kindlegen`
