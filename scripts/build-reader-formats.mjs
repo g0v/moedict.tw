@@ -23,6 +23,25 @@ const LANG_LABELS = {
 	c: '兩岸',
 };
 
+const LANG_METADATA = {
+	a: {
+		title: '萌典（國語）',
+		language: 'zh-Hant-TW',
+	},
+	t: {
+		title: '萌典（台語）',
+		language: 'nan-Hant-TW',
+	},
+	h: {
+		title: '萌典（客語）',
+		language: 'hak-Hant-TW',
+	},
+	c: {
+		title: '萌典（兩岸）',
+		language: 'zh-Hant-TW',
+	},
+};
+
 const BOOK_PREFIX = 'moedict';
 const MOBI_CONVERTER = process.env.MOBI_CONVERTER || '';
 const SKIP_MOBI = process.env.SKIP_MOBI === '1';
@@ -227,6 +246,7 @@ async function writeStarDictFiles(lang, records) {
 	const outputDir = path.join(OUTPUT_ROOT, lang);
 	await fsp.mkdir(outputDir, { recursive: true });
 
+	const metadata = LANG_METADATA[lang];
 	const bookName = `${BOOK_PREFIX}-${lang}-html`;
 	const dictPath = path.join(outputDir, `${bookName}.dict`);
 	const idxPath = path.join(outputDir, `${bookName}.idx`);
@@ -259,11 +279,12 @@ async function writeStarDictFiles(lang, records) {
 	const ifoContent = [
 		"StarDict's dict ifo file",
 		'version=2.4.2',
-		`bookname=${bookName}`,
+		`bookname=${metadata.title}`,
 		`wordcount=${records.length}`,
 		`idxfilesize=${idxBuffer.length}`,
 		'sametypesequence=h',
-		`description=Generated from moedict.tw ${LANG_LABELS[lang]} data with simplified HTML formatting.`,
+		`description=Generated from moedict.tw ${metadata.title} data with simplified HTML formatting.`,
+		`lang=${metadata.language}`,
 		`date=${new Date().toISOString().slice(0, 10)}`,
 		'',
 	].join('\n');
@@ -351,7 +372,7 @@ async function resolveMobiConverter() {
 }
 
 function renderMobiChunkHtml(lang, records, chunkIndex, chunkCount) {
-	const title = `${LANG_LABELS[lang]}字典`;
+	const title = LANG_METADATA[lang].title;
 	const items = records
 		.map((record) => `<hr /><h2>${escapeHtml(record.word)}</h2><p>${renderXhtmlFragment(record.article)}</p>`)
 		.join('\n');
@@ -372,7 +393,8 @@ function renderMobiChunkHtml(lang, records, chunkIndex, chunkCount) {
 }
 
 function renderOpf(lang, baseName, chunkFiles) {
-	const title = `${LANG_LABELS[lang]}字典`;
+	const metadata = LANG_METADATA[lang];
+	const title = metadata.title;
 	const manifestItems = chunkFiles
 		.map((file, index) => `<item id="chunk-${index}" href="${file}" media-type="application/xhtml+xml" />`)
 		.join('\n    ');
@@ -385,7 +407,7 @@ function renderOpf(lang, baseName, chunkFiles) {
 		'<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="bookid" version="2.0">',
 		'  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">',
 		`    <dc:title>${escapeHtml(title)}</dc:title>`,
-		'    <dc:language>zh-TW</dc:language>',
+		`    <dc:language>${metadata.language}</dc:language>`,
 		`    <dc:identifier id="bookid">urn:moedict:${baseName}</dc:identifier>`,
 		'  </metadata>',
 		'  <manifest>',
@@ -436,7 +458,7 @@ async function writeMobiFiles(lang, records, converter) {
 	if (converter.type === 'ebook-convert') {
 		await executeCommand(
 			converter.command,
-			[opfPath, mobiPath, '--title', `${LANG_LABELS[lang]}字典`],
+			[opfPath, mobiPath, '--title', LANG_METADATA[lang].title],
 			{ label: `${converter.type} (${lang})` },
 		);
 	} else if (converter.type === 'kindlegen') {

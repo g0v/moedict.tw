@@ -300,4 +300,5 @@ bun run build-reader-formats
 
 - 有些相容StarDict格式之閱讀器，需要同一組檔案同目錄放置（至少 `.dict + .idx + .ifo`），請依需求選單一語系匯入（`a`/`t`/`h`/`c`）。
 - Kindle 請直接使用對應語系的 `.mobi` 檔案匯入。
+- macOS 內建「字典.app」使用的是 Apple Dictionary `.dictionary` bundle，不能直接匯入 StarDict 的 `.dict/.idx/.ifo`。若要支援 macOS 內建字典，需要另做 Apple Dictionary 專用匯出流程。
 若目標裝置要求壓縮版，可再自行把 `.dict` 轉為 `.dict.dz`（不影響 `.idx/.ifo` 結構）。
