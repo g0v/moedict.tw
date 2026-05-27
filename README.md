@@ -218,7 +218,7 @@ bun run test
 - 本專案根目錄 `LICENSE` 為 **CC0 1.0 Universal**，適用於本專案自行撰寫的程式碼、腳本與整理流程。
 - 字典資料來自上游資料源，不應視為 CC0。特別是中華民國教育部《重編國語辭典修訂本》採 **CC BY-ND 3.0 TW** 創用 CC 授權，散布時需標示來源，且不得局部改作條目。
 
-本腳本的用途是把既有字典資料轉為不同閱讀器可用的格式（如 StarDict 與 Kindle `.mobi`）。若要對外散布產出檔，請依各上游資料來源的授權條款處理；這不是法律意見，若要商業大量散布，建議再由法律專業確認。
+本腳本的用途是把既有字典資料轉為不同閱讀器可用的格式（如 StarDict 格式 與 Kindle `.mobi`）。若要對外散布產出檔，請依各上游資料來源的授權條款處理；這不是法律意見，若要商業大量散布，建議再由法律專業確認。
 
 ### 1) 安裝依賴
 
@@ -226,7 +226,10 @@ bun run test
 bun install
 ```
 
-另外需安裝其中一種 `.mobi` 轉檔工具：
+如果只要產生分語系 StarDict 格式：
+```SKIP_MOBI=1 bun run build-stardict-html```
+
+如同步要產生 Kindle 格式，另外需安裝其中一種 `.mobi` 轉檔工具：
 - `ebook-convert`（Calibre）
 - `kindlegen`
 
@@ -268,7 +271,7 @@ bun run build-reader-formats
 ```
 
 產出路徑（已在 `.gitignore` 排除）：
-- StarDict（每語系各三檔）：
+- StarDict 格式（每語系各三檔）：
   - `build/stardict/a/moedict-a-html.dict`
   - `build/stardict/a/moedict-a-html.idx`
   - `build/stardict/a/moedict-a-html.ifo`
@@ -281,7 +284,7 @@ bun run build-reader-formats
   - `build/stardict/c/moedict-c-html.dict`
   - `build/stardict/c/moedict-c-html.idx`
   - `build/stardict/c/moedict-c-html.ifo`
-- Kindle `.mobi`（每語系各一檔）：
+- Kindle 格式 `.mobi`（每語系各一檔）：
   - `build/kindle/a/moedict-a-kindle.mobi`
   - `build/kindle/t/moedict-t-kindle.mobi`
   - `build/kindle/h/moedict-h-kindle.mobi`
