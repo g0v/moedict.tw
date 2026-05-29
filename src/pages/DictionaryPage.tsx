@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type TouchEvent as ReactTouchEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useRadicalTooltip } from '../hooks/useRadicalTooltip';
 import { cleanTextForTTS, speakText } from '../utils/tts-utils';
@@ -68,6 +68,10 @@ interface DictionaryPageProps {
   lang: DictionaryLang;
 }
 
+const CONTENT_LOOKUP_LINK_SELECTOR = '.def a, .definition a, .example a, .mandarin a, .quote a, .link a, blockquote a';
+const LONG_PRESS_MIN_DURATION_MS = 320;
+const LONG_PRESS_SUPPRESS_CLICK_MS = 450;
+
 function groupDefinitions(definitions: Definition[]): Map<string, Definition[]> {
   const grouped = new Map<string, Definition[]>();
   for (const definition of definitions) {
@@ -112,6 +116,15 @@ function normalizeHref(rawHref: string): string | null {
   token = token.trim();
   if (!token) return null;
   return `/${token}`;
+}
+
+function hasActiveSelection(): boolean {
+  const selection = window.getSelection();
+  return selection != null && !selection.isCollapsed && selection.toString().trim().length > 0;
+}
+
+function isContentLookupAnchor(anchor: HTMLAnchorElement): boolean {
+  return anchor.matches(CONTENT_LOOKUP_LINK_SELECTOR);
 }
 
 function untag(input: string): string {
@@ -351,6 +364,8 @@ function RadicalGlyph({ char, lang }: { char: string; lang: DictionaryLang }) {
 
 export function DictionaryPage({ word, lang }: DictionaryPageProps) {
   const navigate = useNavigate();
+  const touchAnchorStartAtRef = useRef<number | null>(null);
+  const suppressAnchorClickUntilRef = useRef(0);
   const queryWord = useMemo(() => (word ?? '').trim(), [word]);
   const langTokenPrefix = getLangTokenPrefix(lang);
   const [state, setState] = useState<DictionaryState>({
@@ -474,6 +489,11 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
     if (!(target instanceof HTMLElement)) return;
     const anchor = target.closest('a');
     if (!anchor) return;
+    const isLookupAnchor = isContentLookupAnchor(anchor);
+    if (isLookupAnchor && (hasActiveSelection() || Date.now() < suppressAnchorClickUntilRef.current)) {
+      event.preventDefault();
+      return;
+    }
     const href = anchor.getAttribute('href');
     if (!href) return;
 
@@ -481,6 +501,30 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
     if (!normalized) return;
     event.preventDefault();
     navigate(normalized);
+  };
+
+  const onContentTouchStartCapture = (event: ReactTouchEvent<HTMLDivElement>): void => {
+    touchAnchorStartAtRef.current = null;
+    if (event.touches.length !== 1) return;
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const anchor = target.closest('a');
+    if (!(anchor instanceof HTMLAnchorElement)) return;
+    if (!isContentLookupAnchor(anchor)) return;
+    touchAnchorStartAtRef.current = Date.now();
+  };
+
+  const onContentTouchEndCapture = (): void => {
+    const startedAt = touchAnchorStartAtRef.current;
+    touchAnchorStartAtRef.current = null;
+    if (!startedAt) return;
+    if (Date.now() - startedAt >= LONG_PRESS_MIN_DURATION_MS) {
+      suppressAnchorClickUntilRef.current = Date.now() + LONG_PRESS_SUPPRESS_CLICK_MS;
+    }
+  };
+
+  const onContentTouchCancelCapture = (): void => {
+    touchAnchorStartAtRef.current = null;
   };
 
   if (state.error) {
@@ -519,7 +563,14 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
   const francais = translation.francais ?? entry.francais;
 
   return (
-    <div className="result" onClick={onContentClick} aria-busy={state.loading}>
+    <div
+      className="result"
+      onClick={onContentClick}
+      onTouchStartCapture={onContentTouchStartCapture}
+      onTouchEndCapture={onContentTouchEndCapture}
+      onTouchCancelCapture={onContentTouchCancelCapture}
+      aria-busy={state.loading}
+    >
       {/* 筆順動畫區域（同原 index.html #strokes 位於 .results 頂部） */}
       <StrokeAnimation title={title} visible={strokesVisible} lang={lang} />
 
