@@ -1,9 +1,10 @@
 /**
  * 滑動手勢導航 hook
- * 偵測「快速水平甩動」，往右滑回到上一頁，往左滑前往下一頁。
+ * 偵測「從螢幕邊緣起手的快速水平甩動」，往右滑回到上一頁，往左滑前往下一頁。
  *
  * 為了避免在 iOS 上「長按選取文字再拖曳」被誤判成換頁，這裡用多重條件
  * 來區分「滑動換頁」與「選字拖曳」：
+ *  - 必須從螢幕左／右邊緣起手（內容中間的拖曳＝選字，完全不觸發換頁）
  *  - 選取中（touchend 時仍有文字被選取）一律不換頁
  *  - 多指手勢（縮放等）不算滑動
  *  - 在可編輯欄位（input / textarea / contenteditable）上不觸發
@@ -16,6 +17,7 @@ const SWIPE_THRESHOLD = 60;       // 最小滑動距離（px）
 const MAX_VERTICAL_RATIO = 0.3;   // 最大允許垂直偏移比例
 const MAX_DURATION = 500;         // 最長手勢時間（ms）；超過視為慢速拖曳（多半在選字）
 const MIN_VELOCITY = 0.3;         // 最小水平速度（px/ms）；過慢視為選字而非甩動
+const EDGE_ZONE = 60;             // 邊緣起手感應區寬度（px）：只有從左／右緣起手才換頁
 
 /** 此次觸控是否落在可編輯／可選取互動元素內 */
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -78,11 +80,14 @@ export function useSwipeNavigation(elementRef: React.RefObject<HTMLElement | nul
       if (duration > MAX_DURATION) return;
       if (Math.abs(deltaX) / duration < MIN_VELOCITY) return;
 
+      const viewportWidth = window.innerWidth;
       if (deltaX > 0) {
-        // 往右滑 → 上一頁
+        // 往右滑 → 上一頁：必須從「左邊緣」起手
+        if (start.x > EDGE_ZONE) return;
         navigate(-1);
       } else {
-        // 往左滑 → 下一頁
+        // 往左滑 → 下一頁：必須從「右邊緣」起手
+        if (start.x < viewportWidth - EDGE_ZONE) return;
         navigate(1);
       }
     };
