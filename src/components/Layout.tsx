@@ -3,7 +3,7 @@
  * 根據 layout 類型切換不同的頁面結構
  */
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { NavbarAbout } from './navbar-about';
 import { NavbarNormal } from './navbar-normal';
 import { Sidebar } from './sidebar';
@@ -29,8 +29,7 @@ interface LayoutProps {
 export function Layout({ layout, children, currentLang, r2Endpoint }: LayoutProps) {
 	const [criticalCssReady, setCriticalCssReady] = useState(false);
 	const [inlineStylesReady, setInlineStylesReady] = useState(false);
-	const mainRef = useRef<HTMLElement | null>(null);
-	useSwipeNavigation(mainRef);
+	const swipeRef = useSwipeNavigation();
 
 	useEffect(() => {
 		if (r2Endpoint) {
@@ -54,7 +53,7 @@ export function Layout({ layout, children, currentLang, r2Endpoint }: LayoutProp
 			{layout === 'about' ? (
 				<div className="app-shell">
 					<NavbarAbout r2Endpoint={r2Endpoint} />
-					<main id="main-content" className="about-layout" ref={mainRef}>
+					<main id="main-content" className="about-layout" ref={swipeRef}>
 						{children}
 					</main>
 				</div>
@@ -63,7 +62,7 @@ export function Layout({ layout, children, currentLang, r2Endpoint }: LayoutProp
 					<NavbarNormal currentLang={currentLang} />
 					<Sidebar currentLang={currentLang} />
 					<UserPref />
-					<main id="main-content" ref={mainRef}>
+					<main id="main-content" ref={swipeRef}>
 						{children}
 					</main>
 				</div>

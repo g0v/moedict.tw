@@ -68,7 +68,8 @@ interface DictionaryPageProps {
   lang: DictionaryLang;
 }
 
-const CONTENT_LOOKUP_LINK_SELECTOR = '.def a, .definition a, .example a, .mandarin a, .quote a, .link a, blockquote a';
+// 內容中「可查字」的逐字連結。必須與 InlineStyles.tsx 的長按選字 CSS 選擇器保持一致。
+const CONTENT_LOOKUP_LINK_SELECTOR = '.def a, .definition a, .example a, .mandarin a, .quote a, .link a';
 const LONG_PRESS_MIN_DURATION_MS = 320;
 const LONG_PRESS_SUPPRESS_CLICK_MS = 450;
 

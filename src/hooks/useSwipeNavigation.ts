@@ -9,8 +9,13 @@
  *  - 多指手勢（縮放等）不算滑動
  *  - 在可編輯欄位（input / textarea / contenteditable）上不觸發
  *  - 換頁滑動必須是「快速一甩」：時間夠短且速度夠快，慢慢拖曳不算
+ *
+ * 此 hook 回傳一個 callback ref，請直接掛在要監聽的元素上（例如 <main ref={swipeRef}>）。
+ * 用 callback ref 而非 useEffect + RefObject，是為了在元素「掛載當下」就立即綁定 listener；
+ * 否則冷啟動時 <main> 還沒 render（Layout 仍在 loading 分支），effect 先跑一次拿到 null，
+ * 之後 <main> 掛上時 deps 沒變、effect 不會重跑，導致要先點一次才會生效。
  */
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const SWIPE_THRESHOLD = 60;       // 最小滑動距離（px）
@@ -31,12 +36,23 @@ function hasActiveSelection(): boolean {
   return selection != null && !selection.isCollapsed && selection.toString().trim().length > 0;
 }
 
-export function useSwipeNavigation(elementRef: React.RefObject<HTMLElement | null>) {
+export function useSwipeNavigation(): (el: HTMLElement | null) => void {
   const navigate = useNavigate();
-  const touchStart = useRef<{ x: number; y: number; time: number } | null>(null);
-
+  // 用 ref 保存最新的 navigate，讓 listener 不必在每次換頁（navigate 身分改變）時重綁。
+  const navigateRef = useRef(navigate);
   useEffect(() => {
-    const el = elementRef.current;
+    navigateRef.current = navigate;
+  }, [navigate]);
+
+  const touchStart = useRef<{ x: number; y: number; time: number } | null>(null);
+  const detach = useRef<(() => void) | null>(null);
+
+  return useCallback((el: HTMLElement | null) => {
+    // 先卸除前一個元素上的 listener（元素替換或卸載時）
+    if (detach.current) {
+      detach.current();
+      detach.current = null;
+    }
     if (!el) return;
 
     const handleTouchStart = (e: TouchEvent) => {
@@ -84,11 +100,11 @@ export function useSwipeNavigation(elementRef: React.RefObject<HTMLElement | nul
       if (deltaX > 0) {
         // 往右滑 → 上一頁：必須從「左邊緣」起手
         if (start.x > EDGE_ZONE) return;
-        navigate(-1);
+        navigateRef.current(-1);
       } else {
         // 往左滑 → 下一頁：必須從「右邊緣」起手
         if (start.x < viewportWidth - EDGE_ZONE) return;
-        navigate(1);
+        navigateRef.current(1);
       }
     };
 
@@ -96,10 +112,10 @@ export function useSwipeNavigation(elementRef: React.RefObject<HTMLElement | nul
     el.addEventListener('touchmove', handleTouchMove, { passive: true });
     el.addEventListener('touchend', handleTouchEnd, { passive: true });
 
-    return () => {
+    detach.current = () => {
       el.removeEventListener('touchstart', handleTouchStart);
       el.removeEventListener('touchmove', handleTouchMove);
       el.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [elementRef, navigate]);
+  }, []);
 }
