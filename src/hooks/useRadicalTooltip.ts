@@ -461,6 +461,8 @@ export function useRadicalTooltip(): void {
 
     document.addEventListener('mouseover', onMouseOver);
     document.addEventListener('mouseout', onMouseOut);
+    // 換頁（不換頁路由）時由 DictionaryPage 派發此事件，重用既有關閉函式收掉殘留 tooltip
+    document.addEventListener('moedict:dismiss-tooltip', hideTooltip);
     window.addEventListener('scroll', refreshPosition, true);
     window.addEventListener('resize', refreshPosition);
 
@@ -469,6 +471,7 @@ export function useRadicalTooltip(): void {
       clearHideTimer();
       document.removeEventListener('mouseover', onMouseOver);
       document.removeEventListener('mouseout', onMouseOut);
+      document.removeEventListener('moedict:dismiss-tooltip', hideTooltip);
       window.removeEventListener('scroll', refreshPosition, true);
       window.removeEventListener('resize', refreshPosition);
       if (tooltipEl) {

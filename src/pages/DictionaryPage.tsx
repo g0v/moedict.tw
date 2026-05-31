@@ -501,7 +501,19 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
     const normalized = normalizeHref(href);
     if (!normalized) return;
     event.preventDefault();
-    navigate(normalized);
+    // 換頁前先用既有的 mouseout 關閉函式收掉殘留的 tooltip，待 300ms 後跳轉。
+    document.dispatchEvent(new Event('moedict:dismiss-tooltip'));
+    // console.debug('[tooltip-entry] dispatched dismiss-tooltip event');
+    let navigated = false;
+    let fallbackTimer = 0;
+    const goToEntry = () => {
+      if (navigated) return;
+      navigated = true;
+      window.clearTimeout(fallbackTimer);
+      // console.debug('[tooltip-entry] navigating to', normalized);
+      navigate(normalized);
+    };
+    fallbackTimer = window.setTimeout(goToEntry, 300);
   };
 
   const onContentTouchStartCapture = (event: ReactTouchEvent<HTMLDivElement>): void => {
