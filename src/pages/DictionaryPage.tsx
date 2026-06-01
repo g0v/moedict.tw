@@ -501,6 +501,9 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
     const normalized = normalizeHref(href);
     if (!normalized) return;
     event.preventDefault();
+    // 換頁前先收掉殘留的 tooltip：hideTooltip 為同步（直接設 display:none），
+    // 派發事件當下即生效，因此可立即跳轉、不需延遲。
+    document.dispatchEvent(new Event('moedict:dismiss-tooltip'));
     navigate(normalized);
   };
 
