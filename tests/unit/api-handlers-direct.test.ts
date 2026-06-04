@@ -102,6 +102,25 @@ describe('handleDictionaryAPI — top-level routing', () => {
     expect(await res.json()).toEqual(['一致', '相仿']);
   });
 
+  it('serves /{lang}/index.json as the word list (issue #124)', async () => {
+    const env = {
+      DICTIONARY: makeR2({
+        'c/index.json': JSON.stringify(['一', '一一', '一下']),
+      }),
+    };
+    const { request, url } = makeRequest('/c/index.json');
+    const res = await handleDictionaryAPI(request, url, env);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(['一', '一一', '一下']);
+  });
+
+  it('404s /{lang}/index.json when the index file is missing', async () => {
+    const env = { DICTIONARY: makeR2({}) };
+    const { request, url } = makeRequest('/h/index.json');
+    const res = await handleDictionaryAPI(request, url, env);
+    expect(res.status).toBe(404);
+  });
+
   it('returns 500 when the R2 backend throws unexpectedly', async () => {
     const env: { DICTIONARY: R2Stub } = {
       DICTIONARY: {
