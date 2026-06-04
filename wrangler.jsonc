@@ -9,7 +9,7 @@
 	"compatibility_date": "2025-11-05",
 	"assets": {
 		"not_found_handling": "single-page-application",
-		"run_worker_first": ["/robots.txt", "/api/*", "/lookup/trs/*", "/*.png", "/*.json", "/manifest.appcache", "/translation-data/cfdict.txt", "/translation-data/cfdict.xml", "!/manifest.json"]
+		"run_worker_first": ["/robots.txt", "/moetris", "/moetris/", "/api/*", "/lookup/trs/*", "/*.png", "/*.json", "/manifest.appcache", "/translation-data/cfdict.txt", "/translation-data/cfdict.xml", "!/manifest.json"]
 	},
 	"observability": {
 		"enabled": true

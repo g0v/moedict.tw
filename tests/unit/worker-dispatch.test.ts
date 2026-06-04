@@ -191,6 +191,20 @@ describe('dispatch — /robots.txt', () => {
   });
 });
 
+describe('dispatch — /moetris', () => {
+  it('302-redirects /moetris to dodo.moedict.tw', async () => {
+    const res = await dispatch(req('/moetris'), makeEnv());
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('https://dodo.moedict.tw/moetris.html');
+  });
+
+  it('302-redirects /moetris/ (trailing slash) to dodo.moedict.tw', async () => {
+    const res = await dispatch(req('/moetris/'), makeEnv());
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('https://dodo.moedict.tw/moetris.html');
+  });
+});
+
 describe('dispatch — /images/Download_on_the_App_Store_Badge_HK_TW_135x40.png', () => {
   it('serves the PNG from ASSETS R2 with caching + etag', async () => {
     const env = makeEnv({
