@@ -111,7 +111,10 @@ describe('handleDictionaryAPI — top-level routing', () => {
     const { request, url } = makeRequest('/c/index.json');
     const res = await handleDictionaryAPI(request, url, env);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(['一', '一一', '一下']);
+    const text = await res.text();
+    expect(JSON.parse(text)).toEqual(['一', '一一', '一下']);
+    // 排版：逗號後換行，每個詞彙獨立一行
+    expect(text).toContain(',\n');
   });
 
   it('404s /{lang}/index.json when the index file is missing', async () => {

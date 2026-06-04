@@ -176,7 +176,8 @@ async function handleLanguageSubRoute(
         false,
       );
     }
-    return jsonResponse(request, JSON.parse(await indexObject.text()), 200, false);
+    // 以 pretty 格式回傳（每個詞彙獨立一行，逗號後換行），方便閱讀
+    return jsonResponse(request, JSON.parse(await indexObject.text()), 200);
   }
 
   if (text.startsWith('@')) {
