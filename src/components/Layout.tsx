@@ -10,6 +10,7 @@ import { Sidebar } from './sidebar';
 import { AssetLoader } from './AssetLoader';
 import { InlineStyles } from './InlineStyles';
 import { UserPref } from './user-pref';
+import { useSwipeNavigation } from '../hooks/useSwipeNavigation';
 
 type Lang = 'a' | 't' | 'h' | 'c';
 
@@ -28,6 +29,7 @@ interface LayoutProps {
 export function Layout({ layout, children, currentLang, r2Endpoint }: LayoutProps) {
 	const [criticalCssReady, setCriticalCssReady] = useState(false);
 	const [inlineStylesReady, setInlineStylesReady] = useState(false);
+	const swipeRef = useSwipeNavigation();
 
 	useEffect(() => {
 		if (r2Endpoint) {
@@ -51,7 +53,7 @@ export function Layout({ layout, children, currentLang, r2Endpoint }: LayoutProp
 			{layout === 'about' ? (
 				<div className="app-shell">
 					<NavbarAbout r2Endpoint={r2Endpoint} />
-					<main id="main-content" className="about-layout">
+					<main id="main-content" className="about-layout" ref={swipeRef}>
 						{children}
 					</main>
 				</div>
@@ -60,7 +62,7 @@ export function Layout({ layout, children, currentLang, r2Endpoint }: LayoutProp
 					<NavbarNormal currentLang={currentLang} />
 					<Sidebar currentLang={currentLang} />
 					<UserPref />
-					<main id="main-content">
+					<main id="main-content" ref={swipeRef}>
 						{children}
 					</main>
 				</div>

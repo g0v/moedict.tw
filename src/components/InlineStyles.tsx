@@ -581,6 +581,36 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 			margin: .4em 0 0 20px;
 			padding-top: 1em;
 		}
+
+		/* ===== iOS 長按選字 vs 短按查字 =====
+		   內容中每個字都是可點的 <a>（短按＝查字）。iOS 預設長按 <a> 會跳出
+		   連結選單（開啟／拷貝連結）而非選取文字，導致無法選字複製。
+		   這裡關閉內容連結的 touch-callout 並允許文字選取：
+		   - 短按：照常觸發 click → 查字
+		   - 長按：可選取文字並複製
+		   注意：下列 class 必須與 DictionaryPage.tsx 的 CONTENT_LOOKUP_LINK_SELECTOR 保持一致，
+		   否則某些可查字的連結（如引文 .quote、連結 .link）長按時仍會跳出 iOS 原生選單。 */
+		.result .def,
+		.result .definition,
+		.result .example,
+		.result .mandarin,
+		.result .quote,
+		.result .link {
+			-webkit-user-select: text;
+			user-select: text;
+		}
+		.result .def a,
+		.result .definition a,
+		.result .example a,
+		.result .mandarin a,
+		.result .quote a,
+		.result .link a {
+			-webkit-touch-callout: none;
+			-webkit-user-drag: none;
+			user-drag: none;
+			-webkit-user-select: text;
+			user-select: text;
+		}
 		`
 			}}
 		/>

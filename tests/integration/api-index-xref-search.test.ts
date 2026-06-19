@@ -17,6 +17,20 @@ describe('/api/index/{lang}.json', () => {
   });
 });
 
+describe('/{lang}/index.json (issue #124)', () => {
+  it.each(['a', 't', 'h', 'c'])('returns the word list array for lang=%s', async (lang) => {
+    const { status, body } = await fetchJson<string[] | { error: string }>(
+      `/${lang}/index.json`,
+    );
+    // Mirrors /api/index/{lang}.json — 200 array when the fixture is seeded, 404 otherwise.
+    if (status === 200) {
+      expect(Array.isArray(body)).toBe(true);
+    } else {
+      expect(status).toBe(404);
+    }
+  });
+});
+
 describe('/api/xref/{lang}.json', () => {
   it.each(['a', 't', 'h', 'c'])('returns an xref object (or {} fallback) for lang=%s', async (lang) => {
     const res = await fetchFromServer(`/api/xref/${lang}.json`);

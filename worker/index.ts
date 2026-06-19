@@ -244,6 +244,17 @@ export async function dispatch(request: Request, env: Env): Promise<Response> {
       return new Response(body, { status: 200, headers });
     }
 
+    // 特殊路由：moetris 方塊遊戲已搬遷至 dodo 子網域，302 重導向（#123）
+    if (url.pathname === '/moetris' || url.pathname === '/moetris/') {
+      return new Response(null, {
+        status: 302,
+        headers: {
+          'Location': 'https://dodo.moedict.tw/moetris.html',
+          'Cache-Control': 'public, max-age=3600',
+        },
+      });
+    }
+
     // lookup API（台語羅馬拼音索引 / 舊站 trs 相容）
     const lookupResponse = await handleLookupAPI(request, url, env);
     if (lookupResponse) {

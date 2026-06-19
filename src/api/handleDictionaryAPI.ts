@@ -166,6 +166,20 @@ async function handleLanguageSubRoute(
   text: string,
   env: DictionaryEnv,
 ): Promise<Response> {
+  if (text === 'index') {
+    const indexObject = await env.DICTIONARY.get(`${lang}/index.json`);
+    if (!indexObject) {
+      return jsonResponse(
+        request,
+        { error: 'Not Found', message: `找不到索引檔：${lang}/index.json`, terms: [] } satisfies ErrorResponse,
+        404,
+        false,
+      );
+    }
+    // 以 pretty 格式回傳（每個詞彙獨立一行，逗號後換行），方便閱讀
+    return jsonResponse(request, JSON.parse(await indexObject.text()), 200);
+  }
+
   if (text.startsWith('@')) {
     const radicalPath = `${lang}/${text}.json`;
     let radicalObject = await env.DICTIONARY.get(radicalPath);

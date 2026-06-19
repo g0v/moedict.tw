@@ -305,6 +305,11 @@ export function useRadicalTooltip(): void {
     let currentId = '';
     let currentAnchor: HTMLAnchorElement | null = null;
     const cache = new Map<string, string>();
+    // 換頁剛收掉 tooltip 後，短時間內阻擋「新內容出現在游標下方時瀏覽器自動補發的
+    // mouseover」把 tooltip 重新打開（否則會在左上角閃現一下）。
+    const SUPPRESS_REOPEN_MS = 300;
+    let suppressShow = false;
+    let suppressTimer: number | null = null;
 
     const clearShowTimer = () => {
       if (showTimer != null) {
@@ -423,7 +428,23 @@ export function useRadicalTooltip(): void {
       currentAnchor = null;
     };
 
+    // 由 DictionaryPage 在「不換頁路由」跳轉前派發 moedict:dismiss-tooltip 事件呼叫：
+    // 立即收掉殘留 tooltip，並在 SUPPRESS_REOPEN_MS 內阻擋重開——換頁後新內容會出現在
+    // 游標下方，瀏覽器會自動補一個 mouseover，若不擋會立刻把 tooltip 重新打開（左上角閃現）。
+    const dismissTooltip = () => {
+      clearShowTimer();
+      clearHideTimer();
+      hideTooltip();
+      suppressShow = true;
+      if (suppressTimer != null) window.clearTimeout(suppressTimer);
+      suppressTimer = window.setTimeout(() => {
+        suppressShow = false;
+        suppressTimer = null;
+      }, SUPPRESS_REOPEN_MS);
+    };
+
     const onMouseOver = (event: MouseEvent) => {
+      if (suppressShow) return;
       const target = resolveTooltipTarget(event.target);
       if (!target) return;
 
@@ -461,6 +482,8 @@ export function useRadicalTooltip(): void {
 
     document.addEventListener('mouseover', onMouseOver);
     document.addEventListener('mouseout', onMouseOut);
+    // 換頁（不換頁路由）時由 DictionaryPage 派發此事件，收掉殘留 tooltip 並短暫阻擋重開
+    document.addEventListener('moedict:dismiss-tooltip', dismissTooltip);
     window.addEventListener('scroll', refreshPosition, true);
     window.addEventListener('resize', refreshPosition);
 
@@ -469,6 +492,8 @@ export function useRadicalTooltip(): void {
       clearHideTimer();
       document.removeEventListener('mouseover', onMouseOver);
       document.removeEventListener('mouseout', onMouseOut);
+      document.removeEventListener('moedict:dismiss-tooltip', dismissTooltip);
+      if (suppressTimer != null) window.clearTimeout(suppressTimer);
       window.removeEventListener('scroll', refreshPosition, true);
       window.removeEventListener('resize', refreshPosition);
       if (tooltipEl) {
