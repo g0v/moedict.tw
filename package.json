@@ -9,6 +9,7 @@
 		"prebuild": "bun run build-search-index && bun run build-pinyin-lookup",
 		"build-search-index": "node scripts/build-search-index.mjs",
 		"build-pinyin-lookup": "node scripts/build-pinyin-lookup.mjs",
+		"build-reader-formats": "node scripts/build-reader-formats.mjs",
 		"dev": "vite",
 		"dev:remote": "VITE_CLOUDFLARE_REMOTE_DEV=1 vite",
 		"build": "tsc -b && vite build",
