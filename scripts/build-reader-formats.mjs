@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const ROOT_DIR = path.resolve(import.meta.dirname, '..');
 const SOURCE_ROOT = path.join(ROOT_DIR, 'data', 'dictionary');
@@ -71,7 +72,6 @@ function renderMarkedHtml(input) {
 	let text = String(input);
 	text = text.replace(/[\uFFF9\uFFFA\uFFFB]/g, '');
 	text = escapeHtml(text);
-	text = text.replace(/`([^~`]+)~/g, '<b>$1</b>');
 	text = text.replaceAll('`', '');
 	text = text.replaceAll('~', '');
 	text = text.replace(/\r?\n/g, '<br>');
@@ -85,6 +85,34 @@ function renderXhtmlFragment(input) {
 function nonEmptyHtml(input) {
 	const rendered = renderMarkedHtml(input);
 	return rendered ? rendered : '';
+}
+
+function asciiLowerBytes(buffer) {
+	const folded = Buffer.from(buffer);
+	for (let index = 0; index < folded.length; index += 1) {
+		const byte = folded[index];
+		if (byte >= 0x41 && byte <= 0x5a) folded[index] = byte + 0x20;
+	}
+	return folded;
+}
+
+function stardictCompare(left, right) {
+	// StarDict binary-search order: g_ascii_strcasecmp then strcmp. For UTF-8
+	// that is byte order, i.e. Unicode code-point order.
+	const leftBuffer = Buffer.from(left, 'utf8');
+	const rightBuffer = Buffer.from(right, 'utf8');
+	const foldedCompare = Buffer.compare(asciiLowerBytes(leftBuffer), asciiLowerBytes(rightBuffer));
+	return foldedCompare !== 0 ? foldedCompare : Buffer.compare(leftBuffer, rightBuffer);
+}
+
+function encodeIdxEntry(word, offset, size) {
+	const wordBuffer = Buffer.from(word, 'utf8');
+	const idxBuffer = Buffer.alloc(wordBuffer.length + 1 + 8);
+	wordBuffer.copy(idxBuffer, 0);
+	idxBuffer[wordBuffer.length] = 0;
+	idxBuffer.writeUInt32BE(offset, wordBuffer.length + 1);
+	idxBuffer.writeUInt32BE(size, wordBuffer.length + 5);
+	return idxBuffer;
 }
 
 function renderDefinition(definition) {
@@ -121,7 +149,6 @@ function renderHeteronym(heteronym, index) {
 		['拼音', nonEmptyHtml(heteronym?.p)],
 		['台羅', nonEmptyHtml(heteronym?.T)],
 		['替代', nonEmptyHtml(heteronym?.A)],
-		['音檔', nonEmptyHtml(heteronym?.['='])],
 	].filter(([, value]) => value);
 
 	parts.push(`<b>讀音 ${index + 1}</b>`);
@@ -152,14 +179,23 @@ function renderHeteronym(heteronym, index) {
 	return parts.join('<br>');
 }
 
+function renderTranslationField(arrayValue, fallbackValue) {
+	const list = Array.isArray(arrayValue)
+		? arrayValue
+		: (fallbackValue != null && fallbackValue !== '' ? [fallbackValue] : []);
+	return list.map(nonEmptyHtml).filter(Boolean).join('; ');
+}
+
 function renderEntryHtml(headword, lang, entry) {
 	const title = nonEmptyHtml(entry?.t) || nonEmptyHtml(headword);
 	const heteronyms = Array.isArray(entry?.h) ? entry.h : [];
+	const translation = entry?.translation && typeof entry.translation === 'object' && !Array.isArray(entry.translation)
+		? entry.translation
+		: {};
 	const translations = [
-		['English', nonEmptyHtml(entry?.English ?? entry?.english)],
-		['Français', nonEmptyHtml(entry?.francais)],
-		['Deutsch', nonEmptyHtml(entry?.Deutsch)],
-		['翻譯', nonEmptyHtml(entry?.translation)],
+		['English', renderTranslationField(translation.English ?? translation.english, entry?.English ?? entry?.english)],
+		['Français', renderTranslationField(translation.francais, entry?.francais)],
+		['Deutsch', renderTranslationField(translation.Deutsch, entry?.Deutsch)],
 	].filter(([, value]) => value);
 
 	const blocks = [];
@@ -215,7 +251,7 @@ async function collectRecords() {
 			}
 		}
 
-		recordsByLang[lang].sort((left, right) => left.word.localeCompare(right.word, 'zh-Hant'));
+		recordsByLang[lang].sort((left, right) => stardictCompare(left.word, right.word));
 		console.log(`[build-reader-formats] ${lang} entries: ${recordsByLang[lang].length}`);
 	}
 
@@ -257,16 +293,8 @@ async function writeStarDictFiles(lang, records) {
 	let offset = 0;
 
 	for (const record of records) {
-		const wordBuffer = Buffer.from(record.word, 'utf8');
 		const articleBuffer = Buffer.from(record.article, 'utf8');
-		const idxBuffer = Buffer.alloc(wordBuffer.length + 1 + 8);
-
-		wordBuffer.copy(idxBuffer, 0);
-		idxBuffer[wordBuffer.length] = 0;
-		idxBuffer.writeUInt32BE(offset, wordBuffer.length + 1);
-		idxBuffer.writeUInt32BE(articleBuffer.length, wordBuffer.length + 5);
-
-		idxChunks.push(idxBuffer);
+		idxChunks.push(encodeIdxEntry(record.word, offset, articleBuffer.length));
 		await writeChunk(dictStream, articleBuffer);
 		offset += articleBuffer.length;
 	}
@@ -340,14 +368,19 @@ function executeCommand(command, args, options = {}) {
 
 async function findExecutableFromPath(name) {
 	const envPath = process.env.PATH || '';
+	const extensions = process.platform === 'win32'
+		? (process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM').split(';').filter(Boolean).map((ext) => ext.toLowerCase())
+		: [''];
 	for (const dir of envPath.split(path.delimiter)) {
 		if (!dir) continue;
-		const candidate = path.join(dir, name);
-		try {
-			await fsp.access(candidate, fs.constants.X_OK);
-			return candidate;
-		} catch {
-			// Continue scanning.
+		for (const extension of extensions) {
+			const candidate = path.join(dir, name + extension);
+			try {
+				await fsp.access(candidate, fs.constants.X_OK);
+				return candidate;
+			} catch {
+				// Continue scanning.
+			}
 		}
 	}
 	return null;
@@ -355,7 +388,8 @@ async function findExecutableFromPath(name) {
 
 async function resolveMobiConverter() {
 	if (MOBI_CONVERTER) {
-		return { type: path.basename(MOBI_CONVERTER), command: MOBI_CONVERTER };
+		const baseName = path.basename(MOBI_CONVERTER).replace(/\.(exe|cmd|bat|com)$/i, '');
+		return { type: baseName, command: MOBI_CONVERTER };
 	}
 
 	const ebookConvertPath = await findExecutableFromPath('ebook-convert');
@@ -491,7 +525,20 @@ async function main() {
 	}
 }
 
-main().catch((error) => {
-	console.error('[build-reader-formats] failed:', error);
-	process.exitCode = 1;
-});
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+	main().catch((error) => {
+		console.error('[build-reader-formats] failed:', error);
+		process.exitCode = 1;
+	});
+}
+
+export {
+	decodePackedKey,
+	renderMarkedHtml,
+	renderDefinition,
+	renderHeteronym,
+	renderEntryHtml,
+	renderTranslationField,
+	stardictCompare,
+	encodeIdxEntry,
+};
