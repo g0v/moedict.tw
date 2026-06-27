@@ -97,6 +97,12 @@ export function About({ assetBaseUrl }: AboutProps) {
 			</div>
 
 			<div className="content">
+				<p className="how-to-use-link" style={{ textAlign: 'center', margin: '0 0 1.5em' }}>
+					<a href="#how-to-use" className="btn btn-info">
+						<SvgIcon name="book" size={14} style={{ marginRight: 6 }} aria-hidden="true" />
+						萌典功能使用說明
+					</a>
+				</p>
 				<p>
 					<Link to="/" className="home">
 						萌典
@@ -418,6 +424,123 @@ export function About({ assetBaseUrl }: AboutProps) {
 					作者 唐鳳 在法律許可的範圍內，拋棄此著作依著作權法所享有之權利，包括所有相關與鄰接的法律權利，並宣告將該著作貢獻至公眾領域。
 				</p>
 			</div>
+
+			{/* 使用說明導覽（#95）：在 /about 內以同頁區段呈現，不新增路由 */}
+			<section id="how-to-use" className="content how-to-use">
+				<h2>使用說明</h2>
+				<p>
+					萌典除了基本的字詞查詢，還有許多實用功能。以下整理常用功能與操作方式，部分附上站內範例連結，點擊即可直接體驗：
+				</p>
+				<ul>
+					<li>
+						<strong>字詞發音</strong>
+						<ul>
+							<li>華語、台語、客語皆有發音功能。</li>
+							<li>客語包含不同腔調的發音。</li>
+						</ul>
+					</li>
+					<li>
+						<strong>多重表記</strong>
+						<ul>
+							<li>支援拼音、注音，台語與客語另支援方音符號。</li>
+						</ul>
+					</li>
+					<li>
+						<strong>部首查詢</strong>
+						<ul>
+							<li>每個字的部首和筆劃都會列出。</li>
+							<li>點擊部首可以查該部首的所有字。</li>
+						</ul>
+					</li>
+					<li>
+						<strong>部首表</strong>
+						<ul>
+							<li>
+								導覽列選單可以點「<Link to="/@">部首表</Link>」，查到所有部首。
+							</li>
+						</ul>
+					</li>
+					<li>
+						<strong>筆順動畫</strong>
+						<ul>
+							<li>每個字詞點擊「鉛筆」圖示，可以顯示筆順動畫。</li>
+						</ul>
+					</li>
+					<li>
+						<strong>字詞記錄簿</strong>
+						<ul>
+							<li>
+								<Link to="/=*">字詞記錄簿</Link>會自動記錄最近的查詢。
+							</li>
+							<li>也可以在字詞頁點擊「星星」鍵來加入字詞記錄簿。</li>
+						</ul>
+					</li>
+					<li>
+						<strong>萬用字元查詢</strong>
+						<ul>
+							<li>可用「.」或「?」代表任一字。</li>
+							<li>
+								如，在搜尋欄輸入「休.」可以查到「休休」「休假」「休克」「休兵」等兩字詞。
+							</li>
+							<li>
+								如，「休..」可以查到「休火山」「休眠期」等三字詞。
+							</li>
+						</ul>
+					</li>
+					<li>
+						<strong>多語檢索</strong>
+						<ul>
+							<li>
+								右上角搜尋「cat」可以查到「狸子」「貓」等漢英譯文中含「cat」單字的詞。
+							</li>
+						</ul>
+					</li>
+					<li>
+						<strong>發音檢索</strong>
+						<ul>
+							<li>
+								華語可以搜尋「di」然後找到「的」「第」等。
+							</li>
+							<li>
+								台語可以搜尋「kha」然後找到「跤手」「鬥跤手」等。
+							</li>
+						</ul>
+					</li>
+					<li>
+						<strong>字圖生成與鏤空描寫模式</strong>
+						<ul>
+							<li>
+								查詢字典中沒有的字詞，如「<Link to="/萌典是什麼">萌典是什麼</Link>」，會出現對應的字圖生成介面。
+							</li>
+							<li>字圖可以切換成不同的書體，如篆書。</li>
+							<li>在對應的字圖下方，會有灰色的鏤空字圖，用平板或手機等觸控裝置，可以在上面描寫。</li>
+						</ul>
+					</li>
+					<li>
+						<strong>匯出閱讀器可用的字典格式</strong>
+						<ul>
+							<li>
+								<a target="_blank" href="https://github.com/g0v/moedict.tw" rel="noopener noreferrer">
+									萌典專案
+								</a>
+								的 README 中有說明如何匯出閱讀器可用的字典格式。
+							</li>
+						</ul>
+					</li>
+					<li>
+						<strong>行動裝置與桌面 App</strong>
+						<ul>
+							<li>
+								有 iOS、macOS、Android App 可安裝，詳見
+								<a target="_blank" href="https://www.moedict.tw" rel="noopener noreferrer">
+									萌典網站
+								</a>
+								。
+							</li>
+						</ul>
+					</li>
+				</ul>
+			</section>
 
 			{/* GitHub 連結 */}
 			{R2_ENDPOINT && (

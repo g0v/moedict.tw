@@ -107,6 +107,45 @@
 	height: auto;
 }
 
+/* 使用說明導覽連結（#95） */
+.about-page .how-to-use-link .btn-info {
+	display: inline-flex;
+	align-items: center;
+	color: #fff;
+	text-decoration: none;
+}
+
+.about-page .how-to-use-link .btn-info:hover {
+	color: #fff;
+	text-decoration: none;
+}
+
+/* 使用說明區段（#95） */
+.about-page .how-to-use {
+	margin-top: 1em;
+	padding-top: 1.5em;
+	border-top: 1px solid #ddd;
+	/* 錨點捲動時預留固定導覽列高度，避免標題被遮住 */
+	scroll-margin-top: 80px;
+}
+
+.about-page .how-to-use h2 {
+	margin-bottom: 0.75em;
+}
+
+.about-page .how-to-use > ul > li {
+	margin-bottom: 0.75em;
+}
+
+.about-page .how-to-use > ul > li > strong {
+	font-size: 1.05em;
+}
+
+.about-page .how-to-use ul ul {
+	margin-top: 0.35em;
+	margin-bottom: 0;
+}
+
 /* 響應式設計 */
 @media only screen and (max-width: 767px) {
 	.about-page .content {
