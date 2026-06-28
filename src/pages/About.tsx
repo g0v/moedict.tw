@@ -34,6 +34,35 @@ function isCapacitorApp() {
 	return typeof window !== 'undefined' && Boolean((window as Window & { Capacitor?: unknown }).Capacitor);
 }
 
+/** 使用說明截圖：放在 public/images/guide/，檔名為中文故以 encodeURIComponent 編碼（#95） */
+const GUIDE_IMAGE_BASE = '/images/guide/';
+function guideSrc(fileName: string): string {
+	return GUIDE_IMAGE_BASE + encodeURIComponent(fileName);
+}
+
+interface GuideFigureProps {
+	src: string;
+	alt: string;
+	caption?: string;
+	onOpen: (src: string, alt: string) => void;
+}
+
+function GuideFigure({ src, alt, caption, onOpen }: GuideFigureProps) {
+	return (
+		<figure className="guide-figure">
+			<button
+				type="button"
+				className="guide-figure-button"
+				onClick={() => onOpen(src, alt)}
+				aria-label={`放大檢視：${alt}`}
+			>
+				<img src={src} alt={alt} loading="lazy" />
+			</button>
+			{caption ? <figcaption>{caption}</figcaption> : null}
+		</figure>
+	);
+}
+
 /**
  * 關於頁面組件
  */
@@ -41,6 +70,18 @@ export function About({ assetBaseUrl }: AboutProps) {
 	const [r2Endpoint, setR2Endpoint] = useState<string>('');
 	const [bookmarkHint, setBookmarkHint] = useState<string>('');
 	const showWebOnlyActions = !isCapacitorApp();
+	const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
+	const openLightbox = (src: string, alt: string) => setLightbox({ src, alt });
+
+	// 放大檢視時按 Esc 關閉
+	useEffect(() => {
+		if (!lightbox) return;
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') setLightbox(null);
+		};
+		window.addEventListener('keydown', onKey);
+		return () => window.removeEventListener('keydown', onKey);
+	}, [lightbox]);
 
 	useEffect(() => {
 		// 如果沒有傳入 assetBaseUrl，從 API 取得
@@ -97,6 +138,12 @@ export function About({ assetBaseUrl }: AboutProps) {
 			</div>
 
 			<div className="content">
+				<p className="how-to-use-link" style={{ textAlign: 'center', margin: '0 0 1.5em' }}>
+					<a href="#how-to-use" className="btn btn-info">
+						<SvgIcon name="book" size={14} style={{ marginRight: 6 }} aria-hidden="true" />
+						萌典功能使用說明
+					</a>
+				</p>
 				<p>
 					<Link to="/" className="home">
 						萌典
@@ -419,6 +466,156 @@ export function About({ assetBaseUrl }: AboutProps) {
 				</p>
 			</div>
 
+			{/* 使用說明導覽（#95）：在 /about 內以同頁區段呈現，不新增路由 */}
+			<section id="how-to-use" className="content how-to-use">
+				<h2>使用說明</h2>
+				<p>
+					萌典除了基本的字詞查詢，還有許多實用功能。以下整理常用功能與操作方式，部分附上站內範例連結，點擊即可直接體驗：
+				</p>
+				<ul>
+					<li>
+						<strong>字詞發音</strong>
+						<ul>
+							<li>華語、台語、客語皆有發音功能。</li>
+							<li>客語包含不同腔調的發音。</li>
+						</ul>
+						<div className="guide-figures">
+							<GuideFigure src={guideSrc('發音與表記_resized.jpg')} alt="字詞頁的發音按鈕與注音、拼音表記" caption="華語、台語發音與表記" onOpen={openLightbox} />
+							<GuideFigure src={guideSrc('發音_客語_resized.jpg')} alt="客語不同腔調的發音選項" caption="客語不同腔調" onOpen={openLightbox} />
+						</div>
+					</li>
+					<li>
+						<strong>多重表記</strong>
+						<ul>
+							<li>支援拼音、注音，台語與客語另支援方音符號。</li>
+						</ul>
+						<div className="guide-figures">
+							<GuideFigure src={guideSrc('多重表記_resized.jpg')} alt="拼音、注音與方音符號等多重表記" onOpen={openLightbox} />
+						</div>
+					</li>
+					<li>
+						<strong>部首查詢</strong>
+						<ul>
+							<li>每個字的部首和筆劃都會列出。</li>
+							<li>點擊部首可以查該部首的所有字。</li>
+						</ul>
+						<div className="guide-figures">
+							<GuideFigure src={guideSrc('部首查詢_按鈕位置_resized.jpg')} alt="字詞頁標示部首與筆劃的位置" caption="部首與筆劃位置" onOpen={openLightbox} />
+							<GuideFigure src={guideSrc('部首查詢_內頁_resized.jpg')} alt="點擊部首後列出該部首所有字" caption="點擊部首後的內頁" onOpen={openLightbox} />
+						</div>
+					</li>
+					<li>
+						<strong>部首表</strong>
+						<ul>
+							<li>
+								導覽列選單可以點「<Link to="/@">部首表</Link>」，查到所有部首。
+							</li>
+						</ul>
+						<div className="guide-figures">
+							<GuideFigure src={guideSrc('部首表_內頁_resized.jpg')} alt="從導覽列開啟的部首表頁面" onOpen={openLightbox} />
+						</div>
+					</li>
+					<li>
+						<strong>筆順動畫</strong>
+						<ul>
+							<li>每個字詞點擊「鉛筆」圖示，可以顯示筆順動畫。</li>
+						</ul>
+						<div className="guide-figures">
+							<GuideFigure src={guideSrc('筆順動畫_按鈕_resized.jpg')} alt="字詞頁的鉛筆筆順圖示" caption="點擊鉛筆圖示" onOpen={openLightbox} />
+							<GuideFigure src={guideSrc('筆順動畫_呈現_resized.jpg')} alt="筆順動畫播放畫面" caption="筆順動畫呈現" onOpen={openLightbox} />
+						</div>
+					</li>
+					<li>
+						<strong>字詞記錄簿</strong>
+						<ul>
+							<li>
+								<Link to="/=*">字詞記錄簿</Link>會自動記錄最近的查詢。
+							</li>
+							<li>也可以在字詞頁點擊「星星」鍵來加入字詞記錄簿。</li>
+						</ul>
+						<div className="guide-figures">
+							<GuideFigure src={guideSrc('字詞記錄簿_內頁_resized.jpg')} alt="字詞記錄簿頁面" onOpen={openLightbox} />
+						</div>
+					</li>
+					<li>
+						<strong>萬用字元查詢</strong>
+						<ul>
+							<li>可用「.」或「?」代表任一字。</li>
+							<li>
+								如，在搜尋欄輸入「休.」可以查到「休休」「休假」「休克」「休兵」等兩字詞。
+							</li>
+							<li>
+								如，「休..」可以查到「休火山」「休眠期」等三字詞。
+							</li>
+						</ul>
+						<div className="guide-figures">
+							<GuideFigure src={guideSrc('萬用字元_resized.jpg')} alt="使用萬用字元搜尋的結果" onOpen={openLightbox} />
+						</div>
+					</li>
+					<li>
+						<strong>多語檢索</strong>
+						<ul>
+							<li>
+								右上角搜尋「cat」可以查到「狸子」「貓」等漢英譯文中含「cat」單字的詞。
+							</li>
+						</ul>
+						<div className="guide-figures">
+							<GuideFigure src={guideSrc('多語檢索_resized.jpg')} alt="輸入英文進行多語檢索的結果" onOpen={openLightbox} />
+						</div>
+					</li>
+					<li>
+						<strong>發音檢索</strong>
+						<ul>
+							<li>
+								華語可以搜尋「di」然後找到「的」「第」等。
+							</li>
+							<li>
+								台語可以搜尋「kha」然後找到「跤手」「鬥跤手」等。
+							</li>
+						</ul>
+						<div className="guide-figures">
+							<GuideFigure src={guideSrc('發音檢索_resized.jpg')} alt="輸入拼音進行發音檢索的結果" onOpen={openLightbox} />
+						</div>
+					</li>
+					<li>
+						<strong>字圖生成與鏤空描寫模式</strong>
+						<ul>
+							<li>
+								查詢字典中沒有的字詞，如「<Link to="/萌典是什麼">萌典是什麼</Link>」，會出現對應的字圖生成介面。
+							</li>
+							<li>字圖可以切換成不同的書體，如篆書。</li>
+							<li>在對應的字圖下方，會有灰色的鏤空字圖，用平板或手機等觸控裝置，可以在上面描寫。</li>
+						</ul>
+						<div className="guide-figures">
+							<GuideFigure src={guideSrc('字圖生成與鏤空描寫模式_resized.jpg')} alt="字圖生成與鏤空描寫介面" onOpen={openLightbox} />
+						</div>
+					</li>
+					<li>
+						<strong>匯出閱讀器可用的字典格式</strong>
+						<ul>
+							<li>
+								<a target="_blank" href="https://github.com/g0v/moedict.tw" rel="noopener noreferrer">
+									萌典專案
+								</a>
+								的 README 中有說明如何匯出閱讀器可用的字典格式。
+							</li>
+						</ul>
+					</li>
+					<li>
+						<strong>行動裝置與桌面 App</strong>
+						<ul>
+							<li>
+								有 iOS、macOS、Android App 可安裝，詳見
+								<a target="_blank" href="https://www.moedict.tw" rel="noopener noreferrer">
+									萌典網站
+								</a>
+								。
+							</li>
+						</ul>
+					</li>
+				</ul>
+			</section>
+
 			{/* GitHub 連結 */}
 			{R2_ENDPOINT && (
 				<a target="_blank" href="https://github.com/g0v/moedict.tw" rel="noopener noreferrer">
@@ -509,6 +706,31 @@ export function About({ assetBaseUrl }: AboutProps) {
 						</div>
 					)}
 					</div>
+			)}
+			{/* 截圖放大檢視（lightbox）#95 */}
+			{lightbox && (
+				<div
+					className="guide-lightbox"
+					role="dialog"
+					aria-modal="true"
+					aria-label={lightbox.alt}
+					onClick={() => setLightbox(null)}
+				>
+					<button
+						type="button"
+						className="guide-lightbox-close"
+						aria-label="關閉放大檢視"
+						onClick={() => setLightbox(null)}
+					>
+						×
+					</button>
+					<img
+						className="guide-lightbox-image"
+						src={lightbox.src}
+						alt={lightbox.alt}
+						onClick={(e) => e.stopPropagation()}
+					/>
+				</div>
 			)}
 		</div>
 	);
