@@ -89,4 +89,23 @@ describe('About page usage guide (#95)', () => {
     expect(html).toContain('「cat」');
     expect(html).toContain('「di」');
   });
+
+  it('embeds the guide screenshots as clickable thumbnails (#95)', () => {
+    const html = render();
+    // 每張截圖都是可點擊放大的縮圖按鈕
+    expect(html).toContain('class="guide-figure-button"');
+    const thumbCount = (html.match(/guide-figure-button/g) ?? []).length;
+    expect(thumbCount).toBe(13);
+    // 中文檔名以 encodeURIComponent 編碼後出現在 /images/guide/ 之下
+    for (const name of [
+      '萬用字元_resized.jpg',
+      '多語檢索_resized.jpg',
+      '發音_客語_resized.jpg',
+      '字圖生成與鏤空描寫模式_resized.jpg',
+    ]) {
+      expect(html).toContain('/images/guide/' + encodeURIComponent(name));
+    }
+    // 截圖一律走 public 靜態資產（非 R2 /assets/ 代理）
+    expect(html).not.toContain('/assets/images/guide/');
+  });
 });
