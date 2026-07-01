@@ -212,15 +212,11 @@ export function removeLRUWord(lang: DictionaryLang, rawWord: string): void {
   const raw = safeGetItem(key);
   if (!raw) return;
 
-  let words: string[] = [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      words = parsed.filter((item): item is string => typeof item === 'string' && item.length > 0);
-    }
-  } catch {
-    words = [];
-  }
+  // Reuse parseLRUWords so a legacy quoted-string bucket (pre-JSON-array
+  // format) falls back to regex extraction instead of being wiped to `[]`
+  // when JSON.parse throws — a single per-item delete must not destroy the
+  // rest of an old-format list.
+  const words = parseLRUWords(raw);
 
   const next = words.filter((existing) => {
     if (existing === word) return false;

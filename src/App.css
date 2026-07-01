@@ -22,7 +22,11 @@
 }
 
 .btn-remove-word:hover,
-.btn-remove-word:focus {
+.btn-remove-word:focus-visible {
 	color: #d9534f;
-	outline: none;
+}
+
+.btn-remove-word:focus-visible {
+	outline: 2px solid #d9534f;
+	outline-offset: 2px;
 }

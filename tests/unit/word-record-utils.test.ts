@@ -218,6 +218,24 @@ describe('LRU list', () => {
     expect(readLRUWords('a')).toEqual([]);
   });
 
+  it('removeLRUWord falls back to legacy regex parsing instead of wiping the bucket', () => {
+    window.localStorage.setItem(getLRUStorageKey('a'), '"one"\\n"two"\\n"three"\\n');
+    removeLRUWord('a', 'two');
+    expect(readLRUWords('a')).toEqual(['one', 'three']);
+  });
+
+  it('removeLRUWord keeps undecodable legacy entries while removing the target word', () => {
+    window.localStorage.setItem(getLRUStorageKey('a'), JSON.stringify(['%E0%A4%A', 'two']));
+    removeLRUWord('a', 'two');
+    expect(readLRUWords('a')).toEqual(['%E0%A4%A']);
+  });
+
+  it('removeLRUWord is a no-op for an empty word', () => {
+    addToLRU('one', 'a');
+    removeLRUWord('a', '');
+    expect(readLRUWords('a')).toEqual(['one']);
+  });
+
   it('removeLRUWord is language-scoped', () => {
     addToLRU('萌', 'a');
     removeLRUWord('t', '萌');
