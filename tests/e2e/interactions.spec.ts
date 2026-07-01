@@ -110,6 +110,23 @@ test.describe('starred page', () => {
     await page.waitForLoadState('networkidle');
     await expect(page).toHaveTitle(/字詞紀錄簿/);
   });
+
+  test('per-item remove button clears a single starred word without confirm (#129)', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    await page.evaluate(() => {
+      window.localStorage.setItem('starred-a', '"萌"\\n"水"\\n');
+    });
+    await page.goto('/=*');
+    await page.waitForLoadState('networkidle');
+
+    await page.getByRole('button', { name: '移除收藏「萌」' }).click();
+
+    await expect(page.getByRole('button', { name: '移除收藏「萌」' })).toHaveCount(0);
+    const raw = await page.evaluate(() => window.localStorage.getItem('starred-a'));
+    expect(raw).not.toContain('"萌"');
+    expect(raw).toContain('"水"');
+  });
 });
 
 test.describe('head metadata injection', () => {

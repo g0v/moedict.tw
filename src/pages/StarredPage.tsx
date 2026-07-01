@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SvgIcon } from '../components/SvgIcon';
-import { clearLRUWords, clearStarredWords, readLRUWords, readStarredWords } from '../utils/word-record-utils';
+import {
+  clearLRUWords,
+  clearStarredWords,
+  readLRUWords,
+  readStarredWords,
+  removeLRUWord,
+  removeStarWord,
+} from '../utils/word-record-utils';
 import { useRadicalTooltip } from '../hooks/useRadicalTooltip';
 
 type Lang = 'a' | 't' | 'h' | 'c';
@@ -76,6 +83,22 @@ export function StarredPage({ lang }: StarredPageProps) {
     setStarredWords([]);
   }, [lang]);
 
+  const handleRemoveStarred = useCallback(
+    (word: string) => {
+      removeStarWord(lang, word);
+      setStarredWords((prev) => prev.filter((existing) => existing !== word));
+    },
+    [lang]
+  );
+
+  const handleRemoveRecent = useCallback(
+    (word: string) => {
+      removeLRUWord(lang, word);
+      setRecentWords((prev) => prev.filter((existing) => existing !== word));
+    },
+    [lang]
+  );
+
   return (
     <div className="result">
       <h1 className="title">字詞紀錄簿</h1>
@@ -107,6 +130,15 @@ export function StarredPage({ lang }: StarredPageProps) {
                   <a href={path} data-radical-id={tooltipId} onClick={(event) => handleWordClick(event, word)}>
                     {word}
                   </a>
+                  <button
+                    type="button"
+                    className="btn-remove-word"
+                    aria-label={`移除收藏「${word}」`}
+                    title={`移除收藏「${word}」`}
+                    onClick={() => handleRemoveStarred(word)}
+                  >
+                    <SvgIcon name="removeCircle" size="0.9em" aria-hidden="true" />
+                  </button>
                 </div>
               );
             })
@@ -137,6 +169,15 @@ export function StarredPage({ lang }: StarredPageProps) {
                 <a href={path} data-radical-id={tooltipId} onClick={(event) => handleWordClick(event, word)}>
                   {word}
                 </a>
+                <button
+                  type="button"
+                  className="btn-remove-word"
+                  aria-label={`移除紀錄「${word}」`}
+                  title={`移除紀錄「${word}」`}
+                  onClick={() => handleRemoveRecent(word)}
+                >
+                  <SvgIcon name="removeCircle" size="0.9em" aria-hidden="true" />
+                </button>
               </div>
             );
           })}

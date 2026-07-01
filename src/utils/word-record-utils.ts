@@ -204,6 +204,32 @@ export function addToLRU(rawWord: string, lang: DictionaryLang): void {
   safeSetItem(key, JSON.stringify(words));
 }
 
+export function removeLRUWord(lang: DictionaryLang, rawWord: string): void {
+  const word = normalizeWord(rawWord);
+  if (!word) return;
+
+  const key = getLRUStorageKey(lang);
+  const raw = safeGetItem(key);
+  if (!raw) return;
+
+  // Reuse parseLRUWords so a legacy quoted-string bucket (pre-JSON-array
+  // format) falls back to regex extraction instead of being wiped to `[]`
+  // when JSON.parse throws — a single per-item delete must not destroy the
+  // rest of an old-format list.
+  const words = parseLRUWords(raw);
+
+  const next = words.filter((existing) => {
+    if (existing === word) return false;
+    try {
+      return decodeURIComponent(existing) !== word;
+    } catch {
+      return true;
+    }
+  });
+
+  safeSetItem(key, JSON.stringify(next));
+}
+
 export function writeLastLookup(rawWord: string, lang: DictionaryLang): void {
   const word = normalizeWord(rawWord);
   if (!shouldRecordWord(word)) return;
