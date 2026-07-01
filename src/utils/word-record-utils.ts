@@ -204,6 +204,36 @@ export function addToLRU(rawWord: string, lang: DictionaryLang): void {
   safeSetItem(key, JSON.stringify(words));
 }
 
+export function removeLRUWord(lang: DictionaryLang, rawWord: string): void {
+  const word = normalizeWord(rawWord);
+  if (!word) return;
+
+  const key = getLRUStorageKey(lang);
+  const raw = safeGetItem(key);
+  if (!raw) return;
+
+  let words: string[] = [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      words = parsed.filter((item): item is string => typeof item === 'string' && item.length > 0);
+    }
+  } catch {
+    words = [];
+  }
+
+  const next = words.filter((existing) => {
+    if (existing === word) return false;
+    try {
+      return decodeURIComponent(existing) !== word;
+    } catch {
+      return true;
+    }
+  });
+
+  safeSetItem(key, JSON.stringify(next));
+}
+
 export function writeLastLookup(rawWord: string, lang: DictionaryLang): void {
   const word = normalizeWord(rawWord);
   if (!shouldRecordWord(word)) return;

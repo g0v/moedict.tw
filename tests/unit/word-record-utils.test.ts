@@ -13,6 +13,7 @@ import {
   readLRUWords,
   readLastLookup,
   readStarredWords,
+  removeLRUWord,
   removeStarWord,
   shouldRecordWord,
   writeLastLookup,
@@ -200,6 +201,31 @@ describe('LRU list', () => {
   it('clearLRUWords removes the bucket', () => {
     addToLRU('萌', 'a');
     clearLRUWords('a');
+    expect(readLRUWords('a')).toEqual([]);
+  });
+
+  it('removeLRUWord removes a specific entry while keeping the rest', () => {
+    addToLRU('one', 'a');
+    addToLRU('two', 'a');
+    addToLRU('three', 'a');
+    removeLRUWord('a', 'two');
+    expect(readLRUWords('a')).toEqual(['three', 'one']);
+  });
+
+  it('removeLRUWord matches percent-encoded stored entries', () => {
+    window.localStorage.setItem(getLRUStorageKey('a'), JSON.stringify(['%E8%90%8C']));
+    removeLRUWord('a', '萌');
+    expect(readLRUWords('a')).toEqual([]);
+  });
+
+  it('removeLRUWord is language-scoped', () => {
+    addToLRU('萌', 'a');
+    removeLRUWord('t', '萌');
+    expect(readLRUWords('a')).toEqual(['萌']);
+  });
+
+  it('removeLRUWord is a no-op when the bucket is missing', () => {
+    removeLRUWord('a', 'missing');
     expect(readLRUWords('a')).toEqual([]);
   });
 
