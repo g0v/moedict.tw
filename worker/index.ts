@@ -198,6 +198,51 @@ async function getAssetFromBucket(request: Request, env: Env): Promise<Response 
   }
   return new Response(object.body, { status: 200, headers });
 }
+const CONFIG_API_CACHE_CONTROL = 'public, max-age=86400, s-maxage=86400';
+
+/** Fixed CORS for /api/config — must not vary by Origin when edge-caching (Cache API keys by URL only). */
+const CONFIG_API_CORS_HEADERS: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
+export async function respondWithConfigApi(
+  request: Request,
+  env: Env,
+  ctx?: Pick<ExecutionContext, 'waitUntil'>,
+): Promise<Response> {
+  const cacheKey = new Request(request.url, request);
+  const cache = typeof caches !== 'undefined' ? caches.default : undefined;
+
+  if (cache && request.method === 'GET') {
+    const cached = await cache.match(cacheKey);
+    if (cached) {
+      return cached;
+    }
+  }
+
+  const response = new Response(
+    JSON.stringify({
+      assetBaseUrl: env.ASSET_BASE_URL || '',
+      dictionaryBaseUrl: env.DICTIONARY_BASE_URL || '',
+    }),
+    {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': CONFIG_API_CACHE_CONTROL,
+        ...CONFIG_API_CORS_HEADERS,
+      },
+    },
+  );
+
+  if (cache && request.method === 'GET' && ctx) {
+    ctx.waitUntil(cache.put(cacheKey, response.clone()));
+  }
+
+  return response;
+}
 
 /**
  * Pure-function worker entry point — same body as the default export's
@@ -207,7 +252,11 @@ async function getAssetFromBucket(request: Request, env: Env): Promise<Response 
  * The default export below is a one-line wrapper that preserves the
  * `ExportedHandler<Env>` contract for the real deployment.
  */
-export async function dispatch(request: Request, env: Env): Promise<Response> {
+export async function dispatch(
+  request: Request,
+  env: Env,
+  ctx?: Pick<ExecutionContext, 'waitUntil'>,
+): Promise<Response> {
     console.log('🔍 [Index] 開始處理請求:', request.url);
     const url = new URL(request.url);
     console.log(url.pathname);
@@ -377,10 +426,7 @@ export async function dispatch(request: Request, env: Env): Promise<Response> {
       // 提供配置資訊 API（vars → JSON；ASSET 前端有讀取，DICTIONARY 目前僅回傳未使用）
       if (url.pathname === '/api/config') {
         console.log('🔍 [Index] 提供配置資訊');
-        return Response.json({
-          assetBaseUrl: env.ASSET_BASE_URL || '',
-          dictionaryBaseUrl: env.DICTIONARY_BASE_URL || '',
-        });
+        return respondWithConfigApi(request, env, ctx);
       }
 
       // 全文檢索索引 API（從 DICTIONARY R2 讀取 search-index/{lang}.json）
@@ -568,5 +614,5 @@ export async function dispatch(request: Request, env: Env): Promise<Response> {
 }
 
 export default {
-  fetch: (request, env) => dispatch(request, env),
+  fetch: (request, env, ctx) => dispatch(request, env, ctx),
 } satisfies ExportedHandler<Env>;

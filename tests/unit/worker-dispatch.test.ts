@@ -13,7 +13,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { dispatch } from '../../worker/index';
+import { dispatch, respondWithConfigApi } from '../../worker/index';
 
 type AnyEnv = Parameters<typeof dispatch>[1];
 
@@ -86,10 +86,79 @@ describe('dispatch — /api/config', () => {
     });
   });
 
+  it('sets Cache-Control and fixed CORS for edge cacheability', async () => {
+    const res = await dispatch(req('/api/config'), makeEnv());
+    expect(res.headers.get('cache-control')).toContain('max-age=86400');
+    expect(res.headers.get('cache-control')).toContain('s-maxage=86400');
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
+  });
+
   it('serves empty strings when vars are absent', async () => {
     const env = makeEnv({ ASSET_BASE_URL: undefined, DICTIONARY_BASE_URL: undefined });
     const body = await (await dispatch(req('/api/config'), env)).json();
     expect(body).toMatchObject({ assetBaseUrl: '', dictionaryBaseUrl: '' });
+  });
+});
+
+describe('respondWithConfigApi — edge cache', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('returns a cache hit without rebuilding config from env', async () => {
+    const cached = new Response(JSON.stringify({ assetBaseUrl: 'from-cache', dictionaryBaseUrl: 'cached-dict' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const match = vi.fn().mockResolvedValue(cached);
+    const put = vi.fn();
+    vi.stubGlobal('caches', { default: { match, put } });
+
+    const res = await respondWithConfigApi(
+      req('/api/config'),
+      makeEnv({ ASSET_BASE_URL: 'live-assets', DICTIONARY_BASE_URL: 'live-dict' }),
+    );
+
+    expect(match).toHaveBeenCalledOnce();
+    expect(put).not.toHaveBeenCalled();
+    expect(await res.json()).toEqual({ assetBaseUrl: 'from-cache', dictionaryBaseUrl: 'cached-dict' });
+  });
+
+  it('stores a GET miss via ctx.waitUntil(cache.put)', async () => {
+    const match = vi.fn().mockResolvedValue(undefined);
+    const put = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('caches', { default: { match, put } });
+    const waitUntil = vi.fn((promise: Promise<unknown>) => {
+      void promise;
+    });
+
+    const res = await respondWithConfigApi(req('/api/config'), makeEnv(), { waitUntil });
+
+    expect(res.status).toBe(200);
+    expect(waitUntil).toHaveBeenCalledOnce();
+    await waitUntil.mock.calls[0]![0];
+    expect(put).toHaveBeenCalledOnce();
+    const [cacheKey, stored] = put.mock.calls[0]!;
+    expect(cacheKey).toBeInstanceOf(Request);
+    expect((cacheKey as Request).url).toBe('http://localhost/api/config');
+    expect(await (stored as Response).json()).toMatchObject({
+      assetBaseUrl: 'https://r2-assets.test.local',
+      dictionaryBaseUrl: 'https://r2-dictionary.test.local',
+    });
+  });
+
+  it('builds JSON when caches is unavailable (no match or put)', async () => {
+    vi.stubGlobal('caches', undefined);
+
+    const res = await respondWithConfigApi(req('/api/config'), makeEnv());
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toContain('s-maxage=86400');
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
+    expect(await res.json()).toMatchObject({
+      assetBaseUrl: 'https://r2-assets.test.local',
+      dictionaryBaseUrl: 'https://r2-dictionary.test.local',
+    });
   });
 });
 
