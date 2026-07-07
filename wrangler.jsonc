@@ -6,7 +6,10 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "cf-moedict-webkit-neo",
 	"main": "worker/index.ts",
-	"compatibility_date": "2025-11-05",
+	"compatibility_date": "2026-07-07",
+	"cache": {
+		"enabled": true
+	},
 	"assets": {
 		"not_found_handling": "single-page-application",
 		"run_worker_first": ["/robots.txt", "/moetris", "/moetris/", "/api/*", "/lookup/trs/*", "/*.png", "/*.json", "/manifest.appcache", "/translation-data/cfdict.txt", "/translation-data/cfdict.xml", "!/manifest.json"]

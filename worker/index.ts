@@ -421,6 +421,7 @@ export async function dispatch(
         'Access-Control-Allow-Origin': origin || '*',
         'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
+        'Vary': 'Origin',
       };
 
       // 提供配置資訊 API（vars → JSON；ASSET 前端有讀取，DICTIONARY 目前僅回傳未使用）

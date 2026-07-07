@@ -312,17 +312,23 @@ function getCORSHeaders(request: Request): HeadersInit {
     'Access-Control-Allow-Origin': origin || '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
+    'Vary': 'Origin',
   };
 }
-
 function jsonResponse(request: Request, payload: unknown, status = 200, pretty = true): Response {
   const body = pretty ? JSON.stringify(payload, null, 2) : JSON.stringify(payload);
+  const headers = new Headers({
+    'Content-Type': 'application/json',
+    ...getCORSHeaders(request),
+  });
+
+  if (request.method === 'GET' && status === 200) {
+    headers.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+  }
+
   return new Response(body, {
     status,
-    headers: {
-      'Content-Type': 'application/json',
-      ...getCORSHeaders(request),
-    },
+    headers,
   });
 }
 
