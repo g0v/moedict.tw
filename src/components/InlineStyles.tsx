@@ -270,7 +270,7 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 			color: #333;
 			text-decoration: none;
 			font-weight: 400;
-			font-family: "Biaodian Pro Serif CNS", "MOE EduKai Android", MOEDICT, "TW-Kai-98_1", "教育部標準楷書", "標楷體", "BiauKai", "DFKaiShu-SB-Estd-BF", "全字庫正楷體", cursive, serif;
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Biaodian Pro Serif CNS", sans-serif;
 		}
 
 		.ui-autocomplete.search-results .ui-menu-item.is-status {
