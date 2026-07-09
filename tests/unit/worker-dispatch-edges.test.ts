@@ -14,7 +14,7 @@
  *   - `getAssetFromBucket` (R2Bucket path) HEAD + GET + invalid method
  *   - the `handleLookupAPI` 200 return branch
  *   - `handleListAPI` delegation via `/api/=category`
- *   - the Origin-mirror CORS block inside the ASSET_BASE_URL proxy
+ *   - the fixed-star CORS block inside the ASSET_BASE_URL proxy
  *   - HEAD variants of the App-Store-badge image route
  *   - the cfdict.txt 404 (mirrors the xml 404)
  *
@@ -425,19 +425,17 @@ describe('dispatch — /assets/* via R2Bucket (getAssetFromBucket branches)', ()
   });
 });
 
-describe('dispatch — ASSET_BASE_URL proxy Origin-mirror CORS', () => {
-  it('mirrors Origin and sets Allow-Credentials when the proxied request has an Origin header', async () => {
-    // happy-dom strips Origin from Request constructors; we set it
-    // post-construction to force the `if (origin)` branch in dispatch
-    // (lines 513-516) to execute.
+describe('dispatch — ASSET_BASE_URL proxy fixed-star CORS', () => {
+  it('uses fixed-star CORS without credentials even when Origin is present', async () => {
+    // happy-dom strips Origin from Request constructors; set post-construction.
     globalThis.fetch = vi.fn(async () =>
       new Response('proxied ok', { status: 200, headers: { 'Content-Type': 'text/plain' } })) as typeof fetch;
     const env = makeEnv({ ASSETS: makeBucket() });
     const r = reqWithOrigin('/assets/x.js', 'https://origin.test');
     const res = await dispatch(r, env);
     expect(res.status).toBe(200);
-    expect(res.headers.get('access-control-allow-origin')).toBe('https://origin.test');
-    expect(res.headers.get('access-control-allow-credentials')).toBe('true');
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
+    expect(res.headers.get('access-control-allow-credentials')).toBeNull();
     expect(res.headers.get('access-control-allow-methods')).toContain('GET');
   });
 });

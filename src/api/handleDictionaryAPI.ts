@@ -306,24 +306,40 @@ function fixMojibake(text: string): string {
   return text;
 }
 
-function getCORSHeaders(request: Request): HeadersInit {
-  const origin = request.headers.get('Origin');
+function getCORSHeaders(): HeadersInit {
   return {
-    'Access-Control-Allow-Origin': origin || '*',
+    'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
-    'Vary': 'Origin',
   };
 }
+
+function resolveDictCacheTags(request: Request): string {
+  const pathname = new URL(request.url).pathname;
+  const sub = parseSubRoute(pathname);
+  if (sub && (sub.routeType === 'a' || sub.routeType === 't' || sub.routeType === 'h' || sub.routeType === 'c')) {
+    return `dict,dict-${sub.routeType}`;
+  }
+
+  const pathForParse = pathname.replace(/^\/api(?=\/|$)/, '') || pathname;
+  const { lang } = parseTextFromUrl(pathForParse);
+  return `dict,dict-${lang}`;
+}
+
 function jsonResponse(request: Request, payload: unknown, status = 200, pretty = true): Response {
   const body = pretty ? JSON.stringify(payload, null, 2) : JSON.stringify(payload);
   const headers = new Headers({
     'Content-Type': 'application/json',
-    ...getCORSHeaders(request),
+    ...getCORSHeaders(),
   });
 
-  if (request.method === 'GET' && status === 200) {
-    headers.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+  // Long-cache only successful public GET/HEAD payloads — never 404/500.
+  if ((request.method === 'GET' || request.method === 'HEAD') && status === 200) {
+    headers.set(
+      'Cache-Control',
+      'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800',
+    );
+    headers.set('Cache-Tag', resolveDictCacheTags(request));
   }
 
   return new Response(body, {

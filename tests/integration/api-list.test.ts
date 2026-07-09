@@ -77,26 +77,26 @@ describe('handleListAPI — malformed path handling', () => {
 });
 
 describe('handleListAPI — CORS', () => {
-  it('mirrors Origin on successful list responses', async () => {
+  it('uses fixed-star CORS on successful list responses', async () => {
     const res = await fetchFromServer('/api/=%E8%BF%91%E7%BE%A9%E8%A9%9E', {
       headers: { Origin: 'https://example.test' },
     });
     expect(res.status).toBe(200);
-    expect(res.headers.get('access-control-allow-origin')).toBe('https://example.test');
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
     expect(res.headers.get('access-control-allow-methods')).toContain('GET');
   });
 
-  it('falls back to * when no Origin header is sent', async () => {
+  it('uses fixed-star CORS when no Origin header is sent', async () => {
     const res = await fetchFromServer('/api/=%E8%BF%91%E7%BE%A9%E8%A9%9E');
     expect(res.status).toBe(200);
     expect(res.headers.get('access-control-allow-origin')).toBe('*');
   });
 
-  it('mirrors Origin on 404 responses (list not found)', async () => {
+  it('uses fixed-star CORS on 404 responses (list not found)', async () => {
     const res = await fetchFromServer('/api/=unknowncategory', {
       headers: { Origin: 'https://example.test' },
     });
     expect(res.status).toBe(404);
-    expect(res.headers.get('access-control-allow-origin')).toBe('https://example.test');
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
   });
 });

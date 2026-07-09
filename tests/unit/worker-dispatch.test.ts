@@ -66,7 +66,7 @@ beforeEach(() => {
 });
 
 describe('dispatch — CORS preflight', () => {
-  it('OPTIONS on any path returns 204 with Origin-mirrored CORS headers', async () => {
+  it('OPTIONS on any path returns 204 with fixed-star CORS headers', async () => {
     const res = await dispatch(req('/anything', { method: 'OPTIONS' }), makeEnv());
     expect(res.status).toBe(204);
     expect(res.headers.get('access-control-allow-origin')).toBe('*');
@@ -86,11 +86,11 @@ describe('dispatch — /api/config', () => {
     });
   });
 
-  it('sets Cache-Control and fixed CORS for edge cacheability', async () => {
+  it('sets fixed CORS and no-store so env changes are not edge-pinned', async () => {
     const res = await dispatch(req('/api/config'), makeEnv());
-    expect(res.headers.get('cache-control')).toContain('max-age=86400');
-    expect(res.headers.get('cache-control')).toContain('s-maxage=86400');
     expect(res.headers.get('access-control-allow-origin')).toBe('*');
+    expect(res.headers.get('cache-control')).toMatch(/no-store|max-age=0|private/i);
+    expect(res.headers.get('cache-control') ?? '').not.toMatch(/s-maxage=[1-9]/);
   });
 
   it('serves empty strings when vars are absent', async () => {
@@ -100,60 +100,42 @@ describe('dispatch — /api/config', () => {
   });
 });
 
-describe('respondWithConfigApi — edge cache', () => {
+describe('respondWithConfigApi — no edge pin', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('returns a cache hit without rebuilding config from env', async () => {
-    const cached = new Response(JSON.stringify({ assetBaseUrl: 'from-cache', dictionaryBaseUrl: 'cached-dict' }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-    const match = vi.fn().mockResolvedValue(cached);
+  it('does not read or write caches.default', async () => {
+    const match = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ assetBaseUrl: 'from-cache', dictionaryBaseUrl: 'cached-dict' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
     const put = vi.fn();
     vi.stubGlobal('caches', { default: { match, put } });
+    const waitUntil = vi.fn();
 
     const res = await respondWithConfigApi(
       req('/api/config'),
       makeEnv({ ASSET_BASE_URL: 'live-assets', DICTIONARY_BASE_URL: 'live-dict' }),
+      { waitUntil },
     );
 
-    expect(match).toHaveBeenCalledOnce();
+    expect(match).not.toHaveBeenCalled();
     expect(put).not.toHaveBeenCalled();
-    expect(await res.json()).toEqual({ assetBaseUrl: 'from-cache', dictionaryBaseUrl: 'cached-dict' });
+    expect(waitUntil).not.toHaveBeenCalled();
+    expect(res.headers.get('cache-control')).toMatch(/no-store|max-age=0|private/i);
+    expect(await res.json()).toEqual({ assetBaseUrl: 'live-assets', dictionaryBaseUrl: 'live-dict' });
   });
 
-  it('stores a GET miss via ctx.waitUntil(cache.put)', async () => {
-    const match = vi.fn().mockResolvedValue(undefined);
-    const put = vi.fn().mockResolvedValue(undefined);
-    vi.stubGlobal('caches', { default: { match, put } });
-    const waitUntil = vi.fn((promise: Promise<unknown>) => {
-      void promise;
-    });
-
-    const res = await respondWithConfigApi(req('/api/config'), makeEnv(), { waitUntil });
-
-    expect(res.status).toBe(200);
-    expect(waitUntil).toHaveBeenCalledOnce();
-    await waitUntil.mock.calls[0]![0];
-    expect(put).toHaveBeenCalledOnce();
-    const [cacheKey, stored] = put.mock.calls[0]!;
-    expect(cacheKey).toBeInstanceOf(Request);
-    expect((cacheKey as Request).url).toBe('http://localhost/api/config');
-    expect(await (stored as Response).json()).toMatchObject({
-      assetBaseUrl: 'https://r2-assets.test.local',
-      dictionaryBaseUrl: 'https://r2-dictionary.test.local',
-    });
-  });
-
-  it('builds JSON when caches is unavailable (no match or put)', async () => {
+  it('builds JSON with fixed CORS when caches is unavailable', async () => {
     vi.stubGlobal('caches', undefined);
 
     const res = await respondWithConfigApi(req('/api/config'), makeEnv());
 
     expect(res.status).toBe(200);
-    expect(res.headers.get('cache-control')).toContain('s-maxage=86400');
+    expect(res.headers.get('cache-control')).toMatch(/no-store|max-age=0|private/i);
     expect(res.headers.get('access-control-allow-origin')).toBe('*');
     expect(await res.json()).toMatchObject({
       assetBaseUrl: 'https://r2-assets.test.local',
@@ -163,14 +145,21 @@ describe('respondWithConfigApi — edge cache', () => {
 });
 
 describe('dispatch — /api/search-index/{lang}.json', () => {
-  it('200 serves the cached JSON with long Cache-Control', async () => {
+  it('200 serves JSON with fixed-star CORS, s-maxage, and search-index tags', async () => {
     const env = makeEnv({
       DICTIONARY: makeBucket({ 'search-index/a.json': { body: '{"words":[]}' } }),
     });
-    const res = await dispatch(req('/api/search-index/a.json'), env);
+    const request = req('/api/search-index/a.json');
+    request.headers.set('Origin', 'https://evil.example');
+    const res = await dispatch(request, env);
     expect(res.status).toBe(200);
     expect(await res.text()).toBe('{"words":[]}');
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
+    expect(res.headers.get('vary')).toBeNull();
     expect(res.headers.get('cache-control')).toContain('max-age=604800');
+    expect(res.headers.get('cache-control')).toContain('s-maxage=');
+    expect(res.headers.get('cache-tag')).toMatch(/\bsearch-index\b/);
+    expect(res.headers.get('cache-tag')).toMatch(/\bsearch-index-a\b/);
   });
 
   it('404 with error body when the language key is missing', async () => {
@@ -422,13 +411,12 @@ describe('dispatch — /assets/* ASSET_BASE_URL proxy fallback', () => {
     expect(res.status).toBe(502);
   });
 
-  it('mirrors Origin in CORS headers on the proxied response', async () => {
+  it('uses fixed-star CORS on the proxied response', async () => {
     const fetcher = { fetch: vi.fn(async () => new Response('', { status: 404 })) };
     globalThis.fetch = vi.fn(async () => new Response('ok', { status: 200 })) as typeof fetch;
     const env = makeEnv({ ASSETS: fetcher as unknown as AnyEnv['ASSETS'] });
     const res = await dispatch(req('/assets/x.js', { headers: { Origin: 'https://example.test' } }), env);
-    // Happy-dom strips Origin on Request — this test exercises the no-Origin
-    // branch which falls back to '*'.
+    // Happy-dom may strip Origin on Request; either way response is fixed `*`.
     expect(res.headers.get('access-control-allow-origin')).toBe('*');
   });
 });

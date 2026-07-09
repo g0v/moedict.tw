@@ -151,6 +151,7 @@ async function renderHtmlShell(request: Request, env: Env, pathname: string): Pr
   if (request.method === 'HEAD') {
     const headers = new Headers(shellResponse.headers);
     headers.set('Content-Type', 'text/html; charset=utf-8');
+    headers.set('Cache-Control', 'public, max-age=60, s-maxage=60');
     return new Response(null, { status: shellResponse.status, headers });
   }
 
@@ -158,6 +159,8 @@ async function renderHtmlShell(request: Request, env: Env, pathname: string): Pr
   const rewritten = await injectHeadMetadata(html, pathname, env);
   const headers = new Headers(shellResponse.headers);
   headers.set('Content-Type', 'text/html; charset=utf-8');
+  // Path-specific head injection — keep edge TTL short.
+  headers.set('Cache-Control', 'public, max-age=60, s-maxage=60');
   return new Response(rewritten, { status: shellResponse.status, headers });
 }
 
@@ -198,31 +201,22 @@ async function getAssetFromBucket(request: Request, env: Env): Promise<Response 
   }
   return new Response(object.body, { status: 200, headers });
 }
-const CONFIG_API_CACHE_CONTROL = 'public, max-age=86400, s-maxage=86400';
+const CONFIG_API_CACHE_CONTROL = 'no-store';
 
-/** Fixed CORS for /api/config — must not vary by Origin when edge-caching (Cache API keys by URL only). */
-const CONFIG_API_CORS_HEADERS: Record<string, string> = {
+/** Fixed CORS for public config / dictionary / static GETs under Workers Cache. */
+const PUBLIC_CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
 export async function respondWithConfigApi(
-  request: Request,
+  _request: Request,
   env: Env,
-  ctx?: Pick<ExecutionContext, 'waitUntil'>,
+  _ctx?: Pick<ExecutionContext, 'waitUntil'>,
 ): Promise<Response> {
-  const cacheKey = new Request(request.url, request);
-  const cache = typeof caches !== 'undefined' ? caches.default : undefined;
-
-  if (cache && request.method === 'GET') {
-    const cached = await cache.match(cacheKey);
-    if (cached) {
-      return cached;
-    }
-  }
-
-  const response = new Response(
+  // Env-backed; must not be edge-pinned via Workers Cache or Cache API.
+  return new Response(
     JSON.stringify({
       assetBaseUrl: env.ASSET_BASE_URL || '',
       dictionaryBaseUrl: env.DICTIONARY_BASE_URL || '',
@@ -232,16 +226,10 @@ export async function respondWithConfigApi(
       headers: {
         'Content-Type': 'application/json; charset=utf-8',
         'Cache-Control': CONFIG_API_CACHE_CONTROL,
-        ...CONFIG_API_CORS_HEADERS,
+        ...PUBLIC_CORS_HEADERS,
       },
     },
   );
-
-  if (cache && request.method === 'GET' && ctx) {
-    ctx.waitUntil(cache.put(cacheKey, response.clone()));
-  }
-
-  return response;
 }
 
 /**
@@ -263,13 +251,10 @@ export async function dispatch(
 
     // 處理 OPTIONS 預檢請求（CORS preflight）
     if (request.method === 'OPTIONS') {
-      const origin = request.headers.get('Origin');
       return new Response(null, {
         status: 204,
         headers: {
-          'Access-Control-Allow-Origin': origin || '*',
-          'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
+          ...PUBLIC_CORS_HEADERS,
           'Access-Control-Max-Age': '86400',
         },
       });
@@ -351,12 +336,7 @@ export async function dispatch(
 
     // 特殊路由：CFDict XML（從字典 R2 讀取）
     if (url.pathname === '/translation-data/cfdict.xml') {
-      const origin = request.headers.get('Origin');
-      const corsHeaders = {
-        'Access-Control-Allow-Origin': origin || '*',
-        'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      };
+      const corsHeaders = PUBLIC_CORS_HEADERS;
       const bucket = env.DICTIONARY;
       const key = 'translation-data/cfdict.xml';
       const obj = await bucket.get(key);
@@ -373,7 +353,8 @@ export async function dispatch(
       obj.writeHttpMetadata(headers);
       headers.set('Content-Type', 'application/xml; charset=utf-8');
       headers.set('Content-Disposition', 'attachment; filename="cfdict.xml"');
-      headers.set('Cache-Control', 'public, max-age=86400');
+      headers.set('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+      headers.set('Cache-Tag', 'translation,translation-cfdict');
       headers.set('etag', obj.httpEtag);
       Object.entries(corsHeaders).forEach(([k, v]) => headers.set(k, v));
       if (request.method === 'HEAD') {
@@ -384,12 +365,7 @@ export async function dispatch(
 
     // 特殊路由：CFDict TXT（從字典 R2 讀取，強制 UTF-8）
     if (url.pathname === '/translation-data/cfdict.txt') {
-      const origin = request.headers.get('Origin');
-      const corsHeaders = {
-        'Access-Control-Allow-Origin': origin || '*',
-        'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      };
+      const corsHeaders = PUBLIC_CORS_HEADERS;
       const bucket = env.DICTIONARY;
       const key = 'translation-data/cfdict.txt';
       const obj = await bucket.get(key);
@@ -405,7 +381,8 @@ export async function dispatch(
       const headers = new Headers();
       obj.writeHttpMetadata(headers);
       headers.set('Content-Type', 'text/plain; charset=utf-8');
-      headers.set('Cache-Control', 'public, max-age=86400');
+      headers.set('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+      headers.set('Cache-Tag', 'translation,translation-cfdict');
       headers.set('etag', obj.httpEtag);
       Object.entries(corsHeaders).forEach(([k, v]) => headers.set(k, v));
       if (request.method === 'HEAD') {
@@ -416,13 +393,7 @@ export async function dispatch(
 
     if (url.pathname.startsWith('/api/') || url.pathname.endsWith('.json')) {
       console.log('🔍 [Index] 處理 API 請求:', url.pathname);
-      const origin = request.headers.get('Origin');
-      const corsHeaders = {
-        'Access-Control-Allow-Origin': origin || '*',
-        'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Vary': 'Origin',
-      };
+      const corsHeaders = PUBLIC_CORS_HEADERS;
 
       // 提供配置資訊 API（vars → JSON；ASSET 前端有讀取，DICTIONARY 目前僅回傳未使用）
       if (url.pathname === '/api/config') {
@@ -453,7 +424,8 @@ export async function dispatch(
           status: 200,
           headers: {
             'Content-Type': 'application/json; charset=utf-8',
-            'Cache-Control': 'public, max-age=604800, stale-while-revalidate=86400',
+            'Cache-Control': 'public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400',
+            'Cache-Tag': `search-index,search-index-${lang}`,
             ...corsHeaders,
           },
         });
@@ -484,7 +456,8 @@ export async function dispatch(
           status: 200,
           headers: {
             'Content-Type': 'application/json; charset=utf-8',
-            'Cache-Control': 'public, max-age=300',
+            'Cache-Control': 'public, max-age=300, s-maxage=300',
+            'Cache-Tag': `index,index-${lang}`,
             ...corsHeaders,
           },
         });
@@ -502,7 +475,8 @@ export async function dispatch(
             status: 200,
             headers: {
               'Content-Type': 'application/json; charset=utf-8',
-              'Cache-Control': 'public, max-age=3600',
+              'Cache-Control': 'public, max-age=3600, s-maxage=3600',
+              'Cache-Tag': `xref,xref-${lang}`,
               ...corsHeaders,
             },
           });
@@ -513,7 +487,8 @@ export async function dispatch(
           status: 200,
           headers: {
             'Content-Type': 'application/json; charset=utf-8',
-            'Cache-Control': 'public, max-age=3600',
+            'Cache-Control': 'public, max-age=3600, s-maxage=3600',
+            'Cache-Tag': `xref,xref-${lang}`,
             ...corsHeaders,
           },
         });
@@ -580,20 +555,11 @@ export async function dispatch(
           'User-Agent': request.headers.get('User-Agent') || 'Cloudflare-Worker',
         },
       }).then((response) => {
-        // 複製回應並添加 CORS headers
         const newHeaders = new Headers(response.headers);
-        const origin = request.headers.get('Origin');
-
-        // 允許請求的來源
-        if (origin) {
-          newHeaders.set('Access-Control-Allow-Origin', origin);
-          newHeaders.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-          newHeaders.set('Access-Control-Allow-Headers', 'Content-Type');
-          newHeaders.set('Access-Control-Allow-Credentials', 'true');
-        } else {
-          // 如果沒有 Origin header，允許所有來源（開發環境）
-          newHeaders.set('Access-Control-Allow-Origin', '*');
-        }
+        newHeaders.set('Access-Control-Allow-Origin', '*');
+        newHeaders.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+        newHeaders.set('Access-Control-Allow-Headers', 'Content-Type');
+        newHeaders.delete('Access-Control-Allow-Credentials');
 
         return new Response(response.body, {
           status: response.status,

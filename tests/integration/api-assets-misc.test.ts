@@ -19,12 +19,12 @@ describe('/translation-data/*', () => {
     expect(res.headers.get('cache-control')).toContain('max-age=86400');
   });
 
-  it('adds CORS headers on cfdict.xml for any Origin', async () => {
+  it('adds fixed-star CORS headers on cfdict.xml for any Origin', async () => {
     const res = await fetchFromServer('/translation-data/cfdict.xml', {
       headers: { Origin: 'https://example.com' },
     });
     if (res.status !== 200) return;
-    expect(res.headers.get('access-control-allow-origin')).toBe('https://example.com');
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
   });
 });
 
@@ -95,6 +95,6 @@ describe('CORS and method fallbacks', () => {
       headers: { Origin: 'https://example.test' },
     });
     expect(res.status).toBe(204);
-    expect(res.headers.get('access-control-allow-origin')).toBe('https://example.test');
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
   });
 });

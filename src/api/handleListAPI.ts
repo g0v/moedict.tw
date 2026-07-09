@@ -51,22 +51,20 @@ function parseLangAndCategory(pathname: string): ParsedList | null {
   return { lang, category };
 }
 
-function corsHeaders(request: Request): Record<string, string> {
-  const origin = request.headers.get('Origin');
+function corsHeaders(): Record<string, string> {
   return {
-    'Access-Control-Allow-Origin': origin || '*',
+    'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
-    'Vary': 'Origin',
   };
 }
 
-function jsonResponse(request: Request, body: unknown, status: number): Response {
+function jsonResponse(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
-      ...corsHeaders(request),
+      ...corsHeaders(),
     },
   });
 }
@@ -79,7 +77,7 @@ export async function handleListAPI(
   const parsed = parseLangAndCategory(url.pathname);
 
   if (!parsed) {
-    return jsonResponse(request, { error: 'Bad Request', message: '路徑格式錯誤' }, 400);
+    return jsonResponse({ error: 'Bad Request', message: '路徑格式錯誤' }, 400);
   }
 
   const { lang, category } = parsed;
@@ -93,7 +91,6 @@ export async function handleListAPI(
 
   if (!obj) {
     return jsonResponse(
-      request,
       { error: 'Not Found', message: `找不到分類：${category}` },
       404,
     );
@@ -106,19 +103,24 @@ export async function handleListAPI(
   try {
     parsed_data = JSON.parse(data);
   } catch {
-    return jsonResponse(request, { error: 'Internal Error', message: '資料格式異常' }, 500);
+    return jsonResponse({ error: 'Internal Error', message: '資料格式異常' }, 500);
   }
 
   if (!Array.isArray(parsed_data)) {
-    return jsonResponse(request, { error: 'Internal Error', message: '資料非陣列格式' }, 500);
+    return jsonResponse({ error: 'Internal Error', message: '資料非陣列格式' }, 500);
+  }
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json; charset=utf-8',
+    ...corsHeaders(),
+  };
+  if (request.method === 'GET' || request.method === 'HEAD') {
+    headers['Cache-Control'] = 'public, max-age=3600, s-maxage=3600';
+    headers['Cache-Tag'] = `list,list-${lang}`;
   }
 
   return new Response(data, {
     status: 200,
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Cache-Control': 'public, max-age=3600',
-      ...corsHeaders(request),
-    },
+    headers,
   });
 }

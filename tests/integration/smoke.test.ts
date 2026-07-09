@@ -17,7 +17,7 @@ describe('server smoke', () => {
       headers: { Origin: 'https://www.moedict.tw' },
     });
     expect(res.status).toBe(204);
-    expect(res.headers.get('access-control-allow-origin')).toBe('https://www.moedict.tw');
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
     expect(res.headers.get('access-control-allow-methods')).toContain('GET');
   });
 });

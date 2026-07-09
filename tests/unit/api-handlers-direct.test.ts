@@ -58,6 +58,40 @@ describe('handleDictionaryAPI — top-level routing', () => {
     expect(body).toBeTruthy();
   });
 
+  it('uses fixed-star CORS and 200-only cache headers on dictionary GETs', async () => {
+    const env = {
+      DICTIONARY: makeR2({
+        'pack/12.txt': JSON.stringify({
+          [escape('萌')]: { t: '萌', h: [{ b: 'ㄇㄥˊ', d: [{ f: '草木初生的芽' }] }] },
+        }),
+      }),
+    };
+    const { request, url } = makeRequest('/a/%E8%90%8C.json');
+    request.headers.set('Origin', 'https://evil.example');
+    const res = await handleDictionaryAPI(request, url, env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
+    expect(res.headers.get('access-control-allow-credentials')).toBeNull();
+    expect(res.headers.get('vary')).toBeNull();
+    expect(res.headers.get('cache-control')).toContain('public');
+    expect(res.headers.get('cache-control')).toContain('s-maxage=');
+    expect(res.headers.get('cache-tag')).toMatch(/\bdict\b/);
+    expect(res.headers.get('cache-tag')).toMatch(/\bdict-a\b/);
+  });
+
+  it('does not long-cache dictionary 404 responses', async () => {
+    const env = { DICTIONARY: makeR2({}) };
+    const { request, url } = makeRequest('/api/%E4%B8%8D%E5%AD%98.json');
+    const res = await handleDictionaryAPI(request, url, env);
+    expect(res.status).toBe(404);
+    const cacheControl = res.headers.get('cache-control');
+    if (cacheControl) {
+      expect(cacheControl).toMatch(/no-store|max-age=0|private/i);
+      expect(cacheControl).not.toMatch(/s-maxage=[1-9]/);
+    }
+    expect(res.headers.get('cache-tag')).toBeNull();
+  });
+
   it('404s with a terms array when the word is unknown', async () => {
     const env = { DICTIONARY: makeR2({}) };
     const { request, url } = makeRequest('/api/%E4%B8%8D%E5%AD%98.json');
@@ -413,6 +447,25 @@ describe('handleListAPI', () => {
     const res = await handleListAPI(request, url, env);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(['守株待兔', '畫蛇添足']);
+  });
+
+  it('uses fixed-star CORS and cache tags on list 200s', async () => {
+    const env = {
+      DICTIONARY: makeR2({
+        'a/=成語.json': JSON.stringify(['守株待兔', '畫蛇添足']),
+      }),
+    };
+    const { request, url } = makeRequest('/api/=%E6%88%90%E8%AA%9E');
+    request.headers.set('Origin', 'https://evil.example');
+    const res = await handleListAPI(request, url, env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
+    expect(res.headers.get('access-control-allow-credentials')).toBeNull();
+    expect(res.headers.get('vary')).toBeNull();
+    expect(res.headers.get('cache-control')).toContain('public');
+    expect(res.headers.get('cache-control')).toContain('s-maxage=');
+    expect(res.headers.get('cache-tag')).toMatch(/\blist\b/);
+    expect(res.headers.get('cache-tag')).toMatch(/\blist-a\b/);
   });
 
   it('404s when the category is unknown', async () => {
