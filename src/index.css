@@ -105,6 +105,7 @@ body {
 	color: #333;
 	font-size: 16px;
 	line-height: 1.4;
+  font-family: "Biaodian Pro Serif CNS", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif, "MOE EduKai Android", MOEDICT, "TW-Kai-98_1", "標楷體", serif;
 }
 
 .fulltext-search-input:focus {
@@ -193,6 +194,7 @@ body {
 	font-size: 16px;
 	font-weight: 600;
 	line-height: 1.4;
+	font-family: "Biaodian Pro Serif CNS", "MOE EduKai Android", MOEDICT, "TW-Kai-98_1", "教育部標準楷書", "標楷體", "BiauKai", "DFKaiShu-SB-Estd-BF", "全字庫正楷體", cursive, serif;
 }
 
 .fulltext-search-result-snippet {
