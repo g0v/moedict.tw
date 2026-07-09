@@ -1,0 +1,46 @@
+revised-dict.woff — MOE Revised-Dict (標楷體2) PUA variant-headword font
+=======================================================================
+
+Source
+  https://dict.revised.moe.edu.tw/revised-dict.woff
+  Served by MOE's 重編國語辭典修訂本 site (set.css @font-face "標楷體2").
+  Font name table: "(c) 2021 MOE", family "Revised-Dict", version 1.00
+  (01-07-2021), OS/2 fsType = 0 (installable embedding).
+  SHA-256 of the file hosted here:
+  7059eb9e5b5eb9630bf4ecebab04bd91d4d2e6197344e9ca9ff9d15c305c7a63
+
+This file is hosted UNMODIFIED (byte-for-byte identical to MOE's served
+WOFF; no subsetting, no re-encoding to WOFF2).
+
+Purpose
+  Render MOE's own plane-15 Supplementary Private Use Area (U+F0000–FFFFF)
+  variant headwords — 110 single-char PUA titles in the dictionary
+  (e.g. U+F0009 = 「丑」的異體字). No shipped EduKai / 全字庫 web face
+  covers these codepoints. The @font-face is scoped with
+  `unicode-range: U+F0000-FFFFF` so the browser only fetches this 9.17 MiB
+  file when a PUA codepoint is actually on the page.
+
+License status — UNCONFIRMED (read carefully)
+  MOE publishes the 重編國語辭典修訂本 dictionary CONTENT under
+  創用CC 姓名標示—禁止改作 3.0 臺灣 (CC BY-ND 3.0 TW), which permits
+  unmodified redistribution with attribution but prohibits derivatives.
+  MOE has NOT published a separate license statement for revised-dict.woff
+  itself. This file is therefore hosted on EXPLICIT PROJECT-OWNER RISK
+  ACCEPTANCE, under the following reasoning and limits:
+
+    * It is redistributed UNMODIFIED (CC BY-ND's permitted act), not
+      subsetted or re-encoded (which would be a prohibited derivative).
+    * It is used only to render MOE's own dictionary, on a non-commercial
+      civic mirror (g0v/moedict) that already redistributes MOE's
+      dictionary content under CC BY-ND with attribution.
+    * fsType=0 is a font-embedding permission, NOT a copyright license;
+      it is noted here for completeness, not relied upon as a license.
+    * If MOE requests removal, this file and its @font-face will be
+      removed promptly.
+
+Attribution (per CC BY-ND 3.0 TW 使用說明)
+  中華民國教育部（Ministry of Education, R.O.C.）。《重編國語辭典修訂本》。
+  網址：https://dict.revised.moe.edu.tw/
+
+Do NOT subset, re-encode, or modify this file without first obtaining
+font-specific permission from MOE.
