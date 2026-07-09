@@ -1,3 +1,4 @@
+import { CACHE_CONTROL } from './cache';
 /**
  * 筆順 JSON 代理 API
  *
@@ -52,7 +53,8 @@ export async function handleStrokeAPI(
       status: 200,
       headers: {
         'Content-Type': 'application/json; charset=utf-8',
-        'Cache-Control': 'public, max-age=86400',
+        'Cache-Control': CACHE_CONTROL.stroke,
+        'Cache-Tag': 'stroke',
         ...corsHeaders,
       },
     });

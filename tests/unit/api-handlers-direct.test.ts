@@ -74,7 +74,8 @@ describe('handleDictionaryAPI — top-level routing', () => {
     expect(res.headers.get('access-control-allow-credentials')).toBeNull();
     expect(res.headers.get('vary')).toBeNull();
     expect(res.headers.get('cache-control')).toContain('public');
-    expect(res.headers.get('cache-control')).toContain('s-maxage=');
+    expect(res.headers.get('cache-control')).toContain('max-age=300');
+    expect(res.headers.get('cache-control')).toContain('s-maxage=86400');
     expect(res.headers.get('cache-tag')).toMatch(/\bdict\b/);
     expect(res.headers.get('cache-tag')).toMatch(/\bdict-a\b/);
   });
@@ -463,7 +464,8 @@ describe('handleListAPI', () => {
     expect(res.headers.get('access-control-allow-credentials')).toBeNull();
     expect(res.headers.get('vary')).toBeNull();
     expect(res.headers.get('cache-control')).toContain('public');
-    expect(res.headers.get('cache-control')).toContain('s-maxage=');
+    expect(res.headers.get('cache-control')).toContain('max-age=300');
+    expect(res.headers.get('cache-control')).toContain('s-maxage=3600');
     expect(res.headers.get('cache-tag')).toMatch(/\blist\b/);
     expect(res.headers.get('cache-tag')).toMatch(/\blist-a\b/);
   });

@@ -1,3 +1,4 @@
+import { CACHE_CONTROL, dictTagsForLang } from './cache';
 import { dedupeHeteronyms } from '../utils/heteronym-dedup';
 
 type DictionaryLang = 'a' | 't' | 'h' | 'c';
@@ -318,12 +319,11 @@ function resolveDictCacheTags(request: Request): string {
   const pathname = new URL(request.url).pathname;
   const sub = parseSubRoute(pathname);
   if (sub && (sub.routeType === 'a' || sub.routeType === 't' || sub.routeType === 'h' || sub.routeType === 'c')) {
-    return `dict,dict-${sub.routeType}`;
+    return dictTagsForLang(sub.routeType);
   }
-
   const pathForParse = pathname.replace(/^\/api(?=\/|$)/, '') || pathname;
   const { lang } = parseTextFromUrl(pathForParse);
-  return `dict,dict-${lang}`;
+  return dictTagsForLang(lang);
 }
 
 function jsonResponse(request: Request, payload: unknown, status = 200, pretty = true): Response {
@@ -335,10 +335,7 @@ function jsonResponse(request: Request, payload: unknown, status = 200, pretty =
 
   // Long-cache only successful public GET/HEAD payloads — never 404/500.
   if ((request.method === 'GET' || request.method === 'HEAD') && status === 200) {
-    headers.set(
-      'Cache-Control',
-      'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800',
-    );
+    headers.set('Cache-Control', CACHE_CONTROL.dict);
     headers.set('Cache-Tag', resolveDictCacheTags(request));
   }
 

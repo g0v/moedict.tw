@@ -5,12 +5,15 @@ import { handleLookupAPI } from '../src/api/handleLookupAPI';
 import { handleStrokeAPI } from '../src/api/handleStrokeAPI';
 import { escapeHeadContent, resolveHeadByPath } from '../src/ssr/head';
 import { handleImageGeneration } from '../src/utils/image-generation';
+import { CACHE_CONTROL, handleCachePurge } from '../src/api/cache';
 
 interface Env {
 	/** wrangler vars：靜態資源公開端；見 /api/config.assetBaseUrl、/assets/* 代理 */
 	ASSET_BASE_URL?: string;
 	/** wrangler vars：僅注入 /api/config.dictionaryBaseUrl；目前無前端使用 */
 	DICTIONARY_BASE_URL?: string;
+	/** Secret for POST /api/cache/purge (Bearer or X-Cache-Purge-Token). */
+	CACHE_PURGE_TOKEN?: string;
 	DICTIONARY: R2Bucket;
   ASSETS?: Fetcher | R2Bucket;
   FONTS: R2Bucket;
@@ -151,7 +154,7 @@ async function renderHtmlShell(request: Request, env: Env, pathname: string): Pr
   if (request.method === 'HEAD') {
     const headers = new Headers(shellResponse.headers);
     headers.set('Content-Type', 'text/html; charset=utf-8');
-    headers.set('Cache-Control', 'public, max-age=60, s-maxage=60');
+    headers.set('Cache-Control', CACHE_CONTROL.htmlShell);
     return new Response(null, { status: shellResponse.status, headers });
   }
 
@@ -160,7 +163,7 @@ async function renderHtmlShell(request: Request, env: Env, pathname: string): Pr
   const headers = new Headers(shellResponse.headers);
   headers.set('Content-Type', 'text/html; charset=utf-8');
   // Path-specific head injection — keep edge TTL short.
-  headers.set('Cache-Control', 'public, max-age=60, s-maxage=60');
+  headers.set('Cache-Control', CACHE_CONTROL.htmlShell);
   return new Response(rewritten, { status: shellResponse.status, headers });
 }
 
@@ -243,7 +246,9 @@ export async function respondWithConfigApi(
 export async function dispatch(
   request: Request,
   env: Env,
-  ctx?: Pick<ExecutionContext, 'waitUntil'>,
+  ctx?: Pick<ExecutionContext, 'waitUntil'> & {
+    cache?: { purge?: (options: { tags?: string[]; pathPrefixes?: string[]; purgeEverything?: boolean }) => Promise<unknown> };
+  },
 ): Promise<Response> {
     console.log('🔍 [Index] 開始處理請求:', request.url);
     const url = new URL(request.url);
@@ -308,7 +313,8 @@ export async function dispatch(
       const headers = new Headers();
       obj.writeHttpMetadata(headers);
       headers.set('Content-Type', 'image/png');
-      headers.set('Cache-Control', 'public, max-age=86400');
+      headers.set('Cache-Control', CACHE_CONTROL.staticDay);
+      headers.set('Cache-Tag', 'assets');
       headers.set('etag', obj.httpEtag);
       if (request.method === 'HEAD') {
         return new Response(null, { status: 200, headers });
@@ -326,7 +332,8 @@ export async function dispatch(
       const headers = new Headers();
       obj.writeHttpMetadata(headers);
       headers.set('Content-Type', 'text/cache-manifest; charset=utf-8');
-      headers.set('Cache-Control', 'public, max-age=86400');
+      headers.set('Cache-Control', CACHE_CONTROL.staticDay);
+      headers.set('Cache-Tag', 'appcache');
       headers.set('etag', obj.httpEtag);
       if (request.method === 'HEAD') {
         return new Response(null, { status: 200, headers });
@@ -353,7 +360,7 @@ export async function dispatch(
       obj.writeHttpMetadata(headers);
       headers.set('Content-Type', 'application/xml; charset=utf-8');
       headers.set('Content-Disposition', 'attachment; filename="cfdict.xml"');
-      headers.set('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+      headers.set('Cache-Control', CACHE_CONTROL.translation);
       headers.set('Cache-Tag', 'translation,translation-cfdict');
       headers.set('etag', obj.httpEtag);
       Object.entries(corsHeaders).forEach(([k, v]) => headers.set(k, v));
@@ -381,7 +388,7 @@ export async function dispatch(
       const headers = new Headers();
       obj.writeHttpMetadata(headers);
       headers.set('Content-Type', 'text/plain; charset=utf-8');
-      headers.set('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+      headers.set('Cache-Control', CACHE_CONTROL.translation);
       headers.set('Cache-Tag', 'translation,translation-cfdict');
       headers.set('etag', obj.httpEtag);
       Object.entries(corsHeaders).forEach(([k, v]) => headers.set(k, v));
@@ -394,6 +401,17 @@ export async function dispatch(
     if (url.pathname.startsWith('/api/') || url.pathname.endsWith('.json')) {
       console.log('🔍 [Index] 處理 API 請求:', url.pathname);
       const corsHeaders = PUBLIC_CORS_HEADERS;
+      if (url.pathname === '/api/cache/purge') {
+        const cacheApi = ctx?.cache;
+        const purge =
+          cacheApi?.purge != null
+            ? (opts: { tags?: string[]; pathPrefixes?: string[]; purgeEverything?: boolean }) =>
+                cacheApi.purge!(opts)
+            : async () => {
+                throw new Error('ctx.cache.purge unavailable');
+              };
+        return handleCachePurge(request, { env, purge });
+      }
 
       // 提供配置資訊 API（vars → JSON；ASSET 前端有讀取，DICTIONARY 目前僅回傳未使用）
       if (url.pathname === '/api/config') {
@@ -424,7 +442,7 @@ export async function dispatch(
           status: 200,
           headers: {
             'Content-Type': 'application/json; charset=utf-8',
-            'Cache-Control': 'public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400',
+            'Cache-Control': CACHE_CONTROL.searchIndex,
             'Cache-Tag': `search-index,search-index-${lang}`,
             ...corsHeaders,
           },
@@ -456,7 +474,7 @@ export async function dispatch(
           status: 200,
           headers: {
             'Content-Type': 'application/json; charset=utf-8',
-            'Cache-Control': 'public, max-age=300, s-maxage=300',
+            'Cache-Control': CACHE_CONTROL.index,
             'Cache-Tag': `index,index-${lang}`,
             ...corsHeaders,
           },
@@ -475,7 +493,7 @@ export async function dispatch(
             status: 200,
             headers: {
               'Content-Type': 'application/json; charset=utf-8',
-              'Cache-Control': 'public, max-age=3600, s-maxage=3600',
+              'Cache-Control': CACHE_CONTROL.xref,
               'Cache-Tag': `xref,xref-${lang}`,
               ...corsHeaders,
             },
@@ -487,7 +505,7 @@ export async function dispatch(
           status: 200,
           headers: {
             'Content-Type': 'application/json; charset=utf-8',
-            'Cache-Control': 'public, max-age=3600, s-maxage=3600',
+            'Cache-Control': CACHE_CONTROL.xref,
             'Cache-Tag': `xref,xref-${lang}`,
             ...corsHeaders,
           },

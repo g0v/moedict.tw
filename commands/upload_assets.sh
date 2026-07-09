@@ -55,3 +55,26 @@ rclone check "$ASSETS_DIR/" "$BUCKET/" --one-way --missing-on-dst --max-backlog=
 echo ""
 echo "🔗 R2 Storage 路徑: $BUCKET"
 echo "🌐 公開端點: https://pub-1808868ac1e14b13abe9e2800cace884.r2.dev"
+
+# Purge Workers Cache for asset-tagged responses (badge/appcache/static).
+# Requires CACHE_PURGE_TOKEN (same as Worker secret); optional CACHE_PURGE_URL.
+if [ -n "${CACHE_PURGE_TOKEN:-}" ]; then
+  PURGE_URL="${CACHE_PURGE_URL:-https://moedict.tw/api/cache/purge}"
+  echo ""
+  echo "🧹 Purging Workers Cache asset tags via $PURGE_URL ..."
+  purge_status=$(curl -sS -o /tmp/moedict-assets-cache-purge.json -w '%{http_code}' \
+    -X POST "$PURGE_URL" \
+    -H "Authorization: Bearer ${CACHE_PURGE_TOKEN}" \
+    -H 'Content-Type: application/json' \
+    -d '{"tags":["assets","appcache","png"]}') || true
+  if [ "$purge_status" = "200" ]; then
+    echo "✅ Cache purge ok: $(cat /tmp/moedict-assets-cache-purge.json)"
+  else
+    echo "❌ Cache purge failed (HTTP ${purge_status:-curl-error}): $(cat /tmp/moedict-assets-cache-purge.json 2>/dev/null || true)"
+    echo "   R2 upload succeeded, but front cache may still be stale until TTL/redeploy."
+    exit 1
+  fi
+else
+  echo ""
+  echo "⚠️  CACHE_PURGE_TOKEN unset — skipped Workers Cache purge after asset upload."
+fi

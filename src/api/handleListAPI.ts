@@ -1,3 +1,4 @@
+import { CACHE_CONTROL, listTagsForLang } from './cache';
 /**
  * 分類詞彙列表 API
  * 處理 /api/={類名}、/api/'={類名}、/api/:={類名}、/api/~={類名} 的請求
@@ -115,8 +116,8 @@ export async function handleListAPI(
     ...corsHeaders(),
   };
   if (request.method === 'GET' || request.method === 'HEAD') {
-    headers['Cache-Control'] = 'public, max-age=3600, s-maxage=3600';
-    headers['Cache-Tag'] = `list,list-${lang}`;
+    headers['Cache-Control'] = CACHE_CONTROL.list;
+    headers['Cache-Tag'] = listTagsForLang(lang);
   }
 
   return new Response(data, {

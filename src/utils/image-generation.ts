@@ -1,4 +1,5 @@
 import { Resvg } from '@cf-wasm/resvg';
+import { CACHE_CONTROL } from '../api/cache';
 
 interface FontSvgObject {
 	size: number;
@@ -153,7 +154,7 @@ export async function handleImageGeneration(url: URL, env: Env): Promise<Respons
 				status: 404,
 				headers: {
 					'Content-Type': 'text/plain; charset=utf-8',
-					'Cache-Control': 'public, max-age=3600', // 快取一小時
+					'Cache-Control': 'no-store', // font missing is env-specific
 					...getCORSHeaders(),
 				},
 			});
@@ -170,7 +171,8 @@ export async function handleImageGeneration(url: URL, env: Env): Promise<Respons
 		return new Response(Uint8Array.from(pngBuffer), {
 			headers: {
 				'Content-Type': 'image/png',
-				'Cache-Control': 'public, max-age=31536000', // 快取一年
+				'Cache-Control': CACHE_CONTROL.png,
+				'Cache-Tag': 'png',
 				...getCORSHeaders(),
 			},
 		});

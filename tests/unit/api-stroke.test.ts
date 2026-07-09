@@ -42,7 +42,9 @@ describe('handleStrokeAPI validation', () => {
     const response = await handleStrokeAPI(request, url, corsHeaders);
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toMatch(/json/);
-    expect(response.headers.get('Cache-Control')).toContain('max-age=86400');
+    expect(response.headers.get('Cache-Control')).toContain('s-maxage=86400');
+    expect(response.headers.get('Cache-Control')).toContain('max-age=3600');
+    expect(response.headers.get('Cache-Tag')).toBe('stroke');
     expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.stringContaining('/840c.json'),
       expect.objectContaining({ method: 'GET' }),

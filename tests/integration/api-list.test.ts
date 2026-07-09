@@ -16,7 +16,8 @@ describe('/api/=<category>.json — 華語 list route', () => {
     expect(Array.isArray(body)).toBe(true);
     expect(body.length).toBeGreaterThan(0);
     expect(headers.get('content-type')).toMatch(/json/);
-    expect(headers.get('cache-control')).toContain('max-age=3600');
+    expect(headers.get('cache-control')).toContain('max-age=300');
+    expect(headers.get('cache-control')).toContain('s-maxage=3600');
   });
 
   it('accepts paths with a trailing .json (worker routes them to handleListAPI too)', async () => {

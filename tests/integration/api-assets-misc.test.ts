@@ -8,7 +8,7 @@ describe('/translation-data/*', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toContain('xml');
     expect(res.headers.get('content-disposition')).toContain('cfdict.xml');
-    expect(res.headers.get('cache-control')).toContain('max-age=86400');
+    expect(res.headers.get('cache-control')).toContain('s-maxage=86400');
   });
 
   it('serves cfdict.txt from DICTIONARY R2 (when fixture present)', async () => {
@@ -16,7 +16,7 @@ describe('/translation-data/*', () => {
     if (res.status === 404) return;
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toContain('text/plain');
-    expect(res.headers.get('cache-control')).toContain('max-age=86400');
+    expect(res.headers.get('cache-control')).toContain('s-maxage=86400');
   });
 
   it('adds fixed-star CORS headers on cfdict.xml for any Origin', async () => {
@@ -33,7 +33,7 @@ describe('/manifest.appcache', () => {
     const res = await fetchFromServer('/manifest.appcache');
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toContain('cache-manifest');
-    expect(res.headers.get('cache-control')).toContain('max-age=86400');
+    expect(res.headers.get('cache-control')).toContain('s-maxage=86400');
     const text = await res.text();
     expect(text).toContain('CACHE MANIFEST');
   });
@@ -50,7 +50,7 @@ describe('/images/Download_on_the_App_Store_Badge_HK_TW_135x40.png', () => {
     if (res.status === 404) return; // fixture optional
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('image/png');
-    expect(res.headers.get('cache-control')).toContain('max-age=86400');
+    expect(res.headers.get('cache-control')).toContain('s-maxage=86400');
   });
 
   it('HEAD returns headers only', async () => {

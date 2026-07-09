@@ -230,3 +230,29 @@ echo "  - lookup/pinyin/: $pinyin_lookup_count 個 JSON 檔案"
 
 echo ""
 echo "🔗 R2 Storage 路徑: $R2_REMOTE:$R2_BUCKET"
+
+# Purge Workers Cache so front-of-Worker hits do not serve stale dictionary JSON.
+# Requires:
+#   CACHE_PURGE_TOKEN  — same secret as Worker env CACHE_PURGE_TOKEN
+#   CACHE_PURGE_URL    — optional, default https://moedict.tw/api/cache/purge
+if [ -n "${CACHE_PURGE_TOKEN:-}" ]; then
+  PURGE_URL="${CACHE_PURGE_URL:-https://moedict.tw/api/cache/purge}"
+  echo ""
+  echo "🧹 Purging Workers Cache via $PURGE_URL ..."
+  purge_status=$(curl -sS -o /tmp/moedict-cache-purge.json -w '%{http_code}' \
+    -X POST "$PURGE_URL" \
+    -H "Authorization: Bearer ${CACHE_PURGE_TOKEN}" \
+    -H 'Content-Type: application/json' \
+    -d '{"allDictionaryTags":true}') || true
+  if [ "$purge_status" = "200" ]; then
+    echo "✅ Cache purge ok: $(cat /tmp/moedict-cache-purge.json)"
+  else
+    echo "❌ Cache purge failed (HTTP ${purge_status:-curl-error}): $(cat /tmp/moedict-cache-purge.json 2>/dev/null || true)"
+    echo "   R2 upload succeeded, but front cache may still be stale until TTL/redeploy."
+    exit 1
+  fi
+else
+  echo ""
+  echo "⚠️  CACHE_PURGE_TOKEN unset — skipped Workers Cache purge after upload."
+  echo "   Set CACHE_PURGE_TOKEN (and optional CACHE_PURGE_URL) to invalidate dict/list/search-index tags."
+fi

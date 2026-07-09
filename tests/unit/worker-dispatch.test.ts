@@ -144,6 +144,52 @@ describe('respondWithConfigApi — no edge pin', () => {
   });
 });
 
+
+describe('dispatch — /api/cache/purge', () => {
+  it('403s when CACHE_PURGE_TOKEN is not configured', async () => {
+    const res = await dispatch(
+      req('/api/cache/purge', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer secret', 'Content-Type': 'application/json' },
+        body: '{}',
+      }),
+      makeEnv(),
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it('purges allowed tags when token and ctx.cache.purge are present', async () => {
+    const purge = vi.fn(async () => ({ success: true }));
+    const res = await dispatch(
+      req('/api/cache/purge', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer secret', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags: ['dict', 'evil'] }),
+      }),
+      makeEnv({ CACHE_PURGE_TOKEN: 'secret' }),
+      { waitUntil: vi.fn(), cache: { purge } } as never,
+    );
+    expect(res.status).toBe(200);
+    expect(purge).toHaveBeenCalledWith({ tags: ['dict'] });
+    const body = await res.json() as { ok: boolean; purgedTags: string[] };
+    expect(body.ok).toBe(true);
+    expect(body.purgedTags).toEqual(['dict']);
+  });
+
+  it('500s when purge runtime is unavailable', async () => {
+    const res = await dispatch(
+      req('/api/cache/purge', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer secret', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags: ['dict'] }),
+      }),
+      makeEnv({ CACHE_PURGE_TOKEN: 'secret' }),
+      { waitUntil: vi.fn() },
+    );
+    expect(res.status).toBe(500);
+  });
+});
+
 describe('dispatch — /api/search-index/{lang}.json', () => {
   it('200 serves JSON with fixed-star CORS, s-maxage, and search-index tags', async () => {
     const env = makeEnv({
@@ -156,8 +202,8 @@ describe('dispatch — /api/search-index/{lang}.json', () => {
     expect(await res.text()).toBe('{"words":[]}');
     expect(res.headers.get('access-control-allow-origin')).toBe('*');
     expect(res.headers.get('vary')).toBeNull();
-    expect(res.headers.get('cache-control')).toContain('max-age=604800');
-    expect(res.headers.get('cache-control')).toContain('s-maxage=');
+    expect(res.headers.get('cache-control')).toContain('max-age=3600');
+    expect(res.headers.get('cache-control')).toContain('s-maxage=604800');
     expect(res.headers.get('cache-tag')).toMatch(/\bsearch-index\b/);
     expect(res.headers.get('cache-tag')).toMatch(/\bsearch-index-a\b/);
   });
@@ -193,7 +239,8 @@ describe('dispatch — /api/xref/{lang}.json', () => {
     });
     const res = await dispatch(req('/api/xref/a.json'), env);
     expect(res.status).toBe(200);
-    expect(res.headers.get('cache-control')).toContain('max-age=3600');
+    expect(res.headers.get('cache-control')).toContain('max-age=300');
+    expect(res.headers.get('cache-control')).toContain('s-maxage=3600');
   });
 
   it('returns empty-object JSON (not 404) when xref file is missing', async () => {
@@ -239,6 +286,7 @@ describe('dispatch — /robots.txt', () => {
     expect(body).toContain('Disallow: /*.json$');
     expect(body).toContain('Disallow: /*.png$');
     expect(body).toContain('Allow: /');
+    expect(res.headers.get('cache-control')).toContain('max-age=3600');
   });
 
   it('HEAD returns headers only', async () => {
@@ -273,7 +321,9 @@ describe('dispatch — /images/Download_on_the_App_Store_Badge_HK_TW_135x40.png'
     const res = await dispatch(req('/images/Download_on_the_App_Store_Badge_HK_TW_135x40.png'), env);
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('image/png');
-    expect(res.headers.get('cache-control')).toContain('max-age=86400');
+    expect(res.headers.get('cache-control')).toContain('max-age=3600');
+    expect(res.headers.get('cache-control')).toContain('s-maxage=86400');
+    expect(res.headers.get('cache-tag')).toBe('assets');
     expect(res.headers.get('etag')).toBe('"etag-stub"');
   });
 
