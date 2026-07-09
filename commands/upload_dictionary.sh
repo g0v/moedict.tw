@@ -21,9 +21,9 @@ if [ ! -d "$DICTIONARY_DIR" ]; then
     exit 1
 fi
 
-# R2 Storage 配置
-R2_REMOTE="r2"
-R2_BUCKET="moedict-dictionary-preview" # or "moedict-dictionary"
+# R2 Storage 配置 (override: R2_BUCKET=moedict-dictionary)
+R2_REMOTE="${R2_REMOTE:-r2}"
+R2_BUCKET="${R2_BUCKET:-moedict-dictionary-preview}" # prod: moedict-dictionary
 
 # pack 資料夾（字詞 bucket 資料）
 PACK_FOLDERS=("pack" "pcck" "phck" "ptck")
