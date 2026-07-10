@@ -158,25 +158,36 @@ describe('dispatch — /api/cache/purge', () => {
     expect(res.status).toBe(403);
   });
 
-  it('purges allowed tags when token and ctx.cache.purge are present', async () => {
-    const purge = vi.fn(async () => ({ success: true }));
+  it('purges allowed tags through the Zone Cache Purge API', async () => {
+    const zonePurge = vi.fn(async () => new Response(JSON.stringify({ success: true }), { status: 200 }));
+    globalThis.fetch = zonePurge as typeof fetch;
     const res = await dispatch(
       req('/api/cache/purge', {
         method: 'POST',
         headers: { Authorization: 'Bearer secret', 'Content-Type': 'application/json' },
         body: JSON.stringify({ tags: ['dict', 'evil'] }),
       }),
-      makeEnv({ CACHE_PURGE_TOKEN: 'secret' }),
-      { waitUntil: vi.fn(), cache: { purge } } as never,
+      makeEnv({ CACHE_PURGE_TOKEN: 'secret', CLOUDFLARE_API_TOKEN: 'zone-token' }),
+      { waitUntil: vi.fn() } as never,
     );
     expect(res.status).toBe(200);
-    expect(purge).toHaveBeenCalledWith({ tags: ['dict'] });
+    expect(zonePurge).toHaveBeenCalledWith(
+      'https://api.cloudflare.com/client/v4/zones/208ed37cabff643b306011964e52ad25/purge_cache',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer zone-token',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ tags: ['dict'] }),
+      }),
+    );
     const body = await res.json() as { ok: boolean; purgedTags: string[] };
     expect(body.ok).toBe(true);
     expect(body.purgedTags).toEqual(['dict']);
   });
 
-  it('500s when purge runtime is unavailable', async () => {
+  it('500s when the Zone Cache Purge token is unavailable', async () => {
     const res = await dispatch(
       req('/api/cache/purge', {
         method: 'POST',
