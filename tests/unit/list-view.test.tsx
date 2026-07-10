@@ -17,6 +17,12 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
+  // Suppress React 19 act() warning — known false positive with
+  // createRoot + useEffect + happy-dom (effects fire after act returns)
+  vi.spyOn(console, 'error').mockImplementation((msg: unknown, ...rest: unknown[]) => {
+    if (typeof msg === 'string' && msg.includes('not wrapped in act')) return;
+    console.error(msg, ...rest);
+  });
   vi.stubGlobal('fetch', vi.fn(async () => ({
     ok: true,
     json: async () => pairRows,
