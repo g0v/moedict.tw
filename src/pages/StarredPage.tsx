@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMous
 import { useNavigate } from 'react-router-dom';
 import { SvgIcon } from '../components/SvgIcon';
 import {
+  addStarWord,
   clearLRUWords,
   clearStarredWords,
+  hasStarWord,
   readLRUWords,
   readStarredWords,
   removeLRUWord,
@@ -98,6 +100,19 @@ export function StarredPage({ lang }: StarredPageProps) {
     },
     [lang]
   );
+  const starredSet = useMemo(() => new Set(starredWords), [starredWords]);
+
+  const handleToggleStar = useCallback(
+    (word: string) => {
+      if (hasStarWord(lang, word)) {
+        removeStarWord(lang, word);
+      } else {
+        addStarWord(lang, word);
+      }
+      loadWords();
+    },
+    [lang, loadWords]
+  );
 
   return (
     <div className="result">
@@ -118,7 +133,7 @@ export function StarredPage({ lang }: StarredPageProps) {
         <div className="word-list">
           {starredWords.length === 0 ? (
             <p className="bg-info">
-              （請按詞條右方的 <SvgIcon name="starEmpty" size="1em" style={{ margin: '0 0.15em', verticalAlign: '-0.125em' }} aria-hidden="true" /> 按鈕，即可將字詞加到這裡。）
+              （請按詞條旁的 <SvgIcon name="starEmpty" size="1em" style={{ margin: '0 0.15em', verticalAlign: '-0.125em' }} aria-hidden="true" /> 按鈕，即可將字詞加到這裡。）
             </p>
           ) : (
             starredWords.map((word) => {
@@ -126,7 +141,15 @@ export function StarredPage({ lang }: StarredPageProps) {
               const tooltipId = buildTooltipId(word, path, prefix);
               return (
                 <div key={`starred-${word}`} style={{ clear: 'both', display: 'block' }}>
-                  <span>·</span>
+                <button
+                  type="button"
+                  className="btn-star-word"
+                  aria-label={`取消收藏「${word}」`}
+                  title={`取消收藏「${word}」`}
+                  onClick={() => handleToggleStar(word)}
+                >
+                  <SvgIcon name="star" size="0.9em" aria-hidden="true" />
+                </button>
                   <a href={path} data-radical-id={tooltipId} onClick={(event) => handleWordClick(event, word)}>
                     {word}
                   </a>
@@ -165,7 +188,15 @@ export function StarredPage({ lang }: StarredPageProps) {
             const tooltipId = buildTooltipId(word, path, prefix);
             return (
               <div key={`recent-${word}`} style={{ clear: 'both', display: 'block' }}>
-                <span>·</span>
+                <button
+                  type="button"
+                  className="btn-star-word"
+                  aria-label={starredSet.has(word) ? `取消收藏「${word}」` : `收藏「${word}」`}
+                  title={starredSet.has(word) ? `取消收藏「${word}」` : `收藏「${word}」`}
+                  onClick={() => handleToggleStar(word)}
+                >
+                  <SvgIcon name={starredSet.has(word) ? 'star' : 'starEmpty'} size="0.9em" aria-hidden="true" />
+                </button>
                 <a href={path} data-radical-id={tooltipId} onClick={(event) => handleWordClick(event, word)}>
                   {word}
                 </a>

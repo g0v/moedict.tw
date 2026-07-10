@@ -28,13 +28,20 @@ function createStorage(): Storage {
   return storage;
 }
 
-const w = globalThis as unknown as { window?: unknown; localStorage: Storage; sessionStorage: Storage };
+const w = globalThis as unknown as {
+  window?: unknown;
+  localStorage: Storage;
+  sessionStorage: Storage;
+  IS_REACT_ACT_ENVIRONMENT?: boolean;
+};
 Object.defineProperty(w, 'localStorage', { value: createStorage(), configurable: true, writable: false });
 Object.defineProperty(w, 'sessionStorage', { value: createStorage(), configurable: true, writable: false });
 if (typeof (w as { window?: { localStorage?: Storage; sessionStorage?: Storage } }).window === 'object') {
   Object.defineProperty(w.window as object, 'localStorage', { value: w.localStorage, configurable: true });
   Object.defineProperty(w.window as object, 'sessionStorage', { value: w.sessionStorage, configurable: true });
 }
+// Enable React 19 act() — global flag checked by React's test renderer
+w.IS_REACT_ACT_ENVIRONMENT = true;
 
 beforeEach(() => {
   w.localStorage.clear();
