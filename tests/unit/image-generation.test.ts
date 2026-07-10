@@ -4,7 +4,24 @@ import {
   fixMojibake,
   getFontName,
   getCORSHeaders,
+  generateTextSVGWithR2Fonts,
 } from '../../src/utils/image-generation';
+
+interface FakeFontsEnv {
+  FONTS: { get(key: string): Promise<{ size: number; text(): Promise<string> } | null> };
+}
+
+/** Minimal R2-shaped FONTS stub: only the listed keys resolve to a glyph SVG. */
+function makeFontsEnv(entries: Record<string, string>): FakeFontsEnv {
+  return {
+    FONTS: {
+      async get(key: string) {
+        const body = entries[key];
+        return body === undefined ? null : { size: body.length, text: async () => body };
+      },
+    },
+  };
+}
 
 describe('parseTextFromUrl', () => {
   it.each([
@@ -110,5 +127,62 @@ describe('getFontName', () => {
     expect(getFontName('wt064')).toBe('HanWangYanKai');
     expect(getFontName('wtcc02')).toBe('HanWangCC02');
     expect(getFontName('wthc06')).toBe('HanWangGB06');
+  });
+});
+
+describe('generateTextSVGWithR2Fonts', () => {
+  it('splits by Unicode code point, not UTF-16 code unit, for a supplementary-plane headword', async () => {
+    // 𣁳仔 (U+23073, U+4ED4) — 𣁳 is a surrogate pair in JS strings; the old
+    // text[i]/text.length loop treated the two surrogate halves as separate
+    // "characters", drawing 3 grid cells and looking up the bogus lone
+    // surrogate code points U+D84C / U+DC73 instead of the real U+23073.
+    const requested: string[] = [];
+    const env = {
+      FONTS: {
+        async get(key: string) {
+          requested.push(key);
+          // 𣁳's glyph SVG doesn't exist in R2 for any font (confirmed against
+          // the live moedict-fonts bucket); 仔's does.
+          if (key === 'TW-Kai/U+4ED4.svg') {
+            return { size: 10, text: async () => '<svg><path d="M0 0 L10 10"/></svg>' };
+          }
+          return null;
+        },
+      },
+    };
+
+    const { svg, usedFallbackGlyph } = await generateTextSVGWithR2Fonts('𣁳仔', 'kai', env as never);
+
+    // exactly two grid cells (grid-cell rects use the #F9F6F6 fill; the SVG
+    // also has one unrelated #F0F0F0 canvas-background rect)
+    expect((svg.match(/#F9F6F6/g) || []).length).toBe(2);
+
+    // looked up the real code point, never the lone surrogate halves
+    expect(requested).toEqual(['TW-Kai/U+23073.svg', 'TW-Kai/U+4ED4.svg']);
+
+    // 𣁳 has no R2 glyph anywhere, so the <text> fallback fired and must
+    // reference the bundled Tauhu Oo font by its real internal family name
+    // ("Tauhu Oo 20.05" — resvg matches fontBuffers by the font's own name
+    // table, not any CSS @font-face alias)
+    expect(usedFallbackGlyph).toBe(true);
+    expect(svg).toContain('font-family="Tauhu Oo 20.05, serif"');
+    expect(svg).toContain('>𣁳</text>');
+  });
+
+  it('does not flag usedFallbackGlyph when every character resolves via R2', async () => {
+    const env = makeFontsEnv({ 'TW-Kai/U+840C.svg': '<svg><path d="M0 0 L1 1"/></svg>' });
+    const { usedFallbackGlyph, svg } = await generateTextSVGWithR2Fonts('萌', 'kai', env as never);
+    expect(usedFallbackGlyph).toBe(false);
+    expect(svg).not.toContain('Tauhu Oo');
+  });
+
+  it('counts grid cells by code point for a mixed astral/BMP headword (regression guard)', async () => {
+    const word = '𣁳仔𣁳仔字';
+    const chars = Array.from(word);
+    expect(chars.length).toBe(5); // word.length (UTF-16 units) would be 7
+
+    const env = makeFontsEnv({}); // nothing resolves; only cell *count* matters here
+    const { svg } = await generateTextSVGWithR2Fonts(word, 'kai', env as never);
+    expect((svg.match(/#F9F6F6/g) || []).length).toBe(chars.length);
   });
 });

@@ -28,6 +28,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import workerDefault, { dispatch } from '../../worker/index';
 import * as dictionaryAPI from '../../src/api/handleDictionaryAPI';
+import { resvgCalls } from '../helpers/stubs/resvg';
 
 type AnyEnv = Parameters<typeof dispatch>[1];
 
@@ -36,6 +37,7 @@ interface R2Obj {
   httpEtag: string;
   writeHttpMetadata(headers: Headers): void;
   text(): Promise<string>;
+  arrayBuffer(): Promise<ArrayBuffer>;
   size?: number;
 }
 
@@ -45,6 +47,7 @@ function r2Obj(body: string, contentType = 'application/octet-stream'): R2Obj {
     httpEtag: '"etag-stub"',
     writeHttpMetadata: (headers: Headers) => headers.set('Content-Type', contentType),
     text: async () => body,
+    arrayBuffer: async () => new TextEncoder().encode(body).buffer,
     size: body.length,
   };
 }
@@ -88,6 +91,7 @@ afterEach(() => {
 });
 beforeEach(() => {
   vi.restoreAllMocks();
+  resvgCalls.length = 0;
 });
 
 // A minimal shell template with every meta tag the worker's
@@ -138,7 +142,9 @@ describe('dispatch — *.png image generation fallback', () => {
     const env = makeEnv({
       ASSETS: fetcher as unknown as AnyEnv['ASSETS'],
       FONTS: makeBucket({
-        'TW-Kai/U+840C.svg': { body: '<svg><path d="M0 0"/></svg>' },
+        'TW-Kai/U+840C.svg': { body: '<svg><path d="M0 0"/></svg>' }, // checkFontAvailability probe
+        'TW-Kai/U+0066.svg': { body: '<svg><path d="M0 0"/></svg>' }, // f
+        'TW-Kai/U+006F.svg': { body: '<svg><path d="M0 0"/></svg>' }, // o
       }),
     });
     // /foo.png bypasses the ASSET_BASE_URL proxy (proxy checks /assets/*)
@@ -146,6 +152,62 @@ describe('dispatch — *.png image generation fallback', () => {
     const res = await dispatch(req('/foo.png'), env);
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('image/png');
+  });
+});
+
+describe('dispatch — *.png fallback font wiring (Tauhu Oo via ASSETS)', () => {
+  // 𣁳仔 — 𣁳 (U+23073) has no precomputed glyph SVG in R2 for any font (confirmed
+  // against the live moedict-fonts bucket), so it always takes the <text> fallback
+  // path and needs the bundled Tauhu Oo font loaded from ASSETS to render correctly.
+  const pngPath = `/${encodeURIComponent("'𣁳仔")}.png`;
+
+  it('loads Tauhu Oo from ASSETS and wires it into resvg as fontBuffers when a glyph is missing from FONTS', async () => {
+    const env = makeEnv({
+      FONTS: makeBucket({
+        'TW-Kai/U+840C.svg': { body: '<svg><path d="M0 0 L1 1"/></svg>' }, // checkFontAvailability probe
+        'TW-Kai/U+4ED4.svg': { body: '<svg><path d="M0 0 L1 1"/></svg>' }, // 仔 only; 𣁳 absent
+      }),
+      ASSETS: makeBucket({
+        'fonts/TauhuOo2005-Regular.otf': { body: 'fake-otf-bytes' },
+      }),
+    });
+
+    const res = await dispatch(req(pngPath), env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('image/png');
+
+    const call = resvgCalls.at(-1);
+    const options = call?.options as { font?: { fontBuffers?: Uint8Array[] } } | undefined;
+    expect(options?.font?.fontBuffers).toHaveLength(1);
+    expect(new TextDecoder().decode(options!.font!.fontBuffers![0])).toBe('fake-otf-bytes');
+  });
+
+  it('returns 503 no-store (never a year-long cacheable broken render) when the fallback font is unavailable', async () => {
+    const env = makeEnv({
+      FONTS: makeBucket({
+        'TW-Kai/U+840C.svg': { body: '<svg><path d="M0 0 L1 1"/></svg>' }, // checkFontAvailability probe
+        'TW-Kai/U+4ED4.svg': { body: '<svg><path d="M0 0 L1 1"/></svg>' },
+      }),
+      ASSETS: makeBucket(), // no fonts/TauhuOo2005-Regular.otf entry seeded
+    });
+
+    const res = await dispatch(req(pngPath), env);
+    expect(res.status).toBe(503);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+  });
+
+  it('never fetches the fallback font when every character already resolves via R2', async () => {
+    const assetsGet = vi.fn(async () => null);
+    const env = makeEnv({
+      FONTS: makeBucket({
+        'TW-Kai/U+840C.svg': { body: '<svg><path d="M0 0 L1 1"/></svg>' },
+      }),
+      ASSETS: { get: assetsGet } as unknown as AnyEnv['ASSETS'],
+    });
+
+    const res = await dispatch(req('/%E8%90%8C.png'), env); // 萌, fully covered by FONTS
+    expect(res.status).toBe(200);
+    expect(assetsGet).not.toHaveBeenCalled();
   });
 });
 

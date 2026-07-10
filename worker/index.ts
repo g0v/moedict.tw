@@ -585,7 +585,7 @@ export async function dispatch(
 
     const isPngRequest = url.pathname.endsWith('.png');
     if (isPngRequest && (!staticResponse || staticResponse.status === 404)) {
-      return await handleImageGeneration(url, { FONTS: env.FONTS });
+      return await handleImageGeneration(url, { FONTS: env.FONTS, ASSETS: getAssetsBucket(env) ?? undefined });
     }
 
 		return new Response(null, { status: 404 });
