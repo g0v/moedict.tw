@@ -1,5 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { analyzePinyinField } from './hanyu-pinyin-tokens.mjs';
+
+export { analyzePinyinField, sortDocs, insertIndex };
 
 const ROOT_DIR = path.resolve(import.meta.dirname, '..');
 const DICTIONARY_DIR = path.join(ROOT_DIR, 'data', 'dictionary');
@@ -10,6 +13,11 @@ const TAIWANESE_TYPES = ['TL', 'DT', 'POJ'];
 
 const HAKKA_SOURCE_DIR = path.join(DICTIONARY_DIR, 'phck');
 const HAKKA_TYPES = ['TH', 'PFS'];
+
+const MANDARIN_SOURCE_DIR = path.join(DICTIONARY_DIR, 'pack');
+const CROSS_STRAIT_SOURCE_DIR = path.join(DICTIONARY_DIR, 'pcck');
+const HANYU_TYPE = 'HanYu';
+
 const HAKKA_DIALECT_MARKER_RE = /([四海大平安南])[\u20DE\u20DF](\S+)/g;
 const HAKKA_SYLLABLE_RE = /[A-Za-z\u00C0-\u024F\u1E00-\u1EFF\u0300-\u036F]+[¹²³⁴⁵]+/g;
 
@@ -339,6 +347,40 @@ async function buildTaiwaneseLookupIndex() {
 	await writeIndexes('t', TAIWANESE_TYPES, indexByType);
 }
 
+async function buildHanYuLookupIndex(lang, sourceDir) {
+	const bucketFiles = await getBucketFiles(sourceDir);
+	if (bucketFiles.length === 0) {
+		throw new Error(`找不到華語詞典資料：${sourceDir}`);
+	}
+
+	const indexByType = new Map([[HANYU_TYPE, new Map()]]);
+
+	for (const bucketFile of bucketFiles) {
+		const bucketPath = path.join(sourceDir, bucketFile);
+		const bucketRaw = await fs.readFile(bucketPath, 'utf8');
+		const bucket = JSON.parse(bucketRaw);
+
+		for (const [packedKey, entry] of Object.entries(bucket)) {
+			const title = extractTitle(packedKey, entry);
+			if (!title) continue;
+
+			const heteronyms = Array.isArray(entry?.h) ? entry.h : [];
+			for (const heteronym of heteronyms) {
+				const rawPinyin = heteronym?.p;
+				if (typeof rawPinyin !== 'string' || rawPinyin.trim().length === 0) continue;
+
+				const tokens = analyzePinyinField(rawPinyin, lang);
+				if (tokens.length === 0) continue;
+
+				insertIndex(indexByType.get(HANYU_TYPE), title, tokens);
+			}
+		}
+	}
+
+	await ensureOutputDirs(lang, [HANYU_TYPE]);
+	await writeIndexes(lang, [HANYU_TYPE], indexByType);
+}
+
 async function buildHakkaLookupIndex() {
 	const bucketFiles = await getBucketFiles(HAKKA_SOURCE_DIR);
 	if (bucketFiles.length === 0) {
@@ -375,6 +417,8 @@ async function buildHakkaLookupIndex() {
 async function main() {
 	await buildTaiwaneseLookupIndex();
 	await buildHakkaLookupIndex();
+	await buildHanYuLookupIndex('a', MANDARIN_SOURCE_DIR);
+	await buildHanYuLookupIndex('c', CROSS_STRAIT_SOURCE_DIR);
 }
 
 main().catch((error) => {

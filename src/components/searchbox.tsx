@@ -9,6 +9,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { prefetchDictionaryEntry } from '../utils/dictionary-cache';
 import { removeBopomofo } from '../utils/bopomofo-pinyin-utils';
 import { collectLegacyMatchedTerms, hasLegacyPatternOperators } from '../utils/legacy-search-utils';
+import { getHanYuPinyinLookupBase } from '../utils/hanyu-pinyin-lookup';
 
 type Lang = 'a' | 't' | 'h' | 'c';
 
@@ -49,14 +50,6 @@ const INDEX_FALLBACK_ORDER: Record<Lang, Lang[]> = {
 	c: ['c'],
 };
 const HANYU_ROMANIZATION_QUERY_RE = /^[\p{Script=Latin}\d' -]+$/u;
-
-function getLegacyHanYuPinyinLookupBase(lang: Lang): string | null {
-	if (lang !== 'a' && lang !== 'c') {
-		return null;
-	}
-
-	return `https://www.moedict.org/lookup/pinyin/${lang}/HanYu`;
-}
 
 /**
  * 從字詞提取語言前綴和清理後的字詞
@@ -492,11 +485,12 @@ function shouldKeepHanYuRomanizationTerm(term: string, lang: Lang, indexSet: Set
 	return false;
 }
 
-async function fetchLegacyHanYuRomanizationTerms(keyword: string, lang: Lang): Promise<string[]> {
-	const lookupBase = getLegacyHanYuPinyinLookupBase(lang);
-	if (!lookupBase) {
+async function fetchHanYuPinyinLookupTerms(keyword: string, lang: Lang): Promise<string[]> {
+	if (lang !== 'a' && lang !== 'c') {
 		return [];
 	}
+
+	const lookupBase = getHanYuPinyinLookupBase(lang);
 
 	const tokens = tokenizeHanYuRomanization(keyword);
 	if (tokens.length === 0) {
@@ -543,9 +537,9 @@ async function fetchHanYuRomanizationTerms(keyword: string, lang: Lang): Promise
 		return [];
 	}
 
-	const legacyTerms = await fetchLegacyHanYuRomanizationTerms(normalizedKeyword, lang);
-	if (legacyTerms.length > 0) {
-		return legacyTerms;
+	const pinyinLookupTerms = await fetchHanYuPinyinLookupTerms(normalizedKeyword, lang);
+	if (pinyinLookupTerms.length > 0) {
+		return pinyinLookupTerms;
 	}
 
 	try {
