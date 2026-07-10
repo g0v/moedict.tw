@@ -14,6 +14,8 @@ interface Env {
 	DICTIONARY_BASE_URL?: string;
 	/** Secret for POST /api/cache/purge (Bearer or X-Cache-Purge-Token). */
 	CACHE_PURGE_TOKEN?: string;
+	/** Cloudflare API token with Zone Cache Purge permission (used by the purge helper). */
+	CLOUDFLARE_API_TOKEN?: string;
 	DICTIONARY: R2Bucket;
   ASSETS?: Fetcher | R2Bucket;
   FONTS: R2Bucket;
@@ -246,9 +248,7 @@ export async function respondWithConfigApi(
 export async function dispatch(
   request: Request,
   env: Env,
-  ctx?: Pick<ExecutionContext, 'waitUntil'> & {
-    cache?: { purge?: (options: { tags?: string[]; pathPrefixes?: string[]; purgeEverything?: boolean }) => Promise<unknown> };
-  },
+  ctx?: ExecutionContext,
 ): Promise<Response> {
     console.log('🔍 [Index] 開始處理請求:', request.url);
     const url = new URL(request.url);
@@ -402,14 +402,7 @@ export async function dispatch(
       console.log('🔍 [Index] 處理 API 請求:', url.pathname);
       const corsHeaders = PUBLIC_CORS_HEADERS;
       if (url.pathname === '/api/cache/purge') {
-        const cacheApi = ctx?.cache;
-        const purge =
-          cacheApi?.purge != null
-            ? (opts: { tags?: string[]; pathPrefixes?: string[]; purgeEverything?: boolean }) =>
-                cacheApi.purge!(opts)
-            : async () => {
-                throw new Error('ctx.cache.purge unavailable');
-              };
+        const purge = createZoneCachePurger(env);
         return handleCachePurge(request, { env, purge });
       }
 
@@ -596,6 +589,52 @@ export async function dispatch(
     }
 
 		return new Response(null, { status: 404 });
+}
+
+/**
+ * Zone Cache Purge via the Cloudflare REST API.
+ *
+ * ctx.cache.purge does not exist on ExecutionContext — the old dispatch
+ * path always threw 'ctx.cache.purge unavailable'. This helper calls the
+ * real API: POST /zones/{zoneId}/purge_cache with cache tags.
+ *
+ * Requires env.CLOUDFLARE_API_TOKEN (a token with Zone Cache Purge
+ * permission for the moedict.tw zone). The zone ID is the account's only
+ * zone; we hardcode it since there is exactly one.
+ */
+const MOEDICT_TW_ZONE_ID = '208ed37cabff643b306011964e52ad25';
+
+export function createZoneCachePurger(env: Env): import('../src/api/cache').CachePurger {
+  return async (options) => {
+    const token = env.CLOUDFLARE_API_TOKEN?.trim();
+    if (!token) {
+      throw new Error('CLOUDFLARE_API_TOKEN not configured');
+    }
+    const body: Record<string, unknown> = {};
+    if ('purgeEverything' in options && options.purgeEverything === true) {
+      body.purge_everything = true;
+    } else if ('tags' in options && options.tags && options.tags.length > 0) {
+      body.tags = options.tags;
+    } else {
+      // No-op: nothing to purge
+      return;
+    }
+    const resp = await fetch(
+      `https://api.cloudflare.com/client/v4/zones/${MOEDICT_TW_ZONE_ID}/purge_cache`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      },
+    );
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      throw new Error(`Zone purge failed (${resp.status}): ${text.slice(0, 200)}`);
+    }
+  };
 }
 
 export default {
