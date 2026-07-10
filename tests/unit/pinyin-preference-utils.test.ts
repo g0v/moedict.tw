@@ -191,6 +191,11 @@ describe('trsToBpmf (extended)', () => {
       expect(trsToBpmf('t', 'pok')).toBe('\u3105\u31A6\u31B6');
     });
 
+    it('expands op → oop before bopomofo lookup', () => {
+      expect(trsToBpmf('t', 'op')).toBe('\u31A6\u31B4');
+      expect(trsToBpmf('t', 'lop')).toBe('\u310C\u31A6\u31B4');
+    });
+
     it('strips punctuation and collapses hyphen/space separators', () => {
       // Single-syllable phrases keep their citation tone (no sandhi target).
       expect(trsToBpmf('t', 'hang.')).toBe('\u310F\u3124 ');

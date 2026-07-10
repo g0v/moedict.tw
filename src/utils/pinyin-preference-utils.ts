@@ -455,6 +455,7 @@ export function trsToBpmf(lang: Lang, trs: string): string {
       });
       token = token.replace(/^(tsh?|[sj])i/, '$1ii');
       token = token.replace(/ok$/, 'ook');
+      token = token.replace(/op$/, 'oop');
       token = token.replace(CV_RE, (_, consonant: string, rest: string) => `${TAIWANESE_CONSONANTS[consonant]}${rest}`);
       token = token.replace(/[ptkh]$/, (ending) => {
         tone = TAIWANESE_TONES[`${ending}${tone}`] || tone;
