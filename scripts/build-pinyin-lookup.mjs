@@ -1,8 +1,9 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { analyzePinyinField } from './hanyu-pinyin-tokens.mjs';
 
-export { analyzePinyinField, sortDocs, insertIndex };
+export { analyzePinyinField, sortDocs, insertIndex, buildHanYuLookupIndex };
 
 const ROOT_DIR = path.resolve(import.meta.dirname, '..');
 const DICTIONARY_DIR = path.join(ROOT_DIR, 'data', 'dictionary');
@@ -50,12 +51,19 @@ function extractTitle(packedKey, entry) {
 	return normalizeTitle(decodePackedKey(packedKey));
 }
 
+function codePointLength(title) {
+	// Legacy Perl length($title) counts decoded characters; JS .length counts
+	// UTF-16 code units and would rank a one-codepoint astral title (e.g. 𠀁)
+	// as length 2. Count code points for parity.
+	return Array.from(title).length;
+}
+
 function sortDocs(termDocs) {
 	return Array.from(termDocs.entries())
 		.map(([title, [firstPos, frequency]]) => ({ title, firstPos, frequency }))
 		.sort((left, right) => {
 			return (
-				left.title.length - right.title.length ||
+				codePointLength(left.title) - codePointLength(right.title) ||
 				left.firstPos - right.firstPos ||
 				right.frequency - left.frequency ||
 				left.title.localeCompare(right.title, 'zh-Hant')
@@ -107,17 +115,17 @@ async function resetOutputDir(dir) {
 	await fs.mkdir(dir, { recursive: true });
 }
 
-async function ensureOutputDirs(lang, types) {
-	const langRoot = path.join(OUTPUT_ROOT, lang);
+async function ensureOutputDirs(lang, types, outputRoot = OUTPUT_ROOT) {
+	const langRoot = path.join(outputRoot, lang);
 	await resetOutputDir(langRoot);
 	for (const type of types) {
 		await fs.mkdir(path.join(langRoot, type), { recursive: true });
 	}
 }
 
-async function writeIndexes(lang, types, indexByType) {
+async function writeIndexes(lang, types, indexByType, outputRoot = OUTPUT_ROOT) {
 	for (const type of types) {
-		const typeDir = path.join(OUTPUT_ROOT, lang, type);
+		const typeDir = path.join(outputRoot, lang, type);
 		const typeIndex = indexByType.get(type);
 		let count = 0;
 
@@ -347,7 +355,7 @@ async function buildTaiwaneseLookupIndex() {
 	await writeIndexes('t', TAIWANESE_TYPES, indexByType);
 }
 
-async function buildHanYuLookupIndex(lang, sourceDir) {
+async function buildHanYuLookupIndex(lang, sourceDir, outputRoot = OUTPUT_ROOT) {
 	const bucketFiles = await getBucketFiles(sourceDir);
 	if (bucketFiles.length === 0) {
 		throw new Error(`找不到華語詞典資料：${sourceDir}`);
@@ -377,8 +385,8 @@ async function buildHanYuLookupIndex(lang, sourceDir) {
 		}
 	}
 
-	await ensureOutputDirs(lang, [HANYU_TYPE]);
-	await writeIndexes(lang, [HANYU_TYPE], indexByType);
+	await ensureOutputDirs(lang, [HANYU_TYPE], outputRoot);
+	await writeIndexes(lang, [HANYU_TYPE], indexByType, outputRoot);
 }
 
 async function buildHakkaLookupIndex() {
@@ -421,7 +429,11 @@ async function main() {
 	await buildHanYuLookupIndex('c', CROSS_STRAIT_SOURCE_DIR);
 }
 
-main().catch((error) => {
-	console.error('[build-pinyin-lookup] failed', error);
-	process.exitCode = 1;
-});
+// Import-safe: run only when invoked directly (bun run build-pinyin-lookup),
+// never when unit tests import the exported helpers.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+	main().catch((error) => {
+		console.error('[build-pinyin-lookup] failed', error);
+		process.exitCode = 1;
+	});
+}
