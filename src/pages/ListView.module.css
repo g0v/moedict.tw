@@ -1,0 +1,38 @@
+.comparisonTableWrapper {
+  max-width: 100%;
+  margin-top: 8px;
+}
+
+.comparisonTable {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.comparisonTable th,
+.comparisonTable td {
+  padding: 8px 10px;
+  overflow-wrap: anywhere;
+  text-align: left;
+  vertical-align: top;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.comparisonTable th {
+  background: #f5f5f5;
+}
+
+.comparisonTable tbody tr:nth-child(even) {
+  background: #fafafa;
+}
+
+.comparisonTable tbody tr:hover {
+  background: #f0f7fc;
+}
+
+@media (max-width: 767px) {
+  .comparisonTable th,
+  .comparisonTable td {
+    padding: 6px;
+  }
+}

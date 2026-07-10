@@ -134,6 +134,28 @@ export function collectDictionaryFixtures(): FixtureEntry[] {
     });
   }
 
+  const crossStraitListFixture = '=同實異名.json';
+  const crossStraitListPath = path.join(DATA_DICT, 'c', crossStraitListFixture);
+  if (existsSync(crossStraitListPath)) {
+    entries.push({
+      bucket: 'DICTIONARY',
+      key: `c/${crossStraitListFixture}`,
+      body: readFileSync(crossStraitListPath),
+      httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    });
+  } else {
+    entries.push({
+      bucket: 'DICTIONARY',
+      key: `c/=同實異名.json`,
+      body: new TextEncoder().encode(JSON.stringify([
+        ';三角皮帶;三角帶',
+        ';人工智慧;人工智能',
+        ';一卡通;交通卡',
+      ])),
+      httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    });
+  }
+
   for (const lang of ['a', 'c', 'h', 't'] as const) {
     const key = `search-index/${lang}.json`;
     const body = optional(path.join(DATA_DICT, 'search-index', `${lang}.json`), key);
