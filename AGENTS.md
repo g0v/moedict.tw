@@ -250,6 +250,23 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
   scoped override 餵給 typescript-estree（本 repo typecheck 僅約 2 秒，
   目前不值得這個複雜度）；(c) lint 整個遷移到 oxlint + tsgolint
   （TS 團隊協作的 Go 原生 type-aware linter，2026 中仍 alpha）。
+  **2026-07-11 spike（分支 `spike/ts7-oxlint-tsgolint`，未合併）**：條件 (c) 已
+  手動驗證可行——`typescript@7.0.2` 是正式 GA（非 RC），`oxlint@1.73.0` +
+  `oxlint-tsgolint@0.24.0`（type-aware 後端，需 TS 7+）都是可直接 `bun add`
+  的穩定版本；scoped 到目前 eslint 涵蓋的 134 個 `.ts`/`.tsx` 檔案時，
+  `.oxlintrc.json` parity config 重現了全部既有規則（no-shadow、
+  `_`-prefix no-unused-vars、react-hooks 兩條、react-refresh
+  only-export-components，皆用 throwaway fixture 驗證過），只有 1 個
+  行為差異（`no-unsafe-optional-chaining` 在 oxlint 抓到、eslint 沒抓到，
+  需人工判斷）；`tsc -b --noEmit`／`bun run build`／unit+integration 測試
+  全數在 TS7 下乾淨通過（tsc 還快了約 11 倍）。條件 (a) 仍確認擋死：
+  typescript-eslint 8.63.0 peer 仍是 `<6.1.0`，`bun run lint` 在 TS7 下
+  直接丟 `Cannot read properties of undefined (reading 'Cjs')` 崩潰。
+  尚未做：拿掉 eslint 系列 deps、把 `scripts/*.mjs` 納入 lint 範圍前先處理
+  兩個既有的 Unicode combining-class 誤判、評估是否啟用
+  `--type-aware`（會多抓到約 35 個真實但目前未曾檢查過的型別相關警告，如
+  多處 `navigate()` 未處理的 floating promise）。要採用的話，從該分支開一個
+  真的遷移 PR，不要重跑一次這份調查。
 
 ## 授權紅線
 
