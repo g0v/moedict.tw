@@ -65,6 +65,10 @@ describe('parseTextFromUrl', () => {
     expect(parseTextFromUrl('/api/~上訴.json')).toEqual({ lang: 'c', cleanText: '上訴' });
   });
 
+  it('handles legacy /!word → t (hash-bang era alias)', () => {
+    expect(parseTextFromUrl('/api/!食.json')).toEqual({ lang: 't', cleanText: '食' });
+  });
+
   it('handles /<lang>/<word>.json slash-separated form', () => {
     expect(parseTextFromUrl('/api/a/萌.json')).toEqual({ lang: 'a', cleanText: '萌' });
     expect(parseTextFromUrl('/api/t/食.json')).toEqual({ lang: 't', cleanText: '食' });

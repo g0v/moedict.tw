@@ -12,7 +12,9 @@ import { describe, expect, it } from 'vitest';
 import {
   buildDefinitionDescription,
   buildDictionaryPathname,
+  classifyRoute,
   parseDictionaryRoute,
+  stripLangPrefix,
   stripTags,
 } from '../../src/utils/dictionary-route';
 
@@ -181,5 +183,213 @@ describe('buildDictionaryPathname', () => {
 
   it('percent-encodes the word', () => {
     expect(buildDictionaryPathname('a', 'a b')).toBe('/a%20b');
+  });
+});
+
+describe('classifyRoute', () => {
+  describe('default / home', () => {
+    it('returns default for /', () => {
+      expect(classifyRoute('/')).toEqual({ kind: 'default' });
+    });
+    it('returns default for empty string', () => {
+      expect(classifyRoute('')).toEqual({ kind: 'default' });
+    });
+    it('returns default for slash-only paths', () => {
+      expect(classifyRoute('///')).toEqual({ kind: 'default' });
+    });
+    it('returns default for falsy pathname', () => {
+      expect(classifyRoute(null as unknown as string)).toEqual({ kind: 'default' });
+      expect(classifyRoute(undefined as unknown as string)).toEqual({ kind: 'default' });
+    });
+  });
+
+  describe('about', () => {
+    it('classifies /about', () => {
+      expect(classifyRoute('/about')).toEqual({ kind: 'about' });
+    });
+    it('classifies /about.html (legacy alias)', () => {
+      expect(classifyRoute('/about.html')).toEqual({ kind: 'about' });
+    });
+  });
+
+  describe('radical', () => {
+    it('classifies /@ as empty radical (a)', () => {
+      expect(classifyRoute('/@')).toEqual({ kind: 'radical', lang: 'a', radical: '' });
+    });
+    it('classifies /~@ as empty radical (c)', () => {
+      expect(classifyRoute('/~@')).toEqual({ kind: 'radical', lang: 'c', radical: '' });
+    });
+    it('classifies /@木 as radical a with 木', () => {
+      expect(classifyRoute('/@木')).toEqual({ kind: 'radical', lang: 'a', radical: '木' });
+    });
+    it('classifies /~@水 as radical c with 水', () => {
+      expect(classifyRoute('/~@水')).toEqual({ kind: 'radical', lang: 'c', radical: '水' });
+    });
+    it('decodes percent-encoded radical', () => {
+      expect(classifyRoute('/@%E6%9C%A8')).toEqual({ kind: 'radical', lang: 'a', radical: '木' });
+    });
+  });
+
+  describe('starred', () => {
+    it('classifies /=* as starred (a)', () => {
+      expect(classifyRoute('/=*')).toEqual({ kind: 'starred', lang: 'a' });
+    });
+    it("classifies /'=* as starred (t)", () => {
+      expect(classifyRoute("/'=*")).toEqual({ kind: 'starred', lang: 't' });
+    });
+    it('classifies /:=* as starred (h)', () => {
+      expect(classifyRoute('/:=*')).toEqual({ kind: 'starred', lang: 'h' });
+    });
+    it('classifies /~=* as starred (c)', () => {
+      expect(classifyRoute('/~=*')).toEqual({ kind: 'starred', lang: 'c' });
+    });
+  });
+
+  describe('group', () => {
+    it('classifies /=成語 as group (a)', () => {
+      expect(classifyRoute('/=成語')).toEqual({ kind: 'group', lang: 'a', category: '成語' });
+    });
+    it("classifies /'=台諺語 as group (t)", () => {
+      expect(classifyRoute("/'=台諺語")).toEqual({ kind: 'group', lang: 't', category: '台諺語' });
+    });
+    it("classifies /:=諺語 as group (h)", () => {
+      expect(classifyRoute("/:=諺語")).toEqual({ kind: 'group', lang: 'h', category: '諺語' });
+    });
+    it('classifies /~=成語 as group (c)', () => {
+      expect(classifyRoute('/~=成語')).toEqual({ kind: 'group', lang: 'c', category: '成語' });
+    });
+    it('handles empty category (=)', () => {
+      expect(classifyRoute('/=')).toEqual({ kind: 'group', lang: 'a', category: '' });
+    });
+    it('handles empty category (:=) for Hakka', () => {
+      expect(classifyRoute("/:=")).toEqual({ kind: 'group', lang: 'h', category: '' });
+    });
+  });
+
+  describe('entry', () => {
+    it('classifies /萌 as entry (a)', () => {
+      expect(classifyRoute('/萌')).toEqual({ kind: 'entry', lang: 'a', text: '萌' });
+    });
+    it("classifies /'食 as entry (t)", () => {
+      expect(classifyRoute("/'食")).toEqual({ kind: 'entry', lang: 't', text: '食' });
+    });
+    it('classifies /:字 as entry (h)', () => {
+      expect(classifyRoute('/:字')).toEqual({ kind: 'entry', lang: 'h', text: '字' });
+    });
+    it('classifies /~萌 as entry (c)', () => {
+      expect(classifyRoute('/~萌')).toEqual({ kind: 'entry', lang: 'c', text: '萌' });
+    });
+    it('decodes percent-encoded word', () => {
+      expect(classifyRoute('/%E8%90%8C')).toEqual({ kind: 'entry', lang: 'a', text: '萌' });
+    });
+    it('parses trailing /<digits> as idx', () => {
+      expect(classifyRoute('/萌/2')).toEqual({ kind: 'entry', lang: 'a', text: '萌', idx: 2 });
+    });
+    it('idx is undefined when no trailing /<digits>', () => {
+      const route = classifyRoute('/萌');
+      expect(route.kind).toBe('entry');
+      if (route.kind === 'entry') expect(route.idx).toBeUndefined();
+    });
+    it('a word that is itself all-digits is not misparsed as text+idx', () => {
+      expect(classifyRoute('/123')).toEqual({ kind: 'entry', lang: 'a', text: '123' });
+    });
+  });
+
+  describe('invalid-encoding', () => {
+    it('returns invalid-encoding with raw string on malformed % escapes', () => {
+      expect(classifyRoute('/%')).toEqual({ kind: 'invalid-encoding', raw: '%' });
+      expect(classifyRoute('/%E8%90')).toEqual({ kind: 'invalid-encoding', raw: '%E8%90' });
+      expect(classifyRoute("/'%")).toEqual({ kind: 'invalid-encoding', raw: "'%" });
+    });
+  });
+
+  describe('idx stripping on non-entry routes', () => {
+    it('strips trailing /<digits> from about route', () => {
+      expect(classifyRoute('/about/2')).toEqual({ kind: 'about' });
+    });
+    it('strips trailing /<digits> from radical route', () => {
+      expect(classifyRoute('/@木/2')).toEqual({ kind: 'radical', lang: 'a', radical: '木' });
+    });
+    it('strips trailing /<digits> from group route', () => {
+      expect(classifyRoute('/=成語/2')).toEqual({ kind: 'group', lang: 'a', category: '成語' });
+    });
+    it('strips trailing /<digits> from starred route', () => {
+      expect(classifyRoute('/=*/2')).toEqual({ kind: 'starred', lang: 'a' });
+    });
+    it('does NOT attach idx to non-entry kinds', () => {
+      const route = classifyRoute('/=成語/2');
+      expect(route).not.toHaveProperty('idx');
+    });
+  });
+
+  describe('precedence order', () => {
+    it("'=* (starred) takes precedence over '= (group)", () => {
+      expect(classifyRoute("/'=*star")).toEqual({ kind: 'starred', lang: 't' });
+    });
+    it("'= (group) takes precedence over ' (entry)", () => {
+      expect(classifyRoute("/'=諺語")).toEqual({ kind: 'group', lang: 't', category: '諺語' });
+    });
+    it("'=* before '= before ' — full chain", () => {
+      // The three-level precedence: starred > group > entry
+      expect(classifyRoute("/'=*")).toEqual({ kind: 'starred', lang: 't' });
+      expect(classifyRoute("/'=詞")).toEqual({ kind: 'group', lang: 't', category: '詞' });
+      expect(classifyRoute("/'食")).toEqual({ kind: 'entry', lang: 't', text: '食' });
+    });
+    it('=* (starred a) takes precedence over = (group a)', () => {
+      expect(classifyRoute('/=*star')).toEqual({ kind: 'starred', lang: 'a' });
+    });
+    it('= (group) takes precedence over bare entry', () => {
+      expect(classifyRoute('/=成語')).toEqual({ kind: 'group', lang: 'a', category: '成語' });
+    });
+    it('~@ (radical c) takes precedence over ~ (entry c)', () => {
+      expect(classifyRoute('/~@水')).toEqual({ kind: 'radical', lang: 'c', radical: '水' });
+    });
+    it('~@ exact match before ~@ prefix', () => {
+      expect(classifyRoute('/~@')).toEqual({ kind: 'radical', lang: 'c', radical: '' });
+    });
+  });
+
+  describe('query-string stripping', () => {
+    it('strips ?query before classifying', () => {
+      expect(classifyRoute('/萌?foo=bar')).toEqual({ kind: 'entry', lang: 'a', text: '萌' });
+    });
+    it('strips ?query from about route', () => {
+      expect(classifyRoute('/about?x=1')).toEqual({ kind: 'about' });
+    });
+  });
+
+  describe('parseDictionaryRoute is a thin wrapper over classifyRoute', () => {
+    it('returns entry shape for entry routes', () => {
+      expect(parseDictionaryRoute('/萌')).toEqual({ lang: 'a', text: '萌' });
+      expect(parseDictionaryRoute('/萌/2')).toEqual({ lang: 'a', text: '萌', idx: 2 });
+    });
+    it('returns null for non-entry kinds', () => {
+      expect(parseDictionaryRoute('/about')).toBeNull();
+      expect(parseDictionaryRoute('/@木')).toBeNull();
+      expect(parseDictionaryRoute('/=*')).toBeNull();
+      expect(parseDictionaryRoute('/=成語')).toBeNull();
+    });
+    it('returns null for invalid-encoding', () => {
+      expect(parseDictionaryRoute('/%')).toBeNull();
+    });
+  });
+});
+
+describe('stripLangPrefix', () => {
+  it('maps the three canonical prefixes and defaults to a', () => {
+    expect(stripLangPrefix("'食")).toEqual({ lang: 't', rest: '食' });
+    expect(stripLangPrefix(':字')).toEqual({ lang: 'h', rest: '字' });
+    expect(stripLangPrefix('~上訴')).toEqual({ lang: 'c', rest: '上訴' });
+    expect(stripLangPrefix('萌')).toEqual({ lang: 'a', rest: '萌' });
+  });
+
+  it('returns lang a with empty rest for the empty string', () => {
+    expect(stripLangPrefix('')).toEqual({ lang: 'a', rest: '' });
+  });
+
+  it('honors the extra alias map only for non-canonical heads', () => {
+    expect(stripLangPrefix('!食', { '!': 't' })).toEqual({ lang: 't', rest: '食' });
+    expect(stripLangPrefix("'食", { '!': 't' })).toEqual({ lang: 't', rest: '食' });
+    expect(stripLangPrefix('!食')).toEqual({ lang: 'a', rest: '!食' });
   });
 });

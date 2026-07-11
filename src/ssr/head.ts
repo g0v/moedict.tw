@@ -1,4 +1,6 @@
-export type DictionaryLang = 'a' | 't' | 'h' | 'c';
+import { classifyRoute, buildDictionaryPathname, type DictionaryLang } from '../utils/dictionary-route';
+
+export type { DictionaryLang } from '../utils/dictionary-route';
 
 export interface PageHead {
   title: string;
@@ -46,18 +48,6 @@ function safeDecode(input: string): string {
   } catch {
     return input;
   }
-}
-
-function toSegment(pathname: string): string {
-  const cleanPath = String(pathname || '').split('?')[0].replace(/\/+$/, '');
-  const raw = cleanPath.replace(/^\/+/, '');
-  const decoded = safeDecode(raw);
-  // Strip a trailing /<digits> definition-index permalink segment
-  // (/萌/3) — resolveHeadByPath only needs the word/route segment for
-  // title+og construction; toCanonicalUrl still uses the untouched
-  // pathname separately, so the permalink URL itself is preserved in
-  // og:url even though the idx plays no further role here.
-  return decoded.replace(/\/\d+$/, '');
 }
 
 function toPathname(pathname: string): string {
@@ -117,11 +107,10 @@ function createHead(title: string, description: string, pathname: string, imageW
 }
 
 function buildDictionaryPath(word: string, lang: DictionaryLang): string {
-  const normalizedWord = normalizeWord(word) || '萌';
-  if (lang === 't') return `/'${normalizedWord}`;
-  if (lang === 'h') return `/:${normalizedWord}`;
-  if (lang === 'c') return `/~${normalizedWord}`;
-  return `/${normalizedWord}`;
+  // 前綴規則統一委派給 dictionary-route 的 buildDictionaryPathname；此處只補
+  // 空詞目的 '萌' fallback。回傳值會經 toCanonicalUrl 的 decode→encodeURI，
+  // 所以 encodeURIComponent 過的路徑與原始 Unicode 路徑產生相同 og:url。
+  return buildDictionaryPathname(lang, normalizeWord(word) || '萌');
 }
 
 export function getDictionaryHead(word: string, lang: DictionaryLang, pathname?: string): PageHead {
@@ -158,32 +147,27 @@ function getDefaultHead(pathname: string): PageHead {
 
 export function resolveHeadByPath(pathname: string): PageHead {
   const normalizedPath = toPathname(pathname);
-  const segment = toSegment(pathname);
-  if (!segment) return getDefaultHead(normalizedPath);
-
-  if (segment === 'about' || segment === 'about.html') {
-    return createHead('關於本站 - 萌典', ABOUT_DESCRIPTION, normalizedPath);
+  const route = classifyRoute(pathname);
+  switch (route.kind) {
+    case 'default':
+      return getDefaultHead(normalizedPath);
+    case 'about':
+      return createHead('關於本站 - 萌典', ABOUT_DESCRIPTION, normalizedPath);
+    case 'radical':
+      return getRadicalHead(route.radical, route.lang, normalizedPath);
+    case 'starred':
+      return getStarredHead(route.lang, normalizedPath);
+    case 'group':
+      return getGroupHead(route.category, route.lang, normalizedPath);
+    case 'entry':
+      return getDictionaryHead(route.text, route.lang, normalizedPath);
+    case 'invalid-encoding':
+      // classifyRoute could not decode the percent-encoding — reproduce the
+      // legacy toSegment/safeDecode behavior: use the raw undecoded string as
+      // a bare (lang a) dictionary head so the page still renders something
+      // sensible rather than 500ing on malformed input.
+      return getDictionaryHead(route.raw, 'a', normalizedPath);
   }
-
-  if (segment === '@') return getRadicalHead('', 'a', normalizedPath);
-  if (segment === '~@') return getRadicalHead('', 'c', normalizedPath);
-  if (segment.startsWith('@')) return getRadicalHead(segment.slice(1), 'a', normalizedPath);
-  if (segment.startsWith('~@')) return getRadicalHead(segment.slice(2), 'c', normalizedPath);
-
-  if (segment.startsWith("'=*")) return getStarredHead('t', normalizedPath);
-  if (segment.startsWith(':=*')) return getStarredHead('h', normalizedPath);
-  if (segment.startsWith('~=*')) return getStarredHead('c', normalizedPath);
-  if (segment.startsWith('=*')) return getStarredHead('a', normalizedPath);
-
-  if (segment.startsWith("'=")) return getGroupHead(segment.slice(2), 't', normalizedPath);
-  if (segment.startsWith(':=')) return getGroupHead(segment.slice(2), 'h', normalizedPath);
-  if (segment.startsWith('~=')) return getGroupHead(segment.slice(2), 'c', normalizedPath);
-  if (segment.startsWith('=')) return getGroupHead(segment.slice(1), 'a', normalizedPath);
-
-  if (segment.startsWith("'")) return getDictionaryHead(segment.slice(1), 't', normalizedPath);
-  if (segment.startsWith(':')) return getDictionaryHead(segment.slice(1), 'h', normalizedPath);
-  if (segment.startsWith('~')) return getDictionaryHead(segment.slice(1), 'c', normalizedPath);
-  return getDictionaryHead(segment, 'a', normalizedPath);
 }
 
 function setMetaByName(name: string, content: string): void {

@@ -1,7 +1,7 @@
 import { CACHE_CONTROL, dictTagsForLang } from './cache';
 import { dedupeHeteronyms } from '../utils/heteronym-dedup';
+import { stripLangPrefix, type DictionaryLang } from '../utils/dictionary-route';
 
-type DictionaryLang = 'a' | 't' | 'h' | 'c';
 type SubRouteType = DictionaryLang | 'raw' | 'uni' | 'pua';
 
 interface DictionaryObjectLike {
@@ -290,19 +290,7 @@ export function parseTextFromUrl(pathname: string): { lang: DictionaryLang; clea
     };
   }
 
-  let lang: DictionaryLang = 'a';
-  let cleanText = decoded;
-  if (decoded.startsWith("'") || decoded.startsWith('!')) {
-    lang = 't';
-    cleanText = decoded.slice(1);
-  } else if (decoded.startsWith(':')) {
-    lang = 'h';
-    cleanText = decoded.slice(1);
-  } else if (decoded.startsWith('~')) {
-    lang = 'c';
-    cleanText = decoded.slice(1);
-  }
-
+  const { lang, rest: cleanText } = stripLangPrefix(decoded, { '!': 't' });
   return { lang, cleanText };
 }
 
@@ -328,7 +316,7 @@ function resolveDictCacheTags(request: Request): string {
   if (sub && (sub.routeType === 'a' || sub.routeType === 't' || sub.routeType === 'h' || sub.routeType === 'c')) {
     return dictTagsForLang(sub.routeType);
   }
-  const pathForParse = pathname.replace(/^\/api(?=\/|$)/, '') || pathname;
+  const pathForParse = pathname.replace(/^\/api(?=\/|$)/, '');
   const { lang } = parseTextFromUrl(pathForParse);
   return dictTagsForLang(lang);
 }

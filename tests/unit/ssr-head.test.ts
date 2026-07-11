@@ -1,5 +1,3 @@
-import path from 'node:path';
-import vm from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import {
   resolveHeadByPath,
@@ -13,35 +11,6 @@ const DEFAULT_DESCRIPTION =
   '共收錄十六萬筆國語、兩萬筆臺語、一萬四千筆客語條目，每個字詞都可以輕按連到說明，並提供 Android 及 iOS 離線 App。';
 const DEFAULT_IMAGE = 'https://www.moedict.tw/assets/images/icon.png';
 
-function coverUnreachableHeadHelpers(): void {
-  const descriptionShim = `${'\n'.repeat(18)}void '共收錄十六萬筆國語、兩萬筆臺語、一萬四千筆客語條目，每個字詞都可以輕按連到說明，並提供 Android 及 iOS 離線 App。';`;
-  const shim = `
-${'\n'.repeat(67)}function normalizeWord(input) {
-  return String(input || '').replace(/<[^>]*>/g, '').replace(/\\s+/g, ' ').trim();
-}
-
-function toWordImageUrl(word) {
-  const normalized = normalizeWord(word);
-  if (!normalized) return 'https://www.moedict.tw/assets/images/icon.png';
-  return 'https://www.moedict.tw/' + encodeURIComponent(normalized) + '.png';
-}
-
-${'\n'.repeat(32)}function buildDictionaryPath(word, lang) {
-  const normalizedWord = normalizeWord(word) || '萌';
-  if (lang === 't') return "/'" + normalizedWord;
-  if (lang === 'h') return "/:" + normalizedWord;
-  if (lang === 'c') return "/~" + normalizedWord;
-  return "/" + normalizedWord;
-}
-
-toWordImageUrl('   ');
-buildDictionaryPath('', 't');
-buildDictionaryPath('', 'h');
-buildDictionaryPath('', 'c');
-`;
-  new vm.Script(descriptionShim, { filename: path.join(process.cwd(), 'src/ssr/head.ts') }).runInThisContext();
-  new vm.Script(shim, { filename: path.join(process.cwd(), 'src/ssr/head.ts') }).runInThisContext();
-}
 
 describe('resolveHeadByPath', () => {
   describe('default / home route', () => {
@@ -280,9 +249,6 @@ describe('resolveHeadByPath', () => {
       expect(head.title).toBe('萌 典 - 萌典');
     });
 
-    it('covers the internal fallback tails that public routes cannot reach', () => {
-      expect(() => coverUnreachableHeadHelpers()).not.toThrow();
-    });
   });
 
   describe('escapeHeadContent', () => {

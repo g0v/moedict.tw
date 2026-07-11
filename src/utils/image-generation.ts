@@ -1,5 +1,6 @@
 import { Resvg, type ResvgRenderOptions } from '@cf-wasm/resvg';
 import { CACHE_CONTROL } from '../api/cache';
+import { stripLangPrefix, type DictionaryLang } from './dictionary-route';
 
 interface FontSvgObject {
 	size: number;
@@ -18,7 +19,7 @@ interface AssetBucket {
 	get(key: string): Promise<AssetObject | null>;
 }
 
-type DictionaryLang = 'a' | 't' | 'h' | 'c';
+
 interface Env {
 	FONTS: FontBucket;
 	/** R2-backed static asset bucket；用來讀取 Tauhu Oo 補完字型（見 loadFallbackFontBuffer）。 */
@@ -97,25 +98,10 @@ export function parseTextFromUrl(pathname: string): { text: string; lang: Dictio
 		console.log('🔍 [ParseTextFromUrl] 處理特殊重定向後:', text);
 	}
 
-	// 解析語言前綴
-	let lang: DictionaryLang = 'a'; // 預設華語
-	let cleanText = text;
-
-	if (text.startsWith("'") || text.startsWith('!')) {
-		lang = 't'; // 台語
-		cleanText = text.substring(1);
-		console.log('🔍 [ParseTextFromUrl] 識別為台語，lang:', lang, 'cleanText:', cleanText);
-	} else if (text.startsWith(':')) {
-		lang = 'h'; // 客語
-		cleanText = text.substring(1);
-		console.log('🔍 [ParseTextFromUrl] 識別為客語，lang:', lang, 'cleanText:', cleanText);
-	} else if (text.startsWith('~')) {
-		lang = 'c'; // 兩岸
-		cleanText = text.substring(1);
-		console.log('🔍 [ParseTextFromUrl] 識別為兩岸，lang:', lang, 'cleanText:', cleanText);
-	} else {
-		console.log('🔍 [ParseTextFromUrl] 預設華語，lang:', lang, 'cleanText:', cleanText);
-	}
+	// 解析語言前綴（統一委派給 dictionary-route 的 stripLangPrefix；`!` 為
+	// legacy hash-bang 時代對 t 的別名，僅 API/字圖端接受）
+	const { lang, rest: cleanText } = stripLangPrefix(text, { '!': 't' });
+	console.log('🔍 [ParseTextFromUrl] 語言前綴解析:', { lang, cleanText });
 
 	console.log('🔍 [ParseTextFromUrl] 最終解析結果:', { text, lang, cleanText });
 	return { text, lang, cleanText };

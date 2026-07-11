@@ -28,48 +28,107 @@ export function stripTags(input: string): string {
 }
 
 /**
+ * 語言前綴 → 語言代碼的唯一對照表：`'`=t(臺灣台語)、`:`=h(臺灣客語)、
+ * `~`=c(兩岸)、無前綴=a(華語)。API 端另接受 legacy `!` 作為 t 的別名
+ * （舊 hash-bang 時代），頁面路由不接受。所有需要「去掉語言前綴」的
+ * parser 一律呼叫 stripLangPrefix，不得自建 if-chain。
+ */
+export function stripLangPrefix(
+  text: string,
+  extra?: Record<string, DictionaryLang>,
+): { lang: DictionaryLang; rest: string } {
+  const head = text[0];
+  if (head === "'") return { lang: 't', rest: text.slice(1) };
+  if (head === ':') return { lang: 'h', rest: text.slice(1) };
+  if (head === '~') return { lang: 'c', rest: text.slice(1) };
+  if (head !== undefined && extra && extra[head]) return { lang: extra[head], rest: text.slice(1) };
+  return { lang: 'a', rest: text };
+}
+
+/**
+ * Classifies a pathname into a discriminated route kind — the single
+ * source of truth for the moedict.tw URL prefix grammar.
+ *
+ * Owns: leading/trailing slash strip, query-string strip (`?…`),
+ * decodeURIComponent (on failure → `{ kind: 'invalid-encoding'; raw }`
+ * so callers own their fallback), trailing `/<digits>` idx strip (captured
+ * as `idx` on `entry` kinds; silently dropped on non-entry kinds, matching
+ * the legacy behavior where idx never bypasses a non-word route), and the
+ * ONE canonical prefix-precedence chain:
+ *
+ *   about (exact) → `@`/`~@` exact+prefix → `*=*` starred family →
+ *   `*=` group family → entry prefixes (`'`/`:`/`~`/bare).
+ *
+ * `pathname` is expected percent-encoded (e.g. `url.pathname`); the
+ * `?…` query string is stripped before decoding so callers that pass a
+ * full path+query (as head.ts historically did) keep working.
+ */
+export type ClassifiedRoute =
+  | { kind: 'default' }
+  | { kind: 'about' }
+  | { kind: 'radical'; lang: 'a' | 'c'; radical: string }
+  | { kind: 'starred'; lang: DictionaryLang }
+  | { kind: 'group'; lang: DictionaryLang; category: string }
+  | { kind: 'entry'; lang: DictionaryLang; text: string; idx?: number }
+  | { kind: 'invalid-encoding'; raw: string };
+
+export function classifyRoute(pathname: string): ClassifiedRoute {
+  const cleanPath = String(pathname || '').split('?')[0].replace(/^\/+/, '').replace(/\/+$/, '');
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(cleanPath);
+  } catch {
+    return { kind: 'invalid-encoding', raw: cleanPath };
+  }
+  if (!decoded) return { kind: 'default' };
+
+  let idx: number | undefined;
+  const idxMatch = decoded.match(/^(.+)\/(\d+)$/);
+  if (idxMatch) {
+    decoded = idxMatch[1];
+    idx = Number(idxMatch[2]);
+  }
+
+  if (decoded === 'about' || decoded === 'about.html') return { kind: 'about' };
+
+  if (decoded === '@') return { kind: 'radical', lang: 'a', radical: '' };
+  if (decoded === '~@') return { kind: 'radical', lang: 'c', radical: '' };
+  if (decoded.startsWith('@')) return { kind: 'radical', lang: 'a', radical: decoded.slice(1) };
+  if (decoded.startsWith('~@')) return { kind: 'radical', lang: 'c', radical: decoded.slice(2) };
+
+  if (decoded.startsWith("'=*")) return { kind: 'starred', lang: 't' };
+  if (decoded.startsWith(':=*')) return { kind: 'starred', lang: 'h' };
+  if (decoded.startsWith('~=*')) return { kind: 'starred', lang: 'c' };
+  if (decoded.startsWith('=*')) return { kind: 'starred', lang: 'a' };
+
+  if (decoded.startsWith("'=")) return { kind: 'group', lang: 't', category: decoded.slice(2) };
+  if (decoded.startsWith(':=')) return { kind: 'group', lang: 'h', category: decoded.slice(2) };
+  if (decoded.startsWith('~=')) return { kind: 'group', lang: 'c', category: decoded.slice(2) };
+  if (decoded.startsWith('=')) return { kind: 'group', lang: 'a', category: decoded.slice(1) };
+
+  const { lang, rest } = stripLangPrefix(decoded);
+  return { kind: 'entry', lang, text: rest, idx };
+}
+
+/**
  * Parses a pathname into { lang, text, idx? }, or null when it isn't a
  * single dictionary-entry route (about page, radical table, category/
- * starred lists). `pathname` is expected percent-encoded (e.g.
- * `url.pathname`); malformed `%` escapes decode-fail closed to null rather
- * than throwing — this is reachable with arbitrary caller-supplied input
- * via the oEmbed `url=` query parameter, not just internal navigation.
+ * starred lists, invalid encoding). Thin wrapper over `classifyRoute` —
+ * the single source of truth for the prefix grammar.
  *
- * A trailing `/<digits>` segment (`/萌/2`) is the legacy definition-index
- * permalink (g0v/moedict-webkit's `/:text/:idx` — deep-links to the idx-th
- * definition across all of a word's heteronyms, 1-based). It's stripped
- * before the lang/text checks below so every existing route shape keeps
- * working unchanged; `idx` is only meaningful to word-entry consumers
- * (DictionaryPage) and is silently ignored by anything else that doesn't
- * ask for it (radical/list/starred routes, oEmbed, OG head text).
+ * Malformed `%` escapes produce `classifyRoute`'s `invalid-encoding` kind,
+ * which this wrapper maps to null (fail-closed) — reachable with arbitrary
+ * caller-supplied input via the oEmbed `url=` query parameter.
  */
 export function parseDictionaryRoute(
   pathname: string,
 ): { lang: DictionaryLang; text: string; idx?: number } | null {
-  let raw: string;
-  try {
-    raw = decodeURIComponent(String(pathname || '').replace(/^\/+/, '').replace(/\/+$/, ''));
-  } catch {
-    return null;
+  const route = classifyRoute(pathname);
+  if (route.kind === 'entry') {
+    const { lang, text, idx } = route;
+    return { lang, text, idx };
   }
-  if (!raw) return null;
-
-  let idx: number | undefined;
-  const idxMatch = raw.match(/^(.+)\/(\d+)$/);
-  if (idxMatch) {
-    raw = idxMatch[1];
-    idx = Number(idxMatch[2]);
-  }
-
-  if (raw === 'about' || raw === 'about.html') return null;
-  if (raw.startsWith('@') || raw.startsWith('~@')) return null;
-  if (raw.startsWith('=')) return null;
-  if (raw.startsWith("'=*") || raw.startsWith(':=*') || raw.startsWith('~=*') || raw.startsWith('=*')) return null;
-  if (raw.startsWith("'=") || raw.startsWith(':=') || raw.startsWith('~=')) return null;
-  if (raw.startsWith("'")) return { lang: 't', text: raw.slice(1), idx };
-  if (raw.startsWith(':')) return { lang: 'h', text: raw.slice(1), idx };
-  if (raw.startsWith('~')) return { lang: 'c', text: raw.slice(1), idx };
-  return { lang: 'a', text: raw, idx };
+  return null;
 }
 
 export function buildDefinitionDescription(entry: DictionaryEntryLike | null): string | null {
