@@ -68,7 +68,12 @@ export default defineConfig({
       : `bun run build && bunx tsx tests/e2e/serve.ts`,
     port: PORT,
     timeout: 180_000,
-    reuseExistingServer: !process.env.CI,
+    // Decouple server reuse from CI: a stray CI=1 in a dev/agent shell must not
+    // force reuseExistingServer:false (which causes port-conflict false failures).
+    // Override with PW_REUSE_EXISTING_SERVER=1|0; default reuses locally, not in CI.
+    reuseExistingServer: process.env.PW_REUSE_EXISTING_SERVER != null
+      ? process.env.PW_REUSE_EXISTING_SERVER === '1'
+      : !process.env.CI,
     env: {
       E2E_PORT: String(PORT),
     },
