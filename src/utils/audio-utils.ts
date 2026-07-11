@@ -108,9 +108,7 @@ export function playAudioUrl(url: string, onStateChange?: (playing: boolean) => 
         console.warn('[Audio] 播放失敗，嘗試下一種格式:', candidate, err);
       } finally {
         probingCandidate = false;
-        if (candidateErrorHandler) {
-          audio.removeEventListener('error', candidateErrorHandler);
-        }
+        audio.removeEventListener('error', candidateErrorHandler!);
       }
     }
     if (currentToken === token && currentAudio === audio) {
