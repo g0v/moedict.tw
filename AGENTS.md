@@ -241,9 +241,15 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
 - Commit message 含反引號時用 `git commit -F <file>`（heredoc 會觸發指令替換）。
 - git 對非 ASCII 檔名輸出八進位跳脫——grep CJK 檔名會 silent miss，
   用 `git -c core.quotePath=false` 或 `-z`。
-- `bun run lint` 正常可用（typescript 固定在 5.x；勿升到 7.x 的 Go-native
-  preview，typescript-eslint 不支援其 API，整庫會崩）。`@typescript-eslint/no-shadow`
-  為 error 級。
+- **typescript 鎖 5.9.x**（`@typescript-eslint/no-shadow` 為 error 級）。背景：
+  TypeScript 7（Go 原生編譯器）已於 2026-07 GA（`typescript@latest` = 7.x），
+  但 **7.0 刻意不含穩定 programmatic API（7.1 才有）**，typescript-eslint 依賴
+  該 API（目前 peer `<6.1.0`），裝上 7.x 整庫 lint 直接崩。升回 7.x 的條件
+  （擇一成立才動）：(a) typescript-eslint 正式支援 TS7／7.1 API；
+  (b) 走官方 dual-track——頂層 `typescript@7` 跑 tsc、`@typescript/typescript6`
+  scoped override 餵給 typescript-estree（本 repo typecheck 僅約 2 秒，
+  目前不值得這個複雜度）；(c) lint 整個遷移到 oxlint + tsgolint
+  （TS 團隊協作的 Go 原生 type-aware linter，2026 中仍 alpha）。
 
 ## 授權紅線
 

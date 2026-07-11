@@ -1,11 +1,10 @@
 import { CACHE_CONTROL, listTagsForLang } from './cache';
+import { stripLangPrefix, type DictionaryLang as Lang } from '../utils/dictionary-route';
 /**
  * 分類詞彙列表 API
  * 處理 /api/={類名}、/api/'={類名}、/api/:={類名}、/api/~={類名} 的請求
  * 從 R2 讀取對應 JSON 陣列並回傳
  */
-
-type Lang = 'a' | 't' | 'h' | 'c';
 
 interface ListEnv {
   DICTIONARY: {
@@ -27,22 +26,10 @@ interface ParsedList {
  *   ~=同實異名  → lang='c', category='同實異名'
  */
 function parseLangAndCategory(pathname: string): ParsedList | null {
-  // 移除 /api/ 前綴，並解碼 URI
+  // 移除 /api/ 前綴，並解碼 URI；語言前綴規則統一委派 stripLangPrefix
+  // （此路由不接受 legacy `!` 別名，維持既有行為）
   const raw = decodeURIComponent(pathname.replace(/^\/api\//, ''));
-
-  let lang: Lang = 'a';
-  let rest = raw;
-
-  if (raw.startsWith("'")) {
-    lang = 't';
-    rest = raw.slice(1);
-  } else if (raw.startsWith(':')) {
-    lang = 'h';
-    rest = raw.slice(1);
-  } else if (raw.startsWith('~')) {
-    lang = 'c';
-    rest = raw.slice(1);
-  }
+  const { lang, rest } = stripLangPrefix(raw);
 
   if (!rest.startsWith('=')) return null;
 

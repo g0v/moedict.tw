@@ -11,6 +11,7 @@ import { CACHE_CONTROL, handleCachePurge } from '../src/api/cache';
 import {
   buildDefinitionDescription,
   parseDictionaryRoute,
+  stripLangPrefix,
   type DictionaryEntryLike,
 } from '../src/utils/dictionary-route';
 
@@ -546,14 +547,10 @@ export async function dispatch(
         return handleStrokeAPI(request, url, corsHeaders);
       }
 
-      // 分類詞彙列表 API（=成語、'=諺語、:=諺語、~=同實異名 等）
+      // 分類詞彙列表 API（=成語、'=諺語、:=諺語、~=同實異名 等）——
+      // 語言前綴規則委派 stripLangPrefix，「去掉語言前綴後以 = 開頭」即列表路由
       const listSegment = decodeURIComponent(url.pathname.replace('/api/', ''));
-      if (
-        listSegment.startsWith('=') ||
-        listSegment.startsWith("'=") ||
-        listSegment.startsWith(':=') ||
-        listSegment.startsWith('~=')
-      ) {
+      if (stripLangPrefix(listSegment).rest.startsWith('=')) {
         console.log('🔍 [Index] 處理列表 API 請求:', url.pathname);
         return handleListAPI(request, url, env);
       }
