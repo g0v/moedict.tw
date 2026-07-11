@@ -21,6 +21,7 @@ interface MockAudio {
   pause(): void;
   load(): void;
   addEventListener(type: string, handler: (ev?: unknown) => void): void;
+  removeEventListener(type: string, handler: (ev?: unknown) => void): void;
   setAttribute(_name: string, _value: string): void;
   trigger(event: 'ended' | 'error'): void;
 }
@@ -28,6 +29,7 @@ interface MockAudio {
 let instances: MockAudio[] = [];
 let playShouldReject = false;
 let playRejectionsRemaining = 0;
+let playErrorAndRejectRemaining = 0;
 let deferredPlay: {
   outcome: 'resolve' | 'reject';
   resolve: () => void;
@@ -69,6 +71,11 @@ function createMockAudio(): MockAudio {
           deferredPlay = { outcome, resolve, reject };
         });
       }
+      if (playErrorAndRejectRemaining > 0) {
+        playErrorAndRejectRemaining -= 1;
+        this.trigger('error');
+        throw new Error('mock play() rejection');
+      }
       if (playRejectionsRemaining > 0) {
         playRejectionsRemaining -= 1;
         throw new Error('mock play() rejection');
@@ -86,6 +93,10 @@ function createMockAudio(): MockAudio {
       arr.push(handler);
       listeners.set(type, arr);
     },
+    removeEventListener(type, handler) {
+      const arr = listeners.get(type) ?? [];
+      listeners.set(type, arr.filter((candidate) => candidate !== handler));
+    },
     setAttribute() {
       // no-op for this stub — iOS-specific attrs aren't observable here
     },
@@ -101,6 +112,7 @@ beforeEach(() => {
   instances = [];
   playShouldReject = false;
   playRejectionsRemaining = 0;
+  playErrorAndRejectRemaining = 0;
   deferredPlay = null;
   nextDeferredPlayOutcome = null;
   // @ts-expect-error — overriding global for happy-dom env
@@ -181,6 +193,18 @@ describe('playAudioUrl', () => {
 
     const a = instances[0];
     expect(a.playCalls).toBeGreaterThanOrEqual(2); // mp3 then ogg
+    expect(a.src).toMatch(/\.ogg$/);
+    expect(onState).toHaveBeenCalledWith(true);
+  });
+
+  it('falls back when the mp3 attempt emits error before play rejects', async () => {
+    playErrorAndRejectRemaining = 1;
+    const onState = vi.fn();
+    playAudioUrl('https://cdn/clip.ogg', onState);
+    await flushMicrotasks();
+
+    const a = instances[0];
+    expect(a.playCalls).toBeGreaterThanOrEqual(2); // mp3 error/rejection then ogg
     expect(a.src).toMatch(/\.ogg$/);
     expect(onState).toHaveBeenCalledWith(true);
   });

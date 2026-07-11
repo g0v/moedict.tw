@@ -70,6 +70,7 @@ export function playAudioUrl(url: string, onStateChange?: (playing: boolean) => 
   audio.setAttribute('webkit-playsinline', 'true');
   currentAudio = audio;
   currentRequestKey = requestKey;
+  let probingCandidate = false;
 
   audio.addEventListener('ended', () => {
     if (currentAudio === audio) {
@@ -79,6 +80,7 @@ export function playAudioUrl(url: string, onStateChange?: (playing: boolean) => 
   });
 
   audio.addEventListener('error', () => {
+    if (probingCandidate) return;
     if (currentAudio === audio) {
       currentAudio = null;
       onStateChange?.(false);
@@ -89,15 +91,26 @@ export function playAudioUrl(url: string, onStateChange?: (playing: boolean) => 
   void (async () => {
     for (const candidate of candidates) {
       if (currentToken !== token || currentAudio !== audio) return;
+      probingCandidate = true;
+      let candidateErrorHandler: (() => void) | null = null;
       try {
+        const candidateError = new Promise<never>((_, reject) => {
+          candidateErrorHandler = () => reject(new Error('audio candidate error'));
+          audio.addEventListener('error', candidateErrorHandler);
+        });
         audio.src = candidate;
         audio.load();
-        await audio.play();
+        await Promise.race([audio.play(), candidateError]);
         if (currentToken !== token || currentAudio !== audio) return;
         onStateChange?.(true);
         return;
       } catch (err) {
         console.warn('[Audio] 播放失敗，嘗試下一種格式:', candidate, err);
+      } finally {
+        probingCandidate = false;
+        if (candidateErrorHandler) {
+          audio.removeEventListener('error', candidateErrorHandler);
+        }
       }
     }
     if (currentToken === token && currentAudio === audio) {
