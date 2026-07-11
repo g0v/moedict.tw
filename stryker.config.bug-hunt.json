@@ -4,7 +4,7 @@
   "packageManager": "npm",
   "testRunner": "vitest",
   "vitest": {
-    "configFile": "vitest.unit.config.ts"
+    "configFile": "vite.config.ts"
   },
   "mutate": [
     "src/utils/xref-switch-utils.ts"

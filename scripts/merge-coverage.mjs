@@ -12,7 +12,7 @@
  *   - coverage/combined/lcov.info              (for codecov etc.)
  *   - coverage/combined/text summary           (printed to stdout)
  *
- * Run with `bun run test:coverage`. Each tier can be absent — the script
+ * Run with `vp run test:coverage`. Each tier can be absent — the script
  * reports what it found, merges what's there, and exits 0 either way.
  */
 
@@ -110,7 +110,7 @@ async function main() {
   await ingestPlaywrightDir(PLAYWRIGHT_DIR);
 
   if (contributingTiers === 0) {
-    console.error('[merge-coverage] nothing to merge — run at least one of bun run test:unit / test:integration / test:e2e with coverage enabled first.');
+    console.error('[merge-coverage] nothing to merge — run at least one of vp run test:unit / test:integration / test:e2e with coverage enabled first.');
     process.exit(1);
   }
 

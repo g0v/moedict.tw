@@ -26,8 +26,8 @@
 
 ### PR 最低檢查
 
-- `bun run typecheck`
-- `bun run lint`
+- `vp check`
+- `vp run typecheck`
 
 ## 使用自己的 Cloudflare R2 開發（必看）
 
@@ -36,9 +36,7 @@
 
 ### 1. 前置需求
 
-- Node.js（建議 `>= 20.19`）
-- Bun（含 `bunx`）
-- Wrangler CLI
+- [Vite+](https://viteplus.dev/) 的全域 `vp` CLI（會管理 Node.js、Bun 與本專案工具鏈）
 - rclone
 - Cloudflare 帳號（可建立 R2 bucket 與 Worker）
 
@@ -47,12 +45,12 @@
 可自訂名稱，以下為範例：
 
 ```bash
-wrangler r2 bucket create <your-fonts-bucket>
-wrangler r2 bucket create <your-fonts-bucket-preview>
-wrangler r2 bucket create <your-assets-bucket>
-wrangler r2 bucket create <your-assets-bucket-preview>
-wrangler r2 bucket create <your-dictionary-bucket>
-wrangler r2 bucket create <your-dictionary-bucket-preview>
+vp exec wrangler r2 bucket create <your-fonts-bucket>
+vp exec wrangler r2 bucket create <your-fonts-bucket-preview>
+vp exec wrangler r2 bucket create <your-assets-bucket>
+vp exec wrangler r2 bucket create <your-assets-bucket-preview>
+vp exec wrangler r2 bucket create <your-dictionary-bucket>
+vp exec wrangler r2 bucket create <your-dictionary-bucket-preview>
 ```
 
 ### 3. 設定 rclone（remote 名稱建議 `r2`）
@@ -81,7 +79,7 @@ rclone sync data/assets/ r2:<your-assets-bucket>/ \
 請先產生全文檢索索引，再同步整個 `data/dictionary`（不是只傳 `pack`）：
 
 ```bash
-bun run build-search-index
+vp run build-search-index
 ```
 
 接著上傳：
@@ -92,7 +90,7 @@ rclone sync data/dictionary/ r2:<your-dictionary-bucket>/ \
 ```
 
 說明：
-- `search-index/` 不是原始資料的一部分，而是由 `bun run build-search-index` 根據 `data/dictionary/*ck/*.txt` 動態產生。
+- `search-index/` 不是原始資料的一部分，而是由 `vp run build-search-index` 根據 `data/dictionary/*ck/*.txt` 動態產生。
 - 專案會使用 `pack/pcck/phck/ptck`，也會讀取 `a/`、`c/` 與根目錄下 `@*.json`、`=*.json` 等檔案。
 - 若未先產生 `search-index/` 就直接同步 `data/dictionary/`，正式環境的右上角全文搜尋會缺資料。
 - 只上傳部分目錄會導致部首表、分類索引或搜尋功能不完整。
@@ -143,36 +141,35 @@ rclone sync data/dictionary/ r2:<your-dictionary-bucket>/ \
 一般前端/互動測試可直接使用本機資料啟動，不必先登入 Cloudflare：
 
 ```bash
-bun install
-bun run dev
+vp install
+vp run dev
 ```
 
 
 補充：
-- `bun run dev` 會以本機檔案系統提供 `data/assets/`、`data/dictionary/` 與 `data/dictionary/search-index/`，適合日常 UI 與互動除錯。
+- `vp run dev` 會以本機檔案系統提供 `data/assets/`、`data/dictionary/` 與 `data/dictionary/search-index/`，適合日常 UI 與互動除錯。
 - 若你需要完整 Cloudflare Worker / R2 預覽環境，再執行：
 
 ```bash
-wrangler auth login
-bun run dev:remote
+vp exec wrangler login
+vp run dev:remote
 ```
 
 或完整worker預覽：
 ```bash
-wrangler auth login
-bun preview
+vp exec wrangler login
+vp run preview
 ```
 
-- `bun run dev`、`bun run dev:remote` 與 `bun run build` 都會先根據 `data/dictionary/*ck/*.txt` 自動產生 `data/dictionary/search-index/*.json`。
+- `vp run dev`、`vp run dev:remote` 與 `vp run build` 都會先根據 `data/dictionary/*ck/*.txt` 自動產生 `data/dictionary/search-index/*.json`。
+- `vp dev` / `vp build` 是 Vite+ built-in，不會執行上述 `predev` / `prebuild`；本專案請使用 `vp run` 版本。
 - 這些索引檔不會打包進 Workers assets，避免單一檔案超過 Cloudflare Workers 靜態資產 25 MiB 限制。
-- 正式部署前若字典資料有更新，請先執行 `bun run build-search-index`，再執行 `sh commands/upload_dictionary.sh` 上傳最新的 `search-index/`。
+- 正式部署前若字典資料有更新，請先執行 `vp run build-search-index`，再執行 `sh commands/upload_dictionary.sh` 上傳最新的 `search-index/`。
 
 部署：
 
 ```bash
-bun run deploy
-# 或
-bunx wrangler deploy
+vp run deploy
 ```
 
 ## 補充：現有上傳腳本
@@ -181,7 +178,7 @@ bunx wrangler deploy
 - `commands/upload_dictionary.sh`
 
 這兩支腳本可作為參考，但若你使用自訂 bucket 名稱，請先調整腳本中的 bucket 設定，或直接使用上面的 `rclone sync` 指令。
-其中 `commands/upload_dictionary.sh` 目前也會一併上傳 `data/dictionary/search-index/`；若沒有先產生該目錄，腳本會提示先執行 `bun run build-search-index`。
+其中 `commands/upload_dictionary.sh` 目前也會一併上傳 `data/dictionary/search-index/`；若沒有先產生該目錄，腳本會提示先執行 `vp run build-search-index`。
 
 ## 資料更新提示
 
@@ -197,19 +194,20 @@ bunx wrangler deploy
 ## 自動測試
 
 ```bash
-bun run test:unit
+vp run test:unit
 ```
 
-或用以下程序執行完整測試：
+`vp test` 會一次執行 unit（happy-dom）與 integration（Miniflare）兩個 Vitest
+project。若要連同 Playwright e2e 跑完整三層測試：
 
-1. 先安裝playwright： 
+1. 先安裝 Playwright：
 ```bash
-bunx playwright install
+vp exec playwright install
 ```
 
 2. 執行：
 ```bash
-bun run test
+vp run test
 ```
 
 ## 匯出閱讀器字典檔（多格式、分語系）
@@ -223,16 +221,16 @@ bun run test
 ### 1) 安裝依賴
 
 ```bash
-bun install
+vp install
 ```
 
 如果只要產生分語系 StarDict 格式：
-```SKIP_MOBI=1 bun run build-reader-formats```
+```SKIP_MOBI=1 vp run build-reader-formats```
 
 如果只要產生特定語系，可用逗號分隔：
 ```bash
-READER_FORMAT_LANGS=h bun run build-reader-formats
-READER_FORMAT_LANGS=a,t SKIP_MOBI=1 bun run build-reader-formats
+READER_FORMAT_LANGS=h vp run build-reader-formats
+READER_FORMAT_LANGS=a,t SKIP_MOBI=1 vp run build-reader-formats
 ```
 
 如同步要產生 Kindle 格式，另外需安裝其中一種 `.mobi` 轉檔工具：
@@ -267,13 +265,13 @@ ebook-convert --version
 - 若工具不在系統 PATH，可在執行時指定：
 
 ```bash
-MOBI_CONVERTER=/path/to/ebook-convert bun run build-reader-formats
+MOBI_CONVERTER=/path/to/ebook-convert vp run build-reader-formats
 ```
 
 ### 2) 產生字典檔（同一腳本輸出多格式）
 
 ```bash
-bun run build-reader-formats
+vp run build-reader-formats
 ```
 
 產出路徑（已在 `.gitignore` 排除）：

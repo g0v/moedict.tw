@@ -15,7 +15,7 @@
  * catch content additions/removals that were never meant to be no-ops (use
  * this to verify a *reformat*, not to gate every edit to this file).
  *
- * Run: `bun run check:css-equivalence [ref]` (ref defaults to HEAD)
+ * Run: `vp run check:css-equivalence [ref]` (ref defaults to HEAD)
  * Not wired into CI — this is a point-in-time proof tool for whoever next
  * reformats/reorganizes this file, not an every-PR gate (most edits to
  * legacy CSS are legitimate content changes, not reformats).

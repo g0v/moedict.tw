@@ -49,7 +49,7 @@
  *      at a later point in the file, not accidents.
  *   3. New #id selectors here must be reconciled with
  *      scripts/check-legacy-css-ids.mjs's ALLOWLIST (CI-enforced).
- *   4. Run `bun run lint:css` after any edit. A clean, untouched checkout
+ *   4. Run `vp run lint:css` after any edit. A clean, untouched checkout
  *      of THIS file already reports 16 errors + 2 warnings — all
  *      pre-existing content defects from the original build, preserved
  *      verbatim per rule 1/2 above (9x IE `filter:alpha(opacity=N)`,

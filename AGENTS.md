@@ -29,10 +29,13 @@ Cloudflare Workers 後端、R2 儲存。本檔是給 AI agent 與新進開發者
 
 ## 技術棧與目錄結構
 
-- 前端：React 19、TypeScript、Vite、react-router-dom v7
+- 前端：React 19、TypeScript、Vite+（Vite 8）、react-router-dom v7
 - 後端：Cloudflare Workers（`worker/index.ts`，經 `@cloudflare/vite-plugin` 建置）
 - 儲存：R2（`FONTS` / `ASSETS` / `DICTIONARY` 三個 binding）
-- 套件管理：**Bun**（`bun install`、`bun run <script>`；lockfile 是 `bun.lock`）
+- 工具鏈：**Vite+** 統一 dev/build/test/lint/format/runtime/package-manager 入口；
+  `vite.config.ts` 同時持有 Vite、Vitest projects、Oxlint 與 Oxfmt 設定。
+- 套件管理：Vite+ 管理的 **Bun**（`vp install`、`vp run <script>`；lockfile
+  是 `bun.lock`）。
 
 ```
 src/
@@ -59,30 +62,33 @@ memory/MEMORY.md  # 跨 session 的架構筆記（與本檔互補）
 ## 常用指令
 
 ```bash
-bun install                # 安裝相依
-bun run dev                # 本地開發（vite + miniflare；predev 會先重建索引）
-bun run build              # tsc -b && vite build（prebuild 會重建索引）
-bun run typecheck          # tsc -b --noEmit
-bun run lint               # oxlint（見「開發慣例」的 typescript/oxlint 說明）
+vp install                    # 依 devEngines.packageManager 安裝相依
+vp run dev                    # predev 重建索引，再啟動 Vite + Miniflare
+vp run build                  # prebuild 重建索引、tsc -b，再執行 vp build
+vp check                      # Oxlint；專案既有格式不做全樹 Oxfmt
+vp run typecheck              # tsc -b --noEmit
 
-bun run test:unit          # Vitest + happy-dom
-bun run test:integration   # Miniflare 實體 worker API 測試（fixtures 來自 data/dictionary）
-bun run test:e2e           # Playwright（chromium project）
-bun run test:e2e:visual    # 視覺回歸（baseline 僅 commit linux 版）
-bun run test               # 三層全跑
-bun run test:coverage      # 三層 coverage 合併至 coverage/combined/
+vp test                       # unit + integration 兩個 Vitest project
+vp run test:unit              # happy-dom unit tests
+vp run test:integration       # Miniflare 實體 Worker API 測試
+vp run test:e2e               # Playwright（chromium project）
+vp run test:e2e:visual        # 視覺回歸（baseline 僅 commit linux 版）
+vp run test                   # unit + integration + e2e 三層全跑
+vp run test:coverage          # 三層 coverage 合併至 coverage/combined/
 ```
 
-**測試一定走 `bun run test:unit`（Vitest），不能用裸 `bun test`**——後者沒有
-happy-dom 環境（`window is not defined`）也沒有本專案的 alias/setup。
-`bun test` 遷移被 oven-sh/bun#16140（缺 `vi.resetModules`）擋住。
+`vp dev` / `vp build` 是不可覆寫的 Vite+ built-in，不會執行本專案的
+`predev` / `prebuild` 與額外的 `tsc -b`；日常開發、正式 build 與部署一律用
+`vp run dev` / `vp run build`。Vitest 可直接用 `vp test`；要限定層級則用
+`vp run test:unit` / `vp run test:integration`。不要用裸 `bun test`——它不讀
+`vite.config.ts` 的 happy-dom、setup、alias 與 project 設定。
 
 ## 部署（staging-first，這是規範不是建議）
 
 ```bash
-bun run deploy:staging   # CLOUDFLARE_ENV=staging bun run build && wrangler deploy
+vp run deploy:staging   # CLOUDFLARE_ENV=staging vp run build && wrangler deploy
 # → 在 https://cf-moedict-webkit-neo-staging.audreyt.workers.dev 驗證
-bun run deploy           # 驗證通過後才部署 production
+vp run deploy           # 驗證通過後才部署 production
 ```
 
 - Staging 是獨立 Worker（`cf-moedict-webkit-neo-staging`），只有 *.workers.dev
@@ -95,7 +101,7 @@ bun run deploy           # 驗證通過後才部署 production
   環境變數（build 時），不是 `wrangler deploy --env`。
 - **陷阱**：`.wrangler/deploy/config.json` 重導向永遠指向「最後一次 build」的
   產物。跑完 `deploy:staging` 後直接裸打 `wrangler deploy` 會**再部署一次
-  staging**，不是 prod。所以一律用 `bun run deploy` / `bun run deploy:staging`
+  staging**，不是 prod。所以一律用 `vp run deploy` / `vp run deploy:staging`
   （它們都會先重新 build，把重導向翻回正確環境）。
 - Cloudflare 具名環境的繼承規則：`assets`/`cache`/`observability` 可繼承；
   `vars`/`r2_buckets`/`kv_namespaces`/`durable_objects`/`services` **不可繼承**，
@@ -120,7 +126,7 @@ bun run deploy           # 驗證通過後才部署 production
   上傳後的驗證 GET 同樣會被限流，驗證程式也要有重試，否則會把 429 誤判成
   內容不一致。
 - 只改資料（`data/dictionary/**`）→ 上傳 R2 即可，不必重佈 Worker；
-  改到 `src/`、`worker/` 任何程式 → 必須 `bun run deploy` 才會上線。
+  改到 `src/`、`worker/` 任何程式 → 必須 `vp run deploy` 才會上線。
 - `data/dictionary/lookup/pinyin/**` 與 `search-index/**` 是**衍生物**，
   由 `scripts/build-pinyin-lookup.mjs`、`build-search-index.mjs` 從 pack 檔重建
   （`predev`/`prebuild` 自動跑）。改 pack 資料後不要手改衍生檔，重建再一起上傳。
@@ -157,11 +163,11 @@ bun run deploy           # 驗證通過後才部署 production
   刪除任何規則/宣告**——cascade 順序是 load-bearing（同一 selector 在檔案
   不同位置出現多次時，後者覆蓋前者是刻意設計，不是重複，見 `src/index.css`
   裡「後載入，需較高特異性」類註解）。改這個檔案前後跑
-  `bun run check:css-equivalence [ref]`（預設 `ref=HEAD`）：對 git 某版本做
+  `vp run check:css-equivalence [ref]`（預設 `ref=HEAD`）：對 git 某版本做
   **順序敏感**的 AST 結構比對，規則/宣告順序或內容有任何差異就報錯（comment
   不算，不影響渲染）。這是驗證「排版沒動到語意」的工具，不是每次內容修改都要
   跑的 CI gate。
-- **CSS lint**：`bun run lint:css`（stylelint + `.stylelintrc.json`）。目前有
+- **CSS lint**：`vp run lint:css`（stylelint + `.stylelintrc.json`）。目前有
   16 個已知、刻意保留的內容層級瑕疵（見檔案 header comment 的完整清單：IE
   `filter:alpha(...)`、殘留的 LESS `fadein()` 呼叫、`speak:none`、
   `background-image:#ddd`、`visibility:visibility`——十年歷史遺留，不影響
@@ -202,9 +208,9 @@ bun run deploy           # 驗證通過後才部署 production
   才有值）——序列化必須用 `for (i < cs.length) cs.getPropertyValue(cs[i])`
   逐一列舉屬性，否則 digest 全程比對到空字串、測試永遠「假通過」（靠正/負
   control 兩組互相驗證才抓到，測試檔內有完整記錄）。跑法：
-  `LEGACY_CSS_BASELINE_REF=HEAD E2E_SKIP_BUILD=1 bunx playwright test
+  `LEGACY_CSS_BASELINE_REF=HEAD E2E_SKIP_BUILD=1 vp exec playwright test
   --project=chromium tests/e2e/legacy-styles-regression.spec.ts`（先手動
-  `bun run build`，或拿掉 `E2E_SKIP_BUILD=1` 讓它自動 build）。
+  `vp run build`，或拿掉 `E2E_SKIP_BUILD=1` 讓它自動 build）。
 
 ## 字典資料格式（pack 檔）
 
@@ -223,7 +229,7 @@ bun run deploy           # 驗證通過後才部署 production
   主讀音與又音（`bAlt`/`pAlt`）。
 - **`ptck` 的 `T` 欄（台語羅馬字）以 NFD 為常態**（分解式，`ê` = `e`+U+0302），
   但上游 twblg CSV 常是 NFC。合併/去重該欄位時一律先 `normalize('NFC')` 做
-  canonical 比對，寫回時存 NFD。**此規則由 CI 強制**：`bun run check:data`
+  canonical 比對，寫回時存 NFD。**此規則由 CI 強制**：`vp run check:data`
   會驗證所有 pack 檔可 JSON.parse、ptck `T` 無 NFC-canonical 重複讀音、
   且每個 segment 都是 NFD。**規則僅限該欄位**：詞目 key、釋義或其他欄位
   未驗證過 normalization 狀態，不要做全域 normalize（會破壞 key 對應）。
@@ -258,9 +264,9 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
   `worker/index.ts` 的覆蓋率靠 direct-call unit tests
   （`tests/unit/api-handlers-direct.test.ts`、`worker-dispatch*.test.ts`）。
   **新增 handler 分支時必須同步加 direct-call 測試**，integration 不會動到數字。
-- Coverage ratchet：`vitest.unit.config.ts` 的 thresholds 是**只升不降的地板**
-  （目前 100%/100%/100%/100%，全綠）。`/* v8 ignore */` 總數上限 20
-  （`scripts/check-v8-ignore-count.mjs`）。
+- Coverage ratchet：`vite.config.ts` 的 `test.coverage.thresholds` 是**只升不降
+  的地板**（目前 100%/100%/100%/100%，全綠）。`/* v8 ignore */` 總數上限
+  20（`scripts/check-v8-ignore-count.mjs`）。
 - 視覺回歸 baseline 只 commit `*-chromium-linux.png`；darwin/win32 是本機自生。
 - `DictionaryPage.tsx`（~950 行）與 `MiddlePoint.tsx` **沒有 unit test**
   （e2e-only 慣例）。變數遮蔽已由 oxlint `no-shadow`（error 級）把關。
@@ -291,7 +297,7 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
   遇到 `/api/%` 這類壞編碼會把 URIError 冒成 500（曾在 prod 實測到）。
   呼叫端自選 fallback：fail-closed（回 null/400）或改用未解碼原字串。
 - **legacy 遠端樣式 `data/assets/styles.css`** 的 `#id` 選擇器會蓋掉新元件
-  （含 Shadow DOM `:host` 預設）：`bun run check:css-ids` 在 CI 把關——
+  （含 Shadow DOM `:host` 預設）：`vp run check:css-ids` 在 CI 把關——
   src 內新增的 id 若撞上 legacy `#id` 選擇器且不在 allowlist 內會 fail；
   要沿用 legacy 樣式就有意識地把 id 加進 allowlist（附註解）。該檔案的完整
   背景（格式化、載入路徑、測試涵蓋範圍）見前面「舊版樣式」一節。
@@ -309,36 +315,32 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
 - Commit message 含反引號時用 `git commit -F <file>`（heredoc 會觸發指令替換）。
 - git 對非 ASCII 檔名輸出八進位跳脫——grep CJK 檔名會 silent miss，
   用 `git -c core.quotePath=false` 或 `-z`。
-- **typescript 在 7.x（Go 原生編譯器）**，lint 走 `oxlint`（`.oxlintrc.json`），
-  取代 eslint + typescript-eslint。背景：TypeScript 7 已於 2026-07 GA，但
-  typescript-eslint 的 typescript-estree 仍卡在 peer `typescript <6.1.0`，
-  裝上 7.x 會直接崩潰（`Cannot read properties of undefined (reading
-  'Cjs')`）——兩者不能並存，這也是 2026-07 從 eslint 遷移到 oxlint 的直接
-  原因。`bun run lint` = `oxlint .`；型別檢查仍是獨立的
-  `bun run typecheck`（`tsc -b --noEmit`），TS7 下原生執行，比 5.9.x 快
-  約 11 倍，型別行為未變（`tsc -b`、`vite build`、unit/integration 測試
-  全數驗證過）。
-- `oxlint` 零設定預設值已涵蓋原本 `js.configs.recommended` +
-  `tseslint.configs.recommended` 的完整規則集；`.oxlintrc.json` 只列出
-  兩者中預設關閉、需要手動打開的規則（含 no-var/prefer-const/
-  no-explicit-any 等，逐條列表與理由見該檔註解），加上兩條本專案自訂規則
-  （`no-shadow`、`_`-prefix `no-unused-vars`）與 react-hooks／
-  react-refresh 對應項（`react/rules-of-hooks`、`react/exhaustive-deps`、
-  `react/only-export-components`）。跨 plugin 同名規則（如 `no-namespace`
-  同時是 typescript／react／import 三個 plugin 的規則名）一律用
-  `<plugin>/<rule>` 前綴消歧義。既有的 `// eslint-disable-next-line
-  <rule>` 註解 oxlint 會自動識別並比對（`@typescript-eslint/X` 與
-  `react-refresh/X` 前綴都能對應到 oxlint 自己的 `typescript/X`／
-  `react/X`），新寫的一律用 `// oxlint-disable-next-line <rule>`
-  （多行說明時，disable 指令必須是緊接在程式碼前的最後一行註解，見
-  `scripts/build-pinyin-lookup.mjs` 範例）。
+- **typescript 在 7.x（Go 原生編譯器）**，lint 走 Vite+ 內建 Oxlint；
+  設定集中在 `vite.config.ts` 的 `lint` block，舊 `.oxlintrc.json` 已移除。
+  背景：TypeScript 7 已於 2026-07 GA，但 typescript-eslint 的
+  typescript-estree 仍卡在 peer `typescript <6.1.0`，裝上 7.x 會直接崩潰
+  （`Cannot read properties of undefined (reading 'Cjs')`）——兩者不能並存，
+  這也是 2026-07 從 eslint 遷移到 Oxlint 的直接原因。`vp check` 執行非
+  type-aware lint；型別檢查仍獨立走 `vp run typecheck`（`tsc -b --noEmit`）。
+  `check.fmt: false` 是刻意設定：本 repo 遷移前沒有全專案 formatter，且同時含
+  現代程式與不可重排的 legacy/vendor 資產，不能用 migration 順手全樹改格式。
+- Oxlint 零設定預設值已涵蓋原本 `js.configs.recommended` +
+  `tseslint.configs.recommended` 的完整規則集；`vite.config.ts` 的 `lint.rules`
+  只列出預設關閉、需要手動打開的規則（含 no-var/prefer-const/
+  no-explicit-any 等），加上兩條本專案自訂規則（`no-shadow`、`_`-prefix
+  `no-unused-vars`）與 React 對應項（`react/rules-of-hooks`、
+  `react/exhaustive-deps`、`react/only-export-components`）。跨 plugin 同名規則
+  一律用 `<plugin>/<rule>` 前綴消歧義。既有的 `// eslint-disable-next-line
+  <rule>` 註解 Oxlint 會自動識別並比對；新寫的一律用
+  `// oxlint-disable-next-line <rule>`（多行說明時，disable 指令必須是緊接在
+  程式碼前的最後一行註解，見 `scripts/build-pinyin-lookup.mjs` 範例）。
 - **Type-aware lint（`oxlint-tsgolint`，需 TS 7+）已裝好但預設不跑**：
-  `bun run lint:type-aware`（`oxlint --type-aware --type-check src
-  worker`）可手動執行，目前會回報約 35 個未經 triage 的建議級（warn）
-  發現（多處 `navigate()` 缺 `void`/`.catch` 的 no-floating-promises、
-  `...getCORSHeaders(): HeadersInit` 的 no-misused-spread、monkey-patch
-  原生方法的 unbound-method 等）。這些**故意**沒接進 `bun run lint` 或
-  CI——要接進硬性 gate 前，需要逐條判斷是真的 bug 還是可接受的既有寫法。
+  `vp run lint:type-aware`（`vp lint --type-aware --type-check src worker`）可手動
+  執行，目前會回報約 35 個未經 triage 的建議級（warn）發現（多處
+  `navigate()` 缺 `void`/`.catch` 的 no-floating-promises、
+  `...getCORSHeaders(): HeadersInit` 的 no-misused-spread、monkey-patch 原生
+  方法的 unbound-method 等）。這些**故意**沒接進 `vp check` 或 CI——要接進
+  硬性 gate 前，需要逐條判斷是真的 bug 還是可接受的既有寫法。
   範圍也要留意：`--type-aware --type-check` 靠逐檔自動找 tsconfig，只有
   `src`／`worker`（`tsc -b` 本來就有 project reference 的範圍）能保證乾淨；
   `tests/` 不在任何 leaf tsconfig 的 `include` 內（`tsc -b` 現在也不型別

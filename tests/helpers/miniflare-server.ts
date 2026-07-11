@@ -40,7 +40,7 @@ export async function startTestServer(options: StartOptions = {}): Promise<TestS
 
   if (wantAssets && !existsSync(DIST_CLIENT)) {
     throw new Error(
-      `includeAssets=true but ${DIST_CLIENT} is missing — run \`bun run build\` first.`,
+      `includeAssets=true but ${DIST_CLIENT} is missing — run \`vp run build\` first.`,
     );
   }
 

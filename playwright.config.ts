@@ -62,10 +62,10 @@ export default defineConfig({
   ],
   webServer: {
     // CI pre-builds once (see .github/workflows/ci.yml) and sets E2E_SKIP_BUILD=1;
-    // locally we build on-demand so `bun run test:e2e` is one-shot.
+    // locally we build on-demand so `vp run test:e2e` is one-shot.
     command: process.env.E2E_SKIP_BUILD
-      ? `bunx tsx tests/e2e/serve.ts`
-      : `bun run build && bunx tsx tests/e2e/serve.ts`,
+      ? `vp exec tsx tests/e2e/serve.ts`
+      : `vp run build && vp exec tsx tests/e2e/serve.ts`,
     port: PORT,
     timeout: 180_000,
     // Decouple server reuse from CI: a stray CI=1 in a dev/agent shell must not
