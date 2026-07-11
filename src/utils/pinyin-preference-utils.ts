@@ -302,16 +302,36 @@ const TAIWANESE_VOWELS: Record<string, string> = {
 
 const TAIWANESE_TONES: Record<string, string> = {
   p: 'ㆴ', t: 'ㆵ', k: 'ㆶ', h: 'ㆷ',
-  'p$': 'ㆴ\u0358', 't$': 'ㆵ\u0358', 'k$': 'ㆶ\u0358', 'h$': 'ㆷ\u0358',
+  // Tone 8 (checked, high-level) is marked with U+0307 COMBINING DOT ABOVE —
+  // not U+030D (the Tai-lo input mark) or U+0358 (a legacy output choice
+  // that renders skewed/detached in many fonts; g0v/moedict-webkit#300).
+  // This is the single source of truth: every consumer (ruby, bAlt/pAlt
+  // alt-reading text) reads this table, so fixing it here fixes all of them.
+  'p$': 'ㆴ\u0307', 't$': 'ㆵ\u0307', 'k$': 'ㆶ\u0307', 'h$': 'ㆷ\u0307',
   '\u0300': '˪', '\u0301': 'ˋ', '\u0302': 'ˊ', '\u0304': '˫', '\u030D': '$',
+  // "Tone 9" (U+030B COMBINING DOUBLE ACUTE ACCENT) marks a 合音 (hi̍p-im,
+  // fused/contracted-syllable) reading — e.g. 查某 tsa-bóo contracting to
+  // tsa̋u — flattened into the T-field slash-alt-reading format by the
+  // moedict-process twblg merge (AGENTS.md「又音.csv」的類型 2/3). It isn't
+  // one of the standard 7 lexical tones and legacy view.ls's own trs2bpmf
+  // never handled it either (only its POJ path remaps U+030B->U+0306) — so
+  // there's no prior bopomofo convention to match. Passed through as-is
+  // rather than mapped to a fabricated standard tone. The trailing \uFFFD
+  // is the same "toneless syllable boundary" sentinel tone-1 uses below —
+  // required because U+030B is a combining mark, not one of the spacing
+  // tone letters (ˇˊˋ˪˫) or checked finals (ㆴㆵㆶㆷ) that
+  // bopomofo-pinyin-utils.ts's decorateRuby spacing regex inserts a
+  // syllable-boundary space after; without it this syllable's bopomofo
+  // fuses into the next one and desyncs the ruby <rb>/<rt> token count.
+  '\u030B': '\u030B\uFFFD',
 };
 
 const V_RE = new RegExp(Object.keys(TAIWANESE_VOWELS).sort((a, b) => b.length - a.length).join('|'), 'g');
 const CV_RE = new RegExp(`^(${Object.keys(TAIWANESE_CONSONANTS).sort((a, b) => b.length - a.length).join('|')})((?:${Object.keys(TAIWANESE_VOWELS).sort((a, b) => b.length - a.length).join('|')})+[ptkh]?)$`);
 
 // TL combining tone marks. Tone 1 (open) and tone 4 (checked) are unmarked.
-const TL_TONE_RE = /[\u0300\u0301\u0302\u0304\u030D]/;
-const TL_TONE_RE_GLOBAL = /[\u0300\u0301\u0302\u0304\u030D]/g;
+const TL_TONE_RE = /[\u0300\u0301\u0302\u0304\u030B\u030D]/;
+const TL_TONE_RE_GLOBAL = /[\u0300\u0301\u0302\u0304\u030B\u030D]/g;
 
 // Citation -> sandhi tone mapping for open syllables, in TL combining marks:
 //   tone 1 (no mark)  -> tone 7 (U+0304 macron)
@@ -319,6 +339,11 @@ const TL_TONE_RE_GLOBAL = /[\u0300\u0301\u0302\u0304\u030D]/g;
 //   tone 3 (U+0300)   -> tone 2 (U+0301)
 //   tone 5 (U+0302)   -> tone 7 (U+0304) [Taiwan southern variety; MoE convention]
 //   tone 7 (U+0304)   -> tone 3 (U+0300)
+// Tone 9 / 合音 (U+030B) has no defined sandhi rule and is deliberately
+// absent here: applyTaigiSandhiToSyllable's `newTone === undefined` branch
+// leaves it as citation form unconditionally (same fallback already used
+// for a bare tone-8 U+030D on a non-checked syllable — see the "leaves an
+// open-syllable carrying tone-8 mark... unchanged" test).
 const TL_OPEN_SANDHI: Record<string, string> = {
   '': '\u0304',
   '\u0301': '',
@@ -327,7 +352,23 @@ const TL_OPEN_SANDHI: Record<string, string> = {
   '\u0304': '\u0300',
 };
 
-const PHRASE_BOUNDARY_RE = /([.!?;:,\uFF0C\u3002\uFF01\uFF1F\uFF1B\uFF1A])/;
+// Additional tone-group boundaries beyond sentence punctuation, verified
+// exhaustively against the full ptck corpus (see scripts/check-trs-bpmf.mjs):
+//   /  — separates a heteronym's alternate T-field readings (AGENTS.md「T
+//        欄的斜線慣例」), e.g. "tsi̍t-ji̍t/tsi̍t-li̍t". Each side is an
+//        independent citation-form pronunciation and needs its own sandhi.
+//   、 — ideographic comma used the same way as ，within a few T fields.
+//   ── — doubled U+2500 BOX DRAWINGS LIGHT HORIZONTAL, used as a xiehouyu
+//        (歇後語) riddle/punchline dash in example sentences and T fields
+//        (e.g. 反種 "Kiô-á khui n̂g-hue──huán-tsíng."). Without this, the
+//        tokenizer below merges the syllable before and after the dash into
+//        one corrupted token, dropping or misplacing tone-8 marks
+//        (g0v/moedict-webkit#300) across the dash (g0v/moedict-webkit#299).
+// Unlike the "--" (doubled ASCII hyphen) light-tone-particle marker handled
+// in sandhiToneGroup, each side of these boundaries gets full independent
+// sandhi treatment — they are not a "freeze the remainder" marker.
+
+const PHRASE_BOUNDARY_RE = /(──|[/、.!?;:,\uFF0C\u3002\uFF01\uFF1F\uFF1B\uFF1A])/;
 
 // Place a TL combining tone mark using TL placement priority: a > o > e >
 // second of an i/u cluster > i/u > ng (mark sits between n and g). Lone
@@ -424,10 +465,11 @@ function sandhiToneGroup(group: string): string {
 
 export function applyTaigiSandhi(trs: string): string {
   if (!trs) return trs;
-  // PHRASE_BOUNDARY_RE is a capture-group split, so odd indices are the captured
-  // single-character punctuation tokens. Even indices are tone-group bodies.
-  // Stryker disable next-line ConditionalExpression: the punctuation parts
-  // captured at odd indices are single-char sentence terminators with no
+  // PHRASE_BOUNDARY_RE is a capture-group split, so odd indices are the
+  // captured boundary tokens (single-char punctuation, "/", "、", or the
+  // two-char "──" xiehouyu dash). Even indices are tone-group bodies.
+  // Stryker disable next-line ConditionalExpression: the boundary tokens
+  // captured at odd indices (punctuation, "/", "、", "──") have no
   // alphabetic content, so calling sandhiToneGroup on them is observationally
   // a no-op. The "always sandhi" mutant is therefore equivalent.
   return trs
@@ -449,7 +491,7 @@ export function trsToBpmf(lang: Lang, trs: string): string {
     .replace(/(?:[A-Za-z]|[\u0300-\u030D])+/gu, (chunk) => {
       let tone = '';
       let token = chunk.toLowerCase();
-      token = token.replace(/([\u0300-\u0302\u0304\u030D])/g, (mark) => {
+      token = token.replace(/([\u0300-\u0302\u0304\u030B\u030D])/g, (mark) => {
         tone = TAIWANESE_TONES[mark];
         return '';
       });
@@ -464,7 +506,7 @@ export function trsToBpmf(lang: Lang, trs: string): string {
       token = token.replace(V_RE, (vowel) => TAIWANESE_VOWELS[vowel]);
       return token + (tone || '\uFFFD');
     })
-    .replace(/[- ]/g, '')
+    .replace(/[-\s]/g, '')
     .replace(/\uFFFD/g, ' ')
     .replace(/[.?!,] ?/g, '');
 }

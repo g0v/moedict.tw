@@ -27,6 +27,7 @@ jobs:
       - run: bun run typecheck
       - run: bun scripts/check-v8-ignore-count.mjs
       - run: bun run check:data
+      - run: bun run check:trs
       - run: bun run check:css-ids
       - run: bun run build
 

@@ -20,6 +20,7 @@
 		"smoke:sub-routes": "bun scripts/smoke-sub-routes.mjs",
 		"check:data": "node scripts/check-dictionary-data.mjs",
 		"check:css-ids": "node scripts/check-legacy-css-ids.mjs",
+		"check:trs": "bun scripts/check-trs-bpmf.mjs",
 		"seed:fixtures": "bun tests/seed-fixtures.mjs",
 		"test": "bun run test:unit && bun run test:integration && bun run test:e2e",
 		"test:unit": "vitest run --config vitest.unit.config.ts",
