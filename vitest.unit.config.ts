@@ -35,7 +35,7 @@ export default defineConfig({
       // Ratchet gate — fails the run if aggregate unit coverage drops below
       // these floors. Raise them (never lower) in a PR that adds tests; the
       // goal is a monotonically-non-decreasing ratchet toward 100%. See
-      // CLAUDE.md "Combined coverage across tiers" for the workflow.
+      // AGENTS.md「測試架構重點」for the workflow.
       thresholds: {
         statements: 100,
         branches: 100,
