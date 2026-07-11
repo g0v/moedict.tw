@@ -14,17 +14,47 @@ const BIAUKAI_URL_PATTERN = '**/BiauKai.ttf*';
 // Intercept legacy styles.css the same way legacy-styles-regression.spec.ts does,
 // serving the current working-tree data/assets/styles.css so the MOEDICT-IOS-KAI
 // @font-face is present and exercises the BiauKai src URL.
-async function routeStylesCss(page: Page): Promise<void> {
+// Returns a thunk that reports whether the intercepted CSS was actually requested,
+// so callers can prove the BiauKai no-request assertion is non-vacuous.
+async function routeStylesCss(page: Page): Promise<() => boolean> {
   const css = readFileSync(STYLES_CSS_PATH, 'utf-8');
-  const handler = (route: Route) =>
-    route.fulfill({
+  let loaded = false;
+  const handler = (route: Route) => {
+    loaded = true;
+    return route.fulfill({
       status: 200,
       contentType: 'text/css; charset=utf-8',
       headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
       body: css,
     });
+  };
   await page.route('https://r2-assets.test.local/styles.css', handler);
   await page.route('**/assets/styles.css', handler);
+  // When window.Capacitor is set, offline-api.ts intercepts /api/config and
+  // returns assetBaseUrl: '/assets-legacy', so AssetLoader loads CSS from
+  // /assets-legacy/styles.css — intercept that path too.
+  await page.route('**/assets-legacy/styles.css', handler);
+  return () => loaded;
+}
+
+// Collect console.error messages, excluding noise from the fixture's intentional
+// r2-*.test.local 404 blocker (those 404s are harness artifacts, not the
+// EduKai/BiauKai behavior under test). App-origin errors (127.0.0.1, localhost,
+// or any non-r2 host) are always retained.
+function collectConsoleErrors(page: Page, consoleErrors: string[]): void {
+  page.on('console', (msg) => {
+    if (msg.type() !== 'error') return;
+    const loc = msg.location();
+    const locUrl = loc.url ?? '';
+    if (locUrl) {
+      try {
+        if (new URL(locUrl).hostname === 'r2-assets.test.local') return;
+      } catch {
+        // Not a parseable URL — keep the message (could be a JS runtime error).
+      }
+    }
+    consoleErrors.push(msg.text());
+  });
 }
 
 // Block CSS sub-resources that would DNS-fail (same as legacy-styles-regression
@@ -44,13 +74,11 @@ test.describe('console load errors — EduKai 404 and BiauKai decode', () => {
     const edukaiRequests: string[] = [];
     const biaukaiRequests: string[] = [];
 
-    page.on('console', (msg) => {
-      if (msg.type() === 'error') consoleErrors.push(msg.text());
-    });
+    collectConsoleErrors(page, consoleErrors);
     page.on('pageerror', (err) => pageErrors.push(err.message));
 
     await blockCssSubresources(page);
-    await routeStylesCss(page);
+    const stylesCssLoaded = await routeStylesCss(page);
 
     // Intercept (but don't block) EduKai and BiauKai requests to record them
     // without letting them 502/DNS-fail — fulfill with 404 so the browser
@@ -78,6 +106,10 @@ test.describe('console load errors — EduKai 404 and BiauKai decode', () => {
     expect(edukaiRequests, 'normal web load must NOT request the EduKai font').toEqual([]);
     expect(consoleErrors, 'normal web load must have zero console.error').toEqual([]);
     expect(pageErrors, 'normal web load must have zero pageerror').toEqual([]);
+    // Sanity: the intercepted legacy styles.css must have actually loaded —
+    // otherwise the BiauKai no-request assertion is vacuous (the @font-face
+    // that triggers the fetch lives in that stylesheet).
+    expect(stylesCssLoaded(), 'legacy styles.css must be loaded to exercise BiauKai @font-face').toBe(true);
     expect(biaukaiRequests, 'normal web load must NOT request the 0-byte BiauKai URL').toEqual([]);
 
     // Computed font-family on .result .entry .title must NOT start with
@@ -93,12 +125,10 @@ test.describe('console load errors — EduKai 404 and BiauKai decode', () => {
 
   test('Capacitor-simulated load: moe-capacitor class present, EduKai in font stack', async ({ page }) => {
     const consoleErrors: string[] = [];
-    page.on('console', (msg) => {
-      if (msg.type() === 'error') consoleErrors.push(msg.text());
-    });
+    collectConsoleErrors(page, consoleErrors);
 
     await blockCssSubresources(page);
-    await routeStylesCss(page);
+    const stylesCssLoaded = await routeStylesCss(page);
 
     // Simulate Capacitor runtime BEFORE the app's main.tsx runs
     await page.addInitScript(() => {
@@ -114,6 +144,10 @@ test.describe('console load errors — EduKai 404 and BiauKai decode', () => {
     const hasCapacitorClass = await page.evaluate(() =>
       document.documentElement.classList.contains('moe-capacitor')
     );
+    // Sanity: the intercepted legacy styles.css must have actually loaded —
+    // otherwise the font-family assertions are vacuous (the @font-face and
+    // legacy font stacks live in that stylesheet).
+    expect(stylesCssLoaded(), 'legacy styles.css must be loaded to exercise font stacks').toBe(true);
     expect(hasCapacitorClass, 'html must have moe-capacitor class when window.Capacitor is set').toBe(true);
 
     // Computed font-family on .result .entry .title MUST include "MOE EduKai Android"
