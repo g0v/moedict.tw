@@ -84,6 +84,9 @@
     left: auto;
     width: fit-content;
     min-width: 160px;
+    /* Room for the row-scoped ::before hover bridge (left: 100%; width: 8px)
+       so overflow-y:auto does not clip its hit target. */
+    padding-right: 8px;
   }
 
   .dropdownMenuRoot a {
@@ -115,19 +118,21 @@
     box-shadow: 0 6px 12px rgba(0, 0, 0, 0.175);
   }
 
-  /* Row-scoped pointer bridge on the fixed submenu.
-     Anchor it to the trigger row so the hit path is only that row's height,
-     not the full submenu — avoiding sibling-item shadowing.
+  /* Row-scoped pointer bridge on the open trigger row itself.
+     position:relative on .dropdownSubmenu + absolute ::before to the right of
+     that row only (not the full submenu height) — avoids sibling-item shadowing.
      8px is an empirical safety margin over the theoretically-zero submenu gap
      (subpixel rounding / border rendering). */
-  .dropdownSubmenu > .dropdownMenu::before {
-    position: fixed;
-    position-anchor: var(--nav-submenu-trigger-name);
-    top: anchor(top);
-    right: auto;
-    bottom: anchor(bottom);
-    left: anchor(right);
+  .dropdownSubmenu {
+    position: relative;
+  }
 
+  .dropdownSubmenu.hover::before,
+  .dropdownSubmenu.pinned::before {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 100%;
     width: 8px;
     content: '';
   }
@@ -139,7 +144,6 @@
   .dropdownSubmenu.hover > a,
   .dropdownSubmenu.pinned > a {
     border-bottom: none;
-    anchor-name: var(--nav-submenu-trigger-name);
   }
 
   .dropdownSubmenu.hover > a::after,

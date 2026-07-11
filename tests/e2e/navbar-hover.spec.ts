@@ -67,7 +67,8 @@ test('desktop hover bridge does not intercept adjacent sibling category items', 
 
 test('desktop nested submenu keeps ancestor hover bridge on its own trigger row', async ({ page }) => {
   // Lang `a` nests DropdownSubmenu 2+ levels (…分類索引 → 外來語 → leaves).
-  // A shared document-wide anchor-name collides once both levels are open.
+  // The relative/absolute bridge must stay row-scoped per open trigger, not
+  // bleed across nesting levels.
   await page.goto('/%E8%90%8C');
 
   await page.locator('nav .navbar-nav > li').first().locator('a').first().click();
@@ -80,9 +81,8 @@ test('desktop nested submenu keeps ancestor hover bridge on its own trigger row'
   await nestedCategory.hover();
   await expect(nestedLeaf).toBeVisible();
 
-  // With both levels open, each trigger must carry a distinct anchor-name and
-  // each level's ::before must stay row-scoped to its own trigger (not rebound
-  // to a descendant via a shared document-wide name).
+  // With both levels open, each open trigger's ::before bridge must cover only
+  // that trigger's own row (ancestor vs nested are vertically offset).
   const geometry = await page.evaluate(() => {
     const ancestorTrigger = Array.from(document.querySelectorAll('a.taxonomy.a')).find(
       (el) => (el.textContent ?? '').trim() === '…分類索引',
@@ -96,24 +96,39 @@ test('desktop nested submenu keeps ancestor hover bridge on its own trigger row'
 
     const ancestorLi = ancestorTrigger.closest('li');
     const nestedLi = nestedTrigger.closest('li');
-    const ancestorSubmenu = ancestorLi?.querySelector(':scope > ul');
-    const nestedSubmenu = nestedLi?.querySelector(':scope > ul');
-    if (!(ancestorSubmenu instanceof HTMLElement) || !(nestedSubmenu instanceof HTMLElement)) {
+    if (!(ancestorLi instanceof HTMLElement) || !(nestedLi instanceof HTMLElement)) {
       return null;
     }
 
-    const ancestorBox = ancestorTrigger.getBoundingClientRect();
-    const nestedBox = nestedTrigger.getBoundingClientRect();
-    const ancestorBridge = getComputedStyle(ancestorSubmenu, '::before');
-    const nestedBridge = getComputedStyle(nestedSubmenu, '::before');
-    const ancestorTriggerStyle = getComputedStyle(ancestorTrigger);
-    const nestedTriggerStyle = getComputedStyle(nestedTrigger);
-    const vh = window.innerHeight;
-
-    const bridgeBottomY = (style: CSSStyleDeclaration) => {
-      const bottomCss = parseFloat(style.bottom);
-      return Number.isFinite(bottomCss) ? vh - bottomCss : NaN;
+    const bridgeRect = (li: HTMLElement) => {
+      const box = li.getBoundingClientRect();
+      const style = getComputedStyle(li, '::before');
+      const topOffset = parseFloat(style.top);
+      const bottomOffset = parseFloat(style.bottom);
+      const leftOffset = parseFloat(style.left);
+      const width = parseFloat(style.width);
+      if (![topOffset, bottomOffset, leftOffset, width].every(Number.isFinite)) {
+        return null;
+      }
+      // Reconstruct the absolute bridge box from the relatively-positioned trigger
+      // and the absolute ::before offsets (top/bottom/left/width).
+      return {
+        top: box.top + topOffset,
+        bottom: box.bottom - bottomOffset,
+        left: box.left + leftOffset,
+        width,
+        position: style.position,
+        content: style.content,
+      };
     };
+
+    const ancestorBox = ancestorLi.getBoundingClientRect();
+    const nestedBox = nestedLi.getBoundingClientRect();
+    const ancestorBridge = bridgeRect(ancestorLi);
+    const nestedBridge = bridgeRect(nestedLi);
+    if (!ancestorBridge || !nestedBridge) {
+      return null;
+    }
 
     return {
       ancestorTop: ancestorBox.top,
@@ -121,17 +136,19 @@ test('desktop nested submenu keeps ancestor hover bridge on its own trigger row'
       ancestorRight: ancestorBox.right,
       nestedTop: nestedBox.top,
       nestedBottom: nestedBox.bottom,
-      ancestorAnchorName: ancestorTriggerStyle.getPropertyValue('anchor-name').trim(),
-      nestedAnchorName: nestedTriggerStyle.getPropertyValue('anchor-name').trim(),
-      ancestorPositionAnchor: ancestorBridge.getPropertyValue('position-anchor').trim(),
-      nestedPositionAnchor: nestedBridge.getPropertyValue('position-anchor').trim(),
-      ancestorBridgeTop: parseFloat(ancestorBridge.top),
-      ancestorBridgeBottomY: bridgeBottomY(ancestorBridge),
-      ancestorBridgeLeft: parseFloat(ancestorBridge.left),
-      ancestorBridgeWidth: parseFloat(ancestorBridge.width),
-      nestedBridgeTop: parseFloat(nestedBridge.top),
-      nestedBridgeBottomY: bridgeBottomY(nestedBridge),
-      nestedBridgeWidth: parseFloat(nestedBridge.width),
+      nestedRight: nestedBox.right,
+      ancestorBridgeTop: ancestorBridge.top,
+      ancestorBridgeBottom: ancestorBridge.bottom,
+      ancestorBridgeLeft: ancestorBridge.left,
+      ancestorBridgeWidth: ancestorBridge.width,
+      ancestorBridgePosition: ancestorBridge.position,
+      ancestorBridgeContent: ancestorBridge.content,
+      nestedBridgeTop: nestedBridge.top,
+      nestedBridgeBottom: nestedBridge.bottom,
+      nestedBridgeLeft: nestedBridge.left,
+      nestedBridgeWidth: nestedBridge.width,
+      nestedBridgePosition: nestedBridge.position,
+      nestedBridgeContent: nestedBridge.content,
     };
   });
 
@@ -140,24 +157,24 @@ test('desktop nested submenu keeps ancestor hover bridge on its own trigger row'
   // Nested row is vertically offset from the ancestor row while both are open.
   expect(Math.abs(geometry!.nestedTop - geometry!.ancestorTop)).toBeGreaterThan(8);
 
-  // Root cause of the multi-level regression: a single shared anchor-name cannot
-  // pair each open level to its own trigger. Each open level must use a unique name.
-  expect(geometry!.ancestorAnchorName).not.toBe('');
-  expect(geometry!.ancestorAnchorName).not.toBe('none');
-  expect(geometry!.nestedAnchorName).not.toBe('');
-  expect(geometry!.nestedAnchorName).not.toBe('none');
-  expect(geometry!.ancestorAnchorName).not.toBe(geometry!.nestedAnchorName);
-  expect(geometry!.ancestorPositionAnchor).toBe(geometry!.ancestorAnchorName);
-  expect(geometry!.nestedPositionAnchor).toBe(geometry!.nestedAnchorName);
-
-  // Each bridge stays row-scoped to its own trigger.
+  // Bridge is a real absolute pseudo-element on each open trigger row.
+  expect(geometry!.ancestorBridgePosition).toBe('absolute');
+  expect(geometry!.nestedBridgePosition).toBe('absolute');
+  expect(geometry!.ancestorBridgeContent).not.toBe('none');
+  expect(geometry!.nestedBridgeContent).not.toBe('none');
   expect(geometry!.ancestorBridgeWidth).toBeGreaterThan(0);
   expect(geometry!.nestedBridgeWidth).toBeGreaterThan(0);
+
+  // Each bridge spans exactly its own trigger row, not the other level's row.
   expect(Math.abs(geometry!.ancestorBridgeTop - geometry!.ancestorTop)).toBeLessThan(2);
-  expect(Math.abs(geometry!.ancestorBridgeBottomY - geometry!.ancestorBottom)).toBeLessThan(2);
+  expect(Math.abs(geometry!.ancestorBridgeBottom - geometry!.ancestorBottom)).toBeLessThan(2);
   expect(Math.abs(geometry!.nestedBridgeTop - geometry!.nestedTop)).toBeLessThan(2);
-  expect(Math.abs(geometry!.nestedBridgeBottomY - geometry!.nestedBottom)).toBeLessThan(2);
+  expect(Math.abs(geometry!.nestedBridgeBottom - geometry!.nestedBottom)).toBeLessThan(2);
   expect(Math.abs(geometry!.ancestorBridgeTop - geometry!.nestedTop)).toBeGreaterThan(8);
+  expect(Math.abs(geometry!.nestedBridgeTop - geometry!.ancestorTop)).toBeGreaterThan(8);
+  // Bridge sits just past the trigger's right edge (left: 100%).
+  expect(Math.abs(geometry!.ancestorBridgeLeft - geometry!.ancestorRight)).toBeLessThan(2);
+  expect(Math.abs(geometry!.nestedBridgeLeft - geometry!.nestedRight)).toBeLessThan(2);
 
   // Slow-move across the ancestor-level gap at the ancestor row height must keep
   // the first-level submenu open (bridge still covers that path).
