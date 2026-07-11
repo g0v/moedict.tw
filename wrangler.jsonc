@@ -12,7 +12,7 @@
 	},
 	"assets": {
 		"binding": "SITE_ASSETS",
-		"run_worker_first": ["/*", "!/assets/*", "!/fonts/*", "!/manifest.json"]
+		"run_worker_first": ["/*", "!/fonts/*", "!/manifest.json"]
 	},
 	"observability": {
 		"enabled": true

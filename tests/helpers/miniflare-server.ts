@@ -70,7 +70,7 @@ export async function startTestServer(options: StartOptions = {}): Promise<TestS
         has_user_worker: true,
         invoke_user_worker_ahead_of_assets: false,
         static_routing: {
-          user_worker: ['/*', '!/assets/*', '!/fonts/*', '!/manifest.json'],
+          user_worker: ['/*', '!/fonts/*', '!/manifest.json'],
         },
       },
     };
