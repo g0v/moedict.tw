@@ -47,8 +47,9 @@
 
 ## 筆順動畫技術細節
 
-- 筆畫 JSON 資料 CDN: `https://829091573dd46381a321-9e8a43b8d3436eaf4353af683c892840.ssl.cf1.rackcdn.com/` (Rackspace, 有效)
-- `stroke-json.moedict.tw` DNS 已失效，改用直接 CDN URL
+- 筆畫 JSON 資料 CDN：已於 2026-07 遷移至 R2（`https://r2-assets.moedict.tw/stroke-json/`），
+  見 `src/utils/media-cdn.ts`、`README_CDN.md`。原 Rackspace CDN
+  （`stroke-json.moedict.tw` DNS 早已失效）僅存於 README_CDN.md 的歷史記錄。
 - 歷代書體 API: `https://www.moedict.tw/api/web/word/{char}` 返回 `.data.strokes[].{key, gif}`
 - JS 相依套件（均已在 R2 assets）: jquery.strokeWords.js, raf.min.js, gl-matrix-min.js, sax.js
 - 鉛筆按鈕 CSS class: `iconic-circle stroke icon-pencil`，顏色由 `body.lang-{a|c|h|t}` 控制
