@@ -142,6 +142,60 @@ bun run deploy           # 驗證通過後才部署 production
 - 部署後 60–90 秒內看到舊回應是正常的 edge 殘留（htmlShell s-maxage=60），
   用 cache-buster query 驗證，別急著當成部署失敗。
 
+## 舊版樣式（data/assets/styles.css）
+
+- **已重新格式化為可讀版本**（2026-07；231KB 一行 minified → 分行、加註解）。
+  內容是 normalize.css v3.0.2 + Bootstrap 3.4.1（客製化：14pt 基準字級、
+  border-radius:0、#6B0000 主色）+ Font Awesome 3.2.1 + moedict 自製
+  theme/result/radical/stroke-animation/widget CSS，原始 build 於
+  moedict-webkit 的 Gulp pipeline——該 repo 已於 2015-06-22 起把 styles.css
+  加進 `.gitignore`（純建置產物、無單一可對應的 commit），且其
+  devDependencies（autoprefixer-core@5、css-mqpacker@3、csswring@3）是十年
+  未更新的廢棄套件。**故意不從 sass 重建**，改為原地格式化、當作本 repo
+  自維護的 vendor 檔案；完整理由見檔案自身開頭的 header comment。
+- **重新排版的安全規則**：只能改空白/換行/加註解，**永遠不能重排、合併或
+  刪除任何規則/宣告**——cascade 順序是 load-bearing（同一 selector 在檔案
+  不同位置出現多次時，後者覆蓋前者是刻意設計，不是重複，見 `src/index.css`
+  裡「後載入，需較高特異性」類註解）。改這個檔案前後跑
+  `bun run check:css-equivalence [ref]`（預設 `ref=HEAD`）：對 git 某版本做
+  **順序敏感**的 AST 結構比對，規則/宣告順序或內容有任何差異就報錯（comment
+  不算，不影響渲染）。這是驗證「排版沒動到語意」的工具，不是每次內容修改都要
+  跑的 CI gate。
+- **CSS lint**：`bun run lint:css`（stylelint + `.stylelintrc.json`）。目前有
+  16 個已知、刻意保留的內容層級瑕疵（見檔案 header comment 的完整清單：IE
+  `filter:alpha(...)`、殘留的 LESS `fadein()` 呼叫、`speak:none`、
+  `background-image:#ddd`、`visibility:visibility`——十年歷史遺留，不影響
+  現代瀏覽器渲染，故意不修）+ 2 個重複屬性警告（可能是刻意 fallback，不自動
+  合併）。CI 的 `lint:css` 步驟是 `continue-on-error: true`（軟性檢查，不擋
+  PR）；跑起來如果錯誤數超過檔案 header 記載的基準值才需要查。
+- **這個檔案怎麼載入、以及既有測試為什麼看不到它**：`AssetLoader.tsx`（掛在
+  `Layout.tsx`，每頁都跑）優先打 `/api/config` 拿到的絕對網址（正式站是
+  `https://r2-assets.moedict.tw`），**直接對該網域發 `<link>` 請求，完全繞過
+  本 Worker**；`About.tsx` 自己另一份載入邏輯固定打相對路徑
+  `/assets/styles.css`（Worker 代理 fallback）。兩者的 `loadCSS()` 都不會在
+  失敗時重試另一條路徑。**既有 Playwright e2e/visual 套件目前完全測不到這個
+  檔案**：測試環境的 `ASSET_BASE_URL` 是假網域 `r2-assets.test.local`，被
+  `tests/e2e/_fixtures.ts` 全域擋成 404，`tests/helpers/fixtures.ts` 的
+  `collectAssetFixtures()` 也沒把 styles.css 種進 Miniflare 的 ASSETS
+  bucket——所以現有 `visual-snapshots.spec.ts` 的 baseline 全部是在「legacy
+  CSS 沒套用」的狀態下拍的。這是既有落差，不是本次改動造成，暫不處理（修這個
+  屬於獨立的測試基礎設施工作，範圍超出單一 CSS 檔案整理）。
+- **驗證新/舊版 styles.css 是否零視覺差異，用
+  `tests/e2e/legacy-styles-regression.spec.ts`**（新增，2026-07）：對每個代表
+  頁面，用 `page.route()` 攔截上述兩條 styles.css 請求路徑，先灌
+  `git show <ref>:data/assets/styles.css`、再灌 working tree 版本，比對兩次
+  導覽後的 `getComputedStyle`（含 `::before`/`::after`，因為 Font
+  Awesome/glyph 類選擇器幾乎全靠 `:before{content}` 呈現——純 PNG 截圖 diff
+  對這類內容改動是盲的，且 headless Chromium 截圖在字型抗鋸齒上有已知的微小
+  不確定性）。**踩過的坑**：`getComputedStyle(el).cssText` 在 Chromium 對
+  computed style 一律回傳空字串（規格如此，只有 inline style 的 `.cssText`
+  才有值）——序列化必須用 `for (i < cs.length) cs.getPropertyValue(cs[i])`
+  逐一列舉屬性，否則 digest 全程比對到空字串、測試永遠「假通過」（靠正/負
+  control 兩組互相驗證才抓到，測試檔內有完整記錄）。跑法：
+  `LEGACY_CSS_BASELINE_REF=HEAD E2E_SKIP_BUILD=1 bunx playwright test
+  --project=chromium tests/e2e/legacy-styles-regression.spec.ts`（先手動
+  `bun run build`，或拿掉 `E2E_SKIP_BUILD=1` 讓它自動 build）。
+
 ## 字典資料格式（pack 檔）
 
 - 每個 pack 檔（如 `ptck/100.txt`）是**一行一詞條**的 JSON：首行 `{"key":{…}`、
@@ -229,7 +283,8 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
 - **legacy 遠端樣式 `data/assets/styles.css`** 的 `#id` 選擇器會蓋掉新元件
   （含 Shadow DOM `:host` 預設）：`bun run check:css-ids` 在 CI 把關——
   src 內新增的 id 若撞上 legacy `#id` 選擇器且不在 allowlist 內會 fail；
-  要沿用 legacy 樣式就有意識地把 id 加進 allowlist（附註解）。
+  要沿用 legacy 樣式就有意識地把 id 加進 allowlist（附註解）。該檔案的完整
+  背景（格式化、載入路徑、測試涵蓋範圍）見前面「舊版樣式」一節。
 - 詞條頁資料流：client 打 `/api/{前綴}{詞}.json` → Worker `fillBucket` 讀
   R2 `p{lang}ck/{bucket}.txt` → 取單一 key 回傳。`/{a,t,h,c,raw,uni,pua}/<詞>.json`
   是對外公開 API（README 有文件），改格式要顧慮外部消費者。

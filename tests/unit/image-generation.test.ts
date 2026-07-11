@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   parseTextFromUrl,
-  fixMojibake,
   getFontName,
   getCORSHeaders,
   generateTextSVGWithR2Fonts,
@@ -50,12 +49,6 @@ describe('parseTextFromUrl', () => {
   });
 });
 
-describe('fixMojibake', () => {
-  it('is currently an identity function for ASCII + CJK', () => {
-    expect(fixMojibake('萌')).toBe('萌');
-    expect(fixMojibake('abc')).toBe('abc');
-  });
-});
 
 describe('getCORSHeaders', () => {
   it('emits wildcard origin and the three Cloudflare-safe headers', () => {

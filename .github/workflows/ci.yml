@@ -29,6 +29,12 @@ jobs:
       - run: bun run check:data
       - run: bun run check:trs
       - run: bun run check:css-ids
+      # Legacy vendor bundle carries ~16 pre-existing content-level defects
+      # (documented in data/assets/styles.css's own header comment and the
+      # PR that reformatted it) that are deliberately preserved, not fixed —
+      # continue-on-error keeps this visible without blocking unrelated PRs.
+      - run: bun run lint:css
+        continue-on-error: true
       - run: bun run build
 
   unit:

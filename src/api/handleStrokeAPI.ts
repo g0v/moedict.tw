@@ -1,16 +1,16 @@
 import { CACHE_CONTROL } from './cache';
 import { tryDecodeURIComponent } from '../utils/dictionary-route';
+import { STROKE_JSON_BASE_URL } from '../utils/media-cdn';
 /**
  * 筆順 JSON 代理 API
  *
  * 路由：GET /api/stroke-json/{codepoint}.json
- * 作用：代理 Rackspace CDN 的筆畫資料，解決瀏覽器 CORS 限制
+ * 作用：代理 R2 上的筆畫資料，解決瀏覽器 CORS 限制
  *
- * 原始資料來源（moedict-webkit main.ls http-map['stroke-json']）：
- * https://829091573dd46381a321-9e8a43b8d3436eaf4353af683c892840.ssl.cf1.rackcdn.com/
+ * 資料來源（原為 moedict-webkit main.ls http-map['stroke-json'] 指向的
+ * Rackspace CDN，已由 commands/migrate-legacy-cdn-to-r2.mjs 遷移進 R2）：
+ * 見 src/utils/media-cdn.ts。
  */
-
-const STROKE_CDN = 'https://829091573dd46381a321-9e8a43b8d3436eaf4353af683c892840.ssl.cf1.rackcdn.com';
 
 export async function handleStrokeAPI(
   request: Request,
@@ -32,7 +32,7 @@ export async function handleStrokeAPI(
     );
   }
 
-  const upstream = `${STROKE_CDN}/${cp}`;
+  const upstream = `${STROKE_JSON_BASE_URL}/${cp}`;
 
   try {
     const upstreamRes = await fetch(upstream, {

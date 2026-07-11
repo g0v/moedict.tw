@@ -47,8 +47,24 @@
 
 ## 筆順動畫技術細節
 
-- 筆畫 JSON 資料 CDN: `https://829091573dd46381a321-9e8a43b8d3436eaf4353af683c892840.ssl.cf1.rackcdn.com/` (Rackspace, 有效)
-- `stroke-json.moedict.tw` DNS 已失效，改用直接 CDN URL
+- 筆畫 JSON 資料 CDN：已於 2026-07 遷移至 R2（`https://r2-assets.moedict.tw/stroke-json/`），
+  見 `src/utils/media-cdn.ts`、`README_CDN.md`。原 Rackspace CDN
+  （`stroke-json.moedict.tw` DNS 早已失效）僅存於 README_CDN.md 的歷史記錄。
 - 歷代書體 API: `https://www.moedict.tw/api/web/word/{char}` 返回 `.data.strokes[].{key, gif}`
 - JS 相依套件（均已在 R2 assets）: jquery.strokeWords.js, raf.min.js, gl-matrix-min.js, sax.js
 - 鉛筆按鈕 CSS class: `iconic-circle stroke icon-pencil`，顏色由 `body.lang-{a|c|h|t}` 控制
+
+## data/assets/styles.css 現代化（2026-07）
+
+- 231KB 一行 minified → 重新格式化為 ~13K 行、含 section 註解與 provenance
+  header，內容/順序完全不變（每條 rule/at-rule/declaration 逐一驗證過，見
+  `bun run check:css-equivalence`）。詳細規則、載入路徑、既有測試盲點見
+  AGENTS.md「舊版樣式」一節——不重複記在這裡。
+- 決策重點：**沒有**從 `moedict-webkit/sass/*.scss` 重新編譯，因為那條
+  pipeline（autoprefixer-core@5、css-mqpacker@3、csswring@3）已凍結十年，
+  且 moedict-webkit 自 2015-06-22 起就把 styles.css 排除在 git 之外持續
+  獨立改動——重新編譯不會更「現代」，只會重新引入舊工具鏈依賴、且無法保證
+  逐條規則對應。改採「原地格式化、原檔即為 source of truth」。
+- 新增 `tests/e2e/legacy-styles-regression.spec.ts` 作為視覺零回歸驗證：用
+  `page.route()` 讓 CSS 內容可控，比對改動前後的 `getComputedStyle`（逐一
+  列舉屬性，不能用 `.cssText`——Chromium 對 computed style 一律回傳空字串）。

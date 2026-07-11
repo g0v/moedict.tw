@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useRadicalTooltip } from '../hooks/useRadicalTooltip';
 import { cleanTextForTTS, speakText } from '../utils/tts-utils';
 import { getAudioUrl, playAudioUrl } from '../utils/audio-utils';
+import { AUDIO_CDN_MAP } from '../utils/media-cdn';
 import { rightAngle } from '../utils/ruby2hruby';
 import { decorateRuby } from '../utils/bopomofo-pinyin-utils';
 import { convertPinyinByLang } from '../utils/pinyin-preference-utils';
@@ -296,8 +297,7 @@ function parseHakkaReadings(rawPinyin: string, audioId?: string): HakkaReading[]
 }
 
 function getHakkaVariantAudioUrl(variant: number, audioId: string): string {
-  const base = 'https://a7ff62cf9d5b13408e72-351edcddf20c69da65316dd74d25951e.ssl.cf1.rackcdn.com/';
-  return `${base}/${variant}-${audioId}.ogg`;
+  return `${AUDIO_CDN_MAP.h}/${variant}-${audioId}.ogg`;
 }
 
 type TTSLabel = '英' | '德' | '法';
