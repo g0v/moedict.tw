@@ -10,7 +10,6 @@ import { Sidebar } from './sidebar';
 import { AssetLoader } from './AssetLoader';
 import { InlineStyles } from './InlineStyles';
 import { UserPref } from './user-pref';
-import { M3StyleInjector } from './M3StyleInjector';
 import { useSwipeNavigation } from '../hooks/useSwipeNavigation';
 
 type Lang = 'a' | 't' | 'h' | 'c';
@@ -68,7 +67,6 @@ export function Layout({ layout, children, currentLang, r2Endpoint }: LayoutProp
 					</main>
 				</div>
 			)}
-			<M3StyleInjector />
 		</>
 	);
 }

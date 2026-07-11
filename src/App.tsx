@@ -6,6 +6,7 @@ import { RadicalView } from './pages/RadicalView'
 import { MiddlePoint } from './MiddlePoint'
 import { DictionaryA } from './pages/Dictionary-a'
 import { Layout } from './components/Layout'
+import { M3StyleInjector } from './components/M3StyleInjector'
 import { readLastLookup } from './utils/word-record-utils'
 import { applyHeadByPath } from './ssr/head'
 import './App.css'
@@ -161,6 +162,7 @@ function App() {
           <Route path="*" element={<MiddlePoint />} />
         </Route>
       </Routes>
+      <M3StyleInjector />
     </BrowserRouter>
   )
 }

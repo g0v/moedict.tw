@@ -36,6 +36,12 @@ body {
   font-family: var(--m3-font-ui);
   background-color: var(--md-sys-color-background, #fffbff);
   color: var(--md-sys-color-on-background, #1c1b1e);
+  /* Legacy theme (data/assets/styles.css) paints a light "subtle
+     stripes" texture PNG on body regardless of scheme — flat M3
+     surfaces read better anyway, and the light texture is illegible
+     against the M3 dark surface color wherever no card covers it
+     (e.g. below the card on /=* and other short pages). */
+  background-image: none;
 }
 
 /* Scrollbar theming (Chromium) */
@@ -369,6 +375,17 @@ button.btn,
 .about-page .content a,
 .about-page .content h2.cc0 a {
   color: var(--md-sys-color-primary, #904a41);
+}
+
+/* The legacy remote theme's `.about .content { background: white; ... }`
+   (data/assets/styles.css, matched via body.about set at route time) only
+   ever accounted for a light page — it hardcodes an opaque white that
+   background-color doesn't inherit through, so .about-page's own dark
+   surface color above never showed through this card. Repaint it. */
+body.about .content,
+.about-page .content {
+  background-color: var(--md-sys-color-surface-container-low, #fdf6f4);
+  color: var(--md-sys-color-on-surface, #1c1b1e);
 }
 
 .about-page .how-to-use {
