@@ -10,6 +10,7 @@
 
 import { handleDictionaryAPI } from './api/handleDictionaryAPI.ts';
 import { handleLookupAPI } from './api/handleLookupAPI.ts';
+import { STROKE_JSON_BASE_URL } from './utils/media-cdn.ts';
 
 const shouldUseOfflineApi =
   typeof window !== 'undefined' &&
@@ -85,7 +86,7 @@ async function handleOfflineApiRequest(url: string, init?: RequestInit): Promise
       if (local.ok) return local;
     } catch { /* fall through to CDN */ }
     try {
-      const cdnUrl = `https://829091573dd46381a321-9e8a43b8d3436eaf4353af683c892840.ssl.cf1.rackcdn.com/${cp}`;
+      const cdnUrl = `${STROKE_JSON_BASE_URL}/${cp}`;
       return await originalFetch(cdnUrl);
     } catch {
       return Response.json(
