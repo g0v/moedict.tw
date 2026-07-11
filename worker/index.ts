@@ -568,6 +568,13 @@ export async function dispatch(
         newHeaders.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
         newHeaders.set('Access-Control-Allow-Headers', 'Content-Type');
         newHeaders.delete('Access-Control-Allow-Credentials');
+        // A miss here is either the upstream legacy bucket genuinely
+        // lacking the file, or (for a freshly-deployed hashed bundle
+        // asset) a brief SITE_ASSETS propagation race — neither should be
+        // edge-cacheable, or a transient 404 can outlive its transience.
+        if (!response.ok) {
+          newHeaders.set('Cache-Control', 'no-store');
+        }
 
         return new Response(response.body, {
           status: response.status,

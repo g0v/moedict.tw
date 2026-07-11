@@ -481,6 +481,18 @@ describe('dispatch — /assets/* ASSET_BASE_URL proxy fallback', () => {
     // Happy-dom may strip Origin on Request; either way response is fixed `*`.
     expect(res.headers.get('access-control-allow-origin')).toBe('*');
   });
+
+  it('sets Cache-Control: no-store when the proxied upstream response is not ok', async () => {
+    // Guards a real incident: a transient upstream miss (propagation lag
+    // right after deploy, or a genuinely absent legacy file) must never
+    // be cached, or it can outlive its own transience at the edge.
+    const fetcher = { fetch: vi.fn(async () => new Response('', { status: 404 })) };
+    globalThis.fetch = vi.fn(async () => new Response('not found upstream', { status: 404 })) as typeof fetch;
+    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv['SITE_ASSETS'] });
+    const res = await dispatch(req('/assets/missing-bundle.css'), env);
+    expect(res.status).toBe(404);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+  });
 });
 
 describe('dispatch — 404 fallback', () => {
