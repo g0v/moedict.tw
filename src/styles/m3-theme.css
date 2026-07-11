@@ -81,6 +81,22 @@ m3e-app-bar.navbar-fixed-top {
   right: 0;
   z-index: 1030;
   --m3e-app-bar-container-color: var(--md-sys-color-surface-container, #f6ecea);
+  /* M3's own "small" app-bar defaults to 4rem (64px). The legacy layout
+     this app inherited (InlineStyles.tsx: body padding-top, .nav-bg
+     height, .query-box top; and its own @media (max-width: 767px)
+     override for #main-content margin-top) hardcodes 50px on desktop
+     and 65px on mobile. Pin the app-bar's real height to match those
+     figures exactly per breakpoint, instead of touching every one of
+     those legacy offsets — a mismatch here silently overlaps the app
+     bar's bottom edge with the sidebar/content by the difference
+     (measured: 15px at the default 64px height on desktop). */
+  --m3e-app-bar-small-container-height: 50px;
+}
+
+@media (max-width: 767px) {
+  m3e-app-bar.navbar-fixed-top {
+    --m3e-app-bar-small-container-height: 65px;
+  }
 }
 
 m3e-app-bar .navbar-header {
