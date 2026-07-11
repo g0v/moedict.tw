@@ -65,6 +65,29 @@ test.describe('dictionary pages per language', () => {
     expect(response?.status()).toBe(200);
     await waitForEntryHydration(page, '上訴');
   });
+  test('dark mode keeps dictionary headword and definition links readable', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.goto("/'%E9%A3%9F");
+    await waitForEntryHydration(page, '食');
+
+    const colors = await page.evaluate(() => {
+      const titleLink = document.querySelector('.result .entry h1.title a');
+      const definitionLink = document.querySelector('.result .entry .definition a');
+      if (!titleLink || !definitionLink) throw new Error('dictionary links not found');
+
+      return {
+        title: getComputedStyle(titleLink).color,
+        definition: getComputedStyle(definitionLink).color,
+        primary: getComputedStyle(document.documentElement).getPropertyValue('--md-sys-color-primary').trim(),
+        surface: getComputedStyle(document.querySelector('.result')!).backgroundColor,
+      };
+    });
+
+    expect(colors.title).not.toBe('rgb(0, 0, 0)');
+    expect(colors.definition).not.toBe('rgb(0, 0, 0)');
+    expect(colors.primary).toBeTruthy();
+    expect(colors.surface).not.toBe('rgb(0, 0, 0)');
+  });
 });
 
 test.describe('mobile Android Taigi ruby layout', () => {

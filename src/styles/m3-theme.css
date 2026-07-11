@@ -332,6 +332,25 @@ body.lang-c .iconic-color { color: var(--md-sys-color-primary, #904a41) !importa
 body.lang-h .iconic-color { color: var(--md-sys-color-tertiary, #984059) !important; }
 body.lang-t .iconic-color { color: var(--md-sys-color-secondary, #77574f) !important; }
 
+/* Legacy data/assets/styles.css forces every `.result a` to #000.
+   That is unreadable on M3 dark surfaces. Keep the headword tied to the
+   card's on-surface text and use the primary role for lookup links in
+   definitions/examples. Scope away from the stroke/star action buttons. */
+.result .entry h1.title a {
+  color: var(--md-sys-color-on-surface, #1c1b1e) !important;
+}
+.result .entry-item a {
+  color: var(--md-sys-color-primary, #904a41) !important;
+}
+.result .entry h1.title a:hover,
+.result .entry h1.title a:focus-visible {
+  color: var(--md-sys-color-on-surface, #1c1b1e) !important;
+}
+.result .entry-item a:hover,
+.result .entry-item a:focus-visible {
+  color: var(--md-sys-color-primary, #904a41) !important;
+}
+
 .result .entry .title .single-char-stroke-trigger:hover {
   border-color: var(--md-sys-color-primary, #904a41) !important;
   background-color: var(--md-sys-color-primary-container, #ffdad4) !important;
