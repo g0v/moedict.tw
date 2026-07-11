@@ -175,6 +175,35 @@ describe('resolveHeadByPath', () => {
       expect(resolveHeadByPath('/%E8%90%8C').title).toBe('萌 - 萌典');
     });
 
+    it('strips a trailing /<digits> definition-index permalink before resolving the word (live prod regression)', () => {
+      // Shipped live with a wrong title before this fix: resolveHeadByPath
+      // has its own independent toSegment()/parseDictionaryRoute-shaped
+      // logic (src/utils/dictionary-route.ts's idx-stripping fix does NOT
+      // cover this file at all), so /萌/3 rendered <title>萌/3 - 萌典</title>
+      // server-side even though the client-side title was already correct
+      // post-hydration (masking the bug from e2e title assertions).
+      const head = resolveHeadByPath('/萌/3');
+      expect(head.title).toBe('萌 - 萌典');
+      const tHead = resolveHeadByPath("/'食/1");
+      expect(tHead.title).toBe('食 - 台語萌典');
+    });
+
+    it('preserves the exact permalink path (including /<digits>) in og:url, unlike the title', () => {
+      // The permalink IS a distinct shareable resource (definition-index
+      // deep link) even though its title collapses to the base word.
+      const head = resolveHeadByPath('/萌/3');
+      expect(head.ogUrl).toBe('https://www.moedict.tw/%E8%90%8C/3');
+    });
+
+    it('ignores a trailing /<digits> on non-word routes rather than rejecting the route', () => {
+      expect(resolveHeadByPath('/about/2').title).toBe('關於本站 - 萌典');
+      expect(resolveHeadByPath('/@木/2').title).toBe('木 部 - 萌典');
+    });
+
+    it('a word that is itself all-digits is not misparsed as word+idx (no separating slash)', () => {
+      expect(resolveHeadByPath('/123').title).toBe('123 - 萌典');
+    });
+
     it('normalizes routes without a leading slash', () => {
       const head = resolveHeadByPath('about');
       expect(head.title).toBe('關於本站 - 萌典');

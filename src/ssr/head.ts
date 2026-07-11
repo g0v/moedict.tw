@@ -51,7 +51,13 @@ function safeDecode(input: string): string {
 function toSegment(pathname: string): string {
   const cleanPath = String(pathname || '').split('?')[0].replace(/\/+$/, '');
   const raw = cleanPath.replace(/^\/+/, '');
-  return safeDecode(raw);
+  const decoded = safeDecode(raw);
+  // Strip a trailing /<digits> definition-index permalink segment
+  // (/萌/3) — resolveHeadByPath only needs the word/route segment for
+  // title+og construction; toCanonicalUrl still uses the untouched
+  // pathname separately, so the permalink URL itself is preserved in
+  // og:url even though the idx plays no further role here.
+  return decoded.replace(/\/\d+$/, '');
 }
 
 function toPathname(pathname: string): string {
