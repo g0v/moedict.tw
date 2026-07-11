@@ -100,26 +100,6 @@ function loadScript(src: string, id?: string): Promise<void> {
 		document.head.appendChild(script);
 	});
 }
-
-/**
- * 預載入字體
- */
-function preloadFont(href: string, as: string = 'font', type: string = 'font/woff'): void {
-	if (!href) return;
-
-	// 檢查是否已經載入過
-	const existing = document.querySelector(`link[rel="preload"][href="${href}"]`);
-	if (existing) return;
-
-	const link = document.createElement('link');
-	link.rel = 'preload';
-	link.href = href;
-	link.as = as;
-	link.type = type;
-	link.crossOrigin = 'anonymous';
-	document.head.appendChild(link);
-}
-
 /**
  * 資源載入組件
  */
@@ -160,12 +140,6 @@ export function AssetLoader({ r2Endpoint, onCriticalStylesReady }: AssetLoaderPr
 				onCriticalStylesReady?.();
 				setCriticalStylesNotified(true);
 			}
-
-			// 預載入字體
-			preloadFont(`${basePath}/fonts/MOEDICT.woff`, 'font', 'font/woff');
-			preloadFont(`${basePath}/fonts/han.woff`, 'font', 'font/woff');
-			preloadFont(`${basePath}/fonts/EBAS-Subset.woff`, 'font', 'font/woff');
-			preloadFont(`${basePath}/fonts/FiraSansOT-Regular.woff`, 'font', 'font/woff');
 
 			// 載入必要的 JS 檔案（順序載入）
 			try {
