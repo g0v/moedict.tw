@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "react"],
+  "env": { "builtin": true, "browser": true },
+  "ignorePatterns": ["dist", "data", "coverage", "worker-configuration.d.ts", ".worktrees/**"],
+  "rules": {
+    "no-shadow": "error",
+    "no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "warn",
+    "react/only-export-components": ["error", { "allowConstantExport": true }]
+  }
+}
