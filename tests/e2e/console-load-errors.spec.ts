@@ -83,14 +83,14 @@ async function routeDictionaryData(page: Page): Promise<void> {
       const body = readFileSync(filePath);
       return route.fulfill({
         status: 200,
-        contentType: 'text/plain; charset=utf-8',
+        contentType: 'application/json; charset=utf-8',
         body: Buffer.from(body),
       });
     } catch {
       return route.fulfill({ status: 404, contentType: 'text/plain', body: '' });
     }
   });
-  // Also route search-index and stroke-json that the offline API fetches
+  // Also route search-index that the offline API fetches
   await page.route('**/search-index/**', (route: Route) => {
     const url = new URL(route.request().url());
     const key = url.pathname.replace(/^\/search-index\//, '');
