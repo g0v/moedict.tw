@@ -278,3 +278,57 @@ test.describe('console load errors — EduKai 404 and BiauKai decode', () => {
     }
   });
 });
+
+test.describe('bare home URL — no unused font preload hints', () => {
+  test('normal web load at /: zero link[rel=preload][as=font] for optional legacy fonts', async ({ page }) => {
+    const consoleErrors: string[] = [];
+    const consoleWarnings: string[] = [];
+
+    collectConsoleErrors(page, consoleErrors);
+    // Capture warning-level messages matching the preload-not-used pattern
+    // if they appear; this is secondary evidence, not the primary assertion
+    // (the primary contract is zero preload hint elements in the DOM).
+    page.on('console', (msg) => {
+      if (msg.type() === 'warning' && /preloaded using link preload but not used/i.test(msg.text())) {
+        consoleWarnings.push(msg.text());
+      }
+    });
+
+    await blockCssSubresources(page);
+    await routeStylesCss(page);
+
+    // Ensure NO window.Capacitor (normal web)
+    await page.addInitScript(() => {
+      // @ts-expect-error -- deliberately delete for normal-web simulation
+      delete window.Capacitor;
+    });
+
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    await page.evaluate(() => document.fonts.ready);
+
+    // Primary contract: AssetLoader must NOT insert any <link rel="preload"
+    // as="font"> elements for optional legacy fonts. The legacy @font-face
+    // rules in styles.css already lazy-load on actual glyph/family demand;
+    // unconditional preload hints waste downloads and trigger intermittent
+    // Chromium warnings ("preloaded using link preload but not used").
+    const preloadLinks = await page.evaluate(() => {
+      return Array.from(
+        document.querySelectorAll('link[rel="preload"][as="font"]'),
+      ).map((el) => ({
+        href: (el as HTMLLinkElement).href,
+        type: (el as HTMLLinkElement).type,
+      }));
+    });
+    expect(preloadLinks, 'bare home URL must have zero font preload hint elements').toEqual([]);
+
+    // Secondary: if any preload-not-used warnings appeared, log them for
+    // diagnostics — but the primary assertion above is the DOM contract.
+    if (consoleWarnings.length > 0) {
+      console.log(`[preload-warnings] ${consoleWarnings.length} warnings:\n${consoleWarnings.map((w) => '  ' + w).join('\n')}`);
+    }
+
+    // No console errors from the bare home load.
+    expect(consoleErrors, 'bare home URL must have zero console.error').toEqual([]);
+  });
+});
