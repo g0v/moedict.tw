@@ -359,6 +359,20 @@ test.describe('special routes', () => {
     await expect(page).toHaveTitle(/關於本站/);
     await page.waitForLoadState('networkidle');
     await expect(page.locator('body')).toContainText(/萌典/, { timeout: 20_000 });
+
+    // About.css must be loaded — .about-page has a distinctive computed style
+    // (position: relative, min-height: 100vh) that proves the stylesheet is
+    // bundled and applied. Without import './About.css' these are default
+    // (position: static, min-height: auto) and the page layout breaks.
+    const aboutStyle = await page.evaluate(() => {
+      const el = document.querySelector('.about-page');
+      if (!el) return null;
+      const cs = getComputedStyle(el);
+      return { position: cs.position, minHeight: cs.minHeight };
+    });
+    expect(aboutStyle, '.about-page element must exist on /about').not.toBeNull();
+    expect(aboutStyle!.position, '.about-page must have position: relative from About.css').toBe('relative');
+    expect(aboutStyle!.minHeight, '.about-page must have min-height: 100vh from About.css').toBe('100vh');
   });
 
   test('/privacy shows privacy content', async ({ page }) => {
