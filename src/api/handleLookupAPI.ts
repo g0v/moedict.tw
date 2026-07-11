@@ -18,7 +18,12 @@ const LOOKUP_LANG_SET = new Set<LookupLang>(['a', 't', 'h', 'c']);
 const LOOKUP_CORS_ALLOWLIST = new Set(['https://moedict.tw', 'https://old.moedict.tw', 'http://old.moedict.tw', 'https://www.moedict.org', 'http://www.moedict.org', 'https://moedict.org', 'http://moedict.org']);
 const PINYIN_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=1800';
 const TRS_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=1800';
-const LOOKUP_MAP_CACHE = new Map<string, Promise<Record<string, string[]>>>();
+const LOOKUP_MAP_TTL_MS = 300_000;
+interface LookupMapCacheEntry {
+	expiresAt: number;
+	pending: Promise<Record<string, string[]>>;
+}
+const LOOKUP_MAP_CACHE = new WeakMap<LookupEnv, Map<string, LookupMapCacheEntry>>();
 
 function buildLookupCORSHeaders(request: Request): Record<string, string> {
 	const origin = request.headers.get('Origin');
@@ -95,18 +100,18 @@ export function parseTrsLookupPath(pathname: string): { term: string } | null {
 	return null;
 }
 
-async function readLookupTitles(env: LookupEnv, lang: LookupLang, type: string, term: string): Promise<string[]> {
+async function readPerTermTitles(
+	env: LookupEnv,
+	lang: LookupLang,
+	type: string,
+	term: string
+): Promise<string[]> {
 	const key = `lookup/pinyin/${lang}/${type}/${encodeURIComponent(term)}.json`;
 	const obj = await env.DICTIONARY.get(key);
-	if (!obj) {
-		if (lang !== 'h') return [];
-		const lookupMap = await readLookupTitleMap(env, lang, type);
-		return lookupMap[term] ?? [];
-	}
+	if (!obj) return [];
 
 	try {
-		const raw = await obj.text();
-		const parsed = JSON.parse(raw) as unknown;
+		const parsed = JSON.parse(await obj.text()) as unknown;
 		if (!Array.isArray(parsed)) return [];
 		return parsed.filter((item): item is string => typeof item === 'string' && item.length > 0);
 	} catch {
@@ -114,12 +119,31 @@ async function readLookupTitles(env: LookupEnv, lang: LookupLang, type: string, 
 	}
 }
 
+function getOwnLookupTitles(lookupMap: Record<string, string[]>, term: string): string[] {
+	return Object.prototype.hasOwnProperty.call(lookupMap, term) ? lookupMap[term] : [];
+}
+
+async function readLookupTitles(env: LookupEnv, lang: LookupLang, type: string, term: string): Promise<string[]> {
+	const perTerm = await readPerTermTitles(env, lang, type, term);
+	if (lang === 't') {
+		const wholeWord = getOwnLookupTitles(await readLookupTitleMap(env, lang, type), term);
+		return Array.from(new Set([...wholeWord, ...perTerm]));
+	}
+	if (perTerm.length > 0 || lang !== 'h') return perTerm;
+	const lookupMap = await readLookupTitleMap(env, lang, type);
+	return getOwnLookupTitles(lookupMap, term);
+}
+
 async function readLookupTitleMap(env: LookupEnv, lang: LookupLang, type: string): Promise<Record<string, string[]>> {
 	const cacheKey = `${lang}:${type}`;
-	const cached = LOOKUP_MAP_CACHE.get(cacheKey);
-	if (cached) {
-		return cached;
+	let envCache = LOOKUP_MAP_CACHE.get(env);
+	if (!envCache) {
+		envCache = new Map();
+		LOOKUP_MAP_CACHE.set(env, envCache);
 	}
+	const cached = envCache.get(cacheKey);
+	if (cached && cached.expiresAt > Date.now()) return cached.pending;
+	if (cached) envCache.delete(cacheKey);
 
 	const pending = (async () => {
 		const key = `lookup/pinyin/${lang}/${type}.json`;
@@ -144,8 +168,13 @@ async function readLookupTitleMap(env: LookupEnv, lang: LookupLang, type: string
 		}
 	})();
 
-	LOOKUP_MAP_CACHE.set(cacheKey, pending);
-	return pending;
+	envCache.set(cacheKey, { expiresAt: Date.now() + LOOKUP_MAP_TTL_MS, pending });
+	try {
+		return await pending;
+	} catch (error) {
+		envCache.delete(cacheKey);
+		throw error;
+	}
 }
 
 export async function handleLookupAPI(request: Request, url: URL, env: LookupEnv): Promise<Response | null> {

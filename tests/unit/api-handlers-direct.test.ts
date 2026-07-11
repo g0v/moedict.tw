@@ -10,7 +10,7 @@
  * and get proper attribution without duplicating the Miniflare wiring.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { handleDictionaryAPI, lookupDictionaryEntry } from '../../src/api/handleDictionaryAPI';
 import { handleLookupAPI } from '../../src/api/handleLookupAPI';
 import { handleListAPI, isListPath, parseListPath } from '../../src/api/handleListAPI';
@@ -268,6 +268,30 @@ describe('handleLookupAPI', () => {
     expect(await res!.json()).toEqual(['食', '蝕']);
   });
 
+
+  it('unions Taiwanese whole-word and syllable matches without duplicates', async () => {
+    const env = {
+      DICTIONARY: makeR2({
+        'lookup/pinyin/t/TL/singlip.json': JSON.stringify(['新立', '成立']),
+        'lookup/pinyin/t/TL.json': JSON.stringify({ singlip: ['成立', '成笠'] }),
+      }),
+    };
+    const { request, url } = makeRequest('/api/lookup/pinyin/t/TL/singlip.json');
+    const res = await handleLookupAPI(request, url, env);
+    expect(await res!.json()).toEqual(['成立', '成笠', '新立']);
+  });
+
+  it('does not treat inherited object keys as Taiwanese lookup matches', async () => {
+    const env = {
+      DICTIONARY: makeR2({
+        'lookup/pinyin/t/TL.json': JSON.stringify({ singlip: ['成立'] }),
+      }),
+    };
+    const { request, url } = makeRequest('/api/lookup/pinyin/t/TL/constructor.json');
+    const res = await handleLookupAPI(request, url, env);
+    expect(res!.status).toBe(200);
+    expect(await res!.json()).toEqual([]);
+  });
   it('reflects allowlisted origins on lookup responses', async () => {
     const env = {
       DICTIONARY: makeR2({
@@ -429,6 +453,48 @@ describe('handleLookupAPI', () => {
     expect(await secondRes!.json()).toEqual(['會']);
   });
 
+
+  it('refreshes title maps after the lookup cache TTL', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-11T00:00:00Z'));
+    let title = '舊';
+    const env = {
+      DICTIONARY: {
+        async get(key: string) {
+          if (key.endsWith('/voi.json')) return null;
+          return { text: async () => JSON.stringify({ voi: [title] }) };
+        },
+      },
+    };
+    const lookup = () => {
+      const { request, url } = makeRequest('/api/lookup/pinyin/h/TQ/voi.json');
+      return handleLookupAPI(request, url, env);
+    };
+    expect(await (await lookup())!.json()).toEqual(['舊']);
+    title = '新';
+    vi.advanceTimersByTime(300_001);
+    expect(await (await lookup())!.json()).toEqual(['新']);
+    vi.useRealTimers();
+  });
+
+  it('evicts a rejected title-map load so the next request can retry', async () => {
+    let attempts = 0;
+    const env = {
+      DICTIONARY: {
+        async get(key: string) {
+          if (key.endsWith('/voi.json')) return null;
+          attempts += 1;
+          if (attempts === 1) throw new Error('temporary R2 failure');
+          return { text: async () => JSON.stringify({ voi: ['會'] }) };
+        },
+      },
+    };
+    const first = makeRequest('/api/lookup/pinyin/h/TR/voi.json');
+    await expect(handleLookupAPI(first.request, first.url, env)).rejects.toThrow('temporary R2 failure');
+    const second = makeRequest('/api/lookup/pinyin/h/TR/voi.json');
+    const response = await handleLookupAPI(second.request, second.url, env);
+    expect(await response!.json()).toEqual(['會']);
+  });
 });
 
 describe('handleListAPI', () => {
