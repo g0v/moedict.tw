@@ -11,7 +11,7 @@
  * selector that is not allowlisted, telling the developer to either rename
  * the id or consciously extend the allowlist.
  *
- * Run: `bun run check:css-ids` / `node scripts/check-legacy-css-ids.mjs`
+ * Run: `vp run check:css-ids` / `vp node scripts/check-legacy-css-ids.mjs`
  * CI:  static job.
  */
 

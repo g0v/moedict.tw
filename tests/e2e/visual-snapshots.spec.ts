@@ -2,13 +2,13 @@
  * Visual regression suite.
  *
  * Takes pixel-level screenshots of canonical pages + states. Baselines are
- * generated once (usually in CI or via `bun run test:e2e:update`) and diffed
+ * generated once (usually in CI or via `vp run test:e2e:update`) and diffed
  * on subsequent runs. Set `expect.toHaveScreenshot.maxDiffPixels` in
  * playwright.config.ts to tune sensitivity.
  *
  * These tests are in the default run; when no baseline exists Playwright
  * creates one and fails the test (by design). Regenerate with:
- *   bun run test:e2e:update
+ *   vp run test:e2e:update
  */
 
 import { expect, test } from './_fixtures';

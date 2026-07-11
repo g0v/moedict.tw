@@ -453,7 +453,7 @@ async function main() {
 	await buildHanYuLookupIndex('c', CROSS_STRAIT_SOURCE_DIR);
 }
 
-// Import-safe: run only when invoked directly (bun run build-pinyin-lookup),
+// Import-safe: run only when invoked directly (vp run build-pinyin-lookup),
 // never when unit tests import the exported helpers.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
 	main().catch((error) => {

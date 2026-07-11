@@ -9,9 +9,6 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  BUN_VERSION: '1.3.11'
-
 jobs:
   static:
     name: Lint / typecheck / build
@@ -19,23 +16,24 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: voidzero-dev/setup-vp@v1
         with:
-          bun-version: ${{ env.BUN_VERSION }}
-      - run: bun install --frozen-lockfile
-      - run: bun run lint
-      - run: bun run typecheck
-      - run: bun scripts/check-v8-ignore-count.mjs
-      - run: bun run check:data
-      - run: bun run check:trs
-      - run: bun run check:css-ids
+          node-version: '24'
+          cache: true
+      - run: vp install --frozen-lockfile
+      - run: vp check
+      - run: vp run typecheck
+      - run: vp node scripts/check-v8-ignore-count.mjs
+      - run: vp run check:data
+      - run: vp run check:trs
+      - run: vp run check:css-ids
       # Legacy vendor bundle carries ~16 pre-existing content-level defects
       # (documented in data/assets/styles.css's own header comment and the
       # PR that reformatted it) that are deliberately preserved, not fixed —
       # continue-on-error keeps this visible without blocking unrelated PRs.
-      - run: bun run lint:css
+      - run: vp run lint:css
         continue-on-error: true
-      - run: bun run build
+      - run: vp run build
 
   unit:
     name: Unit tests (vitest)
@@ -43,13 +41,13 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: voidzero-dev/setup-vp@v1
         with:
-          bun-version: ${{ env.BUN_VERSION }}
-      - run: bun install --frozen-lockfile
-      # --coverage applies thresholds from vitest.unit.config.ts — fails the
-      # job if the ratchet is tripped.
-      - run: bun run test:unit -- --coverage --reporter=default --reporter=junit --outputFile=unit-report.xml
+          node-version: '24'
+          cache: true
+      - run: vp install --frozen-lockfile
+      # --coverage applies the 100% ratchet from vite.config.ts.
+      - run: vp run test:unit --coverage --reporter=default --reporter=junit --outputFile=unit-report.xml
       - name: Upload unit report
         if: always()
         uses: actions/upload-artifact@v4
@@ -64,11 +62,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: voidzero-dev/setup-vp@v1
         with:
-          bun-version: ${{ env.BUN_VERSION }}
-      - run: bun install --frozen-lockfile
-      - run: bun run test:integration
+          node-version: '24'
+          cache: true
+      - run: vp install --frozen-lockfile
+      - run: vp run test:integration
 
   e2e:
     name: E2E (playwright chromium)
@@ -78,19 +77,14 @@ jobs:
       E2E_SKIP_BUILD: '1'
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: voidzero-dev/setup-vp@v1
         with:
-          bun-version: ${{ env.BUN_VERSION }}
-      # Node stays installed alongside Bun so Playwright's test runner
-      # (known-flaky under Bun per microsoft/playwright#27139) has a clean
-      # subprocess host for its browser workers.
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: bun install --frozen-lockfile
+          node-version: '24'
+          cache: true
+      - run: vp install --frozen-lockfile
       - name: Get Playwright version
         id: pw
-        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(vp node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         id: pw-cache
@@ -99,12 +93,12 @@ jobs:
           key: pw-${{ runner.os }}-${{ steps.pw.outputs.version }}
       - name: Install Playwright browsers
         if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: bunx playwright install --with-deps chromium
+        run: vp exec playwright install --with-deps chromium
       - name: Install Playwright OS deps (for cached browsers)
         if: steps.pw-cache.outputs.cache-hit == 'true'
-        run: bunx playwright install-deps chromium
-      - run: bun run build
-      - run: bunx playwright test --project=chromium
+        run: vp exec playwright install-deps chromium
+      - run: vp run build
+      - run: vp exec playwright test --project=chromium
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
@@ -129,13 +123,11 @@ jobs:
       E2E_SKIP_BUILD: '1'
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: voidzero-dev/setup-vp@v1
         with:
-          bun-version: ${{ env.BUN_VERSION }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: bun install --frozen-lockfile
+          node-version: '24'
+          cache: true
+      - run: vp install --frozen-lockfile
       - name: Check if linux baselines exist
         id: baselines
         run: |
@@ -146,10 +138,10 @@ jobs:
           fi
       - name: Install Playwright
         if: steps.baselines.outputs.exist == 'true'
-        run: bunx playwright install --with-deps chromium
-      - run: bun run build
+        run: vp exec playwright install --with-deps chromium
+      - run: vp run build
         if: steps.baselines.outputs.exist == 'true'
-      - run: bunx playwright test --project=visual
+      - run: vp exec playwright test --project=visual
         if: steps.baselines.outputs.exist == 'true'
       - name: Upload visual diff report
         if: always() && steps.baselines.outputs.exist == 'true'

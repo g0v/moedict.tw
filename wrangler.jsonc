@@ -47,7 +47,7 @@
 		// 獨立 staging 環境：獨立 Worker 名稱（只有 *.workers.dev，未綁定任何自訂網域/
 		// 正式站路由，與 production 完全隔離），指向既有的 R2 -preview 桶（唯讀，與
 		// production 桶內容可能存在落差但資料真實可用，見 commands/upload_dictionary.sh
-		// 既有的 preview/prod 慣例）。用 `bun run deploy:staging` 部署；.workers.dev 網址
+		// 既有的 preview/prod 慣例）。用 `vp run deploy:staging` 部署；.workers.dev 網址
 		// 於部署輸出列印，或見 `wrangler deployments list --env staging`。
 		"staging": {
 			"name": "cf-moedict-webkit-neo-staging",

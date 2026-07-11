@@ -6,7 +6,7 @@
  *   - Seeded R2 buckets (DICTIONARY, ASSETS, FONTS) from tests/helpers/fixtures.ts
  *   - Static assets served from dist/client/ (SPA fallback for non-matched paths)
  *
- * Run: `bunx tsx tests/e2e/serve.ts` (invoked automatically by playwright).
+ * Run: `vp exec tsx tests/e2e/serve.ts` (invoked automatically by Playwright).
  */
 import { startTestServer } from '../helpers/miniflare-server';
 

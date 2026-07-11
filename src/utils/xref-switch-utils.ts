@@ -57,12 +57,9 @@ async function loadXrefForLang(lang: DictionaryLang): Promise<void> {
       const data = await res.json() as XrefData;
       XREF_CACHE[lang] = data;
       XREF_LOADED.add(lang);
-      console.log('[xref-switch] loadXrefForLang ok', { lang, keys: Object.keys(data) });
-    } else {
-      console.log('[xref-switch] loadXrefForLang fail', { lang, status: res.status });
     }
-  } catch (e) {
-    console.log('[xref-switch] loadXrefForLang error', { lang, error: e });
+  } catch {
+    // Background preload failures are non-fatal; lookup falls back to entry data.
   } finally {
     XREF_LOADING.delete(lang);
   }
@@ -80,7 +77,6 @@ export function setCurrentXrefs(
     ...xref,
     words: (xref.words ?? []).map((w) => normalizeWordToken(w)).filter(Boolean),
   }));
-  console.log('[xref-switch] setCurrentXrefs', { word, lang, xrefsCount: _xrefs.length, xrefs: _xrefs });
   // 背景預載入目前語言的 xref，讓使用者點選語言切換時已有快取
   void loadXrefForLang(lang);
 }
@@ -110,31 +106,19 @@ function lookupXref(
       if (raw && normalizedFromWord) {
         const words = raw.split(',').map((w) => w.trim()).filter(Boolean);
         if (words.length > 0) {
-          const normalizedTarget = normalizeWordToken(words[0]);
-          console.log('[xref-switch] lookupXref hit (xref.json)', { fromLang, toLang, fromWord, result: normalizedTarget });
-          return normalizedTarget;
+          return normalizeWordToken(words[0]);
         }
       }
-      console.log('[xref-switch] lookupXref miss (xref.json)', { fromLang, toLang, fromWord, hasToLangMap: true, raw: raw || '(no key)' });
-    } else {
-      console.log('[xref-switch] lookupXref miss (xref.json)', { fromLang, toLang, fromWord, hasToLangMap: false, xrefKeys: Object.keys(xrefData) });
     }
-  } else {
-    console.log('[xref-switch] lookupXref no cache', { fromLang, toLang, fromWord, cacheLoaded: XREF_LOADED.has(fromLang) });
   }
 
   // 2. Fallback：從 entry.xrefs（API 回傳）查
   if (_word === fromWord && _lang === fromLang) {
     for (const xref of _xrefs) {
       if (xref.lang === toLang && xref.words.length > 0) {
-        const normalizedTarget = normalizeWordToken(xref.words[0]);
-        console.log('[xref-switch] lookupXref hit (entry.xrefs)', { fromLang, toLang, fromWord, result: normalizedTarget });
-        return normalizedTarget;
+        return normalizeWordToken(xref.words[0]);
       }
     }
-    console.log('[xref-switch] lookupXref miss (entry.xrefs)', { fromWord: _word, fromLang: _lang, fromWordMatch: _word === fromWord, xrefs: _xrefs });
-  } else {
-    console.log('[xref-switch] lookupXref skip entry.xrefs', { fromWord, fromLang, _word, _lang, match: _word === fromWord && _lang === fromLang });
   }
 
   return '';
@@ -159,11 +143,9 @@ export function computeLangSwitchPath(
   fromWord: string
 ): string {
   fromWord = decodeWord(fromWord);
-  console.log('[xref-switch] computeLangSwitchPath', { fromLang, toLang, fromWord });
 
   if (fromLang === toLang) {
     const path = `/${LANG_PREFIX[toLang]}${fromWord}`;
-    console.log('[xref-switch] same lang', { path });
     return path;
   }
 
@@ -173,7 +155,6 @@ export function computeLangSwitchPath(
     (fromLang === 'c' && toLang === 'a')
   ) {
     const path = `/${LANG_PREFIX[toLang]}${fromWord}`;
-    console.log('[xref-switch] a↔c', { path });
     return path;
   }
 
@@ -185,7 +166,6 @@ export function computeLangSwitchPath(
     targetWord = lookupXref(fromLang, 'a', fromWord);
     if (targetWord) {
       const path = `/${LANG_PREFIX.c}${targetWord}`;
-      console.log('[xref-switch] t/h→c via 華語', { path, targetWord });
       return path;
     }
   }
@@ -194,17 +174,14 @@ export function computeLangSwitchPath(
   if (!targetWord) {
     const lru = readLRUWords(toLang);
     targetWord = lru[0] ?? '';
-    console.log('[xref-switch] fallback LRU', { toLang, lruLen: lru.length, targetWord });
   }
 
   // Fallback：預設詞
   if (!targetWord) {
     targetWord = DEFAULTS[toLang];
-    console.log('[xref-switch] fallback DEFAULTS', { toLang, targetWord });
   }
 
   const path = `/${LANG_PREFIX[toLang]}${targetWord}`;
-  console.log('[xref-switch] result', { path, targetWord });
   return path;
 }
 
@@ -217,7 +194,6 @@ export async function computeLangSwitchPathAsync(
   fromWord: string
 ): Promise<string> {
   if (!XREF_LOADED.has(fromLang)) {
-    console.log('[xref-switch] computeLangSwitchPathAsync waiting for xref', { fromLang });
     await loadXrefForLang(fromLang);
   }
   return computeLangSwitchPath(fromLang, toLang, fromWord);

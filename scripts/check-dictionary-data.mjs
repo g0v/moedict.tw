@@ -15,7 +15,7 @@
  *     100% NFD (2026-07); any non-NFD segment is a regression, typically
  *     an NFC string merged from upstream CSV without normalize('NFD').
  *
- * Run: `bun run check:data` / `node scripts/check-dictionary-data.mjs`
+ * Run: `vp run check:data` / `vp node scripts/check-dictionary-data.mjs`
  * CI:  static job.
  */
 

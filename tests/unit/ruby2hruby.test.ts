@@ -5,28 +5,28 @@
  * leftover <rt>s get hidden via inline style.
  */
 
-import { describe, expect, it } from 'vitest';
-import { rightAngle, ruby2hruby } from '../../src/utils/ruby2hruby';
+import { describe, expect, it } from "vite-plus/test";
+import { rightAngle, ruby2hruby } from "../../src/utils/ruby2hruby";
 
 function stripWhitespace(html: string): string {
-  return html.replace(/\s+/g, '');
+  return html.replace(/\s+/g, "");
 }
 
-describe('ruby2hruby — zhuyin rtc', () => {
-  it('converts a single rb + zhuyin rt into <ru zhuyin><zhuyin><yin><diao>', () => {
+describe("ruby2hruby — zhuyin rtc", () => {
+  it("converts a single rb + zhuyin rt into <ru zhuyin><zhuyin><yin><diao>", () => {
     // ㄇㄥ = initial + final → form="SY"; trailing ˊ → diao="ˊ"
     const out = ruby2hruby('<rb>萌</rb><rtc class="zhuyin"><rt>ㄇㄥˊ</rt></rtc>');
-    expect(out).toContain('<ru');
+    expect(out).toContain("<ru");
     expect(out).toContain('zhuyin=""');
     expect(out).toContain('diao="ˊ"');
     expect(out).toContain('length="2"');
     expect(out).toContain('form="SY"');
-    expect(out).toContain('<rb>萌</rb>');
-    expect(out).toContain('<zhuyin>');
-    expect(out).toContain('<yin>ㄇㄥ</yin>');
-    expect(out).toContain('<diao>ˊ</diao>');
+    expect(out).toContain("<rb>萌</rb>");
+    expect(out).toContain("<zhuyin>");
+    expect(out).toContain("<yin>ㄇㄥ</yin>");
+    expect(out).toContain("<diao>ˊ</diao>");
     // The original <rtc class="zhuyin"> is removed after conversion.
-    expect(out).not.toContain('<rtc');
+    expect(out).not.toContain("<rtc");
   });
 
   it('emits form="S" for initial-only syllables like ㄗˋ', () => {
@@ -35,23 +35,23 @@ describe('ruby2hruby — zhuyin rtc', () => {
     expect(out).toContain('diao="ˋ"');
   });
 
-  it('handles multi-character words by producing one <ru> per rb/rt pair', () => {
+  it("handles multi-character words by producing one <ru> per rb/rt pair", () => {
     const out = ruby2hruby(
       '<rb>萌</rb><rb>典</rb><rtc class="zhuyin"><rt>ㄇㄥˊ</rt><rt>ㄉㄧㄢˇ</rt></rtc>',
     );
     const ruCount = (out.match(/<ru\s/g) ?? []).length;
     expect(ruCount).toBe(2);
-    expect(out).toContain('<yin>ㄇㄥ</yin>');
-    expect(out).toContain('<diao>ˊ</diao>');
-    expect(out).toContain('<yin>ㄉㄧㄢ</yin>');
-    expect(out).toContain('<diao>ˇ</diao>');
+    expect(out).toContain("<yin>ㄇㄥ</yin>");
+    expect(out).toContain("<diao>ˊ</diao>");
+    expect(out).toContain("<yin>ㄉㄧㄢ</yin>");
+    expect(out).toContain("<diao>ˇ</diao>");
   });
 
-  it('normalises light-tone ˙ → ˙ (no tone mark produces empty diao)', () => {
+  it("normalises light-tone ˙ → ˙ (no tone mark produces empty diao)", () => {
     const out = ruby2hruby('<rb>的</rb><rtc class="zhuyin"><rt>ㄉㄜ</rt></rtc>');
     // No tone mark in ㄉㄜ → diao attr is empty.
     expect(out).toContain('diao=""');
-    expect(out).toContain('<yin>ㄉㄜ</yin>');
+    expect(out).toContain("<yin>ㄉㄜ</yin>");
   });
 
   it('emits form="JY" for medial+final syllables like ㄧㄢ (yan/ian)', () => {
@@ -86,10 +86,10 @@ describe('ruby2hruby — zhuyin rtc', () => {
     expect(out).toContain('length="0"');
     expect(out).toContain('form=""');
     expect(out).toContain('diao="˙"');
-    expect(out).toContain('<yin></yin>');
+    expect(out).toContain("<yin></yin>");
   });
 
-  it('normalises U+02C5 to U+02C7 and U+030D to U+0307 in the diao attribute', () => {
+  it("normalises U+02C5 to U+02C7 and U+030D to U+0307 in the diao attribute", () => {
     // UNICODE.zhuyin.tone includes \u02C5 (caron below). After diao extraction the code
     // replaces \u02C5 → \u02C7, and \u030D → \u0358 → \u0307. Feed a rt with \u02C5.
     const out = ruby2hruby('<rb>x</rb><rtc class="zhuyin"><rt>ㄇ\u02C5</rt></rtc>');
@@ -98,7 +98,7 @@ describe('ruby2hruby — zhuyin rtc', () => {
     expect(out).not.toContain('diao="\u02C5"');
   });
 
-  it('normalises U+030D combining mark on a ruyun final to U+0307 via the U+030D->U+0358->U+0307 chain', () => {
+  it("normalises U+030D combining mark on a ruyun final to U+0307 via the U+030D->U+0358->U+0307 chain", () => {
     // Pin every step of the chain individually. Drop any of them and U+030D
     // either stays raw, is deleted, or stops at U+0358 in the diao attribute.
     const out = ruby2hruby('<rb>x</rb><rtc class="zhuyin"><rt>\u3107\u31B4\u030D</rt></rtc>');
@@ -108,18 +108,18 @@ describe('ruby2hruby — zhuyin rtc', () => {
     expect(out).not.toContain('diao="\u31B4"');
   });
 
-  it('captures a bare ruyun final (no combining diacritic) as the diao attribute', () => {
+  it("captures a bare ruyun final (no combining diacritic) as the diao attribute", () => {
     // Pins the `?` quantifier on the ruyun pattern: dropping it would require
     // the diacritic and a bare \u31B4 would slip through into yin instead of diao.
     const out = ruby2hruby('<rb>x</rb><rtc class="zhuyin"><rt>\u3107\u31B4</rt></rtc>');
     expect(out).toContain('diao="\u31B4"');
-    expect(out).toContain('<yin>\u3107</yin>');
-    expect(out).not.toContain('<yin>\u3107\u31B4</yin>');
+    expect(out).toContain("<yin>\u3107</yin>");
+    expect(out).not.toContain("<yin>\u3107\u31B4</yin>");
   });
 });
 
-describe('ruby2hruby — ordered rtc (non-zhuyin)', () => {
-  it('wraps the zhuyin-produced <ru> with order/span/annotation from a trailing romanization rtc', () => {
+describe("ruby2hruby — ordered rtc (non-zhuyin)", () => {
+  it("wraps the zhuyin-produced <ru> with order/span/annotation from a trailing romanization rtc", () => {
     // The ordered-rtc branch only kicks in after zhuyin processing has
     // populated `rus`. So the real-world input is zhuyin + romanization,
     // matching decorate-ruby's output in the dictionary pipeline.
@@ -135,40 +135,40 @@ describe('ruby2hruby — ordered rtc (non-zhuyin)', () => {
   });
 });
 
-describe('ruby2hruby — robustness', () => {
-  it('returns the input unchanged when DOMParser is missing', () => {
+describe("ruby2hruby — robustness", () => {
+  it("returns the input unchanged when DOMParser is missing", () => {
     const original = globalThis.DOMParser;
     // @ts-expect-error — deliberately simulate a non-DOM environment.
     delete globalThis.DOMParser;
     try {
-      const html = '<rb>字</rb>';
+      const html = "<rb>字</rb>";
       expect(ruby2hruby(html)).toBe(html);
     } finally {
       globalThis.DOMParser = original;
     }
   });
 
-  it('handles empty input without throwing', () => {
-    expect(() => ruby2hruby('')).not.toThrow();
+  it("handles empty input without throwing", () => {
+    expect(() => ruby2hruby("")).not.toThrow();
   });
 
-  it('returns the input unchanged when parsing produces no <ruby> root', () => {
+  it("returns the input unchanged when parsing produces no <ruby> root", () => {
     // Happy-dom always wraps our string inside the <ruby> we prepend, so this
     // branch is defensive — we still want a non-throwing no-op result.
-    expect(() => ruby2hruby('plain text with no markup')).not.toThrow();
+    expect(() => ruby2hruby("plain text with no markup")).not.toThrow();
   });
 });
 
-describe('rightAngle', () => {
+describe("rightAngle", () => {
   it('wraps ruby2hruby output in <hruby class="rightangle" rightangle="rightangle">', () => {
     const out = rightAngle('<rb>字</rb><rtc class="zhuyin"><rt>ㄗˋ</rt></rtc>');
     expect(out.startsWith('<hruby class="rightangle" rightangle="rightangle">')).toBe(true);
-    expect(out.endsWith('</hruby>')).toBe(true);
+    expect(out.endsWith("</hruby>")).toBe(true);
     // Inner transformation still happens.
-    expect(stripWhitespace(out)).toContain('<yin>ㄗ</yin>');
+    expect(stripWhitespace(out)).toContain("<yin>ㄗ</yin>");
   });
 
-  it('rightAngle on multi-rb input produces one <ru> per rb with correct length/form/diao', () => {
+  it("rightAngle on multi-rb input produces one <ru> per rb with correct length/form/diao", () => {
     // ㄇㄥˊ → form="SY", length=2, diao=ˊ
     // ㄉㄧㄢˇ → form="SJY", length=3, diao=ˇ
     const out = rightAngle(
@@ -183,16 +183,16 @@ describe('rightAngle', () => {
   });
 });
 
-describe('ruby2hruby — multi-rtc (order > 0) branch', () => {
+describe("ruby2hruby — multi-rtc (order > 0) branch", () => {
   // When the ruby has a zhuyin rtc + a non-zhuyin rtc + another non-zhuyin rtc,
   // the third rtc iterates with order=1 (after zhuyin is removed, the remaining
   // two rtcs get order 0 and 1). The order>0 branch reuses the previous-order ru
   // via `ru[order="0"]` lookup instead of shifting from `rus`.
-  it('third rtc wraps the order=0 ru rather than shifting fresh rus', () => {
+  it("third rtc wraps the order=0 ru rather than shifting fresh rus", () => {
     const out = ruby2hruby(
       '<rb>萌</rb><rtc class="zhuyin"><rt>ㄇㄥˊ</rt></rtc>' +
         '<rtc class="romanization"><rt>méng</rt></rtc>' +
-        '<rtc><rt>annotation</rt></rtc>',
+        "<rtc><rt>annotation</rt></rtc>",
     );
     // Outer ru is order="1"; it contains the order="0" ru, which contains the zhuyin ru.
     expect(out).toMatch(/<ru[^>]*\border="1"[^>]*>/);
@@ -207,10 +207,10 @@ describe('ruby2hruby — multi-rtc (order > 0) branch', () => {
     expect(out).toContain('annotation="annotation"');
   });
 
-  it('annotation attr is normalised for combining marks on a/e/i/o/u', () => {
+  it("annotation attr is normalised for combining marks on a/e/i/o/u", () => {
     // Feed a combining-dot-below-style mark on a base vowel `a` (U+0061 + U+0307)
     // — ruby2hruby's normalizeAnnotation should remap to U+DB80 U+DC61 surrogate.
-    const combo = 'a\u0307'; // small a + combining dot above → maps to PUA U+100061
+    const combo = "a\u0307"; // small a + combining dot above → maps to PUA U+100061
     const out = ruby2hruby(
       `<rb>x</rb><rtc class="zhuyin"><rt>ㄇ</rt></rtc><rtc><rt>${combo}</rt></rtc>`,
     );
@@ -221,19 +221,19 @@ describe('ruby2hruby — multi-rtc (order > 0) branch', () => {
 
   it.each([
     // [base vowel, target high-byte, target low-byte]
-    ['e', 0xDB80, 0xDC65],
-    ['i', 0xDB80, 0xDC69],
-    ['o', 0xDB80, 0xDC6F],
-    ['u', 0xDB80, 0xDC75],
+    ["e", 0xdb80, 0xdc65],
+    ["i", 0xdb80, 0xdc69],
+    ["o", 0xdb80, 0xdc6f],
+    ["u", 0xdb80, 0xdc75],
   ])(
-    'normalizeAnnotation maps base vowel %s + each combining mark (U+0307/U+030D/U+0358) to its PUA codepoint',
+    "normalizeAnnotation maps base vowel %s + each combining mark (U+0307/U+030D/U+0358) to its PUA codepoint",
     (vowel, hi, lo) => {
       // Pin every row of the e/i/o/u replace-table individually. Each base vowel
       // is paired with each of the three combining marks the normalizer recognizes;
       // dropping any row would silently leave the literal vowel+combiner in the
       // annotation attribute downstream.
       const expected = String.fromCharCode(hi as number, lo as number);
-      for (const mark of ['\u0307', '\u030d', '\u0358']) {
+      for (const mark of ["\u0307", "\u030d", "\u0358"]) {
         const out = ruby2hruby(
           `<rb>x</rb><rtc class="zhuyin"><rt>\u3107</rt></rtc><rtc><rt>${vowel}${mark}</rt></rtc>`,
         );
@@ -242,7 +242,7 @@ describe('ruby2hruby — multi-rtc (order > 0) branch', () => {
     },
   );
 
-  it('order=0 ru carries the original class attribute from the ruby root', () => {
+  it("order=0 ru carries the original class attribute from the ruby root", () => {
     // The ruby2hruby template injects class="rightangle" on the outer <ruby>;
     // each order=0 wrapper ru should inherit it via setAttribute('class', originalClass).
     const out = ruby2hruby(
@@ -256,32 +256,32 @@ describe('ruby2hruby — multi-rtc (order > 0) branch', () => {
     expect(orderZero![0]).toContain('class="rightangle"');
   });
 
-  it('order>0 with more rts than order=0 produced: excess rts are skipped (line 128)', () => {
+  it("order>0 with more rts than order=0 produced: excess rts are skipped (line 128)", () => {
     // Two rbs under rbspan=2 produce ONE order=0 ru. A follow-on rtc with two rts
     // only finds `ru[order="0"][0]` for idx=0 — idx=1's lookup returns undefined so
     // the early `return` on line 128 fires for the second rt. After processing, the
     // entire remaining rtc (including the orphan rt) is removed by line 149.
     const out = ruby2hruby(
-      '<rb>a</rb><rb>b</rb>' +
+      "<rb>a</rb><rb>b</rb>" +
         '<rtc class="zhuyin"><rt>ㄉ</rt><rt>ㄊ</rt></rtc>' +
         '<rtc class="romanization"><rt rbspan="2">ab</rt></rtc>' +
-        '<rtc><rt>wrapped</rt><rt>orphan</rt></rtc>',
+        "<rtc><rt>wrapped</rt><rt>orphan</rt></rtc>",
     );
     // The "wrapped" annotation makes it onto a ru[order="1"].
     expect(out).toContain('annotation="wrapped"');
     // The "orphan" rt was skipped during wrapping (returned early) AND its containing
     // rtc is removed at the end, so "orphan" does not appear in the final output.
-    expect(out).not.toContain('orphan');
+    expect(out).not.toContain("orphan");
     // There is exactly one order="1" ru despite the rtc having two rts.
     expect((out.match(/order="1"/g) ?? []).length).toBe(1);
   });
 });
 
-describe('ruby2hruby — rbspan (order=0) branches', () => {
+describe("ruby2hruby — rbspan (order=0) branches", () => {
   it('rbspan="2" pulls two rus into a single order=0 ru (line 145 slice(1).remove)', () => {
     // Two zhuyin rus + one romanization rt with rbspan=2 → single wrapping ru with span=2.
     const out = ruby2hruby(
-      '<rb>之</rb><rb>後</rb>' +
+      "<rb>之</rb><rb>後</rb>" +
         '<rtc class="zhuyin"><rt>ㄓ</rt><rt>ㄏㄡˋ</rt></rtc>' +
         '<rtc class="romanization"><rt rbspan="2">zhī hòu</rt></rtc>',
     );
@@ -289,20 +289,18 @@ describe('ruby2hruby — rbspan (order=0) branches', () => {
     expect(out).toContain('order="0"');
     expect(out).toContain('annotation="zhī hòu"');
     // Both zhuyin-wrapped rbs are now nested inside the single order=0 ru.
-    expect(out).toContain('<rb>之</rb>');
-    expect(out).toContain('<rb>後</rb>');
+    expect(out).toContain("<rb>之</rb>");
+    expect(out).toContain("<rb>後</rb>");
     // Only one order="0" ru exists — the second ru was consumed/removed by slice(1).forEach remove.
     expect((out.match(/order="0"/g) ?? []).length).toBe(1);
     // The single outer ru contains both inner zhuyin rus.
-    expect(out).toMatch(
-      /<ru[^>]*span="2"[^>]*>.*<rb>之<\/rb>.*<rb>後<\/rb>.*<\/ru>/s,
-    );
+    expect(out).toMatch(/<ru[^>]*span="2"[^>]*>.*<rb>之<\/rb>.*<rb>後<\/rb>.*<\/ru>/s);
   });
 
-  it('rbspan exceeding available rbs is clamped to maxspan (Math.min)', () => {
+  it("rbspan exceeding available rbs is clamped to maxspan (Math.min)", () => {
     // Only one rb, but rbspan="5" in the romanization — Math.min(5, 1) = 1.
     const out = ruby2hruby(
-      '<rb>萌</rb>' +
+      "<rb>萌</rb>" +
         '<rtc class="zhuyin"><rt>ㄇㄥˊ</rt></rtc>' +
         '<rtc class="romanization"><rt rbspan="5">overflow</rt></rtc>',
     );
@@ -317,24 +315,24 @@ describe('ruby2hruby — rbspan (order=0) branches', () => {
     // rbspan="0" → Math.min(0, 1) = 0 → while (0 > 0) never enters → baseNodes empty →
     // firstBase undefined → early return. The <rt> passes through as a styled rt.
     const out = ruby2hruby(
-      '<rb>萌</rb>' +
+      "<rb>萌</rb>" +
         '<rtc class="zhuyin"><rt>ㄇㄥˊ</rt></rtc>' +
         '<rtc class="romanization"><rt rbspan="0">zero</rt></rtc>',
     );
     // The zhuyin ru is present; no order="0" wrapper ru was created.
-    expect(out).toContain('<rb>萌</rb>');
+    expect(out).toContain("<rb>萌</rb>");
     expect(out).not.toContain('order="0"');
     expect(out).not.toContain('annotation="zero"');
   });
 
-  it('rbspan greater than remaining rus breaks the pull loop (line 112)', () => {
+  it("rbspan greater than remaining rus breaks the pull loop (line 112)", () => {
     // One zhuyin ru for rb `之`; next rtc has two rts, each rbspan defaults to 1.
     // First rt consumes the single ru. Second rt finds `rus` empty → `!rb` breaks the loop,
     // baseNodes stays empty, firstBase undefined → early return on line 133. After the
     // rtcs.forEach loop, any remaining rtc (including the second rt still inside it) is
     // removed on line 149, so "second" doesn't survive in the output.
     const out = ruby2hruby(
-      '<rb>之</rb>' +
+      "<rb>之</rb>" +
         '<rtc class="zhuyin"><rt>ㄓ</rt></rtc>' +
         '<rtc class="romanization"><rt>first</rt><rt>second</rt></rtc>',
     );
@@ -345,71 +343,69 @@ describe('ruby2hruby — rbspan (order=0) branches', () => {
     expect(out).not.toContain('annotation="second"');
     // The second rt was inside an rtc that gets removed wholesale at the end, so its
     // text doesn't appear in the output.
-    expect(out).not.toContain('second');
+    expect(out).not.toContain("second");
   });
 });
 
-describe('ruby2hruby — zhuyin guard (line 63)', () => {
-  it('extra zhuyin rts without matching rbs are skipped silently', () => {
+describe("ruby2hruby — zhuyin guard (line 63)", () => {
+  it("extra zhuyin rts without matching rbs are skipped silently", () => {
     // Only one rb, three rts — idx=1 and idx=2 have no rb, so `if (!rb) return;` fires.
     const out = ruby2hruby(
       '<rb>萌</rb><rtc class="zhuyin"><rt>ㄇㄥˊ</rt><rt>ㄉㄧㄢˇ</rt><rt>extra</rt></rtc>',
     );
     // Only one ru produced (for the sole rb).
     expect((out.match(/<ru\s/g) ?? []).length).toBe(1);
-    expect(out).toContain('<rb>萌</rb>');
+    expect(out).toContain("<rb>萌</rb>");
     // The rtc (including surplus rts) is removed wholesale after processing.
-    expect(out).not.toContain('<rtc');
-    expect(out).not.toContain('ㄉㄧㄢ');
-    expect(out).not.toContain('extra');
+    expect(out).not.toContain("<rtc");
+    expect(out).not.toContain("ㄉㄧㄢ");
+    expect(out).not.toContain("extra");
   });
 });
 
-describe('ruby2hruby — entity serialization passthrough', () => {
+describe("ruby2hruby — entity serialization passthrough", () => {
   // Happy-dom never emits numeric character references (&#xNNNN;) in innerHTML — it
   // serializes characters literally. These tests verify the characters themselves
   // survive the DOMParser round trip, even if the toCodePointString regex callback
   // never fires under happy-dom.
-  it('preserves BMP CJK characters fed as &#xNNNN; entities (decodes to 萌)', () => {
+  it("preserves BMP CJK characters fed as &#xNNNN; entities (decodes to 萌)", () => {
     const out = ruby2hruby('<rb>&#x840C;</rb><rtc class="zhuyin"><rt>ㄇㄥˊ</rt></rtc>');
     // 0x840C = 萌. Happy-dom decodes at parse time; innerHTML writes the literal char.
-    expect(out).toContain('<rb>萌</rb>');
-    expect(out).not.toContain('&#x840C;');
+    expect(out).toContain("<rb>萌</rb>");
+    expect(out).not.toContain("&#x840C;");
   });
 
-  it('preserves SMP (supplementary plane) characters fed as &#x1F600;', () => {
+  it("preserves SMP (supplementary plane) characters fed as &#x1F600;", () => {
     // 0x1F600 = 😀 emoji. Requires surrogate pair in UTF-16.
     const out = ruby2hruby('<rb>&#x1F600;</rb><rtc class="zhuyin"><rt>ㄇㄥˊ</rt></rtc>');
-    expect(out).toContain('<rb>😀</rb>');
+    expect(out).toContain("<rb>😀</rb>");
     // The entity form should not appear in output.
-    expect(out).not.toContain('&#x1F600;');
-    expect(out).not.toContain('&#x1f600;');
+    expect(out).not.toContain("&#x1F600;");
+    expect(out).not.toContain("&#x1f600;");
   });
 
-  it('non-hex entity-like text &amp;#xZZZZ; roundtrips without crashing', () => {
+  it("non-hex entity-like text &amp;#xZZZZ; roundtrips without crashing", () => {
     // An ampersand-escaped invalid hex → textContent is "&#xZZZZ;" which the
     // regex on line 154 would match but only if it reached innerHTML — happy-dom
     // emits &amp;#xZZZZ; so the regex finds no hit. Test stability regardless.
-    const out = ruby2hruby(
-      '<rb>foo&amp;#xZZZZ;bar</rb><rtc class="zhuyin"><rt>ㄇㄥˊ</rt></rtc>',
-    );
+    const out = ruby2hruby('<rb>foo&amp;#xZZZZ;bar</rb><rtc class="zhuyin"><rt>ㄇㄥˊ</rt></rtc>');
     // Output still contains the escaped form (the &amp; round-trips).
-    expect(out).toContain('foo');
-    expect(out).toContain('bar');
-    expect(out).toContain('ZZZZ');
+    expect(out).toContain("foo");
+    expect(out).toContain("bar");
+    expect(out).toContain("ZZZZ");
     // Structure still present.
-    expect(out).toContain('<yin>ㄇㄥ</yin>');
+    expect(out).toContain("<yin>ㄇㄥ</yin>");
   });
 });
 
-describe('ruby2hruby — catch branch (line 156)', () => {
-  it('returns input unchanged when DOMParser constructor throws', () => {
+describe("ruby2hruby — catch branch (line 156)", () => {
+  it("returns input unchanged when DOMParser constructor throws", () => {
     // Different from "DOMParser is undefined" (line 46 early-return) — this exercises
     // the outer try/catch by making `new DOMParser()` itself throw.
     const original = globalThis.DOMParser;
     class ThrowingParser {
       constructor() {
-        throw new Error('simulated DOMParser failure');
+        throw new Error("simulated DOMParser failure");
       }
     }
     // @ts-expect-error — deliberate mock.
@@ -422,17 +418,17 @@ describe('ruby2hruby — catch branch (line 156)', () => {
     }
   });
 
-  it('returns input unchanged when parseFromString throws', () => {
+  it("returns input unchanged when parseFromString throws", () => {
     const original = globalThis.DOMParser;
     class ThrowingParseFromString {
       parseFromString(): never {
-        throw new Error('simulated parse failure');
+        throw new Error("simulated parse failure");
       }
     }
     // @ts-expect-error — deliberate mock.
     globalThis.DOMParser = ThrowingParseFromString;
     try {
-      const html = '<rb>test</rb>';
+      const html = "<rb>test</rb>";
       expect(ruby2hruby(html)).toBe(html);
     } finally {
       globalThis.DOMParser = original;

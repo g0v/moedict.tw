@@ -42,7 +42,7 @@
  * "can't convert / converts to the wrong shape" into a CI error instead of
  * a silently broken page.
  *
- * Run: `bun run check:trs` / `bun scripts/check-trs-bpmf.mjs`
+ * Run: `vp run check:trs` / `bun scripts/check-trs-bpmf.mjs` (uses Bun.CryptoHasher)
  * CI:  static job.
  */
 
