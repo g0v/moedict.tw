@@ -491,12 +491,10 @@ function DropdownSubmenu({
 	item,
 	lang,
 	handleLinkClick,
-	submenuKeyPrefix,
 }: {
 	item: MenuNode;
 	lang: Lang;
 	handleLinkClick: (e: React.MouseEvent<HTMLAnchorElement>, path: string) => void;
-	submenuKeyPrefix: string;
 }) {
 	const enterDropdown: MouseEventHandler<HTMLLIElement> = (e) => {
 		const parent = e.currentTarget.parentElement;
@@ -553,7 +551,6 @@ function DropdownSubmenu({
 							item={child}
 							lang={lang}
 							handleLinkClick={handleLinkClick}
-							submenuKeyPrefix={`${submenuKeyPrefix}-${idx}`}
 						/>
 					) : (
 						<li key={idx} role="presentation">
@@ -706,7 +703,6 @@ export function NavbarNormal({ currentLang }: NavbarNormalProps) {
 													item={page}
 													lang={option.key}
 													handleLinkClick={handleLinkClick}
-													submenuKeyPrefix={`${option.key}-${idx}`}
 												/>
 											) : (
 												<li key={`${option.key}-${idx}`} role="presentation">
