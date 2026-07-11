@@ -4,7 +4,7 @@ import { useRadicalTooltip } from '../hooks/useRadicalTooltip';
 import { cleanTextForTTS, speakText } from '../utils/tts-utils';
 import { getAudioUrl, playAudioUrl } from '../utils/audio-utils';
 import { rightAngle } from '../utils/ruby2hruby';
-import { decorateRuby } from '../utils/bopomofo-pinyin-utils';
+import { decorateRuby, formatBopomofo, formatPinyin } from '../utils/bopomofo-pinyin-utils';
 import { convertPinyinByLang } from '../utils/pinyin-preference-utils';
 import { addStarWord, addToLRU, hasStarWord, removeStarWord, writeLastLookup } from '../utils/word-record-utils';
 import { fetchDictionaryEntry, readCachedDictionaryEntry } from '../utils/dictionary-cache';
@@ -692,6 +692,16 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
                 })()}
               </span>
               {rubyData.youyin && <small className="youyin">{rubyData.youyin}</small>}
+              {(rubyData.bAlt || rubyData.pAlt) && (
+                <small className="alternative">
+                  {lang !== 'h' && rubyData.pAlt && (
+                    <span className="pinyin" dangerouslySetInnerHTML={{ __html: formatPinyin(rubyData.pAlt) }} />
+                  )}
+                  {rubyData.bAlt && (
+                    <span className="bopomofo" dangerouslySetInnerHTML={{ __html: formatBopomofo(rubyData.bAlt) }} />
+                  )}
+                </small>
+              )}
               {lang !== 'h' && pronunAudioId && (
                 <span className="audioBlock">
                   <span
