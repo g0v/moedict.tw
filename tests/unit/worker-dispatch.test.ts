@@ -261,6 +261,27 @@ describe('dispatch — /api/xref/{lang}.json', () => {
   });
 });
 
+describe('dispatch — /api/xref-by-id/{lang}.json', () => {
+  it('serves xref-by-id JSON with xref cache headers', async () => {
+    const env = makeEnv({
+      DICTIONARY: makeBucket({ 't/xref-by-id.json': { body: '{"a":{}}' } }),
+    });
+    const res = await dispatch(req('/api/xref-by-id/t.json'), env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toContain('max-age=300');
+    expect(res.headers.get('cache-control')).toContain('s-maxage=3600');
+    expect(res.headers.get('cache-tag')).toContain('xref');
+    expect(res.headers.get('cache-tag')).toContain('xref-t');
+    expect(await res.text()).toBe('{"a":{}}');
+  });
+
+  it('returns empty-object JSON (not 404) when xref-by-id file is missing', async () => {
+    const res = await dispatch(req('/api/xref-by-id/t.json'), makeEnv());
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe('{}');
+  });
+});
+
 describe('dispatch — /manifest.appcache', () => {
   it('serves the manifest as text/cache-manifest', async () => {
     const env = makeEnv({

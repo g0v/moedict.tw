@@ -50,6 +50,7 @@ interface DictionaryAPIResponse {
   Deutsch?: string | string[];
   francais?: string | string[];
   xrefs?: Array<{ lang: DictionaryLang; words: string[] }>;
+  xrefsByHeteronym?: Array<{ lang: DictionaryLang; byId: Record<string, string[]> }>;
 }
 
 interface DictionaryErrorResponse {
@@ -592,6 +593,15 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
   const deutsch = translation.Deutsch ?? entry.Deutsch;
   const francais = translation.francais ?? entry.francais;
 
+  // Build a per-heteronym-ID xref lookup from the ID-aware sidecar data.
+  // Only the current entry's language is relevant here; xrefsByHeteronym
+  // maps each target language to { heteronymId: [words] }.
+  const xrefsByHeteronymId = entry.xrefsByHeteronym ?? [];
+  const xrefLangsWithById = new Set(xrefsByHeteronymId.map((x) => x.lang));
+  // Flat xrefs for languages that have ID-aware data are rendered per-heteronym
+  // inside each heteronym block; the rest remain at the bottom.
+  const flatXrefs = (entry.xrefs ?? []).filter((x) => !xrefLangsWithById.has(x.lang));
+
   return (
     <div
       className="result"
@@ -892,6 +902,40 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                 </span>
               </div>
             )}
+            {xrefsByHeteronymId.length > 0 && heteronym.id && (() => {
+              const xrefLinks: React.ReactNode[] = [];
+              for (const xref of xrefsByHeteronymId) {
+                const words = xref.byId[heteronym.id];
+                if (!words || words.length === 0) continue;
+                xrefLinks.push(
+                  <div key={`xref-by-id-${xref.lang}-${heteronym.id}`} className="xref-line">
+                    <span className="xref part-of-speech">{getLangName(xref.lang)}</span>
+                    <span className="xref">
+                      {words.map((xrefWord, wIdx) => {
+                        const normalizedXrefWord = normalizeXrefWord(xrefWord);
+                        const to = `/${getLangTokenPrefix(xref.lang)}${normalizedXrefWord}`;
+                        return (
+                          <span key={`xref-by-id-${xref.lang}-${heteronym.id}-${wIdx}`}>
+                            {wIdx > 0 ? '、' : ''}
+                            <a
+                              href={to}
+                              data-radical-id={`entry:${to}`}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                navigate(to);
+                              }}
+                            >
+                              {normalizedXrefWord}
+                            </a>
+                          </span>
+                        );
+                      })}
+                    </span>
+                  </div>
+                );
+              }
+              return xrefLinks.length > 0 ? <div className="xrefs">{xrefLinks}</div> : null;
+            })()}
           </div>
         );
       })}
@@ -904,9 +948,9 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
         </div>
       )}
 
-      {entry.xrefs && entry.xrefs.length > 0 && (
+      {flatXrefs.length > 0 && (
         <div className="xrefs">
-          {entry.xrefs.map((xref) => (
+          {flatXrefs.map((xref) => (
             <div key={xref.lang} className="xref-line">
               <span className="xref part-of-speech">{getLangName(xref.lang)}</span>
               <span className="xref">

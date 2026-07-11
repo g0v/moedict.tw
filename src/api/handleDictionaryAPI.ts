@@ -30,10 +30,15 @@ interface DictionaryEntry {
 interface DictionaryAPIResponse {
   [key: string]: unknown;
   xrefs?: Array<{ lang: DictionaryLang; words: string[] }>;
+  xrefsByHeteronym?: Array<{ lang: DictionaryLang; byId: Record<string, string[]> }>;
 }
 
 interface XRefData {
   [targetLang: string]: Record<string, string | string[]>;
+}
+
+interface XRefByIdData {
+  [targetLang: string]: Record<string, Record<string, string[]>>;
 }
 
 interface ConvertedDictionaryData {
@@ -448,6 +453,7 @@ export async function lookupDictionaryEntry(
   const entry = bucketResult.data;
   const processedEntry = processDictionaryEntry(entry, lang);
   processedEntry.xrefs = await getCrossReferences(text, lang, env);
+  processedEntry.xrefsByHeteronym = await getCrossReferencesById(text, lang, env);
   return processedEntry;
 }
 
@@ -772,6 +778,36 @@ async function getCrossReferences(
             .filter(Boolean);
       if (wordList.length > 0 && isDictionaryLang(targetLang)) {
         result.push({ lang: targetLang, words: wordList });
+      }
+    }
+
+    return result;
+  } catch {
+    return [];
+  }
+}
+
+async function getCrossReferencesById(
+  text: string,
+  lang: DictionaryLang,
+  env: DictionaryEnv,
+): Promise<Array<{ lang: DictionaryLang; byId: Record<string, string[]> }>> {
+  try {
+    const xrefPath = `${lang}/xref-by-id.json`;
+    const xrefObject = await env.DICTIONARY.get(xrefPath);
+    if (!xrefObject) {
+      return [];
+    }
+
+    const xrefData = await xrefObject.text();
+    const xref = JSON.parse(xrefData) as XRefByIdData;
+    const result: Array<{ lang: DictionaryLang; byId: Record<string, string[]> }> = [];
+
+    for (const [targetLang, byTitle] of Object.entries(xref)) {
+      const idMap = byTitle[text];
+      if (!idMap) continue;
+      if (isDictionaryLang(targetLang)) {
+        result.push({ lang: targetLang, byId: idMap });
       }
     }
 

@@ -44,6 +44,17 @@ describe('/api/xref/{lang}.json', () => {
   });
 });
 
+describe('/api/xref-by-id/{lang}.json', () => {
+  it.each(['a', 't', 'h', 'c'])('returns an xref-by-id object (or {} fallback) for lang=%s', async (lang) => {
+    const res = await fetchFromServer(`/api/xref-by-id/${lang}.json`);
+    expect([200, 404]).toContain(res.status);
+    if (res.status === 200) {
+      const body = await res.json();
+      expect(body && typeof body === 'object' && !Array.isArray(body)).toBe(true);
+    }
+  });
+});
+
 describe('/api/search-index/{lang}.json', () => {
   it.each(['a', 't', 'h', 'c'])('returns array data for lang=%s when fixture present', async (lang) => {
     const res = await fetchFromServer(`/api/search-index/${lang}.json`);
