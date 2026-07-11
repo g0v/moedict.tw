@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { LEGACY_STYLESHEET_VERSION } from '../utils/media-cdn';
 
 interface AssetLoaderProps {
 	r2Endpoint?: string;
@@ -152,7 +153,7 @@ export function AssetLoader({ r2Endpoint, onCriticalStylesReady }: AssetLoaderPr
 
 			// 載入 CSS 檔案
 			await Promise.all([
-				loadCSS(`${basePath}/styles.css`, 'styles-css'),
+				loadCSS(`${basePath}/styles.css?v=${LEGACY_STYLESHEET_VERSION}`, 'styles-css'),
 				loadCSS(`${basePath}/css/cupertino/jquery-ui-1.10.4.custom.css`, 'jquery-ui-css'),
 			]);
 			if (!criticalStylesNotified) {

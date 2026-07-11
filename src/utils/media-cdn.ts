@@ -13,6 +13,17 @@
  */
 export const ASSET_CDN_BASE = 'https://r2-assets.moedict.tw';
 
+/**
+ * Cache-bust version for the legacy `data/assets/styles.css` stylesheet.
+ *
+ * The stylesheet is served from R2 with `Cache-Control: max-age=86400` (24h
+ * edge). Appending `?v=<version>` as a query parameter makes the edge treat
+ * each version as a distinct cache key, so a new version busts the old object
+ * without requiring a cache purge. Bump this when the stylesheet content
+ * changes meaningfully (e.g. BiauKai src fix, EduKai gating).
+ */
+export const LEGACY_STYLESHEET_VERSION = '20260711';
+
 /** 筆畫 JSON：`${STROKE_JSON_BASE_URL}/{codepoint-hex}.json` */
 export const STROKE_JSON_BASE_URL = `${ASSET_CDN_BASE}/stroke-json`;
 
