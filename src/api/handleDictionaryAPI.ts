@@ -97,25 +97,24 @@ export async function handleDictionaryAPI(
   }
 
   const { lang, cleanText } = parseTextFromUrl(url.pathname);
-  const fixedText = fixMojibake(cleanText);
 
   try {
-    if (fixedText.startsWith('@')) {
-      return await handleRadicalLookup(request, fixedText, lang, env);
+    if (cleanText.startsWith('@')) {
+      return await handleRadicalLookup(request, cleanText, lang, env);
     }
 
-    if (fixedText.startsWith('=')) {
-      return await handleListLookup(request, fixedText, lang, env);
+    if (cleanText.startsWith('=')) {
+      return await handleListLookup(request, cleanText, lang, env);
     }
 
-    const processedEntry = await lookupDictionaryEntry(fixedText, lang, env);
+    const processedEntry = await lookupDictionaryEntry(cleanText, lang, env);
     if (!processedEntry) {
-      const terms = await performFuzzySearch(fixedText);
+      const terms = await performFuzzySearch(cleanText);
       const status = 404;
       if (terms.length === 0) {
         const errorResponse: ErrorResponse = {
           error: 'Not Found',
-          message: `找不到詞彙: ${fixedText}`,
+          message: `找不到詞彙: ${cleanText}`,
           terms: [],
         };
         return jsonResponse(request, errorResponse, status);
@@ -143,7 +142,7 @@ export function parseSubRoute(pathname: string): { routeType: SubRouteType; text
   const [, routeType, encodedText] = match;
   return {
     routeType: routeType as SubRouteType,
-    text: fixMojibake(tryDecodeURIComponent(encodedText) ?? encodedText),
+    text: tryDecodeURIComponent(encodedText) ?? encodedText,
   };
 }
 
@@ -305,9 +304,6 @@ function isDictionaryLang(input: string): input is DictionaryLang {
   return input === 'a' || input === 't' || input === 'h' || input === 'c';
 }
 
-function fixMojibake(text: string): string {
-  return text;
-}
 
 function getCORSHeaders(): HeadersInit {
   return {

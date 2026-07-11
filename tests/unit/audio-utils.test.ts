@@ -117,7 +117,7 @@ afterEach(() => {
 describe('getAudioUrl', () => {
   it('uses the 華語 CDN for lang=a', () => {
     const url = getAudioUrl('a', '12345');
-    expect(url).toMatch(/rackcdn\.com\/12345\.ogg$/);
+    expect(url).toMatch(/r2-assets\.moedict\.tw\/audio\/a\/12345\.ogg$/);
   });
 
   it('falls back to the 華語 CDN at runtime for unknown langs', () => {
@@ -125,7 +125,7 @@ describe('getAudioUrl', () => {
   });
 
   it('uses the 客語 CDN for lang=h', () => {
-    expect(getAudioUrl('h', '42')).toMatch(/a7ff62cf9d5b13408e72/);
+    expect(getAudioUrl('h', '42')).toMatch(/r2-assets\.moedict\.tw\/audio\/h\/42\.ogg$/);
   });
 
   it('zero-pads 台語 audio IDs to 5 digits', () => {

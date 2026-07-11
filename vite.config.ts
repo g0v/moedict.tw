@@ -6,6 +6,7 @@ import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 
 import { cloudflare } from '@cloudflare/vite-plugin'
+import { STROKE_JSON_BASE_URL } from './src/utils/media-cdn'
 
 interface LocalStaticMount {
 	prefix: string
@@ -60,8 +61,6 @@ function contentTypeFor(filePath: string): string {
 	}
 }
 
-const STROKE_CDN = 'https://829091573dd46381a321-9e8a43b8d3436eaf4353af683c892840.ssl.cf1.rackcdn.com'
-
 async function proxyStrokeJson(cp: string, res: import('http').ServerResponse): Promise<void> {
 	if (!/^[0-9a-f]{4,6}\.json$/i.test(cp)) {
 		res.statusCode = 400;
@@ -69,7 +68,7 @@ async function proxyStrokeJson(cp: string, res: import('http').ServerResponse): 
 		return;
 	}
 	try {
-		const upstream = await fetch(`${STROKE_CDN}/${cp}`);
+		const upstream = await fetch(`${STROKE_JSON_BASE_URL}/${cp}`);
 		if (!upstream.ok) {
 			res.statusCode = upstream.status;
 			res.end('Not Found');

@@ -107,24 +107,6 @@ export function parseTextFromUrl(pathname: string): { text: string; lang: Dictio
 	return { text, lang, cleanText };
 }
 
-/**
- * 修復 mojibake (亂碼) 問題
- */
-export function fixMojibake(text: string): string {
-	console.log('🔍 [FixMojibake] 開始處理文字:', text);
-
-	// 檢查是否為 Latin-1 編碼的中文字符
-	if (/^[\u0080-\u00FF]/.test(text)) {
-		console.log('🔍 [FixMojibake] 檢測到 Latin-1 編碼字符');
-		// 簡單的 Latin-1 到 UTF-8 轉換
-		// 在 CloudFlare Worker 中，通常不需要特別處理
-		// 因為 Worker 環境已經正確處理 UTF-8
-		return text;
-	}
-
-	console.log('🔍 [FixMojibake] 無需修復，返回原文字');
-	return text;
-}
 
 /**
  * 生成 CORS 標頭
@@ -144,13 +126,12 @@ export function getCORSHeaders(): HeadersInit {
  */
 export async function handleImageGeneration(url: URL, env: Env): Promise<Response> {
 	const { cleanText } = parseTextFromUrl(url.pathname);
-	const fixedText = fixMojibake(cleanText);
 	const fontParam = url.searchParams.get('font') || 'kai';
 
 	try {
 		// 限制文字長度
 		// 以 Unicode 碼點（而非 UTF-16 code unit）截斷，避免切斷增補平面字元的 surrogate pair
-		const displayText = Array.from(fixedText).slice(0, 50).join('');
+		const displayText = Array.from(cleanText).slice(0, 50).join('');
 
 		// 檢查字體是否在 R2 中可用
 		const fontName = getFontName(fontParam);

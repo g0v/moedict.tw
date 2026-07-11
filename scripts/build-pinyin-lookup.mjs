@@ -200,24 +200,27 @@ function convertTlTokenToPoj(rawToken) {
 }
 
 function collectTaiwaneseTermsByType(trsValue) {
-	const tlRawTokens = extractTlRawTokens(trsValue);
+	const syllables = { TL: [], DT: [], POJ: [] };
+	const whole = { TL: [], DT: [], POJ: [] };
 
-	const tl = [];
-	const dt = [];
-	const poj = [];
+	for (const variant of String(trsValue ?? '').split('/')) {
+		const rawTokens = extractTlRawTokens(variant);
+		if (rawTokens.length === 0) continue;
 
-	for (const token of tlRawTokens) {
-		const tlToken = normalizeLookupTerm(token);
-		if (tlToken) tl.push(tlToken);
+		const converted = {
+			TL: rawTokens,
+			DT: rawTokens.map(convertTlTokenToDt),
+			POJ: rawTokens.map(convertTlTokenToPoj),
+		};
 
-		const dtToken = normalizeLookupTerm(convertTlTokenToDt(token));
-		if (dtToken) dt.push(dtToken);
-
-		const pojToken = normalizeLookupTerm(convertTlTokenToPoj(token));
-		if (pojToken) poj.push(pojToken);
+		for (const type of TAIWANESE_TYPES) {
+			const variantSyllables = converted[type].map(normalizeLookupTerm).filter(Boolean);
+			syllables[type].push(...variantSyllables);
+			if (variantSyllables.length > 1) whole[type].push(variantSyllables.join(''));
+		}
 	}
 
-	return { TL: tl, DT: dt, POJ: poj };
+	return { syllables, whole };
 }
 
 const PFS_TONE_MARK_MAP = {
@@ -327,13 +330,26 @@ function collectHakkaTermsByType(rawPinyin) {
 	return { TH: th, PFS: pfs };
 }
 
+async function writeTaiwaneseWholeLookupMaps(indexByType) {
+	const taiwaneseRoot = path.join(OUTPUT_ROOT, 't');
+	for (const type of TAIWANESE_TYPES) {
+		const typeIndex = indexByType.get(type);
+		const payload = Object.fromEntries(
+			Array.from(typeIndex.entries()).map(([term, docs]) => [term, sortDocs(docs)])
+		);
+		await fs.writeFile(path.join(taiwaneseRoot, `${type}.json`), `${JSON.stringify(payload)}\n`);
+		console.log(`[build-pinyin-lookup] wrote t/${type} whole words: ${Object.keys(payload).length} terms`);
+	}
+}
+
 async function buildTaiwaneseLookupIndex() {
 	const bucketFiles = await getBucketFiles(TAIWANESE_SOURCE_DIR);
 	if (bucketFiles.length === 0) {
 		throw new Error(`找不到台語詞典資料：${TAIWANESE_SOURCE_DIR}`);
 	}
 
-	const indexByType = new Map(TAIWANESE_TYPES.map((type) => [type, new Map()]));
+	const syllableIndexByType = new Map(TAIWANESE_TYPES.map((type) => [type, new Map()]));
+	const wholeIndexByType = new Map(TAIWANESE_TYPES.map((type) => [type, new Map()]));
 
 	for (const bucketFile of bucketFiles) {
 		const bucketPath = path.join(TAIWANESE_SOURCE_DIR, bucketFile);
@@ -351,14 +367,16 @@ async function buildTaiwaneseLookupIndex() {
 
 				const termsByType = collectTaiwaneseTermsByType(trs);
 				for (const type of TAIWANESE_TYPES) {
-					insertIndex(indexByType.get(type), title, termsByType[type]);
+					insertIndex(syllableIndexByType.get(type), title, termsByType.syllables[type]);
+					insertIndex(wholeIndexByType.get(type), title, termsByType.whole[type]);
 				}
 			}
 		}
 	}
 
 	await ensureOutputDirs('t', TAIWANESE_TYPES);
-	await writeIndexes('t', TAIWANESE_TYPES, indexByType);
+	await writeIndexes('t', TAIWANESE_TYPES, syllableIndexByType);
+	await writeTaiwaneseWholeLookupMaps(wholeIndexByType);
 }
 
 async function buildHanYuLookupIndex(lang, sourceDir, outputRoot = OUTPUT_ROOT) {

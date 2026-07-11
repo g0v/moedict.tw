@@ -3,14 +3,9 @@
  * 複刻原專案 DictionaryViews 的 getAudioUrl 與 playAudio 行為
  */
 
-export type DictionaryLang = 'a' | 't' | 'h' | 'c';
+import { AUDIO_CDN_MAP } from './media-cdn';
 
-const AUDIO_CDN_MAP: Record<DictionaryLang, string> = {
-  a: 'https://203146b5091e8f0aafda-15d41c68795720c6e932125f5ace0c70.ssl.cf1.rackcdn.com',
-  h: 'https://a7ff62cf9d5b13408e72-351edcddf20c69da65316dd74d25951e.ssl.cf1.rackcdn.com',
-  t: 'https://1763c5ee9859e0316ed6-db85b55a6a3fbe33f09b9245992383bd.ssl.cf1.rackcdn.com',
-  c: 'https://203146b5091e8f0aafda-15d41c68795720c6e932125f5ace0c70.ssl.cf1.rackcdn.com', // 兩岸詞典使用華語路由
-};
+export type DictionaryLang = 'a' | 't' | 'h' | 'c';
 
 function normalizeAudioIdByLang(lang: DictionaryLang, audioId: string): string {
   const normalized = String(audioId || '').trim();

@@ -2,8 +2,12 @@
 logs
 *.log
 
-# Local documentation artifacts
-docs/
+# Local documentation artifacts (except committed issue-triage outputs and scripts)
+docs/*
+!docs/
+!docs/*.mjs
+!docs/issue-triage/
+!docs/issue-triage/**
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -48,6 +52,9 @@ coverage/
 unit-report.xml
 reports/mutation/
 .stryker-tmp/
+
+# One-time legacy-CDN migration progress state (commands/migrate-legacy-cdn-to-r2.mjs)
+.migration-state/
 
 # Visual-regression: commit only linux baselines; local runs generate darwin/win32 variants.
 # The `visual` Playwright project uses its own name (not the browser) in the snapshot filename.
