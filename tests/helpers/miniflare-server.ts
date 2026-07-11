@@ -64,6 +64,7 @@ export async function startTestServer(options: StartOptions = {}): Promise<TestS
 
   if (wantAssets) {
     mfConfig.assets = {
+      binding: 'SITE_ASSETS',
       directory: DIST_CLIENT,
       assetConfig: {
         not_found_handling: 'single-page-application',
@@ -72,16 +73,7 @@ export async function startTestServer(options: StartOptions = {}): Promise<TestS
         has_user_worker: true,
         invoke_user_worker_ahead_of_assets: false,
         static_routing: {
-          user_worker: [
-            '/api/*',
-            '/lookup/trs/*',
-            '/*.png',
-            '/*.json',
-            '/manifest.appcache',
-            '/translation-data/cfdict.txt',
-            '/translation-data/cfdict.xml',
-            '!/manifest.json',
-          ],
+          user_worker: ['/*', '!/assets/*', '!/fonts/*', '!/manifest.json'],
         },
       },
     };

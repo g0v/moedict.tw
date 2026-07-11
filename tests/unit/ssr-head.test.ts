@@ -205,6 +205,17 @@ describe('resolveHeadByPath', () => {
       expect(head.ogUrl).toContain(encodeURI('/萌'));
     });
 
+    it('does not double-encode when given an already percent-encoded pathname (real url.pathname shape)', () => {
+      // The Worker always calls resolveHeadByPath with `url.pathname`,
+      // which is percent-encoded (e.g. `/%E8%90%8C` for 萌) — unlike the
+      // plain-Unicode `/萌` used above. toCanonicalUrl used to re-encode
+      // this blindly, producing `/%25E8%2590%258C` (g0v/moedict.tw#131).
+      const head = resolveHeadByPath('/%E8%90%8C');
+      expect(head.ogUrl).toBe('https://www.moedict.tw/%E8%90%8C');
+      const tPrefixed = resolveHeadByPath("/%27%E9%A3%9F"); // /'食
+      expect(tPrefixed.ogUrl).toBe("https://www.moedict.tw/'%E9%A3%9F");
+    });
+
     it('ignores invalid percent-encoding gracefully (does not throw)', () => {
       const head = resolveHeadByPath('/%E8');
       expect(head.title.endsWith('- 萌典')).toBe(true);

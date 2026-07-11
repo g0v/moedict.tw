@@ -147,4 +147,31 @@ test.describe('head metadata injection', () => {
     await page.waitForLoadState('networkidle');
     await expect(page).toHaveTitle(/食/);
   });
+
+  // Regression guard for g0v/moedict.tw#131: the two tests above only
+  // prove the CLIENT-SIDE applyHeadByPath() ran after hydration — they'd
+  // pass even if the Worker's server-side injectHeadMetadata() were
+  // completely dead (which is exactly how #131 shipped unnoticed). This
+  // hits the raw HTTP response via Playwright's `request` fixture — no
+  // page, no JS execution — the same way a crawler, link-unfurl bot, or
+  // oEmbed consumer sees it, against the real Miniflare server (built +
+  // includeAssets:true, see tests/e2e/serve.ts) so it exercises the real
+  // SITE_ASSETS Fetcher binding + wrangler.jsonc run_worker_first catch-all
+  // end-to-end instead of a unit-test mock.
+  test('server renders the word-specific head + oEmbed discovery link with no JS', async ({ request }) => {
+    const res = await request.get('/%E8%90%8C');
+    expect(res.status()).toBe(200);
+    const html = await res.text();
+
+    expect(html).toMatch(/<title>萌[^<]*<\/title>/);
+    expect(html).not.toContain('<title>萌典</title>');
+    expect(html).toContain('property="og:title" content="萌');
+    // Exactly one level of percent-encoding in the canonical URL — guards
+    // the double-encoding bug this same investigation uncovered in
+    // src/ssr/head.ts's toCanonicalUrl().
+    expect(html).toContain('property="og:url" content="https://www.moedict.tw/%E8%90%8C"');
+
+    expect(html).toContain('rel="alternate" type="application/json+oembed"');
+    expect(html).toContain(`url=${encodeURIComponent('https://www.moedict.tw/%E8%90%8C')}`);
+  });
 });

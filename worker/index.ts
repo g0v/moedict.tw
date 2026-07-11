@@ -24,7 +24,19 @@ interface Env {
 	/** Cloudflare API token with Zone Cache Purge permission (used by the purge helper). */
 	CLOUDFLARE_API_TOKEN?: string;
 	DICTIONARY: R2Bucket;
-  ASSETS?: Fetcher | R2Bucket;
+  /** R2 bucket for legacy /assets/* proxying, the App-Store badge, and manifest.appcache. */
+  ASSETS: R2Bucket;
+  /**
+   * Cloudflare's managed static-assets Fetcher (the SPA bundle in dist/client) —
+   * see wrangler.jsonc `assets.binding`. MUST be a distinct name from ASSETS
+   * above: wrangler only creates a static-assets env binding when
+   * `assets.binding` is explicitly set, and it was never set here, so no
+   * Fetcher named ASSETS ever existed in production — `env.ASSETS` was
+   * always just the R2 bucket. getAssetsFetcher() therefore always
+   * returned null, so renderHtmlShell()/injectHeadMetadata() never ran no
+   * matter how the route reached the Worker (g0v/moedict.tw#131).
+   */
+  SITE_ASSETS?: Fetcher;
   FONTS: R2Bucket;
 }
 
@@ -133,7 +145,7 @@ async function renderHtmlShell(request: Request, env: Env, pathname: string): Pr
 }
 
 function getAssetsFetcher(env: Env): ((request: Request) => Promise<Response>) | null {
-  const candidate = env.ASSETS;
+  const candidate = env.SITE_ASSETS;
   if (!candidate || typeof candidate !== 'object' || !('fetch' in candidate)) return null;
   if (typeof candidate.fetch !== 'function') return null;
   return candidate.fetch.bind(candidate);
@@ -552,7 +564,7 @@ export async function dispatch(
         });
       }).catch((error) => {
         console.error('代理請求失敗:', error);
-        return new Response('代理請求失敗', { status: 502 });
+        return new Response('代理請求失敗', { status: 502, headers: { 'Cache-Control': 'no-store' } });
       });
     }
 
@@ -561,7 +573,7 @@ export async function dispatch(
       return await handleImageGeneration(url, { FONTS: env.FONTS, ASSETS: getAssetsBucket(env) ?? undefined });
     }
 
-		return new Response(null, { status: 404 });
+		return new Response(null, { status: 404, headers: { 'Cache-Control': 'no-store' } });
 }
 
 /**

@@ -63,7 +63,13 @@ function toPathname(pathname: string): string {
 function toCanonicalUrl(pathname: string): string {
   const clean = toPathname(pathname);
   if (clean === '/') return SITE_ORIGIN;
-  return `${SITE_ORIGIN}${encodeURI(clean)}`;
+  // `clean` may already be percent-encoded (callers pass raw `url.pathname`
+  // straight through) or may be plain (the `buildDictionaryPath` fallback
+  // embeds raw Unicode). Decode first so encodeURI always applies exactly
+  // once — otherwise an already-encoded path becomes double-encoded
+  // (`/%E8%90%8C` → `/%25E8%2590%258C`), which is exactly what shipped
+  // unnoticed while server-side head injection was dead (g0v/moedict.tw#131).
+  return `${SITE_ORIGIN}${encodeURI(safeDecode(clean))}`;
 }
 
 function toWordImageUrl(word: string): string {

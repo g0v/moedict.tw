@@ -425,7 +425,7 @@ describe('dispatch — HTML shell rendering', () => {
         <meta name="twitter:creator" content="old" />
       </head></html>`;
     const fetcher = { fetch: vi.fn(async () => new Response(shellHtml, { headers: { 'Content-Type': 'text/html' } })) };
-    const env = makeEnv({ ASSETS: fetcher as unknown as AnyEnv['ASSETS'] });
+    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv['SITE_ASSETS'] });
     const res = await dispatch(req('/about'), env);
     expect(res.status).toBe(200);
     const body = await res.text();
@@ -435,7 +435,7 @@ describe('dispatch — HTML shell rendering', () => {
 
   it('HEAD on an HTML route returns empty body but same headers', async () => {
     const fetcher = { fetch: vi.fn(async () => new Response('<html></html>', { headers: { 'Content-Type': 'text/html' } })) };
-    const env = makeEnv({ ASSETS: fetcher as unknown as AnyEnv['ASSETS'] });
+    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv['SITE_ASSETS'] });
     const res = await dispatch(req('/about', { method: 'HEAD' }), env);
     expect(res.status).toBe(200);
     expect(await res.text()).toBe('');
@@ -443,7 +443,7 @@ describe('dispatch — HTML shell rendering', () => {
 
   it('skips HTML shell rendering for Vite-internal requests', async () => {
     const fetcher = { fetch: vi.fn(async () => new Response('<html></html>', { headers: { 'Content-Type': 'text/html' } })) };
-    const env = makeEnv({ ASSETS: fetcher as unknown as AnyEnv['ASSETS'] });
+    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv['SITE_ASSETS'] });
     // /@vite/client is a Vite dev-server transform request — dispatch must
     // pass it through to the asset fetcher without injecting metadata.
     await dispatch(req('/@vite/client'), env);
@@ -458,7 +458,7 @@ describe('dispatch — /assets/* ASSET_BASE_URL proxy fallback', () => {
       expect(String(url)).toContain('r2-assets.test.local/some-font.woff2');
       return new Response('font bytes', { status: 200, headers: { 'Content-Type': 'font/woff2' } });
     }) as typeof fetch;
-    const env = makeEnv({ ASSETS: fetcher as unknown as AnyEnv['ASSETS'] });
+    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv['SITE_ASSETS'] });
     const res = await dispatch(req('/assets/some-font.woff2'), env);
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toMatch(/woff2/);
@@ -467,15 +467,16 @@ describe('dispatch — /assets/* ASSET_BASE_URL proxy fallback', () => {
   it('returns 502 when the upstream fetch rejects', async () => {
     const fetcher = { fetch: vi.fn(async () => new Response('', { status: 404 })) };
     globalThis.fetch = vi.fn(async () => { throw new Error('upstream down'); }) as typeof fetch;
-    const env = makeEnv({ ASSETS: fetcher as unknown as AnyEnv['ASSETS'] });
+    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv['SITE_ASSETS'] });
     const res = await dispatch(req('/assets/missing.woff2'), env);
     expect(res.status).toBe(502);
+    expect(res.headers.get('cache-control')).toBe('no-store');
   });
 
   it('uses fixed-star CORS on the proxied response', async () => {
     const fetcher = { fetch: vi.fn(async () => new Response('', { status: 404 })) };
     globalThis.fetch = vi.fn(async () => new Response('ok', { status: 200 })) as typeof fetch;
-    const env = makeEnv({ ASSETS: fetcher as unknown as AnyEnv['ASSETS'] });
+    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv['SITE_ASSETS'] });
     const res = await dispatch(req('/assets/x.js', { headers: { Origin: 'https://example.test' } }), env);
     // Happy-dom may strip Origin on Request; either way response is fixed `*`.
     expect(res.headers.get('access-control-allow-origin')).toBe('*');

@@ -160,12 +160,25 @@ describe('dispatch — *.png image generation fallback', () => {
     expect(bytes[0]).toBe(137);
   });
 
+  it('still generates a PNG when ASSETS (R2 bucket) is undefined (getAssetsBucket null-candidate branch)', async () => {
+    const pathSvg = '<svg><path d="M0 0 L10 10"/></svg>';
+    const env = makeEnv({
+      ASSETS: undefined,
+      FONTS: makeBucket({
+        'TW-Kai/U+840C.svg': { body: pathSvg, contentType: 'image/svg+xml' },
+      }),
+    });
+    const res = await dispatch(req('/%E8%90%8C.png'), env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('image/png');
+  });
+
   it('still takes the .png branch when the ASSETS fetcher 404s on the path', async () => {
     // Confirms the `(!staticResponse || staticResponse.status === 404)`
     // disjunction covers the 404 arm.
     const fetcher = { fetch: vi.fn(async () => new Response('', { status: 404 })) };
     const env = makeEnv({
-      ASSETS: fetcher as unknown as AnyEnv['ASSETS'],
+      SITE_ASSETS: fetcher as unknown as AnyEnv['SITE_ASSETS'],
       FONTS: makeBucket({
         'TW-Kai/U+840C.svg': { body: '<svg><path d="M0 0"/></svg>' }, // checkFontAvailability probe
         'TW-Kai/U+0066.svg': { body: '<svg><path d="M0 0"/></svg>' }, // f
@@ -248,6 +261,9 @@ describe('dispatch — final null-body 404', () => {
     // `new Response(null, { status: 404 })` sets no Content-Type; happy-dom
     // doesn't synthesize one either.
     expect(res.headers.get('content-type')).toBeNull();
+    // A future broken deploy's error must not be edge-cacheable and
+    // outlive the fix — see g0v/moedict.tw#131's outage postmortem.
+    expect(res.headers.get('cache-control')).toBe('no-store');
   });
 });
 
@@ -260,7 +276,7 @@ describe('dispatch — /assets/* when ASSET_BASE_URL is undefined', () => {
     const fetcher = { fetch: vi.fn(async () => new Response('', { status: 404 })) };
     const env = makeEnv({
       ASSET_BASE_URL: undefined,
-      ASSETS: fetcher as unknown as AnyEnv['ASSETS'],
+      SITE_ASSETS: fetcher as unknown as AnyEnv['SITE_ASSETS'],
     });
     const res = await dispatch(req('/assets/foo.woff2'), env);
     expect(res.status).toBe(404);
@@ -276,7 +292,7 @@ describe('dispatch — HTML shell fetch returns non-OK', () => {
     const fetcher = {
       fetch: vi.fn(async () => new Response('upstream error', { status: 500 })),
     };
-    const env = makeEnv({ ASSETS: fetcher as unknown as AnyEnv['ASSETS'] });
+    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv['SITE_ASSETS'] });
     const res = await dispatch(req('/about'), env);
     expect(res.status).toBe(500);
     // The body is the raw upstream body, NOT rewritten HTML — proof that
@@ -292,7 +308,7 @@ describe('dispatch — HTML shell fetch returns non-OK', () => {
     const fetcher = {
       fetch: vi.fn(async () => new Response('missing', { status: 404 })),
     };
-    const env = makeEnv({ ASSETS: fetcher as unknown as AnyEnv['ASSETS'] });
+    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv['SITE_ASSETS'] });
     const res = await dispatch(req('/deep/link'), env);
     expect(res.status).toBe(404);
   });
@@ -349,7 +365,7 @@ describe('dispatch — HTML shell metadata injection with dictionary lookup', ()
   it('injects heteronym definitions into the og:description for /萌 (lang=a, line 48)', async () => {
     const fetcher = shellFetcher();
     const env = makeEnv({
-      ASSETS: fetcher as unknown as AnyEnv['ASSETS'],
+      SITE_ASSETS: fetcher as unknown as AnyEnv['SITE_ASSETS'],
       DICTIONARY: makeBucket({
         'pack/12.txt': { body: JSON.stringify(DICT_ENTRY_FOR_MENG) },
       }),
@@ -365,7 +381,7 @@ describe('dispatch — HTML shell metadata injection with dictionary lookup', ()
 
   it('handles the lang=t prefix `/\'食` (parseDictionaryRoute line 45)', async () => {
     const fetcher = shellFetcher();
-    const env = makeEnv({ ASSETS: fetcher as unknown as AnyEnv['ASSETS'] });
+    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv['SITE_ASSETS'] });
     // Missing pack is OK — the route just resolves without a rich
     // description, but the prefix-parsing branch still runs.
     const res = await dispatch(req("/%27%E9%A3%9F"), env);
@@ -374,21 +390,21 @@ describe('dispatch — HTML shell metadata injection with dictionary lookup', ()
 
   it('handles the lang=h prefix `/:字` (parseDictionaryRoute line 46)', async () => {
     const fetcher = shellFetcher();
-    const env = makeEnv({ ASSETS: fetcher as unknown as AnyEnv['ASSETS'] });
+    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv['SITE_ASSETS'] });
     const res = await dispatch(req('/%3A%E5%AD%97'), env);
     expect(res.status).toBe(200);
   });
 
   it('handles the lang=c prefix `/~萌` (parseDictionaryRoute line 47)', async () => {
     const fetcher = shellFetcher();
-    const env = makeEnv({ ASSETS: fetcher as unknown as AnyEnv['ASSETS'] });
+    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv['SITE_ASSETS'] });
     const res = await dispatch(req('/~%E8%90%8C'), env);
     expect(res.status).toBe(200);
   });
 
   it('returns null from parseDictionaryRoute for `/=成語` (line 42 — starts with =)', async () => {
     const fetcher = shellFetcher();
-    const env = makeEnv({ ASSETS: fetcher as unknown as AnyEnv['ASSETS'] });
+    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv['SITE_ASSETS'] });
     const res = await dispatch(req('/=%E6%88%90%E8%AA%9E'), env);
     // Shell still renders — injectHeadMetadata runs but skips the dict
     // lookup because parseDictionaryRoute returns null.
@@ -397,21 +413,21 @@ describe('dispatch — HTML shell metadata injection with dictionary lookup', ()
 
   it('returns null from parseDictionaryRoute for `/~@部首` (line 41 — starts with ~@)', async () => {
     const fetcher = shellFetcher();
-    const env = makeEnv({ ASSETS: fetcher as unknown as AnyEnv['ASSETS'] });
+    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv['SITE_ASSETS'] });
     const res = await dispatch(req('/~@%E9%83%A8'), env);
     expect(res.status).toBe(200);
   });
 
   it('returns null from parseDictionaryRoute for `/\'=*星` (line 43)', async () => {
     const fetcher = shellFetcher();
-    const env = makeEnv({ ASSETS: fetcher as unknown as AnyEnv['ASSETS'] });
+    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv['SITE_ASSETS'] });
     const res = await dispatch(req("/'=*%E6%98%9F"), env);
     expect(res.status).toBe(200);
   });
 
   it('returns null from parseDictionaryRoute for `/\'=星` (line 44 — no *)', async () => {
     const fetcher = shellFetcher();
-    const env = makeEnv({ ASSETS: fetcher as unknown as AnyEnv['ASSETS'] });
+    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv['SITE_ASSETS'] });
     const res = await dispatch(req("/'=%E6%98%9F"), env);
     expect(res.status).toBe(200);
   });
@@ -421,7 +437,7 @@ describe('dispatch — HTML shell metadata injection with dictionary lookup', ()
     // description stays at the default from resolveHeadByPath.
     const fetcher = shellFetcher();
     const env = makeEnv({
-      ASSETS: fetcher as unknown as AnyEnv['ASSETS'],
+      SITE_ASSETS: fetcher as unknown as AnyEnv['SITE_ASSETS'],
       DICTIONARY: makeBucket({
         'pack/12.txt': { body: JSON.stringify({ '%u840C': { heteronyms: [] } }) },
       }),
@@ -461,7 +477,7 @@ describe('dispatch — GET /embed/<word> (oEmbed iframe target)', () => {
     // of the lightweight card.
     const fetcher = shellFetcher();
     const env = makeEnv({
-      ASSETS: fetcher as unknown as AnyEnv['ASSETS'],
+      SITE_ASSETS: fetcher as unknown as AnyEnv['SITE_ASSETS'],
       DICTIONARY: makeBucket({ 'pack/12.txt': { body: JSON.stringify(DICT_ENTRY_FOR_MENG) } }),
     });
     await dispatch(req('/embed/%E8%90%8C'), env);
@@ -493,7 +509,7 @@ describe('dispatch — GET /api/oembed (tokenless oEmbed API)', () => {
 describe('dispatch — oEmbed discovery <link> in the HTML shell', () => {
   it('adds a discovery <link rel="alternate" type="application/json+oembed"> for a dictionary entry route', async () => {
     const fetcher = shellFetcher();
-    const env = makeEnv({ ASSETS: fetcher as unknown as AnyEnv['ASSETS'] });
+    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv['SITE_ASSETS'] });
     const res = await dispatch(req('/%E8%90%8C'), env);
     const body = await res.text();
     expect(body).toContain('rel="alternate" type="application/json+oembed"');
@@ -502,7 +518,7 @@ describe('dispatch — oEmbed discovery <link> in the HTML shell', () => {
 
   it('omits the discovery <link> for non-entry routes like /about', async () => {
     const fetcher = shellFetcher();
-    const env = makeEnv({ ASSETS: fetcher as unknown as AnyEnv['ASSETS'] });
+    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv['SITE_ASSETS'] });
     const res = await dispatch(req('/about'), env);
     const body = await res.text();
     expect(body).not.toContain('application/json+oembed');
@@ -605,16 +621,16 @@ describe('dispatch — cfdict.txt 404 branch', () => {
 });
 
 describe('dispatch — ASSETS helper guard branches', () => {
-  it('returns 404 for an HTML-shell route when ASSETS has no fetcher', async () => {
+  it('returns 404 for an HTML-shell route when SITE_ASSETS has no fetcher', async () => {
     const env = makeEnv({
-      ASSETS: undefined,
+      SITE_ASSETS: undefined,
     });
     const res = await dispatch(req('/about'), env);
     expect(res.status).toBe(404);
   });
 
-  it('treats ASSETS.fetch as absent when it is not callable', async () => {
-    const env = makeEnv({ ASSETS: { fetch: true } as unknown as AnyEnv['ASSETS'] });
+  it('treats SITE_ASSETS.fetch as absent when it is not callable', async () => {
+    const env = makeEnv({ SITE_ASSETS: { fetch: true } as unknown as AnyEnv['SITE_ASSETS'] });
     const res = await dispatch(req('/plain.txt'), env);
     expect(res.status).toBe(404);
   });
@@ -629,9 +645,9 @@ describe('dispatch — ASSETS helper guard branches', () => {
 
   it('returns the static response directly when passThroughAssets finds a non-404 fetcher response', async () => {
     const env = makeEnv({
-      ASSETS: {
+      SITE_ASSETS: {
         fetch: vi.fn(async () => new Response('static-ok', { status: 200, headers: { 'Content-Type': 'text/plain' } })),
-      } as unknown as AnyEnv['ASSETS'],
+      } as unknown as AnyEnv['SITE_ASSETS'],
     });
     const res = await dispatch(req('/plain.txt'), env);
     expect(res.status).toBe(200);
