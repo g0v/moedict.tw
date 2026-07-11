@@ -223,6 +223,10 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
   client 路由的 `resolveMiddlePointTarget`（`src/utils/middle-point-target.ts`，
   MiddlePoint 的純對應層）都是它的消費者。**新的 parser 一律消費這兩個
   函式，禁止自建 if-chain。**
+- **request 路徑的 percent-decode 一律用 `tryDecodeURIComponent`**
+  （`dictionary-route.ts`，回 null 不丟例外）——裸呼 `decodeURIComponent`
+  遇到 `/api/%` 這類壞編碼會把 URIError 冒成 500（曾在 prod 實測到）。
+  呼叫端自選 fallback：fail-closed（回 null/400）或改用未解碼原字串。
 - **legacy 遠端樣式 `data/assets/styles.css`** 的 `#id` 選擇器會蓋掉新元件
   （含 Shadow DOM `:host` 預設）：`bun run check:css-ids` 在 CI 把關——
   src 內新增的 id 若撞上 legacy `#id` 選擇器且不在 allowlist 內會 fail；
