@@ -4,7 +4,7 @@ import { useRadicalTooltip } from '../hooks/useRadicalTooltip';
 import { cleanTextForTTS, speakText } from '../utils/tts-utils';
 import { getAudioUrl, playAudioUrl } from '../utils/audio-utils';
 import { rightAngle } from '../utils/ruby2hruby';
-import { decorateRuby, formatBopomofo, formatPinyin } from '../utils/bopomofo-pinyin-utils';
+import { decorateRuby } from '../utils/bopomofo-pinyin-utils';
 import { convertPinyinByLang } from '../utils/pinyin-preference-utils';
 import { addStarWord, addToLRU, hasStarWord, removeStarWord, writeLastLookup } from '../utils/word-record-utils';
 import { fetchDictionaryEntry, readCachedDictionaryEntry } from '../utils/dictionary-cache';
@@ -13,6 +13,7 @@ import { StrokeAnimation } from '../components/StrokeAnimation';
 import { applyHeadToDocument, getDictionaryHead } from '../ssr/head';
 import { CharacterImageView } from '../components/CharacterImageView';
 import { SvgIcon } from '../components/SvgIcon';
+import { TitlePronunciation } from '../components/TitlePronunciation';
 import { dedupeHeteronyms } from '../utils/heteronym-dedup';
 
 export type DictionaryLang = 'a' | 't' | 'h' | 'c';
@@ -691,71 +692,46 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                 />
               </span>
             )}
-
             <h1 className="title" data-title={title}>
-              <span
-                className={isSingleCharTitle ? 'single-char-stroke-trigger' : undefined}
-                role={isSingleCharTitle ? 'button' : undefined}
-                tabIndex={isSingleCharTitle ? 0 : undefined}
-                onClick={isSingleCharTitle ? toggleStrokeAnimation : undefined}
-                onKeyDown={
-                  isSingleCharTitle
-                    ? (event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          toggleStrokeAnimation(event);
-                        }
-                      }
-                    : undefined
-                }
+              <TitlePronunciation
+                lang={lang}
+                youyin={rubyData.youyin}
+                bAlt={rubyData.bAlt}
+                pAlt={rubyData.pAlt}
+                pronunAudioId={lang !== 'h' ? pronunAudioId : undefined}
+                isPlaying={playingAudioId === pronunAudioId}
+                onToggleAudio={() => {
+                  if (!pronunAudioId) return;
+                  const audioId = pronunAudioId;
+                  playAudioUrl(getAudioUrl(lang, audioId), (playing) => {
+                    setPlayingAudioId(playing ? audioId : null);
+                  });
+                }}
               >
-                {(() => {
-                  if (lang === 'h') return <span dangerouslySetInnerHTML={{ __html: title }} />;
-                  const htmlRuby = rubyData.ruby || '';
-                  if (!htmlRuby) return <span dangerouslySetInnerHTML={{ __html: title }} />;
-                  const hruby = rightAngle(htmlRuby);
-                  return <span dangerouslySetInnerHTML={{ __html: hruby }} />;
-                })()}
-              </span>
-              {rubyData.youyin && <small className="youyin">{rubyData.youyin}</small>}
-              {lang !== 'h' && pronunAudioId && (
-                <span className="audioBlock">
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    aria-label={playingAudioId === pronunAudioId ? '停止播放' : '播放發音'}
-                    className="playAudio part-of-speech"
-                    title={playingAudioId === pronunAudioId ? '停止播放' : '播放發音'}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      const audioId = pronunAudioId;
-                      playAudioUrl(getAudioUrl(lang, audioId), (playing) => {
-                        setPlayingAudioId(playing ? audioId : null);
-                      });
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        const audioId = pronunAudioId;
-                        playAudioUrl(getAudioUrl(lang, audioId), (playing) => {
-                          setPlayingAudioId(playing ? audioId : null);
-                        });
-                      }
-                    }}
-                  >
-                    <SvgIcon name={playingAudioId === pronunAudioId ? 'stop' : 'play'} size="1em" aria-hidden="true" />
-                  </span>
+                <span
+                  className={isSingleCharTitle ? 'single-char-stroke-trigger' : undefined}
+                  role={isSingleCharTitle ? 'button' : undefined}
+                  tabIndex={isSingleCharTitle ? 0 : undefined}
+                  onClick={isSingleCharTitle ? toggleStrokeAnimation : undefined}
+                  onKeyDown={
+                    isSingleCharTitle
+                      ? (event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            toggleStrokeAnimation(event);
+                          }
+                        }
+                      : undefined
+                  }
+                >
+                  {(() => {
+                    if (lang === 'h') return <span dangerouslySetInnerHTML={{ __html: title }} />;
+                    const htmlRuby = rubyData.ruby || '';
+                    if (!htmlRuby) return <span dangerouslySetInnerHTML={{ __html: title }} />;
+                    const hruby = rightAngle(htmlRuby);
+                    return <span dangerouslySetInnerHTML={{ __html: hruby }} />;
+                  })()}
                 </span>
-              )}
-              {(rubyData.bAlt || rubyData.pAlt) && (
-                <small className="alternative">
-                  {lang !== 'h' && rubyData.pAlt && (
-                    <span className="pinyin" dangerouslySetInnerHTML={{ __html: formatPinyin(rubyData.pAlt) }} />
-                  )}
-                  {rubyData.bAlt && (
-                    <span className="bopomofo" dangerouslySetInnerHTML={{ __html: formatBopomofo(rubyData.bAlt) }} />
-                  )}
-                </small>
-              )}
+              </TitlePronunciation>
             </h1>
             {hakkaReadings.length > 0 && (
               <div className="bopomofo">
@@ -907,9 +883,9 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
               <div className="synonyms">
                 <span className="part-of-speech">似</span>
                 <span>
-                  {dialectSynonyms.map((item, idx) => (
-                    <span key={`t-synonym-${idx}`}>
-                      {idx > 0 ? '、' : ''}
+                  {dialectSynonyms.map((item, synIdx) => (
+                    <span key={`t-synonym-${synIdx}`}>
+                      {synIdx > 0 ? '、' : ''}
                       <span dangerouslySetInnerHTML={{ __html: item }} />
                     </span>
                   ))}
