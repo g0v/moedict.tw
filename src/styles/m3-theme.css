@@ -18,9 +18,15 @@
  *    zhuyin) — see src/index.css. These are the product of extensive PUA/
  *    Kaiti rendering fixes; this file must never set `font-family` on any
  *    selector that also carries CJK headword/ruby text.
- *  - #user-pref (converted to a real <m3e-dialog>, styled in user-pref.tsx).
- *  - .fulltext-search* under the navbar (converted to <m3e-search-bar>/
- *    <m3e-search-view>, styled in full-text-search.tsx).
+ *  - #user-pref — no rules needed here; converted to a real <m3e-dialog>,
+ *    styled via its own exposed CSS custom properties in user-pref.tsx.
+ *
+ * IMPLEMENTATION NOTE:
+ *  - .fulltext-search* under the navbar IS actively reskinned below (see
+ *    ~line 218) via CSS-token overrides on the existing native <input>/
+ *    <div> markup. full-text-search.tsx itself was NOT converted to
+ *    <m3e-search-bar>/<m3e-search-view>; that conversion was attempted
+ *    and reverted (see git log).
  */
 
 /* ---------------------------------------------------------------------- */
