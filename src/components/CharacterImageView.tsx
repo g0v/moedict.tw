@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SvgIcon } from './SvgIcon';
+import { M3eButton } from '@m3e/react/button';
+import { M3eIcon } from '@m3e/react/icon';
 import { fetchDictionaryEntry, type DictionaryLang } from '../utils/dictionary-cache';
 
 interface FontGroup {
@@ -591,9 +592,9 @@ export function CharacterImageView({ queryWord, terms, lang, langTokenPrefix }: 
         <div className="charimg-controls">
           <select
             id="font"
+            className="charimg-font-select"
             value={font}
             onChange={handleFontChange}
-            style={{ marginRight: 8, padding: '4px 8px', fontSize: '0.95em' }}
           >
             {FONT_GROUPS.map((group) => (
               <optgroup key={group.label} label={group.label}>
@@ -603,30 +604,30 @@ export function CharacterImageView({ queryWord, terms, lang, langTokenPrefix }: 
               </optgroup>
             ))}
           </select>
-          <button
-            className="btn btn-default charimg-share-btn"
+          <M3eButton
+            variant="filled"
             title={shareSupported ? '分享' : '複製連結'}
             onClick={handleShare}
           >
-            <SvgIcon name="share" size={16} aria-hidden="true" />
+            <M3eIcon slot="icon" name="share" aria-hidden="true" />
             {shareSupported ? '分享' : '複製連結'}
-          </button>
-          <button
-            className="btn btn-default charimg-print-btn"
+          </M3eButton>
+          <M3eButton
+            variant="tonal"
             title="列印目前字圖"
             onClick={handlePrint}
           >
-            <SvgIcon name="print" size={16} aria-hidden="true" />
+            <M3eIcon slot="icon" name="print" aria-hidden="true" />
             列印字卡
-          </button>
-          <button
-            className="btn btn-default charimg-clear-btn"
+          </M3eButton>
+          <M3eButton
+            variant="outlined"
             title="清空描寫筆跡"
             onClick={handleClearDrawings}
           >
             清除描寫
-          </button>
-          <label style={{ marginBottom: 0, display: 'inline-flex', gap: 4, alignItems: 'center', fontWeight: 'normal' }}>
+          </M3eButton>
+          <label className="charimg-hollow-label">
             <input
               type="checkbox"
               checked={hollowMode}
@@ -637,12 +638,9 @@ export function CharacterImageView({ queryWord, terms, lang, langTokenPrefix }: 
         </div>
 
         <table
-          className="moetext"
+          className="moetext charimg-moetext"
           style={{
             maxWidth: '90%',
-            background: '#eee',
-            border: '24px #f9f9f9 solid',
-            boxShadow: '#d4d4d4 0 3px 3px',
             borderCollapse: 'separate',
             borderSpacing: 0,
           }}
@@ -652,12 +650,7 @@ export function CharacterImageView({ queryWord, terms, lang, langTokenPrefix }: 
               <tr>
                 <td
                   colSpan={2}
-                  style={{
-                    padding: '16px 24px',
-                    textAlign: 'center',
-                    color: '#666',
-                    fontSize: '1.05em',
-                  }}
+                  className="charimg-loading-cell"
                 >
                   載入中...
                 </td>
@@ -676,27 +669,16 @@ export function CharacterImageView({ queryWord, terms, lang, langTokenPrefix }: 
                       {renderPracticeCanvas(`segment:${segment.part}`, SEGMENT_IMAGE_SIZE, SEGMENT_IMAGE_SIZE)}
                     </div>
                   </td>
-                  <td
-                    style={{
-                      verticalAlign: 'top',
-                      padding: '16px 12px',
-                      color: '#006',
-                      textAlign: 'left',
-                      lineHeight: 1.6,
-                      fontSize: '1.05em',
-                      wordBreak: 'break-word',
-                    }}
-                  >
+                  <td className="charimg-def-cell">
                     {segment.href ? (
                       <a
                         href={segment.href}
-                        style={{ color: '#006' }}
                         onClick={(e) => handleTermClick(e, segment.href!)}
                       >
                         {segment.def || segment.part}
                       </a>
                     ) : (
-                      <span style={{ color: '#999' }}>{segment.part}</span>
+                      <span className="charimg-def-missing">{segment.part}</span>
                     )}
                   </td>
                 </tr>

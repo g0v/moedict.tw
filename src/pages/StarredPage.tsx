@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SvgIcon } from '../components/SvgIcon';
+import { M3eIconButton } from '@m3e/react/icon-button';
+import { M3eIcon } from '@m3e/react/icon';
 import {
   addStarWord,
   clearLRUWords,
@@ -133,35 +134,35 @@ export function StarredPage({ lang }: StarredPageProps) {
         <div className="word-list">
           {starredWords.length === 0 ? (
             <p className="bg-info">
-              （請按詞條旁的 <SvgIcon name="starEmpty" size="1em" style={{ margin: '0 0.15em', verticalAlign: '-0.125em' }} aria-hidden="true" /> 按鈕，即可將字詞加到這裡。）
+              （請按詞條旁的 <M3eIcon name="star" style={{ margin: '0 0.15em', verticalAlign: '-0.125em', fontSize: '1em' }} aria-hidden="true" /> 按鈕，即可將字詞加到這裡。）
             </p>
           ) : (
             starredWords.map((word) => {
               const path = buildPath(word);
               const tooltipId = buildTooltipId(word, path, prefix);
               return (
-                <div key={`starred-${word}`} style={{ clear: 'both', display: 'block' }}>
-                <button
-                  type="button"
+                <div key={`starred-${word}`} className="starred-word-row" style={{ clear: 'both', display: 'block' }}>
+                <M3eIconButton
                   className="btn-star-word"
+                  size="extra-small"
                   aria-label={`取消收藏「${word}」`}
                   title={`取消收藏「${word}」`}
                   onClick={() => handleToggleStar(word)}
                 >
-                  <SvgIcon name="star" size="0.9em" aria-hidden="true" />
-                </button>
+                  <M3eIcon name="star" filled aria-hidden="true" />
+                </M3eIconButton>
                   <a href={path} data-radical-id={tooltipId} onClick={(event) => handleWordClick(event, word)}>
                     {word}
                   </a>
-                  <button
-                    type="button"
+                  <M3eIconButton
                     className="btn-remove-word"
+                    size="extra-small"
                     aria-label={`移除收藏「${word}」`}
                     title={`移除收藏「${word}」`}
                     onClick={() => handleRemoveStarred(word)}
                   >
-                    <SvgIcon name="removeCircle" size="0.9em" aria-hidden="true" />
-                  </button>
+                    <M3eIcon name="remove" aria-hidden="true" />
+                  </M3eIconButton>
                 </div>
               );
             })
@@ -187,28 +188,28 @@ export function StarredPage({ lang }: StarredPageProps) {
             const path = buildPath(word);
             const tooltipId = buildTooltipId(word, path, prefix);
             return (
-              <div key={`recent-${word}`} style={{ clear: 'both', display: 'block' }}>
-                <button
-                  type="button"
+              <div key={`recent-${word}`} className="starred-word-row" style={{ clear: 'both', display: 'block' }}>
+                <M3eIconButton
                   className="btn-star-word"
+                  size="extra-small"
                   aria-label={starredSet.has(word) ? `取消收藏「${word}」` : `收藏「${word}」`}
                   title={starredSet.has(word) ? `取消收藏「${word}」` : `收藏「${word}」`}
                   onClick={() => handleToggleStar(word)}
                 >
-                  <SvgIcon name={starredSet.has(word) ? 'star' : 'starEmpty'} size="0.9em" aria-hidden="true" />
-                </button>
+                  <M3eIcon name="star" filled={starredSet.has(word)} aria-hidden="true" />
+                </M3eIconButton>
                 <a href={path} data-radical-id={tooltipId} onClick={(event) => handleWordClick(event, word)}>
                   {word}
                 </a>
-                <button
-                  type="button"
+                <M3eIconButton
                   className="btn-remove-word"
+                  size="extra-small"
                   aria-label={`移除紀錄「${word}」`}
                   title={`移除紀錄「${word}」`}
                   onClick={() => handleRemoveRecent(word)}
                 >
-                  <SvgIcon name="removeCircle" size="0.9em" aria-hidden="true" />
-                </button>
+                  <M3eIcon name="remove" aria-hidden="true" />
+                </M3eIconButton>
               </div>
             );
           })}

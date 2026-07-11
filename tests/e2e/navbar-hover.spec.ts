@@ -3,7 +3,7 @@ import { expect, test } from './_fixtures';
 test('desktop pointer crosses from 分類索引 to 同實異名 without closing the submenu', async ({ page }) => {
   await page.goto('/~%E8%90%8C');
 
-  await page.locator('nav .navbar-nav > li').first().locator('a').first().click();
+  await page.locator('.navbar-nav > li').first().locator('a').first().click();
   const categoryIndex = page.locator('a.taxonomy.c', { hasText: '…分類索引' });
   const target = page.locator('a.lang-option.c[href="/~=同實異名"]');
 

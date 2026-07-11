@@ -1,88 +1,99 @@
+import type { Page } from '@playwright/test';
 import { expect, test } from './_fixtures';
 
-// Regression test for #99 / PR #101: when the preferences panel is opened
-// on a short or narrow viewport, it must sit flush beneath the navbar and
-// stay inside the viewport (scrolling internally) instead of spilling down
-// past the bottom edge or riding up over the navbar.
+// Regression coverage for the Material 3 redesign: #user-pref is now a real
+// <m3e-dialog> (modal, centered, scrim-backed) instead of the legacy fixed
+// panel pinned 45/50px beneath the navbar (the shape asserted by the old
+// version of this spec, from #99 / PR #101). The dialog manages its own
+// responsive sizing/scrolling internally, so instead of asserting an exact
+// pinned offset we assert the modal actually opens, never spills outside
+// the viewport on constrained screens, and is dismissible.
 
-// Navbar height thresholds match the CSS in InlineStyles.tsx:
-//   desktop (>767px width): 45px
-//   mobile  (≤767px width): 50px
-const DESKTOP_NAVBAR = 45;
-const MOBILE_NAVBAR = 50;
-// Headless Chromium reports env(safe-area-inset-*) as 0, which matches the
-// fallback written into the CSS, so we don't need to mock notch insets.
-const SAFE_AREA = 0;
-
-async function openPrefPanel(page: import('@playwright/test').Page): Promise<void> {
-  // Bypass the slideToggle() animation path and just reveal the panel. The
-  // CSS under test is independent of how the panel was shown.
-  await page.evaluate(() => {
-    const panel = document.getElementById('user-pref');
-    if (!panel) throw new Error('user-pref element not found in DOM');
-    panel.style.display = 'block';
-  });
-  // One frame for layout to settle after the display flip.
+async function openPrefPanel(page: Page): Promise<void> {
+  const gearButton = page.getByRole('button', { name: '偏好設定' });
+  await gearButton.click();
   await page.waitForFunction(() => {
     const el = document.getElementById('user-pref');
-    return el !== null && el.offsetHeight > 0;
+    return el !== null && el.hasAttribute('open');
   });
 }
 
-test.describe('#user-pref panel fits the viewport below the navbar', () => {
-  test('narrow mobile viewport: panel pinned 50px below top, max-height clamped, scrolls', async ({ page }) => {
-    // iPhone SE-sized viewport — short enough that the panel would overflow
-    // without max-height + overflow:auto.
+test.describe('#user-pref settings dialog', () => {
+  test('narrow mobile viewport: dialog opens and stays within the viewport', async ({ page }) => {
+    // iPhone SE-sized viewport — short enough that the dialog would overflow
+    // without its own internal max-height + scroll handling.
     await page.setViewportSize({ width: 375, height: 568 });
     await page.goto('/%E8%90%8C');
     await page.waitForLoadState('networkidle');
 
     await openPrefPanel(page);
 
-    const box = await page.locator('#user-pref').boundingBox();
+    const dialog = page.locator('#user-pref');
+    await expect(dialog).toBeVisible();
+
+    // The <m3e-dialog> host is `display: contents` (it renders no box of
+    // its own); the actual visual surface is the internal native <dialog>
+    // in its shadow root, exposed to Playwright via its implicit role.
+    const surface = page.getByRole('dialog');
+    const box = await surface.boundingBox();
     expect(box).not.toBeNull();
     if (!box) return;
 
-    const computed = await page.locator('#user-pref').evaluate((el) => {
-      const cs = window.getComputedStyle(el);
-      return {
-        position: cs.position,
-        zIndex: Number(cs.zIndex),
-        overflowY: cs.overflowY,
-        top: cs.top,
-        maxHeightPx: Math.round(parseFloat(cs.maxHeight) || 0),
-      };
-    });
-
-    expect(computed.position).toBe('fixed');
-    expect(computed.zIndex).toBeGreaterThanOrEqual(1050);
-    expect(['auto', 'scroll']).toContain(computed.overflowY);
-
-    // Top edge sits at navbar height + safe-area-inset-top.
-    expect(box.y).toBe(MOBILE_NAVBAR + SAFE_AREA);
-    // Bottom edge never exceeds the viewport height.
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(375);
     expect(box.y + box.height).toBeLessThanOrEqual(568);
-    // max-height leaves room for the navbar above and safe-area-bottom below.
-    expect(computed.maxHeightPx).toBe(568 - MOBILE_NAVBAR - SAFE_AREA * 2);
   });
 
-  test('desktop viewport: panel pinned 45px below top', async ({ page }) => {
+  test('desktop viewport: dialog opens and stays within the viewport', async ({ page }) => {
     await page.setViewportSize({ width: 1024, height: 768 });
     await page.goto('/%E8%90%8C');
     await page.waitForLoadState('networkidle');
 
     await openPrefPanel(page);
 
-    const box = await page.locator('#user-pref').boundingBox();
+    const dialog = page.locator('#user-pref');
+    await expect(dialog).toBeVisible();
+
+    const surface = page.getByRole('dialog');
+    const box = await surface.boundingBox();
     expect(box).not.toBeNull();
     if (!box) return;
 
-    const computed = await page.locator('#user-pref').evaluate((el) => {
-      const cs = window.getComputedStyle(el);
-      return { position: cs.position, maxHeightPx: Math.round(parseFloat(cs.maxHeight) || 0) };
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(1024);
+    expect(box.y + box.height).toBeLessThanOrEqual(768);
+  });
+
+  test('dismissible: Escape key closes the dialog', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.goto('/%E8%90%8C');
+    await page.waitForLoadState('networkidle');
+
+    await openPrefPanel(page);
+    await expect(page.locator('#user-pref')).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => {
+      const el = document.getElementById('user-pref');
+      return el !== null && !el.hasAttribute('open');
     });
-    expect(computed.position).toBe('fixed');
-    expect(box.y).toBe(DESKTOP_NAVBAR + SAFE_AREA);
-    expect(computed.maxHeightPx).toBe(768 - DESKTOP_NAVBAR - SAFE_AREA * 2);
+  });
+
+  test('dismissible: built-in close button closes the dialog', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.goto('/%E8%90%8C');
+    await page.waitForLoadState('networkidle');
+
+    await openPrefPanel(page);
+
+    // m3e-dialog's `dismissible` close affordance lives in its shadow DOM;
+    // Playwright pierces shadow roots for role-based locators by default.
+    await page.getByRole('button', { name: /close/i }).click();
+    await page.waitForFunction(() => {
+      const el = document.getElementById('user-pref');
+      return el !== null && !el.hasAttribute('open');
+    });
   });
 });

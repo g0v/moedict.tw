@@ -5,7 +5,8 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { SvgIcon } from '../components/SvgIcon';
+import { M3eButton } from '@m3e/react/button';
+import { M3eIcon } from '@m3e/react/icon';
 import { applyHeadByPath, applyHeadToDocument, resolveHeadByPath } from '../ssr/head';
 import './About.css';
 
@@ -127,7 +128,7 @@ export function About({ assetBaseUrl }: AboutProps) {
 			<div style={{ textAlign: 'center' }}>
 				{R2_ENDPOINT && (
 					<img
-						style={{ marginTop: '25px', marginBottom: '15px', background: 'white' }}
+						style={{ marginTop: '25px', marginBottom: '15px' }}
 						title="萌典首頁"
 						src="/assets/images/icon.png"
 						width="50%"
@@ -139,10 +140,10 @@ export function About({ assetBaseUrl }: AboutProps) {
 
 			<div className="content">
 				<p className="how-to-use-link" style={{ textAlign: 'center', margin: '0 0 1.5em' }}>
-					<a href="#how-to-use" className="btn btn-info">
-						<SvgIcon name="book" size={14} style={{ marginRight: 6 }} aria-hidden="true" />
+					<M3eButton href="#how-to-use" variant="filled">
+						<M3eIcon slot="icon" name="book" aria-hidden="true" />
 						萌典功能使用說明
-					</a>
+					</M3eButton>
 				</p>
 				<p>
 					<Link to="/" className="home">
@@ -638,7 +639,7 @@ export function About({ assetBaseUrl }: AboutProps) {
 					className="visible-xs pull-left ebas btn btn-default home"
 				>
 					<span className="iconic-circle">
-						<SvgIcon name="arrowLeft" size={12} style={{ display: 'block', margin: '3px auto' }} aria-hidden="true" />
+						<M3eIcon name="arrow_back" style={{ display: 'block', margin: '3px auto', fontSize: 12 }} aria-hidden="true" />
 					</span>
 					<span> 萌典</span>
 				</Link>
@@ -680,32 +681,32 @@ export function About({ assetBaseUrl }: AboutProps) {
 			{/* 加入書籤按鈕 */}
 			{showWebOnlyActions && (
 				<div style={{ position: 'fixed', bottom: '10px', right: '10px', zIndex: 1 }} className="web-only">
-					<a
+					<M3eButton
 						id="opensearch"
-						onClick={async (e) => {
-							e.preventDefault();
-							const url = window.location.href;
-							try {
-								await navigator.clipboard.writeText(url);
-								setBookmarkHint('已複製網址，請按 Cmd+D (Mac) 或 Ctrl+D (Windows) 加入書籤');
-							} catch {
-								setBookmarkHint('請按 Cmd+D (Mac) 或 Ctrl+D (Windows) 將此頁加入書籤');
-							}
-							setTimeout(() => setBookmarkHint(''), 4000);
-						}}
-						className="btn btn-default btn-info"
-						href="#"
+						variant="tonal"
 						title="將此頁加入瀏覽器書籤"
+						onClick={() => {
+							const url = window.location.href;
+							void (async () => {
+								try {
+									await navigator.clipboard.writeText(url);
+									setBookmarkHint('已複製網址，請按 Cmd+D (Mac) 或 Ctrl+D (Windows) 加入書籤');
+								} catch {
+									setBookmarkHint('請按 Cmd+D (Mac) 或 Ctrl+D (Windows) 將此頁加入書籤');
+								}
+								setTimeout(() => setBookmarkHint(''), 4000);
+							})();
+						}}
 					>
-						<SvgIcon name="plusCircle" size={14} style={{ marginRight: 4 }} aria-hidden="true" />
+						<M3eIcon slot="icon" name="add_circle" aria-hidden="true" />
 						加入書籤
-					</a>
+					</M3eButton>
 					{bookmarkHint && (
-						<div style={{ marginTop: 6, fontSize: 12, color: 'var(--color-fg-muted)', maxWidth: 260 }}>
+						<div className="bookmark-hint">
 							{bookmarkHint}
 						</div>
 					)}
-					</div>
+				</div>
 			)}
 			{/* 截圖放大檢視（lightbox）#95 */}
 			{lightbox && (

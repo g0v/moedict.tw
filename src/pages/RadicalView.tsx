@@ -62,11 +62,11 @@ export function RadicalView({ lang }: RadicalViewProps) {
   } else if (state.error) {
     resultContent = <div className="def">{state.error}</div>
   } else {
-    resultContent = 
-      <div className="entry-item list">
+    resultContent = (
+      <div className="entry-item list radical-index">
         {state.rows.map((row, stroke) => (
-          <div key={stroke} style={{ margin: '8px 0' }}>
-            <span className="stroke-count" style={{ marginRight: '8px' }}>{stroke}</span>
+          <div key={stroke} className="stroke-row">
+            <span className="stroke-count">{stroke}</span>
             <span className="stroke-list">
               {row.map((radical) => {
                 const to = `${prefix}${radical}`;
@@ -76,7 +76,6 @@ export function RadicalView({ lang }: RadicalViewProps) {
                     className="stroke-char"
                     href={to}
                     data-radical-id={`${tooltipPrefix}${radical}`}
-                    style={{ marginRight: '6px' }}
                     onClick={(event) => onNavigate(event, to)}
                   >
                     {radical}
@@ -84,18 +83,16 @@ export function RadicalView({ lang }: RadicalViewProps) {
                 );
               })}
             </span>
-            <hr style={{ margin: '0', padding: '0', height: '0' }} />
           </div>
         ))}
       </div>
+    );
   }
 
   return (
     <div className="result">
-      <h1 className="title" style={{ marginTop: '0' }}>部首表</h1>
-      <div className="entry">
-        {resultContent}
-      </div>
+      <h1 className="title radical-page-title">部首表</h1>
+      <div className="entry">{resultContent}</div>
     </div>
   );
 }

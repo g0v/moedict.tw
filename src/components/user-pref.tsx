@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { M3eDialog } from '@m3e/react/dialog';
+import { M3eButton } from '@m3e/react/button';
+import { M3eIconButton } from '@m3e/react/icon-button';
 import {
 	FONT_SIZE_MAX_PT,
 	FONT_SIZE_MIN_PT,
@@ -8,7 +11,7 @@ import {
 	readFontSize,
 	writeFontSize,
 } from '../utils/font-size-utils';
-import { SvgIcon } from './SvgIcon';
+import { M3eIcon } from '@m3e/react/icon';
 
 type Lang = 'a' | 't' | 'h' | 'c';
 type PrefKey = 'phonetics' | 'pinyin_a' | 'pinyin_t' | 'pinyin_h';
@@ -19,12 +22,6 @@ interface PrefOption {
 	divider?: boolean;
 }
 
-interface JQueryCollection {
-	slideToggle: () => void;
-	slideUp: () => void;
-}
-
-type JQueryFn = (selector: string) => JQueryCollection;
 
 const PHONETICS_OPTIONS: PrefOption[] = [
 	{ value: 'rightangle', label: '注音拼音共同顯示' },
@@ -78,14 +75,12 @@ function setStoredPref(key: string, value: string): void {
 	}
 }
 
-function getJQuery(): JQueryFn | null {
-	const maybeJQuery = (window as Window & { jQuery?: unknown }).jQuery;
-	return typeof maybeJQuery === 'function' ? (maybeJQuery as JQueryFn) : null;
-}
-
-function isPanelHidden(panel: HTMLElement): boolean {
-	return window.getComputedStyle(panel).display === 'none';
-}
+/**
+ * 偏好設定面板開關事件：改用 CustomEvent + UserPref 內部 state 控制
+ * <m3e-dialog> 的 open。舊版 jQuery slideToggle/slideUp 從未真正生效
+ * （AssetLoader 未載入 jQuery），這裡直接改為純事件通知，行為等價。
+ */
+const USER_PREF_TOGGLE_EVENT = 'moe:user-pref-toggle';
 
 function applyPhoneticsBodyAttr(value: string): void {
 	const mapped = {
@@ -99,29 +94,7 @@ function applyPhoneticsBodyAttr(value: string): void {
 
 // eslint-disable-next-line react-refresh/only-export-components
 export function toggleUserPrefPanel(): void {
-	const panel = document.getElementById('user-pref');
-	if (!panel) return;
-
-	const $ = getJQuery();
-	if ($) {
-		$('#user-pref').slideToggle();
-		return;
-	}
-
-	panel.style.display = isPanelHidden(panel) ? 'block' : 'none';
-}
-
-function hideUserPrefPanel(): void {
-	const panel = document.getElementById('user-pref');
-	if (!panel) return;
-
-	const $ = getJQuery();
-	if ($) {
-		$('#user-pref').slideUp();
-		return;
-	}
-
-	panel.style.display = 'none';
+	window.dispatchEvent(new CustomEvent(USER_PREF_TOGGLE_EVENT));
 }
 
 function PrefList({
@@ -171,11 +144,18 @@ function PrefList({
 export function UserPref() {
 	const location = useLocation();
 	const currentLang = inferLangFromPath(location.pathname);
+	const [open, setOpen] = useState(false);
 	const [phonetics, setPhonetics] = useState(() => getStoredPref('phonetics', 'rightangle'));
 	const [pinyinA, setPinyinA] = useState(() => getStoredPref('pinyin_a', 'HanYu'));
 	const [pinyinT, setPinyinT] = useState(() => getStoredPref('pinyin_t', 'TL'));
 	const [pinyinH, setPinyinH] = useState(() => getStoredPref('pinyin_h', 'TH'));
 	const [fontSize, setFontSize] = useState<number>(() => readFontSize());
+
+	useEffect(() => {
+		const onToggle = () => setOpen((current) => !current);
+		window.addEventListener(USER_PREF_TOGGLE_EVENT, onToggle);
+		return () => window.removeEventListener(USER_PREF_TOGGLE_EVENT, onToggle);
+	}, []);
 
 	useEffect(() => {
 		const classList = document.body.classList;
@@ -196,7 +176,7 @@ export function UserPref() {
 	}, [fontSize]);
 
 	const closePanel = useCallback(() => {
-		hideUserPrefPanel();
+		setOpen(false);
 	}, []);
 
 	const adjustFontSize = useCallback((offset: number) => {
@@ -204,89 +184,84 @@ export function UserPref() {
 	}, []);
 
 	return (
-		<div id="user-pref" style={{ display: 'none' }}>
-			<div>
-				<h4>偏好設定</h4>
-				<button className="close btn-close" type="button" aria-hidden onClick={closePanel}>
-					×
-				</button>
-				<ul>
-					{currentLang === 'a' && (
-						<PrefList
-							name="pinyin_a"
-							label="羅馬拼音顯示方式"
-							options={PINYIN_A_OPTIONS}
-							value={pinyinA}
-							onChange={(nextValue) => {
-								setStoredPref('pinyin_a', nextValue);
-								setPinyinA(nextValue);
-								window.location.reload();
-							}}
-						/>
-					)}
-					{currentLang === 't' && (
-						<PrefList
-							name="pinyin_t"
-							label="羅馬拼音顯示方式"
-							options={PINYIN_T_OPTIONS}
-							value={pinyinT}
-							onChange={(nextValue) => {
-								setStoredPref('pinyin_t', nextValue);
-								setPinyinT(nextValue);
-								window.location.reload();
-							}}
-						/>
-					)}
-					{currentLang === 'h' && (
-						<PrefList
-							name="pinyin_h"
-							label="四縣客語顯示方式"
-							options={PINYIN_H_OPTIONS}
-							value={pinyinH}
-							onChange={(nextValue) => {
-								setStoredPref('pinyin_h', nextValue);
-								setPinyinH(nextValue);
-								window.location.reload();
-							}}
-						/>
-					)}
+		<M3eDialog id="user-pref" open={open} dismissible onClosed={closePanel} onCancel={closePanel}>
+			<span slot="header">偏好設定</span>
+			<ul>
+				{currentLang === 'a' && (
 					<PrefList
-						name="phonetics"
-						label="條目音標顯示方式"
-						options={PHONETICS_OPTIONS}
-						value={phonetics}
-						onChange={setPhonetics}
+						name="pinyin_a"
+						label="羅馬拼音顯示方式"
+						options={PINYIN_A_OPTIONS}
+						value={pinyinA}
+						onChange={(nextValue) => {
+							setStoredPref('pinyin_a', nextValue);
+							setPinyinA(nextValue);
+							window.location.reload();
+						}}
 					/>
-					<li className="btn-group" id="pref-font-size">
-						<label htmlFor="pref-font-size-dec">字體大小</label>
-						<span className="font-size-controls">
-							<button
-								id="pref-font-size-dec"
-								type="button"
-								className="btn btn-default btn-font-size"
-								onClick={() => adjustFontSize(-1)}
-								disabled={fontSize <= FONT_SIZE_MIN_PT}
-								aria-label="縮小字體"
-							>
-								<SvgIcon name="resizeSmall" title="縮小字體" />
-							</button>
-							<span className="font-size-current" aria-live="polite">{fontSize}pt</span>
-							<button
-								type="button"
-								className="btn btn-default btn-font-size"
-								onClick={() => adjustFontSize(1)}
-								disabled={fontSize >= FONT_SIZE_MAX_PT}
-								aria-label="放大字體"
-							>
-								<SvgIcon name="resizeFull" title="放大字體" />
-							</button>
-						</span>
-					</li>
-				</ul>
-				<button className="btn btn-primary btn-block btn-close" type="button" onClick={closePanel}>
+				)}
+				{currentLang === 't' && (
+					<PrefList
+						name="pinyin_t"
+						label="羅馬拼音顯示方式"
+						options={PINYIN_T_OPTIONS}
+						value={pinyinT}
+						onChange={(nextValue) => {
+							setStoredPref('pinyin_t', nextValue);
+							setPinyinT(nextValue);
+							window.location.reload();
+						}}
+					/>
+				)}
+				{currentLang === 'h' && (
+					<PrefList
+						name="pinyin_h"
+						label="四縣客語顯示方式"
+						options={PINYIN_H_OPTIONS}
+						value={pinyinH}
+						onChange={(nextValue) => {
+							setStoredPref('pinyin_h', nextValue);
+							setPinyinH(nextValue);
+							window.location.reload();
+						}}
+					/>
+				)}
+				<PrefList
+					name="phonetics"
+					label="條目音標顯示方式"
+					options={PHONETICS_OPTIONS}
+					value={phonetics}
+					onChange={setPhonetics}
+				/>
+				<li className="btn-group" id="pref-font-size">
+					<label htmlFor="pref-font-size-dec">字體大小</label>
+					<span className="font-size-controls">
+						<M3eIconButton
+							id="pref-font-size-dec"
+							variant="outlined"
+							onClick={() => adjustFontSize(-1)}
+							disabled={fontSize <= FONT_SIZE_MIN_PT}
+							aria-label="縮小字體"
+						>
+							<M3eIcon name="text_decrease" title="縮小字體" />
+						</M3eIconButton>
+						<span className="font-size-current" aria-live="polite">{fontSize}pt</span>
+						<M3eIconButton
+							variant="outlined"
+							onClick={() => adjustFontSize(1)}
+							disabled={fontSize >= FONT_SIZE_MAX_PT}
+							aria-label="放大字體"
+						>
+							<M3eIcon name="text_increase" title="放大字體" />
+						</M3eIconButton>
+					</span>
+				</li>
+			</ul>
+			<div slot="actions" {...{ end: true }}>
+				<M3eButton variant="filled" onClick={closePanel}>
 					關閉
-				</button>
+				</M3eButton>
 			</div>
-		</div>
+		</M3eDialog>
 	);
 }

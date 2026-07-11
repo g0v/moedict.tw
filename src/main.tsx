@@ -1,6 +1,30 @@
 // Offline API handler must be imported before any fetch calls
 import './offline-api.ts'
 
+// Register the m3e-theme custom element used by the static wrapper in index.html
+import '@m3e/web/theme'
+
+// Material Symbols glyphs rendered via <m3e-icon name="..."> across the M3
+// chrome (top app bar, settings dialog, dictionary entry actions). Icon
+// modules self-register on import — see src/components/SvgIcon.tsx for the
+// legacy FontAwesome-derived glyphs still used for external brand marks
+// (Apple/Android/Google Play) where Material Symbols has no equivalent.
+import '@m3e/icons/outlined/book'
+import '@m3e/icons/outlined/bookmark'
+import '@m3e/icons/outlined/settings'
+import '@m3e/icons/outlined/download'
+import '@m3e/icons/outlined/info'
+import '@m3e/icons/outlined/edit'
+import '@m3e/icons/outlined/star'
+import '@m3e/icons/outlined/text_decrease'
+import '@m3e/icons/outlined/text_increase'
+import '@m3e/icons/outlined/close'
+import '@m3e/icons/outlined/arrow_back'
+import '@m3e/icons/outlined/add_circle'
+import '@m3e/icons/outlined/remove'
+import '@m3e/icons/outlined/share'
+import '@m3e/icons/outlined/print'
+
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'

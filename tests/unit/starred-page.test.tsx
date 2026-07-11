@@ -22,9 +22,10 @@ beforeEach(() => {
   root = createRoot(container);
   // Suppress React 19 act() warning — known false positive with
   // createRoot + useEffect + happy-dom (effects fire after act returns)
+  const originalConsoleError = console.error.bind(console);
   vi.spyOn(console, 'error').mockImplementation((msg: unknown, ...rest: unknown[]) => {
     if (typeof msg === 'string' && msg.includes('not wrapped in act')) return;
-    console.error(msg, ...rest);
+    originalConsoleError(msg, ...rest);
   });
 });
 
@@ -59,7 +60,7 @@ describe('StarredPage — star toggle in history (#217)', () => {
     const recent = container.querySelector('.recent-section');
     expect(recent).toBeTruthy();
 
-    const starButtons = recent!.querySelectorAll('.btn-star-word');
+    const starButtons = recent!.querySelectorAll('m3e-icon-button.btn-star-word, .btn-star-word');
     expect(starButtons.length).toBe(1);
 
     // No leftover bullet <span>·</span> elements
@@ -71,7 +72,7 @@ describe('StarredPage — star toggle in history (#217)', () => {
     addToLRU('未收藏', 'a');
     renderPage('a');
 
-    const btn = container.querySelector<HTMLButtonElement>('.recent-section .btn-star-word');
+    const btn = container.querySelector<HTMLElement>('.recent-section m3e-icon-button.btn-star-word, .recent-section .btn-star-word');
     expect(btn).toBeTruthy();
     expect(btn!.getAttribute('aria-label')).toContain('收藏');
     expect(btn!.getAttribute('aria-label')).not.toContain('取消');
@@ -82,7 +83,7 @@ describe('StarredPage — star toggle in history (#217)', () => {
     addToLRU('已收藏', 'a');
     renderPage('a');
 
-    const btn = container.querySelector<HTMLButtonElement>('.recent-section .btn-star-word');
+    const btn = container.querySelector<HTMLElement>('.recent-section m3e-icon-button.btn-star-word, .recent-section .btn-star-word');
     expect(btn).toBeTruthy();
     expect(btn!.getAttribute('aria-label')).toContain('取消收藏');
   });
@@ -92,7 +93,7 @@ describe('StarredPage — star toggle in history (#217)', () => {
     renderPage('a');
 
     // Initially not starred
-    let btn = container.querySelector<HTMLButtonElement>('.recent-section .btn-star-word');
+    let btn = container.querySelector<HTMLElement>('.recent-section m3e-icon-button.btn-star-word, .recent-section .btn-star-word');
     expect(btn!.getAttribute('aria-label')).toContain('收藏');
     expect(btn!.getAttribute('aria-label')).not.toContain('取消');
 
@@ -108,7 +109,7 @@ describe('StarredPage — star toggle in history (#217)', () => {
     expect(starredLinks[0].textContent).toBe('可收藏');
 
     // Recent section star should now show "取消收藏"
-    btn = container.querySelector<HTMLButtonElement>('.recent-section .btn-star-word');
+    btn = container.querySelector<HTMLElement>('.recent-section m3e-icon-button.btn-star-word, .recent-section .btn-star-word');
     expect(btn!.getAttribute('aria-label')).toContain('取消收藏');
   });
 
@@ -118,7 +119,7 @@ describe('StarredPage — star toggle in history (#217)', () => {
     renderPage('a');
 
     // Initially starred
-    let btn = container.querySelector<HTMLButtonElement>('.recent-section .btn-star-word');
+    let btn = container.querySelector<HTMLElement>('.recent-section m3e-icon-button.btn-star-word, .recent-section .btn-star-word');
     expect(btn!.getAttribute('aria-label')).toContain('取消收藏');
     expect(container.querySelectorAll('.starred-section .word-list a').length).toBe(1);
 
@@ -129,7 +130,7 @@ describe('StarredPage — star toggle in history (#217)', () => {
     expect(container.querySelectorAll('.starred-section .word-list a').length).toBe(0);
 
     // Recent section star should now show "收藏"
-    btn = container.querySelector<HTMLButtonElement>('.recent-section .btn-star-word');
+    btn = container.querySelector<HTMLElement>('.recent-section m3e-icon-button.btn-star-word, .recent-section .btn-star-word');
     expect(btn!.getAttribute('aria-label')).toContain('收藏');
     expect(btn!.getAttribute('aria-label')).not.toContain('取消');
   });
@@ -139,7 +140,7 @@ describe('StarredPage — star toggle in history (#217)', () => {
     renderPage('a');
 
     const starred = container.querySelector('.starred-section');
-    const starButtons = starred!.querySelectorAll('.btn-star-word');
+    const starButtons = starred!.querySelectorAll('m3e-icon-button.btn-star-word, .btn-star-word');
     expect(starButtons.length).toBe(1);
     expect(starButtons[0].getAttribute('aria-label')).toContain('取消收藏');
   });
@@ -150,7 +151,7 @@ describe('StarredPage — star toggle in history (#217)', () => {
 
     expect(container.querySelectorAll('.starred-section .word-list a').length).toBe(1);
 
-    const btn = container.querySelector<HTMLButtonElement>('.starred-section .btn-star-word');
+    const btn = container.querySelector<HTMLElement>('.starred-section m3e-icon-button.btn-star-word, .starred-section .btn-star-word');
     clickEl(btn!);
 
     expect(container.querySelectorAll('.starred-section .word-list a').length).toBe(0);
@@ -161,8 +162,8 @@ describe('StarredPage — star toggle in history (#217)', () => {
     renderPage('a');
 
     const recent = container.querySelector('.recent-section');
-    const starBtns = recent!.querySelectorAll('.btn-star-word');
-    const removeBtns = recent!.querySelectorAll('.btn-remove-word');
+    const starBtns = recent!.querySelectorAll('m3e-icon-button.btn-star-word, .btn-star-word');
+    const removeBtns = recent!.querySelectorAll('m3e-icon-button.btn-remove-word, .btn-remove-word');
     expect(starBtns.length).toBe(1);
     expect(removeBtns.length).toBe(1);
     // Star is before the link, remove is after

@@ -1,0 +1,704 @@
+/**
+ * Material Design 3 (Expressive) visual reskin.
+ *
+ * This stylesheet is injected LAST in document order (via M3StyleInjector,
+ * mounted at the end of the Layout tree) so it wins the cascade over the
+ * legacy Bootstrap 3 theme (data/assets/styles.css, remote) and the
+ * InlineStyles.tsx runtime <style> block, without needing to fight either
+ * with brute-force `!important` on every rule.
+ *
+ * Color/shape/elevation/motion tokens come from the <m3e-theme> element
+ * wrapping #root in index.html (--md-sys-color-*, --md-sys-shape-*, etc.),
+ * generated at runtime by @material/material-color-utilities (HCT) from a
+ * single seed color. Do NOT hardcode hex colors here — reference tokens so
+ * light/dark/contrast all stay correct automatically.
+ *
+ * OUT OF SCOPE (left untouched on purpose):
+ *  - CJK font-family stacks for dictionary content (.entry .title, ruby,
+ *    zhuyin) — see src/index.css. These are the product of extensive PUA/
+ *    Kaiti rendering fixes; this file must never set `font-family` on any
+ *    selector that also carries CJK headword/ruby text.
+ *  - #user-pref (converted to a real <m3e-dialog>, styled in user-pref.tsx).
+ *  - .fulltext-search* under the navbar (converted to <m3e-search-bar>/
+ *    <m3e-search-view>, styled in full-text-search.tsx).
+ */
+
+/* ---------------------------------------------------------------------- */
+/* Typography — Roboto Flex for UI chrome / Latin text only.               */
+/* ---------------------------------------------------------------------- */
+
+:root {
+  --m3-font-ui: "Roboto Flex", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --m3-font-mono: "Roboto Mono", "Ubuntu Mono", Menlo, Monaco, Consolas, monospace;
+}
+
+body {
+  font-family: var(--m3-font-ui);
+  background-color: var(--md-sys-color-background, #fffbff);
+  color: var(--md-sys-color-on-background, #1c1b1e);
+}
+
+/* Scrollbar theming (Chromium) */
+* {
+  scrollbar-color: var(--md-sys-color-outline-variant, #c9c4c4) transparent;
+}
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-thumb {
+  background-color: var(--md-sys-color-outline-variant, #c9c4c4);
+  border-radius: 8px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track { background: transparent; }
+
+a {
+  color: var(--md-sys-color-primary, #904a41);
+}
+a:hover {
+  color: var(--md-sys-color-primary, #904a41);
+  opacity: 0.82;
+}
+
+/* Strong, visible focus rings everywhere (M3 accessibility baseline) */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--md-sys-color-primary, #904a41);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Top app bar shell                                                       */
+/* ---------------------------------------------------------------------- */
+
+m3e-app-bar.navbar-fixed-top {
+  position: fixed;
+  top: var(--moe-safe-area-top, 0px);
+  left: 0;
+  right: 0;
+  z-index: 1030;
+  --m3e-app-bar-container-color: var(--md-sys-color-surface-container, #f6ecea);
+}
+
+m3e-app-bar .navbar-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+m3e-app-bar .navbar-brand.brand {
+  font-family: var(--m3-font-ui);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--md-sys-color-on-surface, #1c1b1e) !important;
+  padding: 0 12px 0 4px;
+  text-decoration: none !important;
+}
+
+m3e-app-bar ul.nav {
+  display: flex;
+  align-items: center;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 2px;
+}
+
+m3e-app-bar ul.nav > li {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* Dictionary-switcher dropdown trigger, restyled as an M3 assist-chip-like
+   affordance. The flyout panel itself (ul.dropdownMenuRoot, CSS-modules
+   scoped) keeps its own positioning logic — only repaint its surface here. */
+m3e-app-bar ul.nav > li > a {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: var(--md-sys-shape-corner-full, 999px);
+  color: var(--md-sys-color-on-surface-variant, #52443f) !important;
+  text-decoration: none !important;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+m3e-app-bar ul.nav > li > a:hover {
+  background-color: var(--md-sys-color-surface-container-high, #ece0dd);
+}
+
+m3e-app-bar .caret {
+  margin-left: 6px;
+  opacity: 0.7;
+}
+
+/* Dropdown flyout surface */
+[class*="dropdownMenuRoot"] {
+  background-color: var(--md-sys-color-surface-container, #f6ecea) !important;
+  color: var(--md-sys-color-on-surface, #1c1b1e);
+  border: none !important;
+  border-radius: var(--md-sys-shape-corner-medium, 12px) !important;
+  box-shadow: var(--md-sys-elevation-level2, 0 4px 8px 3px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.3)) !important;
+  overflow: hidden;
+}
+[class*="dropdownMenuRoot"] a {
+  color: var(--md-sys-color-on-surface, #1c1b1e) !important;
+}
+[class*="dropdownMenuRoot"] a:hover,
+[class*="dropdownMenuRoot"] a:focus {
+  background-color: var(--md-sys-color-surface-container-high, #ece0dd) !important;
+}
+[class*="dropdownMenuRoot"] li + li {
+  border-top-color: var(--md-sys-color-outline-variant, #d8c2be) !important;
+}
+[class*="dropdownSubmenu"] > .dropdownMenu,
+[class*="dropdownSubmenu"] > [class*="dropdownMenu"] {
+  background-color: var(--md-sys-color-surface-container, #f6ecea) !important;
+  border-color: var(--md-sys-color-outline-variant, #d8c2be) !important;
+}
+
+/* Icon buttons living in the app bar shell */
+m3e-app-bar m3e-icon-button {
+  --m3e-icon-button-icon-color: var(--md-sys-color-on-surface-variant, #52443f);
+  color: var(--md-sys-color-on-surface-variant, #52443f);
+}
+
+m3e-app-bar .iconic-circle {
+  border-radius: var(--md-sys-shape-corner-full, 999px) !important;
+  background: var(--md-sys-color-tertiary-container, #ffdad4) !important;
+  color: var(--md-sys-color-on-tertiary-container, #58180a) !important;
+}
+
+/* Push page content below the app bar (nav-bg / #main-content already do
+   this via InlineStyles' calc(); this only repaints the background strip). */
+.nav-bg.navbar-fixed-top {
+  background-color: var(--md-sys-color-surface-container, #f6ecea);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Left sidebar / query-box (search entry point — logic untouched)         */
+/* ---------------------------------------------------------------------- */
+
+.query-box {
+  background-color: var(--md-sys-color-surface-container-low, #fdf6f4) !important;
+  border-right: 1px solid var(--md-sys-color-outline-variant, #d8c2be) !important;
+}
+
+.fulltext-search-input {
+  border-radius: var(--md-sys-shape-corner-full, 999px) !important;
+  border: 1px solid var(--md-sys-color-outline, #85736e) !important;
+  background: var(--md-sys-color-surface-container-high, #ece0dd) !important;
+  color: var(--md-sys-color-on-surface, #1c1b1e) !important;
+}
+.fulltext-search-input:focus {
+  border-color: var(--md-sys-color-primary, #904a41) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--md-sys-color-primary, #904a41) 22%, transparent) !important;
+}
+.fulltext-search-icon {
+  color: var(--md-sys-color-on-surface-variant, #52443f) !important;
+}
+.fulltext-search-panel {
+  background-color: var(--md-sys-color-surface-container, #f6ecea) !important;
+  border: none !important;
+  border-radius: var(--md-sys-shape-corner-medium, 12px) !important;
+  box-shadow: var(--md-sys-elevation-level2, 0 4px 8px 3px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.3)) !important;
+}
+.fulltext-search-result:hover,
+.fulltext-search-result.is-active {
+  background: var(--md-sys-color-surface-container-high, #ece0dd) !important;
+}
+.fulltext-search-result-snippet {
+  color: var(--md-sys-color-on-surface-variant, #52443f) !important;
+}
+.fulltext-search-highlight {
+  background: var(--md-sys-color-tertiary-container, #ffdad4) !important;
+  color: var(--md-sys-color-on-tertiary-container, #58180a) !important;
+}
+
+.ui-autocomplete {
+  background: var(--md-sys-color-surface-container, #f6ecea) !important;
+  border: none !important;
+  border-radius: var(--md-sys-shape-corner-medium, 12px) !important;
+  box-shadow: var(--md-sys-elevation-level2, 0 4px 8px 3px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.3)) !important;
+}
+.ui-autocomplete.search-results .ui-menu-item {
+  border-bottom-color: var(--md-sys-color-outline-variant, #d8c2be) !important;
+}
+.ui-autocomplete.search-results .ui-menu-item:not(.is-status):hover {
+  background: var(--md-sys-color-surface-container-high, #ece0dd) !important;
+}
+.ui-autocomplete.search-results .ui-menu-item:hover a,
+.ui-autocomplete.search-results .ui-menu-item a:focus {
+  border-color: var(--md-sys-color-primary, #904a41) !important;
+  background: var(--md-sys-color-primary-container, #ffdad4) !important;
+  color: var(--md-sys-color-on-primary-container, #3a0a02) !important;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Dictionary result cards                                                 */
+/* ---------------------------------------------------------------------- */
+
+.result {
+  background-color: var(--md-sys-color-surface-container-low, #fdf6f4);
+  border-radius: var(--md-sys-shape-corner-large, 16px);
+  box-shadow: var(--md-sys-elevation-level1, 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15));
+}
+
+.result .entry + .entry {
+  margin-top: 12px;
+  padding-top: 20px;
+  border-top: 1px solid var(--md-sys-color-outline-variant, #d8c2be);
+}
+
+.part-of-speech,
+.glyph,
+.fw_lang,
+.specific {
+  background-color: var(--md-sys-color-tertiary, #984059) !important;
+  color: var(--md-sys-color-on-tertiary, #ffffff) !important;
+  border-radius: var(--md-sys-shape-corner-small, 8px) !important;
+}
+
+.iconic-circle,
+.iconic-color {
+  background: var(--md-sys-color-secondary-container, #ffdad4) !important;
+  color: var(--md-sys-color-on-secondary-container, #3a0a02) !important;
+  border-radius: var(--md-sys-shape-corner-full, 999px) !important;
+  transition: background-color 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+.iconic-circle.stroke:hover,
+.star:hover {
+  background: var(--md-sys-color-secondary, #77574f) !important;
+  color: var(--md-sys-color-on-secondary, #ffffff) !important;
+}
+.iconic-color.star {
+  background: var(--md-sys-color-surface-container-low, #fdf6f4) !important;
+}
+.iconic-color.star:hover {
+  background: var(--md-sys-color-secondary-container, #ffdad4) !important;
+}
+
+body.lang-a .iconic-circle { background: var(--md-sys-color-error-container, #ffdad4) !important; color: var(--md-sys-color-on-error-container, #410002) !important; }
+body.lang-c .iconic-circle { background: var(--md-sys-color-primary-container, #ffdad4) !important; color: var(--md-sys-color-on-primary-container, #3a0a02) !important; }
+body.lang-h .iconic-circle { background: var(--md-sys-color-tertiary-container, #ffdad4) !important; color: var(--md-sys-color-on-tertiary-container, #58180a) !important; }
+body.lang-t .iconic-circle { background: var(--md-sys-color-secondary-container, #ffdad4) !important; color: var(--md-sys-color-on-secondary-container, #3a0a02) !important; }
+body.lang-a .iconic-color { color: var(--md-sys-color-error, #ba1a1a) !important; }
+body.lang-c .iconic-color { color: var(--md-sys-color-primary, #904a41) !important; }
+body.lang-h .iconic-color { color: var(--md-sys-color-tertiary, #984059) !important; }
+body.lang-t .iconic-color { color: var(--md-sys-color-secondary, #77574f) !important; }
+
+.result .entry .title .single-char-stroke-trigger:hover {
+  border-color: var(--md-sys-color-primary, #904a41) !important;
+  background-color: var(--md-sys-color-primary-container, #ffdad4) !important;
+}
+
+body.lang-t .result .entry-item .example {
+  border: 1px solid var(--md-sys-color-outline-variant, #d8c2be);
+  background: var(--md-sys-color-surface-container, #f6ecea);
+  border-radius: var(--md-sys-shape-corner-medium, 12px);
+}
+
+#strokes svg:not(.moe-stroke-loader-spinner) {
+  border-color: var(--md-sys-color-primary, #904a41);
+  border-width: 2px;
+  border-radius: var(--md-sys-shape-corner-small, 8px);
+}
+
+.charimg-share-btn {
+  border: 1px solid var(--md-sys-color-outline, #85736e);
+  border-radius: var(--md-sys-shape-corner-full, 999px);
+  background: var(--md-sys-color-surface-container, #f6ecea);
+  color: var(--md-sys-color-on-surface, #1c1b1e);
+}
+.charimg-share-btn:hover {
+  background: var(--md-sys-color-surface-container-high, #ece0dd);
+  box-shadow: var(--md-sys-elevation-level1, 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15));
+}
+
+/* Generic button/input reset toward M3 shape language, for any page that
+   hasn't been individually migrated to real m3e-* components yet. */
+button.btn,
+.btn {
+  border-radius: var(--md-sys-shape-corner-full, 999px);
+}
+.btn.btn-primary {
+  background-color: var(--md-sys-color-primary, #904a41);
+  border-color: var(--md-sys-color-primary, #904a41);
+  color: var(--md-sys-color-on-primary, #ffffff);
+}
+.btn.btn-default {
+  background-color: var(--md-sys-color-surface-container-high, #ece0dd);
+  border-color: var(--md-sys-color-outline-variant, #d8c2be);
+  color: var(--md-sys-color-on-surface, #1c1b1e);
+}
+
+/* ---------------------------------------------------------------------- */
+/* About + Privacy pages                                                   */
+/* ---------------------------------------------------------------------- */
+
+/* About page body surface (About.css also sets these; this wins via late
+   injection so it stays consistent if About.css loads earlier). */
+.about-page {
+  color: var(--md-sys-color-on-surface, #1c1b1e);
+  background-color: var(--md-sys-color-surface, #fff8f6);
+}
+
+.about-page .content a,
+.about-page .content h2.cc0 a {
+  color: var(--md-sys-color-primary, #904a41);
+}
+
+.about-page .how-to-use {
+  border-top-color: var(--md-sys-color-outline-variant, #d8c2be);
+}
+
+/* Privacy is a standalone route with no navbar (App.tsx). */
+.privacy-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  box-sizing: border-box;
+  background: var(--md-sys-color-surface, #fff8f6);
+  color: var(--md-sys-color-on-surface, #1c1b1e);
+}
+
+.privacy-card {
+  max-width: 480px;
+  width: 100%;
+  padding: 32px 24px;
+  text-align: center;
+  background: var(--md-sys-color-surface-container-low, #fdf6f4);
+  color: var(--md-sys-color-on-surface, #1c1b1e);
+  border-radius: var(--md-sys-shape-corner-extra-large, 28px);
+  box-shadow: var(--md-sys-elevation-level2, 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px 2px rgba(0, 0, 0, 0.15));
+  border: 1px solid var(--md-sys-color-outline-variant, #d8c2be);
+}
+
+.privacy-heading {
+  font-size: 1.8em;
+  margin: 0 0 16px;
+  color: var(--md-sys-color-on-surface, #1c1b1e);
+}
+
+.privacy-body {
+  font-size: 1.05em;
+  line-height: 1.6;
+  margin: 0;
+  color: var(--md-sys-color-on-surface-variant, #52443f);
+}
+
+.privacy-divider {
+  width: 80px;
+  border: none;
+  border-top: 2px solid var(--md-sys-color-outline-variant, #d8c2be);
+  margin: 28px auto;
+}
+
+
+/* ---------------------------------------------------------------------- */
+/* Stroke animation chrome                                                 */
+/* ---------------------------------------------------------------------- */
+
+#strokes .loader {
+  background: var(--md-sys-color-surface-container-high, #ece0dd);
+}
+
+#strokes .loader div {
+  background: var(--md-sys-color-surface, #fffbff);
+}
+
+#strokes .loader .moe-stroke-loader-spinner {
+  color: var(--md-sys-color-primary, #904a41);
+}
+
+#strokes canvas {
+  margin-left: 5px;
+  box-shadow: var(--md-sys-elevation-level1, 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15));
+  border-radius: var(--md-sys-shape-corner-small, 8px);
+  background: var(--md-sys-color-surface, #fffbff);
+}
+
+#strokes svg:not(.moe-stroke-loader-spinner) {
+  background: var(--md-sys-color-surface, #fffbff);
+}
+
+.historical-scripts-area {
+  margin-top: 8px;
+}
+
+.historical-scripts-area img {
+  border-radius: var(--md-sys-shape-corner-small, 8px);
+  background: var(--md-sys-color-surface-container, #f6ecea);
+  box-shadow: var(--md-sys-elevation-level1, 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15));
+}
+
+/* ---------------------------------------------------------------------- */
+/* Character image (字圖) chrome                                            */
+/* ---------------------------------------------------------------------- */
+
+.charimg-result .charimg-controls {
+  gap: 10px;
+}
+
+.charimg-result .charimg-font-select {
+  margin-right: 0;
+  padding: 8px 12px;
+  font-size: 0.95em;
+  color: var(--md-sys-color-on-surface, #1c1b1e);
+  background: var(--md-sys-color-surface-container-high, #ece0dd);
+  border: 1px solid var(--md-sys-color-outline-variant, #d8c2be);
+  border-radius: var(--md-sys-shape-corner-full, 999px);
+}
+
+.charimg-result .charimg-hollow-label {
+  margin-bottom: 0;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-weight: normal;
+  color: var(--md-sys-color-on-surface-variant, #52443f);
+}
+
+.charimg-result table.charimg-moetext {
+  background: var(--md-sys-color-surface-container, #f6ecea);
+  border: 24px solid var(--md-sys-color-surface-container-low, #fdf6f4);
+  box-shadow: var(--md-sys-elevation-level1, 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15));
+  border-radius: var(--md-sys-shape-corner-large, 16px);
+}
+
+.charimg-result .charimg-loading-cell {
+  padding: 16px 24px;
+  text-align: center;
+  color: var(--md-sys-color-on-surface-variant, #52443f);
+  font-size: 1.05em;
+}
+
+.charimg-result .charimg-def-cell {
+  vertical-align: top;
+  padding: 16px 12px;
+  color: var(--md-sys-color-on-surface, #1c1b1e);
+  text-align: left;
+  line-height: 1.6;
+  font-size: 1.05em;
+  word-break: break-word;
+}
+
+.charimg-result .charimg-def-cell a {
+  color: var(--md-sys-color-primary, #904a41);
+}
+
+.charimg-result .charimg-def-missing {
+  color: var(--md-sys-color-on-surface-variant, #52443f);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Starred page (字詞紀錄簿) + ListView category pages                    */
+/* ---------------------------------------------------------------------- */
+
+/* Clear buttons remain plain .btn shells; recolor for M3 surface tokens. */
+.starred-section .btn.btn-tiny,
+.recent-section .btn.btn-tiny,
+.starred-section input.btn,
+.recent-section input.btn {
+  background-color: var(--md-sys-color-surface-container-high, #ece0dd);
+  border: 1px solid var(--md-sys-color-outline-variant, #d8c2be);
+  color: var(--md-sys-color-on-surface, #1c1b1e);
+  border-radius: var(--md-sys-shape-corner-full, 999px);
+  padding: 2px 10px;
+}
+
+.starred-section .bg-info,
+.result .starred-section .bg-info {
+  background-color: var(--md-sys-color-secondary-container, #ffdad4);
+  color: var(--md-sys-color-on-secondary-container, #3a0a02);
+  border-radius: var(--md-sys-shape-corner-medium, 12px);
+  padding: 10px 12px;
+}
+
+/* Compact icon actions inside the word list (m3e-icon-button shells). */
+.starred-word-row {
+  display: flex;
+  align-items: center;
+  gap: 0.15em;
+  margin: 2px 0;
+  min-height: 2rem;
+}
+
+.starred-word-row > a {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+m3e-icon-button.btn-star-word,
+m3e-icon-button.btn-remove-word {
+  --m3e-icon-button-extra-small-container-height: 1.75rem;
+  --m3e-icon-button-extra-small-icon-size: 1.05rem;
+  vertical-align: middle;
+  flex: 0 0 auto;
+}
+
+m3e-icon-button.btn-star-word {
+  color: var(--md-sys-color-on-surface-variant, #52443f);
+  margin-right: 0.15em;
+}
+
+m3e-icon-button.btn-star-word:hover,
+m3e-icon-button.btn-star-word:focus-visible {
+  color: var(--md-sys-color-primary, #904a41);
+}
+
+m3e-icon-button.btn-remove-word {
+  color: var(--md-sys-color-on-surface-variant, #52443f);
+  margin-left: 0.15em;
+}
+
+m3e-icon-button.btn-remove-word:hover,
+m3e-icon-button.btn-remove-word:focus-visible {
+  color: var(--md-sys-color-error, #ba1a1a);
+}
+
+/* ListView keyword filter input (reuses .query class from sidebar). */
+.result input.query[type="search"] {
+  width: min(100%, 28rem);
+  max-width: 100%;
+  padding: 8px 14px;
+  border: 1px solid var(--md-sys-color-outline-variant, #d8c2be);
+  border-radius: var(--md-sys-shape-corner-full, 999px);
+  background: var(--md-sys-color-surface-container-highest, #f0e6e3);
+  color: var(--md-sys-color-on-surface, #1c1b1e);
+  outline: none;
+}
+
+.result input.query[type="search"]:focus {
+  border-color: var(--md-sys-color-primary, #904a41);
+  box-shadow: 0 0 0 1px var(--md-sys-color-primary, #904a41);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Radical index pages                                                     */
+/* ---------------------------------------------------------------------- */
+
+/* Page heading row (detail view: back icon + radical title) */
+.radical-page-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.radical-page-header .radical-page-title,
+.radical-page-title {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.radical-back-btn {
+  flex: 0 0 auto;
+  color: var(--md-sys-color-on-surface-variant, #52443f);
+}
+
+.radical-back-row {
+  margin: 4px 0 12px;
+}
+
+.radical-back-link {
+  color: var(--md-sys-color-primary, #904a41);
+  text-decoration: none;
+  font-size: 0.95em;
+}
+.radical-back-link:hover {
+  text-decoration: underline;
+  color: var(--md-sys-color-primary, #904a41);
+}
+
+/* Stroke-count grouped radical / character grids */
+.radical-index {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.radical-index .stroke-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 12px;
+  background-color: var(--md-sys-color-surface-container, #f6ecea);
+  border-radius: var(--md-sys-shape-corner-medium, 12px);
+  border: 1px solid var(--md-sys-color-outline-variant, #d8c2be);
+  transition: background-color 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.radical-index .stroke-row:hover {
+  background-color: var(--md-sys-color-surface-container-high, #ece0dd);
+}
+
+.radical-index .stroke-count {
+  flex: 0 0 auto;
+  min-width: 1.75em;
+  margin: 0;
+  padding: 2px 8px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--md-sys-color-on-secondary-container, #3a0a02);
+  background-color: var(--md-sys-color-secondary-container, #ffdad4);
+  border-radius: var(--md-sys-shape-corner-full, 999px);
+  line-height: 1.6;
+}
+
+.radical-index .stroke-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Grid cells — M3 surface chips. Scoped under .result so tooltip
+   stroke-list (which reuses the same class names) is unaffected. */
+.result .radical-index .stroke-char,
+.result .stroke-list .stroke-char {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2em;
+  min-height: 2em;
+  margin: 0 !important; /* overrides InlineStyles' margin-right: 6px */
+  padding: 4px 8px;
+  text-decoration: none;
+  color: var(--md-sys-color-on-surface, #1c1b1e);
+  background-color: var(--md-sys-color-surface-container-low, #fdf6f4);
+  border: 1px solid transparent;
+  border-radius: var(--md-sys-shape-corner-medium, 12px);
+  transition:
+    background-color 160ms cubic-bezier(0.2, 0, 0, 1),
+    border-color 160ms cubic-bezier(0.2, 0, 0, 1),
+    box-shadow 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.result .radical-index .stroke-char:hover,
+.result .stroke-list .stroke-char:hover {
+  text-decoration: none;
+  color: var(--md-sys-color-on-primary-container, #3a0a02);
+  background-color: var(--md-sys-color-primary-container, #ffdad4);
+  border-color: var(--md-sys-color-outline-variant, #d8c2be);
+  box-shadow: var(--md-sys-elevation-level1, 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15));
+}
+
+.result .radical-index .stroke-char:focus-visible,
+.result .stroke-list .stroke-char:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary, #904a41);
+  outline-offset: 2px;
+}

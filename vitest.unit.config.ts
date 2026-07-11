@@ -5,9 +5,15 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   resolve: {
+    // @lit/react ships a Node/SSR build (no useLayoutEffect event wiring) and
+    // a browser build. Vitest/Node resolves the Node export by default, which
+    // breaks onClick for @m3e/react wrappers (m3e-icon-button, m3e-button, …).
+    // Force the browser build + inline those deps so nested imports honor this.
     alias: {
       '@cf-wasm/resvg': path.resolve(import.meta.dirname, 'tests/helpers/stubs/resvg.ts'),
+      '@lit/react': path.resolve(import.meta.dirname, 'node_modules/@lit/react/index.js'),
     },
+    conditions: ['browser', 'module', 'import', 'default'],
   },
   test: {
     environment: 'happy-dom',
@@ -17,6 +23,11 @@ export default defineConfig({
     reporters: process.env.CI ? ['default', 'junit'] : ['default'],
     outputFile: {
       junit: 'unit-report.xml',
+    },
+    server: {
+      deps: {
+        inline: [/@m3e\/react/, /@lit\/react/],
+      },
     },
     coverage: {
       provider: 'v8',

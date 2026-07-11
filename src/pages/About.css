@@ -1,26 +1,29 @@
 /* About 頁面樣式 - 從 page-rendering.tsx 的 generateAboutHTMLWrapper 提取 */
+/* Colors/shapes use M3 tokens so light/dark track <m3e-theme>. Layout logic kept. */
 
 .about-page {
 	position: relative;
 	min-height: 100vh;
 	min-height: 100dvh;
 	width: 100%;
+	color: var(--md-sys-color-on-surface, #1c1b1e);
+	background-color: var(--md-sys-color-surface, #fff8f6);
 }
 
-/* 導航列樣式 */
+/* 導航列樣式（legacy fallback if ever rendered without NavbarAbout） */
 .navbar {
 	position: fixed;
 	top: 0;
 	left: 0;
 	right: 0;
 	z-index: 1030;
-	background-color: #222;
-	border-bottom: 1px solid #080808;
+	background-color: var(--md-sys-color-surface-container, #f6ecea);
+	border-bottom: 1px solid var(--md-sys-color-outline-variant, #d8c2be);
 }
 
 .navbar-inverse {
-	background-color: #222;
-	border-color: #080808;
+	background-color: var(--md-sys-color-surface-container, #f6ecea);
+	border-color: var(--md-sys-color-outline-variant, #d8c2be);
 }
 
 .navbar-brand {
@@ -28,13 +31,13 @@
 	padding: 15px 15px;
 	font-size: 18px;
 	line-height: 20px;
-	color: #999;
+	color: var(--md-sys-color-on-surface-variant, #52443f);
 	text-decoration: none;
 }
 
 .navbar-brand:hover,
 .navbar-brand:focus {
-	color: #fff;
+	color: var(--md-sys-color-on-surface, #1c1b1e);
 	text-decoration: none;
 }
 
@@ -50,13 +53,13 @@
 .navbar-nav > li > a {
 	display: block;
 	padding: 15px;
-	color: #999;
+	color: var(--md-sys-color-on-surface-variant, #52443f);
 	text-decoration: none;
 }
 
 .navbar-nav > li > a:hover,
 .navbar-nav > li > a:focus {
-	color: #fff;
+	color: var(--md-sys-color-on-surface, #1c1b1e);
 	background-color: transparent;
 }
 
@@ -69,6 +72,7 @@
 	margin: 120px auto 20px;
 	padding: 20px;
 	line-height: 1.6;
+	color: var(--md-sys-color-on-surface, #1c1b1e);
 }
 
 .about-page .content p {
@@ -85,7 +89,7 @@
 }
 
 .about-page .content a {
-	color: #337ab7;
+	color: var(--md-sys-color-primary, #904a41);
 	text-decoration: none;
 }
 
@@ -99,24 +103,21 @@
 }
 
 .about-page .content h2.cc0 a {
-	color: #337ab7;
+	color: var(--md-sys-color-primary, #904a41);
 }
 
 /* Logo 樣式 */
 .about-page .logo {
 	height: auto;
+	background: var(--md-sys-color-surface, #ffffff);
+	border-radius: var(--md-sys-shape-corner-large, 16px);
 }
 
 /* 使用說明導覽連結（#95） */
+.about-page .how-to-use-link m3e-button,
 .about-page .how-to-use-link .btn-info {
 	display: inline-flex;
 	align-items: center;
-	color: #fff;
-	text-decoration: none;
-}
-
-.about-page .how-to-use-link .btn-info:hover {
-	color: #fff;
 	text-decoration: none;
 }
 
@@ -124,13 +125,14 @@
 .about-page .how-to-use {
 	margin-top: 1em;
 	padding-top: 1.5em;
-	border-top: 1px solid #ddd;
+	border-top: 1px solid var(--md-sys-color-outline-variant, #d8c2be);
 	/* 錨點捲動時預留固定導覽列高度，避免標題被遮住 */
 	scroll-margin-top: 80px;
 }
 
 .about-page .how-to-use h2 {
 	margin-bottom: 0.75em;
+	color: var(--md-sys-color-on-surface, #1c1b1e);
 }
 
 .about-page .how-to-use > ul > li {
@@ -169,7 +171,7 @@
 	}
 }
 
-/* 按鈕樣式 */
+/* 按鈕樣式（legacy fallback when not using m3e-button） */
 .btn {
 	display: inline-block;
 	padding: 6px 12px;
@@ -182,32 +184,33 @@
 	vertical-align: middle;
 	cursor: pointer;
 	border: 1px solid transparent;
-	border-radius: 4px;
+	border-radius: var(--md-sys-shape-corner-full, 999px);
 	text-decoration: none;
 }
 
 .btn-default {
-	color: #333;
-	background-color: #fff;
-	border-color: #ccc;
+	color: var(--md-sys-color-on-surface, #1c1b1e);
+	background-color: var(--md-sys-color-surface-container-high, #ece0dd);
+	border-color: var(--md-sys-color-outline-variant, #d8c2be);
 }
 
 .btn-default:hover {
-	color: #333;
-	background-color: #e6e6e6;
-	border-color: #adadad;
+	color: var(--md-sys-color-on-surface, #1c1b1e);
+	background-color: var(--md-sys-color-surface-container-highest, #e6dad7);
+	border-color: var(--md-sys-color-outline, #a08c88);
 }
 
 .btn-info {
-	color: #fff;
-	background-color: #5bc0de;
-	border-color: #46b8da;
+	color: var(--md-sys-color-on-primary, #ffffff);
+	background-color: var(--md-sys-color-primary, #904a41);
+	border-color: var(--md-sys-color-primary, #904a41);
 }
 
 .btn-info:hover {
-	color: #fff;
-	background-color: #46b8da;
-	border-color: #269abc;
+	color: var(--md-sys-color-on-primary, #ffffff);
+	background-color: var(--md-sys-color-primary, #904a41);
+	border-color: var(--md-sys-color-primary, #904a41);
+	filter: brightness(0.95);
 }
 
 /* 使用說明截圖縮圖（#95） */
@@ -236,22 +239,22 @@
 	display: block;
 	width: 100%;
 	height: auto;
-	border: 1px solid #ddd;
-	border-radius: 6px;
-	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+	border: 1px solid var(--md-sys-color-outline-variant, #d8c2be);
+	border-radius: var(--md-sys-shape-corner-medium, 12px);
+	box-shadow: var(--md-sys-elevation-level1, 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15));
 	transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
 
 .about-page .guide-figure-button:hover img,
 .about-page .guide-figure-button:focus-visible img {
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+	box-shadow: var(--md-sys-elevation-level2, 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px 2px rgba(0, 0, 0, 0.15));
 	transform: translateY(-1px);
 }
 
 .about-page .guide-figure figcaption {
 	margin-top: 4px;
 	font-size: 0.8em;
-	color: #888;
+	color: var(--md-sys-color-on-surface-variant, #52443f);
 	text-align: center;
 }
 
@@ -271,7 +274,7 @@
 	align-items: center;
 	justify-content: center;
 	padding: 24px;
-	background: rgba(0, 0, 0, 0.8);
+	background: color-mix(in srgb, var(--md-sys-color-scrim, #000000) 80%, transparent);
 	cursor: zoom-out;
 }
 
@@ -281,8 +284,8 @@
 	width: auto;
 	height: auto;
 	object-fit: contain;
-	border-radius: 4px;
-	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+	border-radius: var(--md-sys-shape-corner-small, 8px);
+	box-shadow: var(--md-sys-elevation-level3, 0 4px 8px 3px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.3));
 	cursor: default;
 }
 
@@ -293,12 +296,20 @@
 	padding: 0;
 	border: 0;
 	background: none;
-	color: #fff;
+	color: var(--md-sys-color-on-primary, #ffffff);
 	font-size: 2.4rem;
 	line-height: 1;
 	cursor: pointer;
 }
 
 .guide-lightbox-close:hover {
-	color: #ccc;
+	color: var(--md-sys-color-primary-container, #ffdad4);
+}
+
+/* Bookmark hint under fixed action */
+.about-page .bookmark-hint {
+	margin-top: 6px;
+	font-size: 12px;
+	color: var(--md-sys-color-on-surface-variant, #52443f);
+	max-width: 260px;
 }

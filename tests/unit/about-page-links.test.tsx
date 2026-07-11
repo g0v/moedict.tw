@@ -41,8 +41,11 @@ describe('About page title (#47)', () => {
 describe('About page usage guide (#95)', () => {
   it('has a prominent link near the top that jumps to the #how-to-use section', () => {
     const html = render();
-    expect(html).toContain('href="#how-to-use"');
+    // M3eButton is a custom element; SSR markup is <m3e-button>…</m3e-button>
+    // (href is a lit property, not always reflected into static markup).
+    expect(html).toMatch(/how-to-use-link[\s\S]*?<m3e-button[\s\S]*?>[\s\S]*?萌典功能使用說明[\s\S]*?<\/m3e-button>/);
     expect(html).toContain('萌典功能使用說明');
+    expect(html).toContain('id="how-to-use"');
   });
 
   it('renders the same-page 使用說明 section (no extra route)', () => {

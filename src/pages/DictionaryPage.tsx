@@ -13,6 +13,7 @@ import { StrokeAnimation } from '../components/StrokeAnimation';
 import { applyHeadToDocument, getDictionaryHead } from '../ssr/head';
 import { CharacterImageView } from '../components/CharacterImageView';
 import { SvgIcon } from '../components/SvgIcon';
+import { M3eIcon } from '@m3e/react/icon';
 import { dedupeHeteronyms } from '../utils/heteronym-dedup';
 
 export type DictionaryLang = 'a' | 't' | 'h' | 'c';
@@ -632,7 +633,7 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
                   }
                 }}
               >
-                <SvgIcon name="pencil" size="1em" aria-hidden="true" />
+                <M3eIcon name="edit" aria-hidden="true" />
               </a>
             </div>
             {idx === 0 && (
@@ -658,9 +659,9 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
                   }
                 }}
               >
-                <SvgIcon
-                  name={isStarred ? 'star' : 'starEmpty'}
-                  size="1em"
+                <M3eIcon
+                  name="star"
+                  filled={isStarred}
                   style={isStarred ? undefined : { transform: 'scale(1.12)' }}
                   aria-hidden="true"
                 />

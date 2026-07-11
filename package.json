@@ -35,6 +35,9 @@
 	},
 	"dependencies": {
 		"@cf-wasm/resvg": "^0.1.24",
+		"@m3e/icons": "1.0.8",
+		"@m3e/react": "2.5.14",
+		"@m3e/web": "2.5.14",
 		"fuse.js": "^7.1.0",
 		"react": "^19.1.1",
 		"react-dom": "^19.1.1",

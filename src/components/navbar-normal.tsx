@@ -6,6 +6,9 @@
 
 import { Fragment, useCallback, useRef, type MouseEventHandler } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { M3eAppBar } from '@m3e/react/app-bar';
+import { M3eIconButton } from '@m3e/react/icon-button';
+import { M3eIcon } from '@m3e/react/icon';
 import { toggleUserPrefPanel } from './user-pref';
 import { computeLangSwitchPathAsync, LANG_PREFIX } from '../utils/xref-switch-utils';
 import { readLRUWords } from '../utils/word-record-utils';
@@ -602,8 +605,7 @@ export function NavbarNormal({ currentLang }: NavbarNormalProps) {
 		navigate(path);
 	}, [closeDictionaryDropdown, navigate]);
 
-	const handlePrefClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
-		e.preventDefault();
+	const handlePrefClick = useCallback(() => {
 		toggleUserPrefPanel();
 	}, []);
 
@@ -654,20 +656,20 @@ export function NavbarNormal({ currentLang }: NavbarNormalProps) {
 			<div className="nav-bg navbar-fixed-top"></div>
 
 			{/* 主要導航列 */}
-			<nav role="navigation" className="navbar navbar-inverse navbar-fixed-top" style={{ opacity: 1 }}>
+			<M3eAppBar className="navbar navbar-inverse navbar-fixed-top" size="small">
 				{/* 左側區域 */}
-				<div className="navbar-header">
+				<div className="navbar-header" slot="leading">
 					<Link to="/" className="navbar-brand brand ebas">
 						萌典
 					</Link>
 				</div>
 
-				<ul className="nav navbar-nav">
+				<ul className="nav navbar-nav" slot="leading">
 					{/* 辭典下拉選單 */}
 					<li>
 						<a href="#" onClick={handleMenuToggle}>
 							{/* Book icon: moedict.tw 的原始 <i class="icon-book">&nbsp;</i> 會多出一個 nbsp 寬度 (~4.8px at 19px)；改以加寬 margin-right 還原同等間距 */}
-							<SvgIcon name="book" size="1em" className={styled.navIcon} style={{ marginRight: '0.55em' }} aria-hidden="true" />
+							<M3eIcon name="book" className={styled.navIcon} style={{ marginRight: '0.55em' }} aria-hidden="true" />
 							<span
 								style={{ margin: 0, padding: 0 }}
 								itemProp="articleSection"
@@ -728,96 +730,89 @@ export function NavbarNormal({ currentLang }: NavbarNormalProps) {
 					</li>
 
 					{/* 字詞紀錄簿按鈕 */}
-					<li id="btn-starred">
-						<a
-							title="字詞紀錄簿"
-							aria-label="字詞紀錄簿"
-							href={starredPath}
-							onClick={(e) => {
-								if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
-								e.preventDefault();
-								closeDictionaryDropdown();
-								if (location.pathname === starredPath) {
-									navigate(-1);
-								} else {
-									navigate(starredPath);
-								}
-							}}
-						>
-							<SvgIcon
-								name="bookmarkEmpty"
-								size="1em"
-								className={styled.navIcon}
-								aria-hidden="true"
-							/>
-						</a>
-					</li>
+				<li id="btn-starred">
+					<M3eIconButton
+						title="字詞紀錄簿"
+						aria-label="字詞紀錄簿"
+						href={starredPath}
+					onClick={(rawEvent: Event) => {
+						const e = rawEvent as MouseEvent;
+						if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+							e.preventDefault();
+							closeDictionaryDropdown();
+							if (location.pathname === starredPath) {
+								navigate(-1);
+							} else {
+								navigate(starredPath);
+							}
+						}}
+					>
+						<M3eIcon name="bookmark" aria-hidden="true" />
+					</M3eIconButton>
+				</li>
 
-					{/* 偏好設定按鈕 */}
-					<li id="btn-pref">
-						<a title="偏好設定" aria-label="偏好設定" href="#" onClick={handlePrefClick}>
-							<SvgIcon name="cogs" size="1em" className={styled.navIcon} aria-hidden="true" />
-						</a>
-					</li>
+				{/* 偏好設定按鈕 */}
+				<li id="btn-pref">
+					<M3eIconButton title="偏好設定" aria-label="偏好設定" onClick={handlePrefClick}>
+						<M3eIcon name="settings" aria-hidden="true" />
+					</M3eIconButton>
+				</li>
 				</ul>
 
 				{/* 右側區域 - 下載連結、搜尋框、社群連結 */}
-				<ul className="nav pull-right hidden-xs" style={{ display: 'flex' }}>
+				<ul className="nav pull-right hidden-xs" slot="trailing" style={{ display: 'flex', alignItems: 'center' }}>
 					<li className="navbar-fulltext-search-item">
 						<FullTextSearch currentLang={resolvedLang} />
 					</li>
 
-					{!isCapacitorApp() && (
-						<>
-							<li style={{ display: 'inline-block' }}>
-								<a
-									href="https://racklin.github.io/moedict-desktop/download.html"
-									target="_blank"
-									rel="noopener noreferrer"
-									title="桌面版下載(可離線使用)"
-									aria-label="桌面版下載(可離線使用)"
-									style={{ color: '#ccc' }}
-								>
-									<SvgIcon name="download" size="1em" className={styled.navIcon} aria-hidden="true" />
-								</a>
-							</li>
+				{!isCapacitorApp() && (
+					<>
+						<li style={{ display: 'inline-block' }}>
+							<M3eIconButton
+								href="https://racklin.github.io/moedict-desktop/download.html"
+								target="_blank"
+								rel="noopener noreferrer"
+								title="桌面版下載(可離線使用)"
+								aria-label="桌面版下載(可離線使用)"
+							>
+								<M3eIcon name="download" aria-hidden="true" />
+							</M3eIconButton>
+						</li>
 
-							<li style={{ display: 'inline-block' }}>
-								<a
-									href="https://play.google.com/store/apps/details?id=org.audreyt.dict.moe"
-									target="_blank"
-									rel="noopener noreferrer"
-									title="Google Play 下載"
-									aria-label="Google Play 下載"
-									style={{ color: '#ccc' }}
-								>
-									<SvgIcon name="android" size="1em" className={styled.navIcon} aria-hidden="true" />
-								</a>
-							</li>
-							<li style={{ display: 'inline-block' }}>
-								<a
-									href="http://itunes.apple.com/app/id1434947403"
-									target="_blank"
-									rel="noopener noreferrer"
-									title="App Store 下載"
-									aria-label="App Store 下載"
-									style={{ color: '#ccc' }}
-								>
-									<SvgIcon name="apple" size="1em" className={styled.navIcon} aria-hidden="true" />
-								</a>
-							</li>
-						</>
-					)}
+						<li style={{ display: 'inline-block' }}>
+							<M3eIconButton
+								href="https://play.google.com/store/apps/details?id=org.audreyt.dict.moe"
+								target="_blank"
+								rel="noopener noreferrer"
+								title="Google Play 下載"
+								aria-label="Google Play 下載"
+							>
+								<SvgIcon name="android" size="1em" aria-hidden="true" />
+							</M3eIconButton>
+						</li>
+						<li style={{ display: 'inline-block' }}>
+							<M3eIconButton
+								href="http://itunes.apple.com/app/id1434947403"
+								target="_blank"
+								rel="noopener noreferrer"
+								title="App Store 下載"
+								aria-label="App Store 下載"
+							>
+								<SvgIcon name="apple" size="1em" aria-hidden="true" />
+							</M3eIconButton>
+						</li>
+					</>
+				)}
 
 					<li>
 						<Link to="/about" title="關於本站" aria-label="關於本站">
 							<span className="iconic-circle" style={{ backgroundColor: '#400' }}>
-								<SvgIcon name="info" size="1em" className={styled.navCircleIcon} aria-hidden="true" />
+								<M3eIcon name="info" className={styled.navCircleIcon} aria-hidden="true" />
 							</span>
 						</Link>
 					</li>
 				</ul>
-			</nav>
+			</M3eAppBar>
 		</>
 	);
 }
