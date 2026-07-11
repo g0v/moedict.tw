@@ -67,7 +67,7 @@ export type ClassifiedRoute =
   | { kind: 'default' }
   | { kind: 'about' }
   | { kind: 'radical'; lang: 'a' | 'c'; radical: string }
-  | { kind: 'starred'; lang: DictionaryLang }
+  | { kind: 'starred'; lang: DictionaryLang; entry: string }
   | { kind: 'group'; lang: DictionaryLang; category: string }
   | { kind: 'entry'; lang: DictionaryLang; text: string; idx?: number }
   | { kind: 'invalid-encoding'; raw: string };
@@ -96,10 +96,10 @@ export function classifyRoute(pathname: string): ClassifiedRoute {
   if (decoded.startsWith('@')) return { kind: 'radical', lang: 'a', radical: decoded.slice(1) };
   if (decoded.startsWith('~@')) return { kind: 'radical', lang: 'c', radical: decoded.slice(2) };
 
-  if (decoded.startsWith("'=*")) return { kind: 'starred', lang: 't' };
-  if (decoded.startsWith(':=*')) return { kind: 'starred', lang: 'h' };
-  if (decoded.startsWith('~=*')) return { kind: 'starred', lang: 'c' };
-  if (decoded.startsWith('=*')) return { kind: 'starred', lang: 'a' };
+  if (decoded.startsWith("'=*")) return { kind: 'starred', lang: 't', entry: decoded.slice(3) };
+  if (decoded.startsWith(':=*')) return { kind: 'starred', lang: 'h', entry: decoded.slice(3) };
+  if (decoded.startsWith('~=*')) return { kind: 'starred', lang: 'c', entry: decoded.slice(3) };
+  if (decoded.startsWith('=*')) return { kind: 'starred', lang: 'a', entry: decoded.slice(2) };
 
   if (decoded.startsWith("'=")) return { kind: 'group', lang: 't', category: decoded.slice(2) };
   if (decoded.startsWith(':=')) return { kind: 'group', lang: 'h', category: decoded.slice(2) };

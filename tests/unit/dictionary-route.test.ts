@@ -232,16 +232,16 @@ describe('classifyRoute', () => {
 
   describe('starred', () => {
     it('classifies /=* as starred (a)', () => {
-      expect(classifyRoute('/=*')).toEqual({ kind: 'starred', lang: 'a' });
+      expect(classifyRoute('/=*')).toEqual({ kind: 'starred', lang: 'a', entry: '' });
     });
     it("classifies /'=* as starred (t)", () => {
-      expect(classifyRoute("/'=*")).toEqual({ kind: 'starred', lang: 't' });
+      expect(classifyRoute("/'=*")).toEqual({ kind: 'starred', lang: 't', entry: '' });
     });
     it('classifies /:=* as starred (h)', () => {
-      expect(classifyRoute('/:=*')).toEqual({ kind: 'starred', lang: 'h' });
+      expect(classifyRoute('/:=*')).toEqual({ kind: 'starred', lang: 'h', entry: '' });
     });
     it('classifies /~=* as starred (c)', () => {
-      expect(classifyRoute('/~=*')).toEqual({ kind: 'starred', lang: 'c' });
+      expect(classifyRoute('/~=*')).toEqual({ kind: 'starred', lang: 'c', entry: '' });
     });
   });
 
@@ -314,7 +314,7 @@ describe('classifyRoute', () => {
       expect(classifyRoute('/=成語/2')).toEqual({ kind: 'group', lang: 'a', category: '成語' });
     });
     it('strips trailing /<digits> from starred route', () => {
-      expect(classifyRoute('/=*/2')).toEqual({ kind: 'starred', lang: 'a' });
+      expect(classifyRoute('/=*/2')).toEqual({ kind: 'starred', lang: 'a', entry: '' });
     });
     it('does NOT attach idx to non-entry kinds', () => {
       const route = classifyRoute('/=成語/2');
@@ -324,19 +324,19 @@ describe('classifyRoute', () => {
 
   describe('precedence order', () => {
     it("'=* (starred) takes precedence over '= (group)", () => {
-      expect(classifyRoute("/'=*star")).toEqual({ kind: 'starred', lang: 't' });
+      expect(classifyRoute("/'=*star")).toEqual({ kind: 'starred', lang: 't', entry: 'star' });
     });
     it("'= (group) takes precedence over ' (entry)", () => {
       expect(classifyRoute("/'=諺語")).toEqual({ kind: 'group', lang: 't', category: '諺語' });
     });
     it("'=* before '= before ' — full chain", () => {
       // The three-level precedence: starred > group > entry
-      expect(classifyRoute("/'=*")).toEqual({ kind: 'starred', lang: 't' });
+      expect(classifyRoute("/'=*")).toEqual({ kind: 'starred', lang: 't', entry: '' });
       expect(classifyRoute("/'=詞")).toEqual({ kind: 'group', lang: 't', category: '詞' });
       expect(classifyRoute("/'食")).toEqual({ kind: 'entry', lang: 't', text: '食' });
     });
     it('=* (starred a) takes precedence over = (group a)', () => {
-      expect(classifyRoute('/=*star')).toEqual({ kind: 'starred', lang: 'a' });
+      expect(classifyRoute('/=*star')).toEqual({ kind: 'starred', lang: 'a', entry: 'star' });
     });
     it('= (group) takes precedence over bare entry', () => {
       expect(classifyRoute('/=成語')).toEqual({ kind: 'group', lang: 'a', category: '成語' });

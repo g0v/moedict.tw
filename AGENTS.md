@@ -219,8 +219,10 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
 - **URL 前綴文法**（`'`=t、`:`=h、`~`=c、`@`/`=`/`=*` 家族、`/<數字>` idx）：
   唯一定義在 `src/utils/dictionary-route.ts` 的 `classifyRoute`（頁面/head 分類）
   與 `stripLangPrefix`（語言前綴，API 端加 `{'!': 't'}` legacy 別名）。
-  `resolveHeadByPath`、`parseDictionaryRoute`、`parseTextFromUrl`（兩處）都是
-  它的消費者。**新的 parser 一律消費這兩個函式，禁止自建 if-chain。**
+  `resolveHeadByPath`、`parseDictionaryRoute`、`parseTextFromUrl`（兩處）與
+  client 路由的 `resolveMiddlePointTarget`（`src/utils/middle-point-target.ts`，
+  MiddlePoint 的純對應層）都是它的消費者。**新的 parser 一律消費這兩個
+  函式，禁止自建 if-chain。**
 - **legacy 遠端樣式 `data/assets/styles.css`** 的 `#id` 選擇器會蓋掉新元件
   （含 Shadow DOM `:host` 預設）：`bun run check:css-ids` 在 CI 把關——
   src 內新增的 id 若撞上 legacy `#id` 選擇器且不在 allowlist 內會 fail；
