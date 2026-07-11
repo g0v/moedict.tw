@@ -20,6 +20,10 @@ const CROSS_STRAIT_SOURCE_DIR = path.join(DICTIONARY_DIR, 'pcck');
 const HANYU_TYPE = 'HanYu';
 
 const HAKKA_DIALECT_MARKER_RE = /([四海大平安南])[\u20DE\u20DF](\S+)/g;
+// NFD-decomposed tone-mark combining diacritics used throughout Hakka/Taiwanese
+// romanization (see AGENTS.md "ptck 的 T 欄" note); matching them individually
+// inside the run is intentional, not a mistaken standalone combining mark.
+// oxlint-disable-next-line no-misleading-character-class
 const HAKKA_SYLLABLE_RE = /[A-Za-z\u00C0-\u024F\u1E00-\u1EFF\u0300-\u036F]+[¹²³⁴⁵]+/g;
 
 function normalizeTitle(input) {
@@ -155,6 +159,8 @@ async function writeHakkaLookupMaps(indexByType) {
 }
 
 function extractTlRawTokens(romanization) {
+	// Same intentional NFD combining-diacritic match as HAKKA_SYLLABLE_RE above.
+	// oxlint-disable-next-line no-misleading-character-class
 	return String(romanization ?? '').match(/[A-Za-z\u00C0-\u024F\u1E00-\u1EFF\u0300-\u036F\u207F]+/g) ?? [];
 }
 

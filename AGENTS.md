@@ -63,7 +63,7 @@ bun install                # 安裝相依
 bun run dev                # 本地開發（vite + miniflare；predev 會先重建索引）
 bun run build              # tsc -b && vite build（prebuild 會重建索引）
 bun run typecheck          # tsc -b --noEmit
-bun run lint               # ESLint（見「已知問題」——目前可能整庫崩潰）
+bun run lint               # oxlint（見「開發慣例」的 typescript/oxlint 說明）
 
 bun run test:unit          # Vitest + happy-dom
 bun run test:integration   # Miniflare 實體 worker API 測試（fixtures 來自 data/dictionary）
@@ -199,8 +199,7 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
   （`scripts/check-v8-ignore-count.mjs`）。
 - 視覺回歸 baseline 只 commit `*-chromium-linux.png`；darwin/win32 是本機自生。
 - `DictionaryPage.tsx`（~950 行）與 `MiddlePoint.tsx` **沒有 unit test**
-  （e2e-only 慣例）。變數遮蔽已由 eslint `@typescript-eslint/no-shadow`
-  （error 級）把關。
+  （e2e-only 慣例）。變數遮蔽已由 oxlint `no-shadow`（error 級）把關。
 - Playwright 的 retries/workers/forbidOnly 跟著 `CI` 環境變數走；只有
   `webServer.reuseExistingServer` 可用 `PW_REUSE_EXISTING_SERVER=1` 單獨
   覆寫（開發 shell 誤設 `CI=1` 時的解法）。
@@ -241,32 +240,41 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
 - Commit message 含反引號時用 `git commit -F <file>`（heredoc 會觸發指令替換）。
 - git 對非 ASCII 檔名輸出八進位跳脫——grep CJK 檔名會 silent miss，
   用 `git -c core.quotePath=false` 或 `-z`。
-- **typescript 鎖 5.9.x**（`@typescript-eslint/no-shadow` 為 error 級）。背景：
-  TypeScript 7（Go 原生編譯器）已於 2026-07 GA（`typescript@latest` = 7.x），
-  但 **7.0 刻意不含穩定 programmatic API（7.1 才有）**，typescript-eslint 依賴
-  該 API（目前 peer `<6.1.0`），裝上 7.x 整庫 lint 直接崩。升回 7.x 的條件
-  （擇一成立才動）：(a) typescript-eslint 正式支援 TS7／7.1 API；
-  (b) 走官方 dual-track——頂層 `typescript@7` 跑 tsc、`@typescript/typescript6`
-  scoped override 餵給 typescript-estree（本 repo typecheck 僅約 2 秒，
-  目前不值得這個複雜度）；(c) lint 整個遷移到 oxlint + tsgolint
-  （TS 團隊協作的 Go 原生 type-aware linter，2026 中仍 alpha）。
-  **2026-07-11 spike（分支 `spike/ts7-oxlint-tsgolint`，未合併）**：條件 (c) 已
-  手動驗證可行——`typescript@7.0.2` 是正式 GA（非 RC），`oxlint@1.73.0` +
-  `oxlint-tsgolint@0.24.0`（type-aware 後端，需 TS 7+）都是可直接 `bun add`
-  的穩定版本；scoped 到目前 eslint 涵蓋的 134 個 `.ts`/`.tsx` 檔案時，
-  `.oxlintrc.json` parity config 重現了全部既有規則（no-shadow、
-  `_`-prefix no-unused-vars、react-hooks 兩條、react-refresh
-  only-export-components，皆用 throwaway fixture 驗證過），只有 1 個
-  行為差異（`no-unsafe-optional-chaining` 在 oxlint 抓到、eslint 沒抓到，
-  需人工判斷）；`tsc -b --noEmit`／`bun run build`／unit+integration 測試
-  全數在 TS7 下乾淨通過（tsc 還快了約 11 倍）。條件 (a) 仍確認擋死：
-  typescript-eslint 8.63.0 peer 仍是 `<6.1.0`，`bun run lint` 在 TS7 下
-  直接丟 `Cannot read properties of undefined (reading 'Cjs')` 崩潰。
-  尚未做：拿掉 eslint 系列 deps、把 `scripts/*.mjs` 納入 lint 範圍前先處理
-  兩個既有的 Unicode combining-class 誤判、評估是否啟用
-  `--type-aware`（會多抓到約 35 個真實但目前未曾檢查過的型別相關警告，如
-  多處 `navigate()` 未處理的 floating promise）。要採用的話，從該分支開一個
-  真的遷移 PR，不要重跑一次這份調查。
+- **typescript 在 7.x（Go 原生編譯器）**，lint 走 `oxlint`（`.oxlintrc.json`），
+  取代 eslint + typescript-eslint。背景：TypeScript 7 已於 2026-07 GA，但
+  typescript-eslint 的 typescript-estree 仍卡在 peer `typescript <6.1.0`，
+  裝上 7.x 會直接崩潰（`Cannot read properties of undefined (reading
+  'Cjs')`）——兩者不能並存，這也是 2026-07 從 eslint 遷移到 oxlint 的直接
+  原因。`bun run lint` = `oxlint .`；型別檢查仍是獨立的
+  `bun run typecheck`（`tsc -b --noEmit`），TS7 下原生執行，比 5.9.x 快
+  約 11 倍，型別行為未變（`tsc -b`、`vite build`、unit/integration 測試
+  全數驗證過）。
+- `oxlint` 零設定預設值已涵蓋原本 `js.configs.recommended` +
+  `tseslint.configs.recommended` 的完整規則集；`.oxlintrc.json` 只列出
+  兩者中預設關閉、需要手動打開的規則（含 no-var/prefer-const/
+  no-explicit-any 等，逐條列表與理由見該檔註解），加上兩條本專案自訂規則
+  （`no-shadow`、`_`-prefix `no-unused-vars`）與 react-hooks／
+  react-refresh 對應項（`react/rules-of-hooks`、`react/exhaustive-deps`、
+  `react/only-export-components`）。跨 plugin 同名規則（如 `no-namespace`
+  同時是 typescript／react／import 三個 plugin 的規則名）一律用
+  `<plugin>/<rule>` 前綴消歧義。既有的 `// eslint-disable-next-line
+  <rule>` 註解 oxlint 會自動識別並比對（`@typescript-eslint/X` 與
+  `react-refresh/X` 前綴都能對應到 oxlint 自己的 `typescript/X`／
+  `react/X`），新寫的一律用 `// oxlint-disable-next-line <rule>`
+  （多行說明時，disable 指令必須是緊接在程式碼前的最後一行註解，見
+  `scripts/build-pinyin-lookup.mjs` 範例）。
+- **Type-aware lint（`oxlint-tsgolint`，需 TS 7+）已裝好但預設不跑**：
+  `bun run lint:type-aware`（`oxlint --type-aware --type-check src
+  worker`）可手動執行，目前會回報約 35 個未經 triage 的建議級（warn）
+  發現（多處 `navigate()` 缺 `void`/`.catch` 的 no-floating-promises、
+  `...getCORSHeaders(): HeadersInit` 的 no-misused-spread、monkey-patch
+  原生方法的 unbound-method 等）。這些**故意**沒接進 `bun run lint` 或
+  CI——要接進硬性 gate 前，需要逐條判斷是真的 bug 還是可接受的既有寫法。
+  範圍也要留意：`--type-aware --type-check` 靠逐檔自動找 tsconfig，只有
+  `src`／`worker`（`tsc -b` 本來就有 project reference 的範圍）能保證乾淨；
+  `tests/` 不在任何 leaf tsconfig 的 `include` 內（`tsc -b` 現在也不型別
+  檢查它），對它跑 `--type-aware` 會因為找不到 ambient 型別（如
+  `ExecutionContext`）報一堆假陽性，不要把 `tests/` 也丟進去。
 
 ## 授權紅線
 

@@ -133,7 +133,7 @@ function main() {
   console.log(`wrote ${written} radical files from TOC (${tocRadicals.length} TOC radicals)`);
 
   // Categories from dict-cat.json, filtered to live index
-  let catPath = dictCatCandidates.find((p) => existsSync(p));
+  const catPath = dictCatCandidates.find((p) => existsSync(p));
   if (!catPath) {
     console.warn('dict-cat.json not found; skipping =*.json regen');
     return;

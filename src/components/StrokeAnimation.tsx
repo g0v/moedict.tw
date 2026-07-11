@@ -117,7 +117,7 @@ export function StrokeAnimation({ title, visible, lang = 'a' }: StrokeAnimationP
 			const basePath = r2Endpoint || '/assets';
 			try {
 				// 確保 jQuery 已載入
-				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				// oxlint-disable-next-line typescript/no-explicit-any
 				if (!(window as any).jQuery) {
 					await loadScript(`${basePath}/js/jquery-2.1.1.min.js`);
 				}
@@ -130,7 +130,7 @@ export function StrokeAnimation({ title, visible, lang = 'a' }: StrokeAnimationP
 				await loadScript(`${basePath}/js/jquery.strokeWords.js`);
 				if (cancelled) return;
 
-				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				// oxlint-disable-next-line typescript/no-explicit-any
 				const $ = (window as any).jQuery;
 				if (!$ || !$.fn || !$.fn.strokeWords) {
 					console.warn('[StrokeAnimation] jquery.strokeWords 未成功載入');
