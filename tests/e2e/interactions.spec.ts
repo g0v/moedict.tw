@@ -4,7 +4,7 @@ test.describe('search box interactions', () => {
   test('typing in nav search shows autocomplete suggestions', async ({ page }) => {
     await page.goto('/%E8%90%8C');
     await page.waitForLoadState('networkidle');
-    const input = page.locator('#nav-fulltext-search').first();
+    const input = page.locator('#nav-fulltext-search-desktop');
     await expect(input).toBeVisible({ timeout: 15_000 });
     await input.fill('萌');
     // Verify no crash and the input still holds the text (suggestion dropdown may
@@ -16,7 +16,7 @@ test.describe('search box interactions', () => {
   test('ArrowDown + Enter selects first suggestion and navigates', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    const input = page.locator('#nav-fulltext-search').first();
+    const input = page.locator('#nav-fulltext-search-desktop');
     await expect(input).toBeVisible({ timeout: 15_000 });
     await input.fill('上訴');
     // Wait for the suggestion dropdown to appear and then highlight first entry
@@ -31,7 +31,7 @@ test.describe('search box interactions', () => {
   test('clicking a suggestion navigates to that word', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    const input = page.locator('#nav-fulltext-search').first();
+    const input = page.locator('#nav-fulltext-search-desktop');
     await expect(input).toBeVisible({ timeout: 15_000 });
     await input.fill('上訴');
     await page.locator('[role="option"], [role="listbox"] li').first().click();

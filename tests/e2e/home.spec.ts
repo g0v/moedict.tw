@@ -7,7 +7,7 @@ test.describe('home route', () => {
     expect(response?.headers()['content-type'] || '').toMatch(/text\/html/);
     await expect(page).toHaveTitle(/萌典/);
     // Wait for React to hydrate and render the fulltext search input.
-    await expect(page.locator('#nav-fulltext-search').first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('#nav-fulltext-search-desktop')).toBeVisible({ timeout: 15_000 });
   });
 
   test('Chinese text renders without mojibake', async ({ page }) => {

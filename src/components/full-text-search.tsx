@@ -7,6 +7,7 @@ type Lang = 'a' | 't' | 'h' | 'c';
 
 interface FullTextSearchProps {
 	currentLang: Lang;
+	instanceId: string;
 }
 
 interface SearchResultItem {
@@ -88,7 +89,7 @@ function renderHighlightedText(text: string, keyword: string): ReactNode {
 	});
 }
 
-export function FullTextSearch({ currentLang }: FullTextSearchProps) {
+export function FullTextSearch({ currentLang, instanceId }: FullTextSearchProps) {
 	const navigate = useNavigate();
 	const location = useLocation();
 	const containerRef = useRef<HTMLDivElement | null>(null);
@@ -322,14 +323,14 @@ export function FullTextSearch({ currentLang }: FullTextSearchProps) {
 
 	return (
 		<div ref={containerRef} className={`fulltext-search${isOpen ? ' is-open' : ''}`}>
-			<label htmlFor="nav-fulltext-search" className="sr-only">
+			<label htmlFor={`nav-fulltext-search-${instanceId}`} className="sr-only">
 				全文檢索
 			</label>
 			<span className="fulltext-search-icon" aria-hidden="true">
 				<SvgIcon name="search" size={13} />
 			</span>
 			<input
-				id="nav-fulltext-search"
+				id={`nav-fulltext-search-${instanceId}`}
 				type="search"
 				className="fulltext-search-input"
 				placeholder="多語檢索"

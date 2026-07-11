@@ -726,7 +726,7 @@ export function NavbarNormal({ currentLang }: NavbarNormalProps) {
 
 					{/* 手機版全文檢索（放在字詞紀錄簿左側） */}
 					<li className="navbar-fulltext-search-item-mobile hidden-sm hidden-md hidden-lg">
-						<FullTextSearch currentLang={resolvedLang} />
+						<FullTextSearch currentLang={resolvedLang} instanceId="mobile" />
 					</li>
 
 					{/* 字詞紀錄簿按鈕 */}
@@ -762,7 +762,7 @@ export function NavbarNormal({ currentLang }: NavbarNormalProps) {
 				{/* 右側區域 - 下載連結、搜尋框、社群連結 */}
 				<ul className="nav pull-right hidden-xs" slot="trailing" style={{ display: 'flex', alignItems: 'center' }}>
 					<li className="navbar-fulltext-search-item">
-						<FullTextSearch currentLang={resolvedLang} />
+						<FullTextSearch currentLang={resolvedLang} instanceId="desktop" />
 					</li>
 
 				{!isCapacitorApp() && (

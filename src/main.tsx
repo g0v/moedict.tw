@@ -24,6 +24,7 @@ import '@m3e/icons/outlined/add_circle'
 import '@m3e/icons/outlined/remove'
 import '@m3e/icons/outlined/share'
 import '@m3e/icons/outlined/print'
+import '@m3e/icons/outlined/search'
 
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'

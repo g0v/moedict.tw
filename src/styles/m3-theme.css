@@ -231,6 +231,16 @@ m3e-app-bar .iconic-circle {
   border: none !important;
   border-radius: var(--md-sys-shape-corner-medium, 12px) !important;
   box-shadow: var(--md-sys-elevation-level2, 0 4px 8px 3px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.3)) !important;
+  color: var(--md-sys-color-on-surface, #1c1b1e) !important;
+}
+/* src/index.css hardcodes .fulltext-search-result-title { color: #111 }
+   (light-mode-only, predates this branch) and .fulltext-search-result
+   { color: inherit } picks that up — invisible against the M3 dark
+   surface container. Repaint both explicitly. */
+.fulltext-search-status,
+.fulltext-search-result,
+.fulltext-search-result-title {
+  color: var(--md-sys-color-on-surface, #1c1b1e) !important;
 }
 .fulltext-search-result:hover,
 .fulltext-search-result.is-active {
