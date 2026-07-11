@@ -136,24 +136,30 @@ function buildManifest() {
   // （2019 年補上，iPad Safari ogg 支援不穩定時的備援，見 audio-utils.ts
   // buildAudioCandidates() 的註解）。playAudioUrl() 一律先試 .mp3 再退回
   // .ogg，所以兩種副檔名都要遷移，缺一個就會讓部分裝置播放失敗。
+  // 佇列順序刻意依「client 端優先嘗試順序」與「流量權重」排列：
+  // stroke（全語言共用，資料量小）→ a（華語/兩岸共用，流量最大）→
+  // t（台語）→ h（客語腔調組合）；每個語言內先 mp3 後 ogg（對應
+  // buildAudioCandidates() 的嘗試順序）。這讓「先跑到一半就要部署」時，
+  // 覆蓋率集中在使用者實際會撞到的路徑，而不是雨露均霑但每個語言都殘缺。
   const AUDIO_EXTENSIONS = [
-    { ext: 'ogg', contentType: 'audio/ogg' },
     { ext: 'mp3', contentType: 'audio/mpeg' },
+    { ext: 'ogg', contentType: 'audio/ogg' },
+  ];
+  const AUDIO_LANGS = [
+    { ids: audioIds.a, host: HOSTS.a, prefix: 'audio/a', catBase: 'audio-a' },
+    { ids: audioIds.t, host: HOSTS.t, prefix: 'audio/t', catBase: 'audio-t' },
+    { ids: hakkaVariantKeys, host: HOSTS.h, prefix: 'audio/h', catBase: 'audio-h-variant' },
   ];
 
   const tasks = [];
   for (const cp of strokeCps) {
     tasks.push({ cat: 'stroke', key: cp, url: `${HOSTS.stroke}/${cp}.json`, r2Key: `stroke-json/${cp}.json`, contentType: 'application/json' });
   }
-  for (const { ext, contentType } of AUDIO_EXTENSIONS) {
-    for (const id of audioIds.a) {
-      tasks.push({ cat: `audio-a-${ext}`, key: id, url: `${HOSTS.a}/${id}.${ext}`, r2Key: `audio/a/${id}.${ext}`, contentType });
-    }
-    for (const id of audioIds.t) {
-      tasks.push({ cat: `audio-t-${ext}`, key: id, url: `${HOSTS.t}/${id}.${ext}`, r2Key: `audio/t/${id}.${ext}`, contentType });
-    }
-    for (const k of hakkaVariantKeys) {
-      tasks.push({ cat: `audio-h-variant-${ext}`, key: k, url: `${HOSTS.h}/${k}.${ext}`, r2Key: `audio/h/${k}.${ext}`, contentType });
+  for (const { ids, host, prefix, catBase } of AUDIO_LANGS) {
+    for (const { ext, contentType } of AUDIO_EXTENSIONS) {
+      for (const id of ids) {
+        tasks.push({ cat: `${catBase}-${ext}`, key: id, url: `${host}/${id}.${ext}`, r2Key: `${prefix}/${id}.${ext}`, contentType });
+      }
     }
   }
   return tasks;
@@ -235,7 +241,17 @@ async function fetchWithRetry(url, attempts = 3) {
   for (let i = 0; i < attempts; i++) {
     try {
       const res = await fetch(url);
-      if (res.status === 404) return { status: 404 };
+      if (res.status === 404) {
+        // 上游偶爾對真實存在的物件回傳暫時性 404（實測案例：327200018.mp3
+        // 首次 404，800ms 後重試穩定回 200）。連續兩次 404 才視為確認不存在，
+        // 避免把暫時性錯誤誤記為物件不存在，漏遷移真實資料。
+        await sleep(800);
+        const confirmRes = await fetch(url);
+        if (confirmRes.status === 404) return { status: 404 };
+        if (!confirmRes.ok) throw new Error(`HTTP ${confirmRes.status}`);
+        const buf = Buffer.from(await confirmRes.arrayBuffer());
+        return { status: 200, buf };
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const buf = Buffer.from(await res.arrayBuffer());
       return { status: 200, buf };
