@@ -97,7 +97,7 @@ function applyPhoneticsBodyAttr(value: string): void {
 	document.body.setAttribute('data-ruby-pref', mapped);
 }
 
-// eslint-disable-next-line react-refresh/only-export-components
+// oxlint-disable-next-line react/only-export-components
 export function toggleUserPrefPanel(): void {
 	const panel = document.getElementById('user-pref');
 	if (!panel) return;

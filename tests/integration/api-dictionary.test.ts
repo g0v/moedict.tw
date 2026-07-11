@@ -3,7 +3,7 @@ import { fetchFromServer, fetchJson } from './_harness';
 
 interface DictEntry {
   title?: string;
-  heteronyms?: Array<{ bopomofo?: string; definitions?: Array<{ def?: string }> }>;
+  heteronyms?: Array<{ bopomofo?: string; bopomofo2?: string; definitions?: Array<{ def?: string }> }>;
   xrefs?: Array<{ lang: string; words: string[] }>;
   stroke_count?: number;
   radical?: string;
@@ -123,9 +123,9 @@ describe('/raw, /uni, /pua sub-routes', () => {
 
   it('raw bopomofo2 field is populated if heteronym has bopomofo', async () => {
     const { body } = await fetchJson<DictEntry>('/raw/%E8%90%8C.json');
-    const bopo = body.heteronyms?.[0].bopomofo;
-    if (bopo) {
-      expect((body.heteronyms?.[0] as Record<string, unknown>).bopomofo2).toBeDefined();
+    const heteronym = body.heteronyms?.[0];
+    if (heteronym?.bopomofo) {
+      expect(heteronym.bopomofo2).toBeDefined();
     }
   });
 

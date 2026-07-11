@@ -52,7 +52,7 @@ export function cleanTextForTTS(value: unknown): string {
   // 移除如 (A) 的大寫標記
   text = text.replace(/\([A-Z]\)/g, '');
   // 僅保留 ASCII 字符
-  // eslint-disable-next-line no-control-regex
+  // oxlint-disable-next-line no-control-regex
   text = text.replace(/[^\x00-\x7F]/g, '');
   // 收斂多餘空白
   text = text.replace(/\s+/g, ' ').trim();
