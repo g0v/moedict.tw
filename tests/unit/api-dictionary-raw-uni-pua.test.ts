@@ -398,6 +398,61 @@ describe('getCrossReferences branches', () => {
   });
 });
 
+describe('getCrossReferencesById branches', () => {
+  it('returns [] when the xref-by-id file is absent', async () => {
+    const env = makeEnv({
+      [BUCKET_PATH]: makeBucketJson({ t: '萌', h: [{ b: 'ㄇㄥˊ', d: [{ f: '草芽' }] }] }),
+    });
+    const result = await lookupDictionaryEntry('萌', 'a', env);
+    expect(result).toBeTruthy();
+    expect(result?.xrefsByHeteronym).toEqual([]);
+  });
+
+  it('returns ID-grouped xrefs when the sidecar is present', async () => {
+    const env = makeEnv({
+      [BUCKET_PATH]: makeBucketJson({ t: '萌', h: [{ b: 'ㄇㄥˊ', d: [{ f: '草芽' }] }] }),
+      'a/xref-by-id.json': JSON.stringify({
+        t: { 萌: { '1': ['發穎', '初生'] } },
+      }),
+    });
+    const result = await lookupDictionaryEntry('萌', 'a', env);
+    expect(result?.xrefsByHeteronym).toEqual([
+      { lang: 't', byId: { '1': ['發穎', '初生'] } },
+    ]);
+  });
+
+  it('skips entries for other words', async () => {
+    const env = makeEnv({
+      [BUCKET_PATH]: makeBucketJson({ t: '萌', h: [{ b: 'ㄇㄥˊ', d: [{ f: '草芽' }] }] }),
+      'a/xref-by-id.json': JSON.stringify({
+        t: { 其他字: { '9': ['不相關'] } },
+      }),
+    });
+    const result = await lookupDictionaryEntry('萌', 'a', env);
+    expect(result?.xrefsByHeteronym).toEqual([]);
+  });
+
+  it('catches malformed xref-by-id JSON and returns []', async () => {
+    const env = makeEnv({
+      [BUCKET_PATH]: makeBucketJson({ t: '萌', h: [{ b: 'ㄇㄥˊ', d: [{ f: '草芽' }] }] }),
+      'a/xref-by-id.json': '<<< not valid JSON >>>',
+    });
+    const result = await lookupDictionaryEntry('萌', 'a', env);
+    expect(result?.xrefsByHeteronym).toEqual([]);
+  });
+
+  it('skips groups whose target lang is not a/t/h/c', async () => {
+    const env = makeEnv({
+      [BUCKET_PATH]: makeBucketJson({ t: '萌', h: [{ b: 'ㄇㄥˊ', d: [{ f: '草芽' }] }] }),
+      'a/xref-by-id.json': JSON.stringify({
+        garbage: { 萌: { '1': ['不應出現'] } },
+      }),
+    });
+    const result = await lookupDictionaryEntry('萌', 'a', env);
+    expect(result?.xrefsByHeteronym).toEqual([]);
+  });
+});
+
 describe('addBopomofo2 — tone + vowel-pick branch coverage', () => {
   // applyTone (inner helper) has a waterfall of `includes()` checks for
   // a / o / e / iu / ui / u / i / ü. Each branch needs both a "present"

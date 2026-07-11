@@ -88,7 +88,7 @@ export function collectDictionaryFixtures(): FixtureEntry[] {
   }
 
   for (const lang of ['a', 't', 'h', 'c'] as const) {
-    for (const name of ['index.json', 'xref.json']) {
+    for (const name of ['index.json', 'xref.json', 'xref-by-id.json']) {
       const key = `${lang}/${name}`;
       const body = optional(path.join(DATA_DICT, lang, name), key);
       if (body) {

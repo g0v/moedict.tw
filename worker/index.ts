@@ -510,6 +510,37 @@ export async function dispatch(
         });
       }
 
+      // ID-aware xref sidecar（目前只有台語 t/xref-by-id.json）
+      const xrefByIdMatch = url.pathname.match(/^\/api\/xref-by-id\/([athc])\.json$/);
+      if (xrefByIdMatch) {
+        const lang = xrefByIdMatch[1];
+        const key = `${lang}/xref-by-id.json`;
+        const obj = await env.DICTIONARY.get(key);
+
+        if (!obj) {
+          return new Response('{}', {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json; charset=utf-8',
+              'Cache-Control': CACHE_CONTROL.xref,
+              'Cache-Tag': `xref,xref-${lang}`,
+              ...corsHeaders,
+            },
+          });
+        }
+
+        const content = await obj.text();
+        return new Response(content, {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': CACHE_CONTROL.xref,
+            'Cache-Tag': `xref,xref-${lang}`,
+            ...corsHeaders,
+          },
+        });
+      }
+
       // 筆順 JSON 代理（/api/stroke-json/{codepoint}.json）
       if (url.pathname.startsWith('/api/stroke-json/')) {
         return handleStrokeAPI(request, url, corsHeaders);
