@@ -175,7 +175,7 @@ export function ListView({ lang, category }: ListViewProps) {
             {filteredWords.map((word) => (
               <span key={word} style={{ clear: 'both', display: 'block' }}>
                 <span>·</span>
-                <Link to={wordPath(lang, word)}>{word}</Link>
+                {word.includes(';') ? word : <Link to={wordPath(lang, word)}>{word}</Link>}
               </span>
             ))}
           </>

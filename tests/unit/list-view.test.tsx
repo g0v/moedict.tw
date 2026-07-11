@@ -5,10 +5,13 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ListView } from '../../src/pages/ListView';
 
-const pairRows = Array.from(
-  { length: 30 },
-  (_, index) => `;臺灣詞${index};大陸詞${index}`,
-);
+const pairRows = [
+  ...Array.from(
+    { length: 30 },
+    (_, index) => `;臺灣詞${index};大陸詞${index}`,
+  ),
+  ';無效的殘列',
+];
 
 let container: HTMLDivElement;
 let root: Root;
@@ -61,6 +64,19 @@ describe('ListView cross-strait comparison table', () => {
     expect(table?.querySelector('a[href="/~臺灣詞0"]')?.textContent).toBe('臺灣詞0');
     expect(table?.querySelector('a[href="/~大陸詞0"]')?.textContent).toBe('大陸詞0');
     expect(container.querySelector('a[href*=";"]')).toBeNull();
+  });
+
+  it('renders malformed cross-strait rows as non-link fallback text', async () => {
+    await renderList('c', '同實異名');
+
+    expect(container.textContent).toContain(';無效的殘列');
+    // Residual semicolon strings must never become dictionary routes.
+    expect(container.querySelector('a[href*=";"]')).toBeNull();
+    const linkTexts = [...container.querySelectorAll('a')].map((anchor) => anchor.textContent);
+    expect(linkTexts).not.toContain(';無效的殘列');
+    // Valid pairs remain independent dictionary links.
+    expect(container.querySelector('a[href="/~臺灣詞0"]')?.textContent).toBe('臺灣詞0');
+    expect(container.querySelector('a[href="/~大陸詞0"]')?.textContent).toBe('大陸詞0');
   });
 
   it('matches a keyword in either term of a cross-strait pair', async () => {

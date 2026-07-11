@@ -115,11 +115,18 @@
     box-shadow: 0 6px 12px rgba(0, 0, 0, 0.175);
   }
 
+  /* Row-scoped pointer bridge on the fixed submenu.
+     Anchor it to the trigger row so the hit path is only that row's height,
+     not the full submenu — avoiding sibling-item shadowing.
+     8px is an empirical safety margin over the theoretically-zero submenu gap
+     (subpixel rounding / border rendering). */
   .dropdownSubmenu > .dropdownMenu::before {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: -8px;
+    position: fixed;
+    position-anchor: --nav-submenu-trigger;
+    top: anchor(top);
+    right: auto;
+    bottom: anchor(bottom);
+    left: anchor(right);
 
     width: 8px;
     content: '';
@@ -132,6 +139,7 @@
   .dropdownSubmenu.hover > a,
   .dropdownSubmenu.pinned > a {
     border-bottom: none;
+    anchor-name: --nav-submenu-trigger;
   }
 
   .dropdownSubmenu.hover > a::after,
