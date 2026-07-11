@@ -717,16 +717,6 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                 })()}
               </span>
               {rubyData.youyin && <small className="youyin">{rubyData.youyin}</small>}
-              {(rubyData.bAlt || rubyData.pAlt) && (
-                <small className="alternative">
-                  {lang !== 'h' && rubyData.pAlt && (
-                    <span className="pinyin" dangerouslySetInnerHTML={{ __html: formatPinyin(rubyData.pAlt) }} />
-                  )}
-                  {rubyData.bAlt && (
-                    <span className="bopomofo" dangerouslySetInnerHTML={{ __html: formatBopomofo(rubyData.bAlt) }} />
-                  )}
-                </small>
-              )}
               {lang !== 'h' && pronunAudioId && (
                 <span className="audioBlock">
                   <span
@@ -755,6 +745,16 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                     <SvgIcon name={playingAudioId === pronunAudioId ? 'stop' : 'play'} size="1em" aria-hidden="true" />
                   </span>
                 </span>
+              )}
+              {(rubyData.bAlt || rubyData.pAlt) && (
+                <small className="alternative">
+                  {lang !== 'h' && rubyData.pAlt && (
+                    <span className="pinyin" dangerouslySetInnerHTML={{ __html: formatPinyin(rubyData.pAlt) }} />
+                  )}
+                  {rubyData.bAlt && (
+                    <span className="bopomofo" dangerouslySetInnerHTML={{ __html: formatBopomofo(rubyData.bAlt) }} />
+                  )}
+                </small>
               )}
             </h1>
             {hakkaReadings.length > 0 && (
