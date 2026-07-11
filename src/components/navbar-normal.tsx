@@ -505,8 +505,13 @@ function DropdownSubmenu({
 		e.currentTarget.classList.add(styled.hover);
 
 		const parentRect = parent.getBoundingClientRect()
+		// Place the flyout at the parent's padding-box right edge, not the
+		// border-box. getBoundingClientRect() includes border, but the row
+		// bridge (::before left:100%; width == padding-right) ends at the
+		// padding edge and cannot cross overflow-clipped border width.
+		const borderRightWidthPx = parseFloat(getComputedStyle(parent).borderRightWidth) || 0
 
-		innerDropdownMenu.style.left = `${parentRect.left + parentRect.width}px`
+		innerDropdownMenu.style.left = `${parentRect.left + parentRect.width - borderRightWidthPx}px`
 		innerDropdownMenu.style.top = `${parentRect.top}px`
 
 		const currentTargetRect = e.currentTarget.getBoundingClientRect()

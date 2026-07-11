@@ -183,3 +183,65 @@ test('desktop nested submenu keeps ancestor hover bridge on its own trigger row'
   await page.mouse.move(geometry!.ancestorRight + 4, midY, { steps: 12 });
   await expect(nestedCategory).toBeVisible();
 });
+
+test('desktop root-level hover bridge reaches fixed submenu left edge', async ({ page }) => {
+  // Root `.dropdownMenuRoot` has a 1px border outside its padding-right room for
+  // the row-scoped ::before bridge. enterDropdown positions the fixed flyout at
+  // the parent's border-box right edge (getBoundingClientRect includes border),
+  // so the bridge must extend at least that far — not stop at the padding edge.
+  await page.goto('/~%E8%90%8C');
+
+  await page.locator('nav .navbar-nav > li').first().locator('a').first().click();
+  const categoryIndex = page.locator('a.taxonomy.c', { hasText: '…分類索引' });
+  const submenuTarget = page.locator('a.lang-option.c[href="/~=同實異名"]');
+
+  await categoryIndex.hover();
+  await expect(submenuTarget).toBeVisible();
+
+  const geometry = await page.evaluate(() => {
+    const trigger = Array.from(document.querySelectorAll('a.taxonomy.c')).find(
+      (el) => (el.textContent ?? '').trim() === '…分類索引',
+    );
+    if (!(trigger instanceof HTMLElement)) return null;
+
+    const li = trigger.closest('li');
+    if (!(li instanceof HTMLElement)) return null;
+
+    const submenu = li.querySelector('ul');
+    if (!(submenu instanceof HTMLElement)) return null;
+
+    const liBox = li.getBoundingClientRect();
+    const style = getComputedStyle(li, '::before');
+    const leftOffset = parseFloat(style.left);
+    const width = parseFloat(style.width);
+    if (![leftOffset, width].every(Number.isFinite)) return null;
+
+    // Reconstruct bridge right edge from the trigger row + absolute ::before
+    // offsets. Do not step a pointer across the gap — that can skip a single CSS
+    // pixel between bridgeRight and submenuLeft.
+    const bridgeLeft = liBox.left + leftOffset;
+    const bridgeRight = bridgeLeft + width;
+    const submenuBox = submenu.getBoundingClientRect();
+
+    return {
+      bridgeLeft,
+      bridgeRight,
+      bridgeWidth: width,
+      bridgePosition: style.position,
+      bridgeContent: style.content,
+      submenuLeft: submenuBox.left,
+      gap: submenuBox.left - bridgeRight,
+    };
+  });
+
+  expect(geometry).not.toBeNull();
+  expect(geometry!.bridgePosition).toBe('absolute');
+  expect(geometry!.bridgeContent).not.toBe('none');
+  expect(geometry!.bridgeWidth).toBeGreaterThan(0);
+
+  // No unfilled strip between the bridge's right edge and the live fixed submenu.
+  expect(
+    geometry!.bridgeRight,
+    `expected bridgeRight (${geometry!.bridgeRight}) >= submenuLeft (${geometry!.submenuLeft}); gap=${geometry!.gap}px`,
+  ).toBeGreaterThanOrEqual(geometry!.submenuLeft);
+});
