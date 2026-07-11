@@ -39,6 +39,19 @@ describe('shouldRenderHtmlShell', () => {
     expect(shouldRenderHtmlShell(req(), url('/foo?html-proxy'))).toBe(false);
   });
 
+  it('does not treat /@<radical> app routes as Vite-internal (regression: g0v/moedict.tw#131 follow-up)', () => {
+    // /@vite/, /@fs/, /@id/, /@react-refresh are the real Vite dev-server
+    // namespaces; a bare /@ prefix also matches moedict's own radical
+    // routes and must render the HTML shell, not be excluded.
+    expect(shouldRenderHtmlShell(req(), url('/@vite/client'))).toBe(false);
+    expect(shouldRenderHtmlShell(req(), url('/@fs/etc/passwd'))).toBe(false);
+    expect(shouldRenderHtmlShell(req(), url('/@id/some-module'))).toBe(false);
+    expect(shouldRenderHtmlShell(req(), url('/@react-refresh'))).toBe(false);
+    expect(shouldRenderHtmlShell(req(), url('/@木'))).toBe(true);
+    expect(shouldRenderHtmlShell(req(), url('/@'))).toBe(true);
+    expect(shouldRenderHtmlShell(req(), url('/~@木'))).toBe(true);
+  });
+
   it('returns false for non-GET/HEAD methods', () => {
     expect(shouldRenderHtmlShell(req('POST'), url('/about'))).toBe(false);
     expect(shouldRenderHtmlShell(req('DELETE'), url('/about'))).toBe(false);

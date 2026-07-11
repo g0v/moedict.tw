@@ -90,7 +90,19 @@ async function injectHeadMetadata(html: string, pathname: string, env: Env): Pro
 
 function isViteInternalRequest(url: URL): boolean {
   const { pathname, searchParams } = url;
-  if (pathname.startsWith('/@') || pathname.startsWith('/node_modules/')) return true;
+  // Real Vite dev-server internal paths are always namespaced
+  // (/@vite/client, /@vite/env, /@fs/…, /@id/…, /@react-refresh) — a bare
+  // `/@`-prefixed check here would also swallow moedict's own /@<radical>
+  // and /~@<radical> app routes, which is exactly what happened once
+  // run_worker_first started routing those through the Worker instead of
+  // letting the platform's static-assets layer serve them directly.
+  if (
+    pathname.startsWith('/@vite/') ||
+    pathname.startsWith('/@fs/') ||
+    pathname.startsWith('/@id/') ||
+    pathname === '/@react-refresh' ||
+    pathname.startsWith('/node_modules/')
+  ) return true;
   return (
     searchParams.has('html-proxy') ||
     searchParams.has('import') ||
