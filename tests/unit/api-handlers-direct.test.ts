@@ -80,6 +80,21 @@ describe('handleDictionaryAPI — top-level routing', () => {
     expect(res.headers.get('cache-tag')).toMatch(/\bdict-a\b/);
   });
 
+  it('sets 200-only cache headers on HEAD dictionary requests too', async () => {
+    const env = {
+      DICTIONARY: makeR2({
+        'pack/12.txt': JSON.stringify({
+          [escape('萌')]: { t: '萌', h: [{ b: 'ㄇㄥˊ', d: [{ f: '草木初生的芽' }] }] },
+        }),
+      }),
+    };
+    const { request, url } = makeRequest('/a/%E8%90%8C.json', { method: 'HEAD' });
+    const res = await handleDictionaryAPI(request, url, env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toContain('s-maxage=86400');
+    expect(res.headers.get('cache-tag')).toMatch(/\bdict-a\b/);
+  });
+
   it('does not long-cache dictionary 404 responses', async () => {
     const env = { DICTIONARY: makeR2({}) };
     const { request, url } = makeRequest('/api/%E4%B8%8D%E5%AD%98.json');
@@ -468,6 +483,32 @@ describe('handleListAPI', () => {
     expect(res.headers.get('cache-control')).toContain('s-maxage=3600');
     expect(res.headers.get('cache-tag')).toMatch(/\blist\b/);
     expect(res.headers.get('cache-tag')).toMatch(/\blist-a\b/);
+  });
+
+  it('sets list cache headers on HEAD requests too', async () => {
+    const env = {
+      DICTIONARY: makeR2({
+        'a/=成語.json': JSON.stringify(['守株待兔', '畫蛇添足']),
+      }),
+    };
+    const { request, url } = makeRequest('/api/=%E6%88%90%E8%AA%9E', { method: 'HEAD' });
+    const res = await handleListAPI(request, url, env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toContain('s-maxage=3600');
+    expect(res.headers.get('cache-tag')).toMatch(/\blist-a\b/);
+  });
+
+  it('omits cache headers on non-GET/HEAD list requests', async () => {
+    const env = {
+      DICTIONARY: makeR2({
+        'a/=成語.json': JSON.stringify(['守株待兔', '畫蛇添足']),
+      }),
+    };
+    const { request, url } = makeRequest('/api/=%E6%88%90%E8%AA%9E', { method: 'POST' });
+    const res = await handleListAPI(request, url, env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBeNull();
+    expect(res.headers.get('cache-tag')).toBeNull();
   });
 
   it('404s when the category is unknown', async () => {

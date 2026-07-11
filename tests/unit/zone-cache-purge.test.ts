@@ -63,4 +63,13 @@ describe('createZoneCachePurger', () => {
 		await expect(purge({ tags: ['dict'] })).rejects.toThrow('Zone purge failed (403)');
 		fetchSpy.mockRestore();
 	});
+
+	it('degrades to an empty snippet when the error response text() rejects', async () => {
+		const resp = new Response('ignored', { status: 500 });
+		vi.spyOn(resp, 'text').mockRejectedValue(new Error('stream broke'));
+		const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(resp);
+		const purge = createZoneCachePurger({ CLOUDFLARE_API_TOKEN: 'test-token' } as PurgerEnv);
+		await expect(purge({ tags: ['dict'] })).rejects.toThrow('Zone purge failed (500): ');
+		fetchSpy.mockRestore();
+	});
 });

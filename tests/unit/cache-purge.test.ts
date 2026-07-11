@@ -120,4 +120,58 @@ describe('handleCachePurge', () => {
 		expect(res.status).toBe(400);
 		expect(purgeMock).not.toHaveBeenCalled();
 	});
+
+	it('400s on an invalid JSON body', async () => {
+		const res = await handleCachePurge(
+			new Request('http://localhost/api/cache/purge', {
+				method: 'POST',
+				headers: { Authorization: 'Bearer secret' },
+				body: 'not-json',
+			}),
+			{ env: { CACHE_PURGE_TOKEN: 'secret' }, purge: purgeMock },
+		);
+		expect(res.status).toBe(400);
+		const body = await res.json() as { message: string };
+		expect(body.message).toBe('invalid JSON');
+		expect(purgeMock).not.toHaveBeenCalled();
+	});
+
+	it('treats a whitespace-only body as empty and purges the full tag set', async () => {
+		const res = await handleCachePurge(
+			new Request('http://localhost/api/cache/purge', {
+				method: 'POST',
+				headers: { Authorization: 'Bearer secret' },
+				body: '   ',
+			}),
+			{ env: { CACHE_PURGE_TOKEN: 'secret' }, purge: purgeMock },
+		);
+		expect(res.status).toBe(200);
+		const body = await res.json() as { purgedTags: string[] };
+		expect(body.purgedTags).toEqual([...DICTIONARY_CACHE_TAGS]);
+	});
+
+	it('falls through a non-Bearer Authorization header to X-Cache-Purge-Token', async () => {
+		const res = await handleCachePurge(
+			new Request('http://localhost/api/cache/purge', {
+				method: 'POST',
+				headers: { Authorization: 'Basic zzz', 'X-Cache-Purge-Token': 'secret' },
+				body: '{}',
+			}),
+			{ env: { CACHE_PURGE_TOKEN: 'secret' }, purge: purgeMock },
+		);
+		expect(res.status).toBe(200);
+	});
+
+	it('403s when X-Cache-Purge-Token is whitespace only', async () => {
+		const res = await handleCachePurge(
+			new Request('http://localhost/api/cache/purge', {
+				method: 'POST',
+				headers: { 'X-Cache-Purge-Token': '   ' },
+				body: '{}',
+			}),
+			{ env: { CACHE_PURGE_TOKEN: 'secret' }, purge: purgeMock },
+		);
+		expect(res.status).toBe(403);
+		expect(purgeMock).not.toHaveBeenCalled();
+	});
 });
