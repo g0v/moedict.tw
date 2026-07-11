@@ -42,6 +42,40 @@
 		"ASSET_BASE_URL": "https://r2-assets.moedict.tw",
 		// DICTIONARY_BASE_URL：目前僅由 /api/config 回傳 dictionaryBaseUrl；程式碼庫內尚無讀取該欄位。字典 JSON 實際由 Worker 綁定 DICTIONARY R2（/api/*.json 等）提供，非此公開 URL 直連。
 		"DICTIONARY_BASE_URL": "https://r2-dictionary.moedict.tw"
+	},
+	"env": {
+		// 獨立 staging 環境：獨立 Worker 名稱（只有 *.workers.dev，未綁定任何自訂網域/
+		// 正式站路由，與 production 完全隔離），指向既有的 R2 -preview 桶（唯讀，與
+		// production 桶內容可能存在落差但資料真實可用，見 commands/upload_dictionary.sh
+		// 既有的 preview/prod 慣例）。用 `bun run deploy:staging` 部署；.workers.dev 網址
+		// 於部署輸出列印，或見 `wrangler deployments list --env staging`。
+		"staging": {
+			"name": "cf-moedict-webkit-neo-staging",
+			"cache": {
+				"enabled": true
+			},
+			"r2_buckets": [
+				{
+					"binding": "FONTS",
+					"bucket_name": "moedict-fonts-preview",
+					"remote": true
+				},
+				{
+					"binding": "ASSETS",
+					"bucket_name": "moedict-assets-preview",
+					"remote": true
+				},
+				{
+					"binding": "DICTIONARY",
+					"bucket_name": "moedict-dictionary-preview",
+					"remote": true
+				}
+			],
+			"vars": {
+				"ASSET_BASE_URL": "https://r2-assets.moedict.tw",
+				"DICTIONARY_BASE_URL": "https://r2-dictionary.moedict.tw"
+			}
+		}
 	}
 	/**
 	 * Smart Placement

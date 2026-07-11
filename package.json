@@ -31,6 +31,7 @@
 		"stryker": "stryker run",
 		"preview": "bun run build && wrangler dev",
 		"deploy": "bun run build && wrangler deploy",
+		"deploy:staging": "CLOUDFLARE_ENV=staging bun run build && wrangler deploy",
 		"cf-typegen": "wrangler types"
 	},
 	"dependencies": {
