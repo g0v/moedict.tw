@@ -154,7 +154,7 @@ describe('trsToBpmf (extended)', () => {
 
   describe('Taiwanese → bopomofo mappings', () => {
     it('maps tsi/tshi/ji/si initial consonants to palatalized bopomofo', () => {
-      expect(trsToBpmf('t', 'tsia\u030Dh')).toBe('\u3110\u3127\u311A\u31B7\u0358');
+      expect(trsToBpmf('t', 'tsia\u030Dh')).toBe('\u3110\u3127\u311A\u31B7\u0307');
       expect(trsToBpmf('t', 'tshok')).toBe('\u3118\u31A6\u31B6');
       expect(trsToBpmf('t', 'si')).toBe('\u3112\u3127 ');
       expect(trsToBpmf('t', 'ji')).toBe('\u31A2\u3127 ');
@@ -182,8 +182,8 @@ describe('trsToBpmf (extended)', () => {
       expect(trsToBpmf('t', 'at')).toBe('\u311A\u31B5');
       expect(trsToBpmf('t', 'ak')).toBe('\u311A\u31B6');
       expect(trsToBpmf('t', 'ah')).toBe('\u311A\u31B7');
-      // With U+030D (fifth tone) combined with final p — uses 'p$' row
-      expect(trsToBpmf('t', 'ap\u030D')).toBe('\u311A\u31B4\u0358');
+      // With U+030D (tone 8, checked) combined with final p — uses 'p$' row
+      expect(trsToBpmf('t', 'ap\u030D')).toBe('\u311A\u31B4\u0307');
     });
 
     it('expands bare ok → ook before bopomofo lookup', () => {
@@ -885,9 +885,9 @@ describe('applyTaigiSandhi', () => {
 
 describe('trsToBpmf — sandhi integration', () => {
   it('applies sandhi to multi-syllable Taigi by default', () => {
-    // 'huat-ínn' -> sandhi'd 'hua̍t-ínn' -> bopomofo includes U+0358 on the
+    // 'huat-ínn' -> sandhi'd 'hua̍t-ínn' -> bopomofo includes U+0307 on the
     // checked tone glyph for the first syllable; second syllable keeps its acute.
-    expect(trsToBpmf('t', 'huat-ínn')).toBe('ㄏㄨㄚㆵ͘ㆪˋ');
+    expect(trsToBpmf('t', 'huat-ínn')).toBe('ㄏㄨㄚㆵ\u0307ㆪˋ');
   });
 
   it('maps 免除 with sandhi on the first syllable', () => {
@@ -913,5 +913,31 @@ describe('trsToBpmf — sandhi integration', () => {
   it('opt-out with bopomofo_sandhi_t=on still applies sandhi (default branch)', () => {
     window.localStorage.setItem('bopomofo_sandhi_t', 'on');
     expect(trsToBpmf('t', 'hang-hang')).toBe('ㄏㄤ˫ㄏㄤ ');
+  });
+});
+
+// Regression coverage for g0v/moedict-webkit#300: the tone-8 (checked,
+// U+030D input) marker used to render as U+0358 COMBINING DOT ABOVE RIGHT,
+// which renders skewed/detached from its base in many fonts — and only the
+// ruby2hruby zhuyin path normalized it to the well-rendering U+0307, so the
+// bAlt/pAlt alt-reading text (rendered via formatBopomofo, never through
+// ruby2hruby) still showed the broken U+0358. Fixed by making U+0307 the
+// canonical TAIWANESE_TONES output — the single source every consumer reads.
+// Real ptck T field, not synthetic: 虱目魚 "sat-ba̍k-hî/sat-ba̍k-hû".
+describe('trsToBpmf — #300 tone-8 marker regression (虱目魚)', () => {
+  const satBakHi = 'sat-ba\u030dk-hi\u0302/sat-ba\u030dk-hu\u0302';
+
+  it('never emits the legacy U+0358 combining dot above right', () => {
+    expect(trsToBpmf('t', satBakHi)).not.toContain('\u0358');
+  });
+
+  it('emits U+0307 for the checked tone-8 syllable added by sandhi (sat -> sát under sandhi)', () => {
+    // sat-ba̍k-hî: "sat" (citation tone 4, non-final) sandhis to tone 8 —
+    // ㆵ + U+0307 — while "ba̍k" (citation tone 8, non-final) sandhis to
+    // tone 4 (dot removed); "hî"/"hû" (final) keep citation tone unchanged.
+    expect(trsToBpmf('t', satBakHi)).toBe(
+      '\u3119\u311A\u31B5\u0307\u31A0\u311A\u31B6\u310F\u3127\u02CA/' +
+        '\u3119\u311A\u31B5\u0307\u31A0\u311A\u31B6\u310F\u3128\u02CA',
+    );
   });
 });

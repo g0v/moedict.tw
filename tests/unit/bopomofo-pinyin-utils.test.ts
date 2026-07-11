@@ -599,3 +599,60 @@ describe('decorateRuby — hard-to-hit rbspan ternary branches', () => {
     }
   });
 });
+
+// Regression coverage for g0v/moedict-webkit#299: xiehouyu (歇後語) example
+// sentences use a doubled U+2500 BOX DRAWINGS LIGHT HORIZONTAL ("──") as a
+// riddle/punchline dash. U+2500 is Unicode category "So" (Symbol), not "P"
+// (Punctuation), so it used to be wrongly treated as its own lookupable ruby
+// base — inflating the <rb> count and shifting every zhuyin <rt> after the
+// dash onto the wrong character. Fixed via RUBY_BASE_PUNCTUATION_RE. Real
+// ptck examples, not synthetic: 反種, 挵硞得, 媠面 all use "X──Y" phrasing.
+describe('decorateRuby + rightAngle — #299 xiehouyu dash regression', () => {
+  it.each([
+    [
+      '反種',
+      '<a href="/\'茄">茄</a><a href="/\'仔">仔</a><a href="/\'開">開</a><a href="/\'黃">黃</a><a href="/\'花">花</a>──<a href="/\'反種">反種</a>。',
+      'Kio\u0302-a\u0301 khui n\u0302g-hue\u2500\u2500hua\u0301n-tsi\u0301ng. ',
+    ],
+    [
+      '挵硞得',
+      '<a href="/\'豆腐">豆腐</a><a href="/\'佮">佮</a><a href="/\'石頭">石頭</a>──<a href="/\'袂磕得">袂磕得</a>。',
+      'Ta\u0304u-hu\u0304 kah tsio\u030dh-tha\u0302u\u2500\u2500be\u0304-kha\u030dp--tit. ',
+    ],
+    [
+      '媠面',
+      '<a href="/\'紅龜">紅龜</a><a href="/\'抹">抹</a><a href="/\'油">油</a>──<a href="/\'媠面">媠面</a>。',
+      'A\u0302ng-ku buah-iu\u0302\u2500\u2500sui\u0301-bi\u0304n.',
+    ],
+  ])('%s: the dash never becomes its own <rb>, and every <rb> gets a zhuyin <ru>', (_name, han, trs) => {
+    const { ruby } = decorateRuby({ LANG: 't', title: han, py: trs });
+    const hruby = rightAngle(ruby);
+
+    // The dash survives as literal text between ruby groups, not as a ruby
+    // base needing its own dictionary lookup link.
+    expect(hruby).toContain('──');
+    expect(hruby).not.toContain('href="./#%E2%94%80"');
+
+    // ruby2hruby pairs zhuyin <rt> to <rb> strictly by array position (no
+    // rbspan tolerance), so every <rb> must end up wrapped in a zhuyin <ru> —
+    // one unwrapped <rb> is exactly how #299 desynced every character after
+    // the dash onto the wrong reading.
+    const rbCount = (hruby.match(/<rb>/g) || []).length;
+    const wrappedCount = (hruby.match(/<ru zhuyin=""/g) || []).length;
+    expect(rbCount).toBeGreaterThan(0);
+    expect(wrappedCount).toBe(rbCount);
+  });
+});
+
+// Regression coverage for g0v/moedict-webkit#300: bAlt (the alt-reading
+// text extracted from a "/"-joined T field, rendered via formatBopomofo in
+// TitlePronunciation.tsx — never passed through ruby2hruby) used to keep the
+// legacy U+0358 combining dot, which renders skewed/detached in many fonts.
+// Real ptck T field, not synthetic: 虱目魚 "sat-ba̍k-hî/sat-ba̍k-hû".
+describe('decorateRuby — #300 bAlt tone-8 marker regression (虱目魚)', () => {
+  it('bAlt never contains the legacy U+0358 and uses U+0307 instead', () => {
+    const { bAlt } = decorateRuby({ LANG: 't', trs: 'sat-ba\u030dk-hi\u0302/sat-ba\u030dk-hu\u0302' });
+    expect(bAlt).not.toContain('\u0358');
+    expect(bAlt).toContain('\u0307');
+  });
+});

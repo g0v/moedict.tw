@@ -27,11 +27,31 @@ function escapeAttr(text: string): string {
   return escapeHtml(text).replace(/'/g, '&#39;');
 }
 
-const RUBY_BASE_PUNCTUATION_RE = /^\p{P}$/u;
-const RUBY_ANNOTATION_PUNCTUATION_RE = /[,.!?;:，、；：？！。．·・－—─…﹔]\s?/g;
+// U+2500 BOX DRAWINGS LIGHT HORIZONTAL is Unicode category "So" (Symbol),
+// not "P" (Punctuation), but doubled ── is used throughout the ptck corpus
+// as a xiehouyu (歇後語) riddle/punchline dash (see pinyin-preference-utils.ts's
+// PHRASE_BOUNDARY_RE comment). Left unhandled, each dash character was wrongly
+// treated as a lookupable ruby base, inflating the <rb> count and desyncing
+// the positional <rb>/<rt> pairing in ruby2hruby (g0v/moedict-webkit#299).
+const RUBY_BASE_PUNCTUATION_RE = /^(?:\p{P}|\u2500)$/u;
+
+// Exported so scripts/check-trs-bpmf.mjs can exhaustively cross-check this
+// hand-maintained classification against every character actually observed
+// in the ptck corpus — the same "table completeness" gate as check:data,
+// applied to ruby-base punctuation instead of dictionary pack JSON shape.
+export function isRubyBasePunctuation(ch: string): boolean {
+  return RUBY_BASE_PUNCTUATION_RE.test(ch);
+}
+// U+0022 (straight double quote) wraps quoted proper nouns/dialogue inside
+// example-sentence romanization (e.g. kiò i "peh-kong"). Left unhandled it
+// doesn't produce a token-splitting space, so it sticks to the adjacent
+// syllable's token — one extra <rt> shifts every following <rt> out of
+// position against its <rb> (the same #299 misalignment mechanism as the
+// U+2500 dash above, caught exhaustively by scripts/check-trs-bpmf.mjs).
+const RUBY_ANNOTATION_PUNCTUATION_RE = /[",.!?;:，、；：？！。．·・－—─…﹔]\s?/g;
 
 function buildRubyBaseChunk(ch: string, href?: string): string {
-  if (RUBY_BASE_PUNCTUATION_RE.test(ch)) {
+  if (isRubyBasePunctuation(ch)) {
     return escapeHtml(ch);
   }
 
@@ -140,7 +160,7 @@ export function decorateRuby(params: {
     .replace(/([^ ])(ㄦ)/g, '$1 $2')
     .replace(/([ ]?[\u3000][ ]?)/g, ' ')
     .replace(/([ˇˊˋ˪˫])[ ]?/g, '$1 ')
-    .replace(/([ㆴㆵㆶㆷ][̍͘]?)/g, '$1 ');
+    .replace(/([ㆴㆵㆶㆷ][\u030D\u0358\u0307]?)/g, '$1 ');
 
   let cnSpecific = '';
   if (processedBopomofo.match(/陸/)) {
