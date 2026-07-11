@@ -157,14 +157,14 @@ bun run deploy           # 驗證通過後才部署 production
 - **`T` 欄的斜線慣例**：一個 heteronym 的多個讀音以 `/` 相連
   （如 `"tshi̍h/ji̍h"`、`"tsi̍t-ji̍t/tsi̍t-li̍t"`），前端 `decorateRuby()` 會拆出
   主讀音與又音（`bAlt`/`pAlt`）。
-- **`ptck` 的 `T` 欄（台語羅馬字）以 NFD 為常態**（分解式，`ê` = `e`+U+0302；
-  已實測 1.7 萬筆），但上游 twblg CSV 常是 NFC。合併/去重該欄位時一律先
-  `normalize('NFC')` 做 canonical 比對，寫回時配合既有內容存 NFD——否則會產生
-  「看起來一樣其實 byte 不同」的重複讀音，並污染 pinyin lookup 索引。
-  **此規則僅限該欄位**：詞目 key、釋義或其他字典欄位未驗證過 normalization
-  狀態，不要做全域 normalize（會破壞 key 對應與 byte-level diff）。
-- 各 pack 目錄的 `=.txt` 是分類表；其中 `pack/`、`pcck/`、`ptck/` 的檔案
-  JSON 格式異常（`{,"key"…` 開頭，`phck/` 的正常）——批次解析 pack 檔時要容錯跳過。
+- **`ptck` 的 `T` 欄（台語羅馬字）以 NFD 為常態**（分解式，`ê` = `e`+U+0302），
+  但上游 twblg CSV 常是 NFC。合併/去重該欄位時一律先 `normalize('NFC')` 做
+  canonical 比對，寫回時存 NFD。**此規則由 CI 強制**：`bun run check:data`
+  會驗證所有 pack 檔可 JSON.parse、ptck `T` 無 NFC-canonical 重複讀音、
+  且每個 segment 都是 NFD。**規則僅限該欄位**：詞目 key、釋義或其他欄位
+  未驗證過 normalization 狀態，不要做全域 normalize（會破壞 key 對應）。
+- 各 pack 目錄的 `=.txt` 是分類表（2026-07 已修復三份曾為 malformed JSON 的
+  檔案；`check:data` 從此把關全部 pack 檔的可解析性）。
 
 ## 上游資料管線與現況
 
@@ -194,28 +194,37 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
   `worker/index.ts` 的覆蓋率靠 direct-call unit tests
   （`tests/unit/api-handlers-direct.test.ts`、`worker-dispatch*.test.ts`）。
   **新增 handler 分支時必須同步加 direct-call 測試**，integration 不會動到數字。
-- Coverage ratchet：`vitest.unit.config.ts` 的 thresholds 是**只升不降的地板**。
-  `/* v8 ignore */` 總數上限 20（`scripts/check-v8-ignore-count.mjs`）。
+- Coverage ratchet：`vitest.unit.config.ts` 的 thresholds 是**只升不降的地板**
+  （目前 100%/100%/100%/100%，全綠）。`/* v8 ignore */` 總數上限 20
+  （`scripts/check-v8-ignore-count.mjs`）。
 - 視覺回歸 baseline 只 commit `*-chromium-linux.png`；darwin/win32 是本機自生。
 - `DictionaryPage.tsx`（~950 行）與 `MiddlePoint.tsx` **沒有 unit test**
-  （e2e-only 慣例）——在大型 render 函式內改動時特別小心變數遮蔽
-  （曾有 prop 被同名 `map((x, idx)` 參數遮蔽的實例）。
-- Shell 環境若已設 `CI=1`，Playwright 會關掉 reuseExistingServer——
-  本機看到大量 e2e 失敗先檢查這個，再懷疑程式。
+  （e2e-only 慣例）。變數遮蔽已由 eslint `@typescript-eslint/no-shadow`
+  （error 級）把關。
+- Playwright 的 retries/workers/forbidOnly 跟著 `CI` 環境變數走；只有
+  `webServer.reuseExistingServer` 可用 `PW_REUSE_EXISTING_SERVER=1` 單獨
+  覆寫（開發 shell 誤設 `CI=1` 時的解法）。
+- CI（`.github/workflows/ci.yml`）push 觸發分支是 `main`。static job 依序跑
+  lint、typecheck、check-v8-ignore-count、`check:data`、`check:css-ids`、build。
 
-## UI 慣例與已知地雷
+## UI 慣例與結構性防護
 
-- **`h1.title` 內的 DOM 順序固定為**：ruby → `small.youyin` → `span.audioBlock`
-  → `small.alternative`（依 legacy `view.ls:132-158`）。`.alternative` 內的
-  `.pinyin`/`.bopomofo` 是 block-level（遠端 legacy CSS），插錯位置會把
-  播放鍵擠下去——已踩過一次。
-- 全站仍載入**遠端 legacy 樣式** `data/assets/styles.css`（Bootstrap 3 時代）。
-  它會用 id/class 選擇器蓋掉你的元件樣式（含 Shadow DOM `:host` 預設）。
-  **新元件不要沿用舊版元素的 id**，改樣式前先 grep 這支檔案。
-- **同一 URL 規則有兩個獨立 parser**：`src/utils/dictionary-route.ts`
-  （`parseDictionaryRoute`，client + worker 路由）與 `src/ssr/head.ts`
-  （`resolveHeadByPath` 的 `toSegment`，伺服端 `<head>`）。改路由語意時
-  **兩處都要改**，並 grep 其他 parser 形狀的函式（`parseX`/`resolveX`/`toSegment`）。
+以下「地雷」已改為結構性防護——單一定義點 + 測試/CI 把關。動到相關區域時
+沿用這些機制，不要繞過：
+
+- **`h1.title` 的 DOM 順序**（ruby → youyin → audioBlock → alternative，
+  依 legacy `view.ls:132-158`）：由 `src/components/TitlePronunciation.tsx`
+  單點持有（ruby 以 children slot 傳入），順序由
+  `tests/unit/title-pronunciation.test.tsx` 鎖定。改順序＝改該元件＋測試。
+- **URL 前綴文法**（`'`=t、`:`=h、`~`=c、`@`/`=`/`=*` 家族、`/<數字>` idx）：
+  唯一定義在 `src/utils/dictionary-route.ts` 的 `classifyRoute`（頁面/head 分類）
+  與 `stripLangPrefix`（語言前綴，API 端加 `{'!': 't'}` legacy 別名）。
+  `resolveHeadByPath`、`parseDictionaryRoute`、`parseTextFromUrl`（兩處）都是
+  它的消費者。**新的 parser 一律消費這兩個函式，禁止自建 if-chain。**
+- **legacy 遠端樣式 `data/assets/styles.css`** 的 `#id` 選擇器會蓋掉新元件
+  （含 Shadow DOM `:host` 預設）：`bun run check:css-ids` 在 CI 把關——
+  src 內新增的 id 若撞上 legacy `#id` 選擇器且不在 allowlist 內會 fail；
+  要沿用 legacy 樣式就有意識地把 id 加進 allowlist（附註解）。
 - 詞條頁資料流：client 打 `/api/{前綴}{詞}.json` → Worker `fillBucket` 讀
   R2 `p{lang}ck/{bucket}.txt` → 取單一 key 回傳。`/{a,t,h,c,raw,uni,pua}/<詞>.json`
   是對外公開 API（README 有文件），改格式要顧慮外部消費者。
@@ -230,9 +239,9 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
 - Commit message 含反引號時用 `git commit -F <file>`（heredoc 會觸發指令替換）。
 - git 對非 ASCII 檔名輸出八進位跳脫——grep CJK 檔名會 silent miss，
   用 `git -c core.quotePath=false` 或 `-z`。
-- `bun run lint` 目前整庫崩潰（typescript 7 beta 與 typescript-eslint 相容性，
-  `TypeError … 'Cjs'`）——不是你弄壞的；靜態檢查用 `bun run typecheck` 頂替，
-  等相依版本和解後移除本條。
+- `bun run lint` 正常可用（typescript 固定在 5.x；勿升到 7.x 的 Go-native
+  preview，typescript-eslint 不支援其 API，整庫會崩）。`@typescript-eslint/no-shadow`
+  為 error 級。
 
 ## 授權紅線
 
@@ -241,7 +250,7 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
   回報上游（dict.revised.moe.edu.tw／sutian.moe.edu.tw），不能在資料層自行改寫釋義。
 - **`revised-dict.woff`**（教育部 PUA 變體字頭字型）：MOE **未另行公布字型授權**；
   本專案在 owner 明確承擔風險下**原封不動**託管（見 `src/index.css:39-50` 與
-  `revised-dict.LICENSE.txt`）。專案政策：**不可 subset、不可轉 WOFF2**、
+  `public/fonts/revised-dict.LICENSE.txt`）。專案政策：**不可 subset、不可轉 WOFF2**、
   不可任何再編碼——保持原檔 byte-identical。
 - 字圖 PNG 產生器的 fallback 字型 Tauhu Oo（豆腐烏，**SIL OFL 1.1**，
   `data/assets/fonts/`）授權乾淨，可自由處理。
