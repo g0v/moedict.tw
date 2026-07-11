@@ -11,7 +11,7 @@
  * 若未來完成音檔遷移，應先驗證四本字典的 .ogg 與 .mp3 物件完整，再只改
  * AUDIO_CDN_MAP；STROKE_JSON_BASE_URL 維持 R2 路由。
  */
-export const ASSET_CDN_BASE = 'https://r2-assets.moedict.tw';
+export const ASSET_CDN_BASE = "https://r2-assets.moedict.tw";
 
 /**
  * Stable cache-bust version for the legacy `data/assets/styles.css` stylesheet.
@@ -25,7 +25,7 @@ export const ASSET_CDN_BASE = 'https://r2-assets.moedict.tw';
  * edge-cached stylesheet key (the original unversioned object at 24h, or a
  * prior `?v=` version still cached at the 5-minute TTL).
  */
-export const LEGACY_STYLESHEET_VERSION = '20260711';
+export const LEGACY_STYLESHEET_VERSION = "20260711";
 
 /** 筆畫 JSON：`${STROKE_JSON_BASE_URL}/{codepoint-hex}.json` */
 export const STROKE_JSON_BASE_URL = `${ASSET_CDN_BASE}/stroke-json`;
@@ -36,9 +36,9 @@ export const STROKE_JSON_BASE_URL = `${ASSET_CDN_BASE}/stroke-json`;
  * 客語（`h`）另有腔調組合音檔 `${AUDIO_CDN_MAP.h}/{variant}-{audioId}.ogg`
  * （見 DictionaryPage.tsx 的 getHakkaVariantAudioUrl / parseHakkaReadings）。
  */
-export const AUDIO_CDN_MAP: Record<'a' | 't' | 'h' | 'c', string> = {
-  a: 'https://203146b5091e8f0aafda-15d41c68795720c6e932125f5ace0c70.ssl.cf1.rackcdn.com',
-  t: 'https://1763c5ee9859e0316ed6-db85b55a6a3fbe33f09b9245992383bd.ssl.cf1.rackcdn.com',
-  h: 'https://a7ff62cf9d5b13408e72-351edcddf20c69da65316dd74d25951e.ssl.cf1.rackcdn.com',
-  c: 'https://203146b5091e8f0aafda-15d41c68795720c6e932125f5ace0c70.ssl.cf1.rackcdn.com',
+export const AUDIO_CDN_MAP: Record<"a" | "t" | "h" | "c", string> = {
+  a: "https://203146b5091e8f0aafda-15d41c68795720c6e932125f5ace0c70.ssl.cf1.rackcdn.com",
+  t: "https://1763c5ee9859e0316ed6-db85b55a6a3fbe33f09b9245992383bd.ssl.cf1.rackcdn.com",
+  h: "https://a7ff62cf9d5b13408e72-351edcddf20c69da65316dd74d25951e.ssl.cf1.rackcdn.com",
+  c: "https://203146b5091e8f0aafda-15d41c68795720c6e932125f5ace0c70.ssl.cf1.rackcdn.com",
 };

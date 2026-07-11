@@ -17,10 +17,10 @@ const STROKE_WORDS_PATH = path.resolve(
 const SVG_ICON_PATH = path.resolve(import.meta.dirname, "../../src/components/SvgIcon.tsx");
 
 function extractSpinnerPathFromSvgIcon(source: string): string {
-  // Match: spinner: { width: 1568, path: '…' },
-  const match = source.match(/spinner:\s*\{\s*width:\s*\d+,\s*path:\s*'([^']+)'/);
+  // Accept either quote style so formatters cannot break this parity guard.
+  const match = source.match(/spinner:\s*\{\s*width:\s*\d+,\s*path:\s*(["'])(.*?)\1/);
   if (!match) throw new Error("Could not locate FONT_AWESOME_GLYPHS.spinner in SvgIcon.tsx");
-  return match[1];
+  return match[2];
 }
 
 function extractSpinnerPathFromStrokeJs(source: string): string {

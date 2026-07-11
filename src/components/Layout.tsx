@@ -3,70 +3,76 @@
  * 根據 layout 類型切換不同的頁面結構
  */
 
-import { useEffect, useState, type ReactNode } from 'react';
-import { NavbarAbout } from './navbar-about';
-import { NavbarNormal } from './navbar-normal';
-import { Sidebar } from './sidebar';
-import { AssetLoader } from './AssetLoader';
-import { InlineStyles } from './InlineStyles';
-import { UserPref } from './user-pref';
-import { useSwipeNavigation } from '../hooks/useSwipeNavigation';
+import { useEffect, useState, type ReactNode } from "react";
+import { NavbarAbout } from "./navbar-about";
+import { NavbarNormal } from "./navbar-normal";
+import { Sidebar } from "./sidebar";
+import { AssetLoader } from "./AssetLoader";
+import { InlineStyles } from "./InlineStyles";
+import { UserPref } from "./user-pref";
+import { useSwipeNavigation } from "../hooks/useSwipeNavigation";
 
-type Lang = 'a' | 't' | 'h' | 'c';
+type Lang = "a" | "t" | "h" | "c";
 
-type LayoutType = 'normal' | 'about';
+type LayoutType = "normal" | "about";
 
 interface LayoutProps {
-	layout: LayoutType;
-	children: ReactNode;
-	currentLang?: Lang;
-	r2Endpoint?: string;
+  layout: LayoutType;
+  children: ReactNode;
+  currentLang?: Lang;
+  r2Endpoint?: string;
 }
 
 /**
  * Layout 組件
  */
 export function Layout({ layout, children, currentLang, r2Endpoint }: LayoutProps) {
-	const [criticalCssReady, setCriticalCssReady] = useState(false);
-	const [inlineStylesReady, setInlineStylesReady] = useState(false);
-	const swipeRef = useSwipeNavigation();
+  const [criticalCssReady, setCriticalCssReady] = useState(false);
+  const [inlineStylesReady, setInlineStylesReady] = useState(false);
+  const swipeRef = useSwipeNavigation();
 
-	useEffect(() => {
-		if (r2Endpoint) {
-			setInlineStylesReady(true);
-		}
-	}, [r2Endpoint]);
+  useEffect(() => {
+    if (r2Endpoint) {
+      setInlineStylesReady(true);
+    }
+  }, [r2Endpoint]);
 
-	if (!criticalCssReady || !inlineStylesReady) {
-		return (
-			<>
-				<AssetLoader r2Endpoint={r2Endpoint} onCriticalStylesReady={() => setCriticalCssReady(true)} />
-				<InlineStyles r2Endpoint={r2Endpoint} onReady={() => setInlineStylesReady(true)} />
-			</>
-		);
-	}
+  if (!criticalCssReady || !inlineStylesReady) {
+    return (
+      <>
+        <AssetLoader
+          r2Endpoint={r2Endpoint}
+          onCriticalStylesReady={() => setCriticalCssReady(true)}
+        />
+        <InlineStyles r2Endpoint={r2Endpoint} onReady={() => setInlineStylesReady(true)} />
+      </>
+    );
+  }
 
-	return (
-		<>
-			<AssetLoader r2Endpoint={r2Endpoint} onCriticalStylesReady={() => setCriticalCssReady(true)} />
-			<InlineStyles r2Endpoint={r2Endpoint} onReady={() => setInlineStylesReady(true)} />
-			{layout === 'about' ? (
-				<div className="app-shell">
-					<NavbarAbout r2Endpoint={r2Endpoint} />
-					<main id="main-content" className="about-layout" ref={swipeRef}>
-						{children}
-					</main>
-				</div>
-			) : (
-				<div className="app-shell">
-					<NavbarNormal currentLang={currentLang} />
-					<Sidebar currentLang={currentLang} />
-					<UserPref />
-					<main id="main-content" ref={swipeRef}>
-						{children}
-					</main>
-				</div>
-			)}
-		</>
-	);
+  return (
+    <>
+      <AssetLoader
+        r2Endpoint={r2Endpoint}
+        onCriticalStylesReady={() => setCriticalCssReady(true)}
+      />
+      <InlineStyles r2Endpoint={r2Endpoint} onReady={() => setInlineStylesReady(true)} />
+      {layout === "about" ? (
+        <div className="app-shell">
+          <NavbarAbout r2Endpoint={r2Endpoint} />
+          <main id="main-content" className="about-layout" ref={swipeRef}>
+            {children}
+          </main>
+        </div>
+      ) : (
+        <div className="app-shell">
+          <NavbarNormal currentLang={currentLang} />
+          <Sidebar currentLang={currentLang} />
+          <UserPref />
+          <main id="main-content" ref={swipeRef}>
+            {children}
+          </main>
+        </div>
+      )}
+    </>
+  );
 }

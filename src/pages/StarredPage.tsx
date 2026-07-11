@@ -1,6 +1,12 @@
-import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { SvgIcon } from '../components/SvgIcon';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
+import { useNavigate } from "react-router-dom";
+import { SvgIcon } from "../components/SvgIcon";
 import {
   addStarWord,
   clearLRUWords,
@@ -10,10 +16,10 @@ import {
   readStarredWords,
   removeLRUWord,
   removeStarWord,
-} from '../utils/word-record-utils';
-import { useRadicalTooltip } from '../hooks/useRadicalTooltip';
+} from "../utils/word-record-utils";
+import { useRadicalTooltip } from "../hooks/useRadicalTooltip";
 
-type Lang = 'a' | 't' | 'h' | 'c';
+type Lang = "a" | "t" | "h" | "c";
 
 interface StarredPageProps {
   lang: Lang;
@@ -21,16 +27,16 @@ interface StarredPageProps {
 }
 
 function getLangPrefix(lang: Lang): string {
-  if (lang === 't') return "'";
-  if (lang === 'h') return ':';
-  if (lang === 'c') return '~';
-  return '';
+  if (lang === "t") return "'";
+  if (lang === "h") return ":";
+  if (lang === "c") return "~";
+  return "";
 }
 
 function buildWordPath(word: string, prefix: string): string {
-  if (word.startsWith('@')) {
+  if (word.startsWith("@")) {
     const radical = word.slice(1);
-    const radicalBase = prefix === '~' ? '/~@' : '/@';
+    const radicalBase = prefix === "~" ? "/~@" : "/@";
     if (!radical) return radicalBase;
     return `${radicalBase}${encodeURIComponent(radical)}`;
   }
@@ -38,8 +44,8 @@ function buildWordPath(word: string, prefix: string): string {
 }
 
 function buildTooltipId(word: string, path: string, prefix: string): string {
-  if (word.startsWith('@')) {
-    return prefix === '~' ? `~${word}` : word;
+  if (word.startsWith("@")) {
+    return prefix === "~" ? `~${word}` : word;
   }
   return `entry:${path}`;
 }
@@ -70,17 +76,17 @@ export function StarredPage({ lang }: StarredPageProps) {
       event.preventDefault();
       navigate(buildPath(word));
     },
-    [buildPath, navigate]
+    [buildPath, navigate],
   );
 
   const handleClearRecent = useCallback(() => {
-    if (!window.confirm('確定要清除瀏覽紀錄？')) return;
+    if (!window.confirm("確定要清除瀏覽紀錄？")) return;
     clearLRUWords(lang);
     setRecentWords([]);
   }, [lang]);
 
   const handleClearStarred = useCallback(() => {
-    if (!window.confirm('確定要清除收藏字詞？')) return;
+    if (!window.confirm("確定要清除收藏字詞？")) return;
     clearStarredWords(lang);
     setStarredWords([]);
   }, [lang]);
@@ -90,7 +96,7 @@ export function StarredPage({ lang }: StarredPageProps) {
       removeStarWord(lang, word);
       setStarredWords((prev) => prev.filter((existing) => existing !== word));
     },
-    [lang]
+    [lang],
   );
 
   const handleRemoveRecent = useCallback(
@@ -98,7 +104,7 @@ export function StarredPage({ lang }: StarredPageProps) {
       removeLRUWord(lang, word);
       setRecentWords((prev) => prev.filter((existing) => existing !== word));
     },
-    [lang]
+    [lang],
   );
   const starredSet = useMemo(() => new Set(starredWords), [starredWords]);
 
@@ -111,7 +117,7 @@ export function StarredPage({ lang }: StarredPageProps) {
       }
       loadWords();
     },
-    [lang, loadWords]
+    [lang, loadWords],
   );
 
   return (
@@ -126,31 +132,42 @@ export function StarredPage({ lang }: StarredPageProps) {
             type="button"
             className="btn-default btn btn-tiny"
             value="清除"
-            style={{ marginLeft: '10px', display: starredWords.length > 0 ? '' : 'none' }}
+            style={{ marginLeft: "10px", display: starredWords.length > 0 ? "" : "none" }}
             onClick={handleClearStarred}
           />
         </h3>
         <div className="word-list">
           {starredWords.length === 0 ? (
             <p className="bg-info">
-              （請按詞條旁的 <SvgIcon name="starEmpty" size="1em" style={{ margin: '0 0.15em', verticalAlign: '-0.125em' }} aria-hidden="true" /> 按鈕，即可將字詞加到這裡。）
+              （請按詞條旁的{" "}
+              <SvgIcon
+                name="starEmpty"
+                size="1em"
+                style={{ margin: "0 0.15em", verticalAlign: "-0.125em" }}
+                aria-hidden="true"
+              />{" "}
+              按鈕，即可將字詞加到這裡。）
             </p>
           ) : (
             starredWords.map((word) => {
               const path = buildPath(word);
               const tooltipId = buildTooltipId(word, path, prefix);
               return (
-                <div key={`starred-${word}`} style={{ clear: 'both', display: 'block' }}>
-                <button
-                  type="button"
-                  className="btn-star-word"
-                  aria-label={`取消收藏「${word}」`}
-                  title={`取消收藏「${word}」`}
-                  onClick={() => handleToggleStar(word)}
-                >
-                  <SvgIcon name="star" size="0.9em" aria-hidden="true" />
-                </button>
-                  <a href={path} data-radical-id={tooltipId} onClick={(event) => handleWordClick(event, word)}>
+                <div key={`starred-${word}`} style={{ clear: "both", display: "block" }}>
+                  <button
+                    type="button"
+                    className="btn-star-word"
+                    aria-label={`取消收藏「${word}」`}
+                    title={`取消收藏「${word}」`}
+                    onClick={() => handleToggleStar(word)}
+                  >
+                    <SvgIcon name="star" size="0.9em" aria-hidden="true" />
+                  </button>
+                  <a
+                    href={path}
+                    data-radical-id={tooltipId}
+                    onClick={(event) => handleWordClick(event, word)}
+                  >
                     {word}
                   </a>
                   <button
@@ -178,7 +195,7 @@ export function StarredPage({ lang }: StarredPageProps) {
             type="button"
             className="btn-default btn btn-tiny"
             value="清除"
-            style={{ marginLeft: '10px', display: recentWords.length > 0 ? '' : 'none' }}
+            style={{ marginLeft: "10px", display: recentWords.length > 0 ? "" : "none" }}
             onClick={handleClearRecent}
           />
         </h3>
@@ -187,7 +204,7 @@ export function StarredPage({ lang }: StarredPageProps) {
             const path = buildPath(word);
             const tooltipId = buildTooltipId(word, path, prefix);
             return (
-              <div key={`recent-${word}`} style={{ clear: 'both', display: 'block' }}>
+              <div key={`recent-${word}`} style={{ clear: "both", display: "block" }}>
                 <button
                   type="button"
                   className="btn-star-word"
@@ -195,9 +212,17 @@ export function StarredPage({ lang }: StarredPageProps) {
                   title={starredSet.has(word) ? `取消收藏「${word}」` : `收藏「${word}」`}
                   onClick={() => handleToggleStar(word)}
                 >
-                  <SvgIcon name={starredSet.has(word) ? 'star' : 'starEmpty'} size="0.9em" aria-hidden="true" />
+                  <SvgIcon
+                    name={starredSet.has(word) ? "star" : "starEmpty"}
+                    size="0.9em"
+                    aria-hidden="true"
+                  />
                 </button>
-                <a href={path} data-radical-id={tooltipId} onClick={(event) => handleWordClick(event, word)}>
+                <a
+                  href={path}
+                  data-radical-id={tooltipId}
+                  onClick={(event) => handleWordClick(event, word)}
+                >
                   {word}
                 </a>
                 <button

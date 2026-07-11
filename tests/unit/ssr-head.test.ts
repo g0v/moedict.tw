@@ -338,7 +338,6 @@ describe("applyHeadToDocument / applyHeadByPath", () => {
         querySelector: () => null,
       },
     } as unknown as Document;
-    // @ts-expect-error - deliberately swapping in a partial document for test
     globalThis.document = fakeDocument;
 
     expect(() =>
@@ -365,7 +364,6 @@ describe("applyHeadToDocument / applyHeadByPath", () => {
   it("returns early when document.head is missing", () => {
     const saved = globalThis.document;
     const fakeDocument = { title: "" } as unknown as Document;
-    // @ts-expect-error - deliberately swapping in a partial document for test
     globalThis.document = fakeDocument;
 
     expect(() =>

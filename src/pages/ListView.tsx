@@ -4,12 +4,12 @@
  * 路由：/={類名}, /'={類名}, /:={類名}, /~={類名}
  */
 
-import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useRadicalTooltip } from '../hooks/useRadicalTooltip';
-import styled from './ListView.module.css';
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { useRadicalTooltip } from "../hooks/useRadicalTooltip";
+import styled from "./ListView.module.css";
 
-type Lang = 'a' | 't' | 'h' | 'c';
+type Lang = "a" | "t" | "h" | "c";
 
 interface ListViewProps {
   lang: Lang;
@@ -17,10 +17,10 @@ interface ListViewProps {
 }
 
 const LANG_PREFIX: Record<Lang, string> = {
-  a: '',
+  a: "",
   t: "'",
-  h: ':',
-  c: '~',
+  h: ":",
+  c: "~",
 };
 const KEYWORD_SEARCH_THRESHOLD = 30;
 
@@ -31,8 +31,8 @@ type CrossStraitPair = {
 
 function parseCrossStraitPair(value: string): CrossStraitPair | null {
   // moedict-data-csld/兩岸同實異名.csv: 臺灣詞,,,大陸詞,,,差異別
-  const fields = value.split(';');
-  if (fields.length !== 3 || fields[0] !== '' || !fields[1] || !fields[2]) return null;
+  const fields = value.split(";");
+  if (fields.length !== 3 || fields[0] !== "" || !fields[1] || !fields[2]) return null;
   return { taiwanTerm: fields[1], mainlandTerm: fields[2] };
 }
 
@@ -42,7 +42,7 @@ function wordPath(lang: Lang, word: string): string {
 
 export function ListView({ lang, category }: ListViewProps) {
   const [words, setWords] = useState<string[]>([]);
-  const [keyword, setKeyword] = useState('');
+  const [keyword, setKeyword] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   useRadicalTooltip();
@@ -65,7 +65,7 @@ export function ListView({ lang, category }: ListViewProps) {
         if (Array.isArray(data)) {
           setWords(data as string[]);
         } else {
-          setError('資料格式錯誤');
+          setError("資料格式錯誤");
         }
       })
       .catch((err: Error) => {
@@ -77,16 +77,20 @@ export function ListView({ lang, category }: ListViewProps) {
   }, [lang, category]);
 
   useEffect(() => {
-    setKeyword('');
+    setKeyword("");
   }, [lang, category]);
 
-  const isCrossStraitComparison = lang === 'c' && category === '同實異名';
+  const isCrossStraitComparison = lang === "c" && category === "同實異名";
   const pairs = useMemo(
-    () => (isCrossStraitComparison ? words.map(parseCrossStraitPair).filter((pair): pair is CrossStraitPair => pair !== null) : []),
+    () =>
+      isCrossStraitComparison
+        ? words.map(parseCrossStraitPair).filter((pair): pair is CrossStraitPair => pair !== null)
+        : [],
     [isCrossStraitComparison, words],
   );
   const ordinaryWords = useMemo(
-    () => (isCrossStraitComparison ? words.filter((word) => parseCrossStraitPair(word) === null) : words),
+    () =>
+      isCrossStraitComparison ? words.filter((word) => parseCrossStraitPair(word) === null) : words,
     [isCrossStraitComparison, words],
   );
 
@@ -107,8 +111,10 @@ export function ListView({ lang, category }: ListViewProps) {
   if (loading) {
     return (
       <div id="result" className="result prefer-pinyin-true">
-        <div style={{ display: 'inline' }}>
-          <h1 itemProp="name" style={{ visibility: 'visible' }}>{category}</h1>
+        <div style={{ display: "inline" }}>
+          <h1 itemProp="name" style={{ visibility: "visible" }}>
+            {category}
+          </h1>
         </div>
       </div>
     );
@@ -117,9 +123,11 @@ export function ListView({ lang, category }: ListViewProps) {
   if (error) {
     return (
       <div id="result" className="result prefer-pinyin-true">
-        <div style={{ display: 'inline' }}>
-          <h1 itemProp="name" style={{ visibility: 'visible' }}>{category}</h1>
-          <span style={{ clear: 'both', display: 'block' }}>{error}</span>
+        <div style={{ display: "inline" }}>
+          <h1 itemProp="name" style={{ visibility: "visible" }}>
+            {category}
+          </h1>
+          <span style={{ clear: "both", display: "block" }}>{error}</span>
         </div>
       </div>
     );
@@ -127,10 +135,12 @@ export function ListView({ lang, category }: ListViewProps) {
 
   return (
     <div id="result" className="result prefer-pinyin-true">
-      <div style={{ display: 'inline' }}>
-        <h1 itemProp="name" style={{ visibility: 'visible' }}>{category}</h1>
+      <div style={{ display: "inline" }}>
+        <h1 itemProp="name" style={{ visibility: "visible" }}>
+          {category}
+        </h1>
         {shouldShowKeywordSearch && (
-          <div style={{ clear: 'both', display: 'block', margin: '8px 0 12px' }}>
+          <div style={{ clear: "both", display: "block", margin: "8px 0 12px" }}>
             <input
               type="search"
               className="query"
@@ -142,46 +152,52 @@ export function ListView({ lang, category }: ListViewProps) {
             />
           </div>
         )}
-        {shouldShowKeywordSearch
-          && (isCrossStraitComparison ? filteredPairs.length === 0 && filteredWords.length === 0 : filteredWords.length === 0)
-          && (
-          <span style={{ clear: 'both', display: 'block' }}>
-            沒有符合「{normalizedKeyword}」的結果
-          </span>
-        )}
+        {shouldShowKeywordSearch &&
+          (isCrossStraitComparison
+            ? filteredPairs.length === 0 && filteredWords.length === 0
+            : filteredWords.length === 0) && (
+            <span style={{ clear: "both", display: "block" }}>
+              沒有符合「{normalizedKeyword}」的結果
+            </span>
+          )}
         {isCrossStraitComparison ? (
           <>
             <div className={styled.comparisonTableWrapper}>
-              <table
-                aria-label="臺灣及大陸用語對照"
-                className={styled.comparisonTable}
-              >
+              <table aria-label="臺灣及大陸用語對照" className={styled.comparisonTable}>
                 <thead>
                   <tr>
-                    <th scope="col"><span aria-hidden="true">🇹🇼</span> 臺灣用語</th>
-                    <th scope="col"><span aria-hidden="true">🇨🇳</span> 大陸用語</th>
+                    <th scope="col">
+                      <span aria-hidden="true">🇹🇼</span> 臺灣用語
+                    </th>
+                    <th scope="col">
+                      <span aria-hidden="true">🇨🇳</span> 大陸用語
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredPairs.map(({ taiwanTerm, mainlandTerm }) => (
                     <tr key={`${taiwanTerm}\u0000${mainlandTerm}`}>
-                      <td><Link to={wordPath('c', taiwanTerm)}>{taiwanTerm}</Link></td>
-                      <td><Link to={wordPath('c', mainlandTerm)}>{mainlandTerm}</Link></td>
+                      <td>
+                        <Link to={wordPath("c", taiwanTerm)}>{taiwanTerm}</Link>
+                      </td>
+                      <td>
+                        <Link to={wordPath("c", mainlandTerm)}>{mainlandTerm}</Link>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
             {filteredWords.map((word) => (
-              <span key={word} style={{ clear: 'both', display: 'block' }}>
+              <span key={word} style={{ clear: "both", display: "block" }}>
                 <span>·</span>
-                {word.includes(';') ? word : <Link to={wordPath(lang, word)}>{word}</Link>}
+                {word.includes(";") ? word : <Link to={wordPath(lang, word)}>{word}</Link>}
               </span>
             ))}
           </>
         ) : (
           filteredWords.map((word) => (
-            <span key={word} style={{ clear: 'both', display: 'block' }}>
+            <span key={word} style={{ clear: "both", display: "block" }}>
               <span>·</span>
               <Link to={wordPath(lang, word)}>{word}</Link>
             </span>

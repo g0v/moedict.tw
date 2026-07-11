@@ -4,15 +4,15 @@
 
 `cf-moedict-webkit-neo` 是 `../moedict-webkit`（原始萌典）的現代化移植版本。
 
-| 原始 (moedict-webkit) | Neo (cf-moedict-webkit-neo) |
-|---|---|
+| 原始 (moedict-webkit)                    | Neo (cf-moedict-webkit-neo)                                 |
+| ---------------------------------------- | ----------------------------------------------------------- |
 | LiveScript + React 0.14 + Gulp + ZappaJS | TypeScript + React 19 + Vite+（Vite 8）+ Cloudflare Workers |
-| `main.ls` | `src/main.tsx` |
-| `view.ls` (767行) | `src/pages/` + `src/components/` |
-| `scripts/Nav.jsx` | `src/components/navbar-normal.tsx` ✅ 已移植 |
-| `scripts/Links.jsx` | 待移植 |
-| `scripts/UserPref.jsx` | 待移植 |
-| `a/`, `t/`, `h/`, `c/` pack 資料 | Cloudflare R2 buckets |
+| `main.ls`                                | `src/main.tsx`                                              |
+| `view.ls` (767行)                        | `src/pages/` + `src/components/`                            |
+| `scripts/Nav.jsx`                        | `src/components/navbar-normal.tsx` ✅ 已移植                |
+| `scripts/Links.jsx`                      | 待移植                                                      |
+| `scripts/UserPref.jsx`                   | 待移植                                                      |
+| `a/`, `t/`, `h/`, `c/` pack 資料         | Cloudflare R2 buckets                                       |
 
 ## Vite+ 工具鏈（2026-07）
 
@@ -23,8 +23,9 @@
 - 專案的索引重建、`tsc -b` 與 deploy 前置流程仍由 package scripts 保證，
   因此開發/正式 build 用 `vp run dev` / `vp run build`，不要改用不執行
   `predev` / `prebuild` 的 built-in `vp dev` / `vp build`。
-- `vp check` 刻意不做全樹格式化或 type-aware lint；型別檢查另跑
-  `vp run typecheck`。原因與 tests/tsconfig 限制詳見 AGENTS.md。
+- `vp check` 會跑 Oxfmt、全範圍 type-aware Oxlint 與 TypeScript diagnostics；
+  `data/**` 等 legacy/vendor 路徑由 formatter 排除，canonical project build
+  check 另跑 `vp run typecheck`。
 
 ## 參考路徑
 
@@ -40,12 +41,12 @@
 
 ## 語言對應
 
-| lang key | 辭典 | hash prefix | 路由 |
-|---|---|---|---|
-| `a` | 華語辭典 | `#` | `/` |
-| `t` | 臺灣台語 | `#'` | `/'` |
-| `h` | 臺灣客語 | `#:` | `/:` |
-| `c` | 兩岸詞典 | `#~` | `/~` |
+| lang key | 辭典     | hash prefix | 路由 |
+| -------- | -------- | ----------- | ---- |
+| `a`      | 華語辭典 | `#`         | `/`  |
+| `t`      | 臺灣台語 | `#'`        | `/'` |
+| `h`      | 臺灣客語 | `#:`        | `/:` |
+| `c`      | 兩岸詞典 | `#~`        | `/~` |
 
 ## 目前 neo 元件完成狀態
 

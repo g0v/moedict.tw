@@ -425,7 +425,6 @@ describe("ruby2hruby — catch branch (line 156)", () => {
         throw new Error("simulated parse failure");
       }
     }
-    // @ts-expect-error — deliberate mock.
     globalThis.DOMParser = ThrowingParseFromString;
     try {
       const html = "<rb>test</rb>";

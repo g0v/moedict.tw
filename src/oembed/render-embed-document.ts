@@ -7,8 +7,13 @@
  * even if a definition contains stray markup.
  */
 
-import { escapeHtml, stripTags } from './html-escape';
-import type { DictionaryLang, EmbedDefinition, EmbedDictionaryEntry, EmbedHeteronym } from './types';
+import { escapeHtml, stripTags } from "./html-escape";
+import type {
+  DictionaryLang,
+  EmbedDefinition,
+  EmbedDictionaryEntry,
+  EmbedHeteronym,
+} from "./types";
 
 const MAX_HETERONYMS = 3;
 const MAX_DEFS_PER_HETERONYM = 5;
@@ -44,20 +49,20 @@ function renderPronunciation(heteronym: EmbedHeteronym, lang: DictionaryLang): s
   // on the full DictionaryPage; out of scope for this compact preview, so
   // — matching the same simplification already made by the tooltip card —
   // the pronunciation line is skipped entirely for lang 'h'.
-  if (lang === 'h') return '';
-  const bopomofo = heteronym.bopomofo ? escapeHtml(stripTags(heteronym.bopomofo)) : '';
-  const romanization = heteronym.pinyin || heteronym.trs || '';
-  const pinyin = romanization ? escapeHtml(stripTags(romanization)) : '';
-  if (!bopomofo && !pinyin) return '';
-  const bopomofoHtml = bopomofo ? `<span class="bopomofo">${bopomofo}</span>` : '';
-  const pinyinHtml = pinyin ? `<span class="pinyin">${pinyin}</span>` : '';
+  if (lang === "h") return "";
+  const bopomofo = heteronym.bopomofo ? escapeHtml(stripTags(heteronym.bopomofo)) : "";
+  const romanization = heteronym.pinyin || heteronym.trs || "";
+  const pinyin = romanization ? escapeHtml(stripTags(romanization)) : "";
+  if (!bopomofo && !pinyin) return "";
+  const bopomofoHtml = bopomofo ? `<span class="bopomofo">${bopomofo}</span>` : "";
+  const pinyinHtml = pinyin ? `<span class="pinyin">${pinyin}</span>` : "";
   return `<p class="pron">${bopomofoHtml}${pinyinHtml}</p>`;
 }
 
 function groupDefinitionsByType(definitions: EmbedDefinition[]): Map<string, EmbedDefinition[]> {
   const grouped = new Map<string, EmbedDefinition[]>();
   for (const definition of definitions) {
-    const key = String(definition.type || '').trim();
+    const key = String(definition.type || "").trim();
     const list = grouped.get(key) ?? [];
     list.push(definition);
     grouped.set(key, list);
@@ -69,23 +74,23 @@ function renderDefinitionGroups(definitions: EmbedDefinition[]): string {
   const grouped = groupDefinitionsByType(definitions.slice(0, MAX_DEFS_PER_HETERONYM));
   const groups: string[] = [];
   for (const [type, items] of grouped) {
-    const posHtml = type ? `<span class="pos">${escapeHtml(type)}</span>` : '';
+    const posHtml = type ? `<span class="pos">${escapeHtml(type)}</span>` : "";
     const itemsHtml = items
-      .map((item) => stripTags(String(item.def || '')))
+      .map((item) => stripTags(String(item.def || "")))
       .filter(Boolean)
       .map((text) => `<li>${escapeHtml(text)}</li>`)
-      .join('');
+      .join("");
     if (!itemsHtml) continue;
     groups.push(`<div class="pos-group">${posHtml}<ol>${itemsHtml}</ol></div>`);
   }
-  return groups.join('');
+  return groups.join("");
 }
 
 function renderHeteronymSection(heteronym: EmbedHeteronym, lang: DictionaryLang): string {
   const pronunciationHtml = renderPronunciation(heteronym, lang);
   const definitions = Array.isArray(heteronym.definitions) ? heteronym.definitions : [];
   const definitionsHtml = renderDefinitionGroups(definitions);
-  if (!pronunciationHtml && !definitionsHtml) return '';
+  if (!pronunciationHtml && !definitionsHtml) return "";
   return `<section class="heteronym">${pronunciationHtml}${definitionsHtml}</section>`;
 }
 
@@ -115,16 +120,26 @@ export interface RenderEmbedDocumentParams {
   canonicalUrl: string;
 }
 
-export function renderEmbedDocument({ word, lang, entry, canonicalUrl }: RenderEmbedDocumentParams): string {
+export function renderEmbedDocument({
+  word,
+  lang,
+  entry,
+  canonicalUrl,
+}: RenderEmbedDocumentParams): string {
   const title = stripTags(String(entry.title || word)) || word;
-  const heteronyms = Array.isArray(entry.heteronyms) ? entry.heteronyms.slice(0, MAX_HETERONYMS) : [];
-  const sections = heteronyms.map((heteronym) => renderHeteronymSection(heteronym, lang)).filter(Boolean);
-  const bodyHtml = sections.length > 0 ? sections.join('') : '<p class="empty">找不到這個詞條的說明。</p>';
+  const heteronyms = Array.isArray(entry.heteronyms)
+    ? entry.heteronyms.slice(0, MAX_HETERONYMS)
+    : [];
+  const sections = heteronyms
+    .map((heteronym) => renderHeteronymSection(heteronym, lang))
+    .filter(Boolean);
+  const bodyHtml =
+    sections.length > 0 ? sections.join("") : '<p class="empty">找不到這個詞條的說明。</p>';
   return renderDocument(title, bodyHtml, canonicalUrl);
 }
 
 export function renderEmbedNotFound(word: string): string {
-  const title = word ? stripTags(word) : '找不到條目';
+  const title = word ? stripTags(word) : "找不到條目";
   const bodyHtml = '<p class="empty">找不到這個詞條。</p>';
-  return renderDocument(title, bodyHtml, 'https://www.moedict.tw/');
+  return renderDocument(title, bodyHtml, "https://www.moedict.tw/");
 }

@@ -9,7 +9,7 @@
  * re-deriving the prefix rules.
  */
 
-export type DictionaryLang = 'a' | 't' | 'h' | 'c';
+export type DictionaryLang = "a" | "t" | "h" | "c";
 
 export interface DictionaryDefinition {
   def?: string;
@@ -24,7 +24,10 @@ export interface DictionaryEntryLike {
 }
 
 export function stripTags(input: string): string {
-  return String(input || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+  return String(input || "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /**
@@ -52,11 +55,11 @@ export function stripLangPrefix(
   extra?: Record<string, DictionaryLang>,
 ): { lang: DictionaryLang; rest: string } {
   const head = text[0];
-  if (head === "'") return { lang: 't', rest: text.slice(1) };
-  if (head === ':') return { lang: 'h', rest: text.slice(1) };
-  if (head === '~') return { lang: 'c', rest: text.slice(1) };
+  if (head === "'") return { lang: "t", rest: text.slice(1) };
+  if (head === ":") return { lang: "h", rest: text.slice(1) };
+  if (head === "~") return { lang: "c", rest: text.slice(1) };
   if (head !== undefined && extra && extra[head]) return { lang: extra[head], rest: text.slice(1) };
-  return { lang: 'a', rest: text };
+  return { lang: "a", rest: text };
 }
 
 /**
@@ -78,19 +81,22 @@ export function stripLangPrefix(
  * full path+query (as head.ts historically did) keep working.
  */
 export type ClassifiedRoute =
-  | { kind: 'default' }
-  | { kind: 'about' }
-  | { kind: 'radical'; lang: 'a' | 'c'; radical: string }
-  | { kind: 'starred'; lang: DictionaryLang; entry: string }
-  | { kind: 'group'; lang: DictionaryLang; category: string }
-  | { kind: 'entry'; lang: DictionaryLang; text: string; idx?: number }
-  | { kind: 'invalid-encoding'; raw: string };
+  | { kind: "default" }
+  | { kind: "about" }
+  | { kind: "radical"; lang: "a" | "c"; radical: string }
+  | { kind: "starred"; lang: DictionaryLang; entry: string }
+  | { kind: "group"; lang: DictionaryLang; category: string }
+  | { kind: "entry"; lang: DictionaryLang; text: string; idx?: number }
+  | { kind: "invalid-encoding"; raw: string };
 
 export function classifyRoute(pathname: string): ClassifiedRoute {
-  const cleanPath = String(pathname || '').split('?')[0].replace(/^\/+/, '').replace(/\/+$/, '');
+  const cleanPath = String(pathname || "")
+    .split("?")[0]
+    .replace(/^\/+/, "")
+    .replace(/\/+$/, "");
   let decoded = tryDecodeURIComponent(cleanPath);
-  if (decoded === null) return { kind: 'invalid-encoding', raw: cleanPath };
-  if (!decoded) return { kind: 'default' };
+  if (decoded === null) return { kind: "invalid-encoding", raw: cleanPath };
+  if (!decoded) return { kind: "default" };
 
   let idx: number | undefined;
   const idxMatch = decoded.match(/^(.+)\/(\d+)$/);
@@ -99,25 +105,25 @@ export function classifyRoute(pathname: string): ClassifiedRoute {
     idx = Number(idxMatch[2]);
   }
 
-  if (decoded === 'about' || decoded === 'about.html') return { kind: 'about' };
+  if (decoded === "about" || decoded === "about.html") return { kind: "about" };
 
-  if (decoded === '@') return { kind: 'radical', lang: 'a', radical: '' };
-  if (decoded === '~@') return { kind: 'radical', lang: 'c', radical: '' };
-  if (decoded.startsWith('@')) return { kind: 'radical', lang: 'a', radical: decoded.slice(1) };
-  if (decoded.startsWith('~@')) return { kind: 'radical', lang: 'c', radical: decoded.slice(2) };
+  if (decoded === "@") return { kind: "radical", lang: "a", radical: "" };
+  if (decoded === "~@") return { kind: "radical", lang: "c", radical: "" };
+  if (decoded.startsWith("@")) return { kind: "radical", lang: "a", radical: decoded.slice(1) };
+  if (decoded.startsWith("~@")) return { kind: "radical", lang: "c", radical: decoded.slice(2) };
 
-  if (decoded.startsWith("'=*")) return { kind: 'starred', lang: 't', entry: decoded.slice(3) };
-  if (decoded.startsWith(':=*')) return { kind: 'starred', lang: 'h', entry: decoded.slice(3) };
-  if (decoded.startsWith('~=*')) return { kind: 'starred', lang: 'c', entry: decoded.slice(3) };
-  if (decoded.startsWith('=*')) return { kind: 'starred', lang: 'a', entry: decoded.slice(2) };
+  if (decoded.startsWith("'=*")) return { kind: "starred", lang: "t", entry: decoded.slice(3) };
+  if (decoded.startsWith(":=*")) return { kind: "starred", lang: "h", entry: decoded.slice(3) };
+  if (decoded.startsWith("~=*")) return { kind: "starred", lang: "c", entry: decoded.slice(3) };
+  if (decoded.startsWith("=*")) return { kind: "starred", lang: "a", entry: decoded.slice(2) };
 
-  if (decoded.startsWith("'=")) return { kind: 'group', lang: 't', category: decoded.slice(2) };
-  if (decoded.startsWith(':=')) return { kind: 'group', lang: 'h', category: decoded.slice(2) };
-  if (decoded.startsWith('~=')) return { kind: 'group', lang: 'c', category: decoded.slice(2) };
-  if (decoded.startsWith('=')) return { kind: 'group', lang: 'a', category: decoded.slice(1) };
+  if (decoded.startsWith("'=")) return { kind: "group", lang: "t", category: decoded.slice(2) };
+  if (decoded.startsWith(":=")) return { kind: "group", lang: "h", category: decoded.slice(2) };
+  if (decoded.startsWith("~=")) return { kind: "group", lang: "c", category: decoded.slice(2) };
+  if (decoded.startsWith("=")) return { kind: "group", lang: "a", category: decoded.slice(1) };
 
   const { lang, rest } = stripLangPrefix(decoded);
-  return { kind: 'entry', lang, text: rest, idx };
+  return { kind: "entry", lang, text: rest, idx };
 }
 
 /**
@@ -134,7 +140,7 @@ export function parseDictionaryRoute(
   pathname: string,
 ): { lang: DictionaryLang; text: string; idx?: number } | null {
   const route = classifyRoute(pathname);
-  if (route.kind === 'entry') {
+  if (route.kind === "entry") {
     const { lang, text, idx } = route;
     return { lang, text, idx };
   }
@@ -147,15 +153,15 @@ export function buildDefinitionDescription(entry: DictionaryEntryLike | null): s
   for (const heteronym of entry.heteronyms) {
     const definitions = Array.isArray(heteronym.definitions) ? heteronym.definitions : [];
     for (const definition of definitions) {
-      const clean = stripTags(definition.def || '');
+      const clean = stripTags(definition.def || "");
       if (!clean) continue;
-      defs.push(clean.replace(/[。．\s]+$/g, ''));
+      defs.push(clean.replace(/[。．\s]+$/g, ""));
       if (defs.length >= 4) break;
     }
     if (defs.length >= 4) break;
   }
   if (defs.length === 0) return null;
-  const sentence = `${defs.join('。')}。`;
+  const sentence = `${defs.join("。")}。`;
   return sentence.length > 180 ? `${sentence.slice(0, 179)}…` : sentence;
 }
 
@@ -166,6 +172,6 @@ export function buildDefinitionDescription(entry: DictionaryEntryLike | null): s
  * handle-embed-page.ts and handle-oembed-api.ts.
  */
 export function buildDictionaryPathname(lang: DictionaryLang, word: string): string {
-  const prefix = lang === 't' ? "'" : lang === 'h' ? ':' : lang === 'c' ? '~' : '';
+  const prefix = lang === "t" ? "'" : lang === "h" ? ":" : lang === "c" ? "~" : "";
   return `/${prefix}${encodeURIComponent(word)}`;
 }

@@ -1,4 +1,4 @@
-import { DictionaryPage } from './DictionaryPage';
+import { DictionaryPage } from "./DictionaryPage";
 
 interface DictionaryProps {
   word?: string;

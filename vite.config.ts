@@ -165,11 +165,6 @@ export default defineConfig(({ command }) => {
     staged: {
       "*": "vp check --fix",
     },
-    check: {
-      // This repository had no project-wide formatter before Vite+. Keep the
-      // established mixed formatting instead of forcing a whole-tree rewrite.
-      fmt: false,
-    },
     fmt: {
       ignorePatterns: ["data/**", "dist/**", "coverage/**", ".worktrees/**"],
     },
@@ -217,11 +212,11 @@ export default defineConfig(({ command }) => {
         ],
         "vite-plus/prefer-vite-plus-imports": "error",
       },
-      // Tests are intentionally outside the leaf tsconfig projects. Keep the
-      // existing opt-in type-aware command scoped to src/worker.
+      // Run semantic Oxlint rules and TypeScript diagnostics across every
+      // linted file; `vp run typecheck` remains the canonical project build check.
       options: {
-        typeAware: false,
-        typeCheck: false,
+        typeAware: true,
+        typeCheck: true,
       },
       jsPlugins: [
         {

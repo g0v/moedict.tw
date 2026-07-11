@@ -720,7 +720,7 @@ describe("dispatch — default export fetch wrapper (line 544)", () => {
     const res = await workerDefault.fetch(req("/api/config"), makeEnv(), {
       waitUntil: () => {},
       passThroughOnException: () => {},
-    } as unknown as ExecutionContext);
+    } as Parameters<typeof workerDefault.fetch>[2]);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { assetBaseUrl: string };
     expect(body.assetBaseUrl).toBe("https://r2-assets.test.local");

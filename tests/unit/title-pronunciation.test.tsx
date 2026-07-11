@@ -25,7 +25,6 @@ function render(overrides: Record<string, unknown> = {}): string {
     onToggleAudio: noop,
   };
   const props = { ...defaults, ...overrides };
-  // @ts-expect-error — 測試端寬鬆組裝 props
   return renderToStaticMarkup(<TitlePronunciation {...props} />);
 }
 

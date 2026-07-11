@@ -47,7 +47,7 @@
 }
 
 .dropdownSubmenu > a::after {
-  content: '▶';
+  content: "▶";
   position: absolute;
   top: 50%;
   right: 10px;
@@ -76,7 +76,7 @@
 
 .dropdownSubmenu.hover > a::after,
 .dropdownSubmenu.pinned > a::after {
-  content: '▼';
+  content: "▼";
 }
 
 @media (min-width: 768px) {
@@ -134,7 +134,7 @@
     bottom: 0;
     left: 100%;
     width: 8px;
-    content: '';
+    content: "";
   }
 
   .dropdownSubmenu.pinned {
@@ -148,7 +148,7 @@
 
   .dropdownSubmenu.hover > a::after,
   .dropdownSubmenu.pinned > a::after {
-    content: '▶';
+    content: "▶";
   }
 }
 

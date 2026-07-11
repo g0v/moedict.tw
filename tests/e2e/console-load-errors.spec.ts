@@ -1,16 +1,16 @@
-import { Buffer } from 'node:buffer';
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import type { Page, Route } from '@playwright/test';
-import { expect, test } from './_fixtures';
+import { Buffer } from "node:buffer";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import type { Page, Route } from "@playwright/test";
+import { expect, test } from "./_fixtures";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(__dirname, '..', '..');
-const STYLES_CSS_PATH = path.join(REPO_ROOT, 'data', 'assets', 'styles.css');
+const REPO_ROOT = path.resolve(__dirname, "..", "..");
+const STYLES_CSS_PATH = path.join(REPO_ROOT, "data", "assets", "styles.css");
 
-const EDUKAI_URL_PATTERN = '**/assets-legacy/fonts/edukai-*.ttf';
-const BIAUKAI_URL_PATTERN = '**/BiauKai.ttf*';
+const EDUKAI_URL_PATTERN = "**/assets-legacy/fonts/edukai-*.ttf";
+const BIAUKAI_URL_PATTERN = "**/BiauKai.ttf*";
 
 // Intercept legacy styles.css the same way legacy-styles-regression.spec.ts does,
 // serving the current working-tree data/assets/styles.css so the MOEDICT-IOS-KAI
@@ -23,7 +23,7 @@ const BIAUKAI_URL_PATTERN = '**/BiauKai.ttf*';
 // Returns a thunk for whether the CSS was requested and an array of the
 // intercepted stylesheet URLs.
 async function routeStylesCss(page: Page): Promise<{ loaded: () => boolean; urls: string[] }> {
-  const css = readFileSync(STYLES_CSS_PATH, 'utf-8');
+  const css = readFileSync(STYLES_CSS_PATH, "utf-8");
   let loaded = false;
   const urls: string[] = [];
   const handler = (route: Route) => {
@@ -31,8 +31,8 @@ async function routeStylesCss(page: Page): Promise<{ loaded: () => boolean; urls
     urls.push(route.request().url());
     return route.fulfill({
       status: 200,
-      contentType: 'text/css; charset=utf-8',
-      headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
+      contentType: "text/css; charset=utf-8",
+      headers: { "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" },
       body: css,
     });
   };
@@ -40,15 +40,15 @@ async function routeStylesCss(page: Page): Promise<{ loaded: () => boolean; urls
   // styles.css* would also match styles.css.bak; styles.css?* matches only
   // the versioned URL. Both are needed so RED (no query) and GREEN (with v)
   // are intercepted without breaking interception.
-  await page.route('https://r2-assets.test.local/styles.css', handler);
-  await page.route('https://r2-assets.test.local/styles.css?*', handler);
-  await page.route('**/assets/styles.css', handler);
-  await page.route('**/assets/styles.css?*', handler);
+  await page.route("https://r2-assets.test.local/styles.css", handler);
+  await page.route("https://r2-assets.test.local/styles.css?*", handler);
+  await page.route("**/assets/styles.css", handler);
+  await page.route("**/assets/styles.css?*", handler);
   // When window.Capacitor is set, offline-api.ts intercepts /api/config and
   // returns assetBaseUrl: '/assets-legacy', so AssetLoader loads CSS from
   // /assets-legacy/styles.css — intercept that path too.
-  await page.route('**/assets-legacy/styles.css', handler);
-  await page.route('**/assets-legacy/styles.css?*', handler);
+  await page.route("**/assets-legacy/styles.css", handler);
+  await page.route("**/assets-legacy/styles.css?*", handler);
   return { loaded: () => loaded, urls };
 }
 
@@ -57,13 +57,13 @@ async function routeStylesCss(page: Page): Promise<{ loaded: () => boolean; urls
 // EduKai/BiauKai behavior under test). App-origin errors (127.0.0.1, localhost,
 // or any non-r2 host) are always retained.
 function collectConsoleErrors(page: Page, consoleErrors: string[]): void {
-  page.on('console', (msg) => {
-    if (msg.type() !== 'error') return;
+  page.on("console", (msg) => {
+    if (msg.type() !== "error") return;
     const loc = msg.location();
-    const locUrl = loc.url ?? '';
+    const locUrl = loc.url ?? "";
     if (locUrl) {
       try {
-        if (new URL(locUrl).hostname === 'r2-assets.test.local') return;
+        if (new URL(locUrl).hostname === "r2-assets.test.local") return;
       } catch {
         // Not a parseable URL — keep the message (could be a JS runtime error).
       }
@@ -76,10 +76,10 @@ function collectConsoleErrors(page: Page, consoleErrors: string[]): void {
 // blockCssSubresources) so networkidle can fire.
 async function blockCssSubresources(page: Page): Promise<void> {
   const notFound = (route: Route) =>
-    route.fulfill({ status: 404, contentType: 'text/plain; charset=utf-8', body: '' });
-  await page.route('**/assets/fonts/**', notFound);
-  await page.route('**/assets/images/leather_x2.jpg', notFound);
-  await page.route('**/assets/images/subtle_stripes_x2.png', notFound);
+    route.fulfill({ status: 404, contentType: "text/plain; charset=utf-8", body: "" });
+  await page.route("**/assets/fonts/**", notFound);
+  await page.route("**/assets/images/leather_x2.jpg", notFound);
+  await page.route("**/assets/images/subtle_stripes_x2.png", notFound);
 }
 
 // When window.Capacitor is set, offline-api.ts intercepts /api/* and serves
@@ -87,50 +87,52 @@ async function blockCssSubresources(page: Page): Promise<void> {
 // In the test environment these paths don't exist on the server, so route them
 // to the data/dictionary/ fixtures so the Capacitor-simulated page renders.
 async function routeDictionaryData(page: Page): Promise<void> {
-  const DATA_DICT = path.join(REPO_ROOT, 'data', 'dictionary');
-  await page.route('**/dictionary/**', (route: Route) => {
+  const DATA_DICT = path.join(REPO_ROOT, "data", "dictionary");
+  await page.route("**/dictionary/**", (route: Route) => {
     const reqUrl = route.request().url();
     const url = new URL(reqUrl);
-    const key = url.pathname.replace(/^\/dictionary\//, '');
+    const key = url.pathname.replace(/^\/dictionary\//, "");
     const filePath = path.join(DATA_DICT, key);
     try {
       const body = readFileSync(filePath);
       return route.fulfill({
         status: 200,
-        contentType: 'application/json; charset=utf-8',
+        contentType: "application/json; charset=utf-8",
         body: Buffer.from(body),
       });
     } catch {
-      return route.fulfill({ status: 404, contentType: 'text/plain', body: '' });
+      return route.fulfill({ status: 404, contentType: "text/plain", body: "" });
     }
   });
   // Also route search-index that the offline API fetches
-  await page.route('**/search-index/**', (route: Route) => {
+  await page.route("**/search-index/**", (route: Route) => {
     const url = new URL(route.request().url());
-    const key = url.pathname.replace(/^\/search-index\//, '');
-    const filePath = path.join(DATA_DICT, 'search-index', key);
+    const key = url.pathname.replace(/^\/search-index\//, "");
+    const filePath = path.join(DATA_DICT, "search-index", key);
     try {
       const body = readFileSync(filePath);
       return route.fulfill({
         status: 200,
-        contentType: 'application/json; charset=utf-8',
+        contentType: "application/json; charset=utf-8",
         body: Buffer.from(body),
       });
     } catch {
-      return route.fulfill({ status: 404, contentType: 'text/plain', body: '' });
+      return route.fulfill({ status: 404, contentType: "text/plain", body: "" });
     }
   });
 }
 
-test.describe('console load errors — EduKai 404 and BiauKai decode', () => {
-  test('normal web load: no EduKai fetch, no console.error, no BiauKai decode', async ({ page }) => {
+test.describe("console load errors — EduKai 404 and BiauKai decode", () => {
+  test("normal web load: no EduKai fetch, no console.error, no BiauKai decode", async ({
+    page,
+  }) => {
     const consoleErrors: string[] = [];
     const pageErrors: string[] = [];
     const edukaiRequests: string[] = [];
     const biaukaiRequests: string[] = [];
 
     collectConsoleErrors(page, consoleErrors);
-    page.on('pageerror', (err) => pageErrors.push(err.message));
+    page.on("pageerror", (err) => pageErrors.push(err.message));
 
     await blockCssSubresources(page);
     const { loaded: stylesCssLoaded, urls: stylesUrls } = await routeStylesCss(page);
@@ -139,7 +141,7 @@ test.describe('console load errors — EduKai 404 and BiauKai decode', () => {
     // so the browser logs the error we're testing for, but networkidle fires.
     await page.route(EDUKAI_URL_PATTERN, (route) => {
       edukaiRequests.push(route.request().url());
-      return route.fulfill({ status: 404, contentType: 'text/plain', body: '' });
+      return route.fulfill({ status: 404, contentType: "text/plain", body: "" });
     });
     // Intercept BiauKai requests — fulfill as 0-byte font/ttf to reproduce
     // the production R2 behavior (R2 serves a 0-byte body with font/ttf
@@ -148,7 +150,7 @@ test.describe('console load errors — EduKai 404 and BiauKai decode', () => {
       biaukaiRequests.push(route.request().url());
       return route.fulfill({
         status: 200,
-        contentType: 'font/ttf',
+        contentType: "font/ttf",
         body: Buffer.alloc(0),
       });
     });
@@ -159,14 +161,17 @@ test.describe('console load errors — EduKai 404 and BiauKai decode', () => {
       delete window.Capacitor;
     });
 
-    await page.goto('/%E8%90%8C');
-    await page.waitForLoadState('networkidle');
+    await page.goto("/%E8%90%8C");
+    await page.waitForLoadState("networkidle");
     await page.evaluate(() => document.fonts.ready);
 
     // Sanity: the intercepted legacy styles.css must have actually loaded —
     // otherwise the BiauKai no-request assertion is vacuous (the @font-face
     // that triggers the fetch lives in that stylesheet).
-    expect(stylesCssLoaded(), 'legacy styles.css must be loaded to exercise BiauKai @font-face').toBe(true);
+    expect(
+      stylesCssLoaded(),
+      "legacy styles.css must be loaded to exercise BiauKai @font-face",
+    ).toBe(true);
 
     // Deterministically exercise the MOEDICT-IOS-KAI @font-face (whose src
     // is the 0-byte BiauKai URL) via document.fonts.load. The title font
@@ -176,15 +181,15 @@ test.describe('console load errors — EduKai 404 and BiauKai decode', () => {
     // directly, guaranteeing a URL fetch if the @font-face has a url() src.
     // Also append a probe element whose sole family is MOEDICT-IOS-KAI.
     await page.evaluate(async () => {
-      const probe = document.createElement('span');
-      probe.style.fontFamily = 'MOEDICT-IOS-KAI';
-      probe.style.position = 'absolute';
-      probe.style.visibility = 'hidden';
-      probe.textContent = '字';
+      const probe = document.createElement("span");
+      probe.style.fontFamily = "MOEDICT-IOS-KAI";
+      probe.style.position = "absolute";
+      probe.style.visibility = "hidden";
+      probe.textContent = "字";
       document.body.appendChild(probe);
       // Force the browser to attempt loading the MOEDICT-IOS-KAI face.
       try {
-        await document.fonts.load('16px "MOEDICT-IOS-KAI"', '字');
+        await document.fonts.load('16px "MOEDICT-IOS-KAI"', "字");
       } catch {
         // load() rejects on decode failure — expected for 0-byte font.
       }
@@ -199,33 +204,42 @@ test.describe('console load errors — EduKai 404 and BiauKai decode', () => {
     // local(BiauKai), no URL request is made and this passes.
     // Use expect.soft so both BiauKai and EduKai failures are reported
     // in a single RED run (both are independent root causes).
-    expect.soft(biaukaiRequests, 'normal web load must NOT request the 0-byte BiauKai URL').toEqual([]);
+    expect
+      .soft(biaukaiRequests, "normal web load must NOT request the 0-byte BiauKai URL")
+      .toEqual([]);
 
     // --- EduKai assertions ---
-    expect.soft(edukaiRequests, 'normal web load must NOT request the EduKai font').toEqual([]);
-    expect(consoleErrors, 'normal web load must have zero console.error').toEqual([]);
-    expect(pageErrors, 'normal web load must have zero pageerror').toEqual([]);
+    expect.soft(edukaiRequests, "normal web load must NOT request the EduKai font").toEqual([]);
+    expect(consoleErrors, "normal web load must have zero console.error").toEqual([]);
+    expect(pageErrors, "normal web load must have zero pageerror").toEqual([]);
 
     // Computed font-family on .result .entry .title must NOT start with
     // "MOE EduKai Android" — it should fall through to system Kaiti.
     const titleFontFamily = await page.evaluate(() => {
-      const el = document.querySelector('.result .entry .title');
+      const el = document.querySelector(".result .entry .title");
       return el ? getComputedStyle(el).fontFamily : null;
     });
-    expect(titleFontFamily, 'title element must exist on the page').not.toBeNull();
-    expect(titleFontFamily, 'title font-family must NOT include MOE EduKai Android on web')
-      .not.toContain('MOE EduKai Android');
+    expect(titleFontFamily, "title element must exist on the page").not.toBeNull();
+    expect(
+      titleFontFamily,
+      "title font-family must NOT include MOE EduKai Android on web",
+    ).not.toContain("MOE EduKai Android");
 
     // Every loaded legacy stylesheet URL must carry a stable non-empty `v`
     // query parameter so edge-cached old objects are bustable on deploy.
-    expect(stylesUrls.length, 'at least one legacy stylesheet must be loaded').toBeGreaterThanOrEqual(1);
+    expect(
+      stylesUrls.length,
+      "at least one legacy stylesheet must be loaded",
+    ).toBeGreaterThanOrEqual(1);
     for (const url of stylesUrls) {
-      const v = new URL(url).searchParams.get('v');
+      const v = new URL(url).searchParams.get("v");
       expect(v, `legacy stylesheet URL must have non-empty v param: ${url}`).toBeTruthy();
     }
   });
 
-  test('Capacitor-simulated load: moe-capacitor class present, EduKai in font stack', async ({ page }) => {
+  test("Capacitor-simulated load: moe-capacitor class present, EduKai in font stack", async ({
+    page,
+  }) => {
     const consoleErrors: string[] = [];
     collectConsoleErrors(page, consoleErrors);
 
@@ -236,31 +250,38 @@ test.describe('console load errors — EduKai 404 and BiauKai decode', () => {
     // Simulate Capacitor runtime BEFORE the app's main.tsx runs
     await page.addInitScript(() => {
       // @ts-expect-error -- simulating Capacitor webview runtime
-      window.Capacitor = { isNative: true, getPlatform: () => 'ios' };
+      window.Capacitor = { isNative: true, getPlatform: () => "ios" };
     });
 
-    await page.goto('/%E8%90%8C');
-    await page.waitForLoadState('networkidle');
+    await page.goto("/%E8%90%8C");
+    await page.waitForLoadState("networkidle");
     await page.evaluate(() => document.fonts.ready);
 
     // moe-capacitor class must be present on <html>
     const hasCapacitorClass = await page.evaluate(() =>
-      document.documentElement.classList.contains('moe-capacitor')
+      document.documentElement.classList.contains("moe-capacitor"),
     );
     // Sanity: the intercepted legacy styles.css must have actually loaded —
     // otherwise the font-family assertions are vacuous (the @font-face and
     // legacy font stacks live in that stylesheet).
-    expect(stylesCssLoaded(), 'legacy styles.css must be loaded to exercise font stacks').toBe(true);
-    expect(hasCapacitorClass, 'html must have moe-capacitor class when window.Capacitor is set').toBe(true);
+    expect(stylesCssLoaded(), "legacy styles.css must be loaded to exercise font stacks").toBe(
+      true,
+    );
+    expect(
+      hasCapacitorClass,
+      "html must have moe-capacitor class when window.Capacitor is set",
+    ).toBe(true);
 
     // Computed font-family on .result .entry .title MUST include "MOE EduKai Android"
     const titleFontFamily = await page.evaluate(() => {
-      const el = document.querySelector('.result .entry .title');
+      const el = document.querySelector(".result .entry .title");
       return el ? getComputedStyle(el).fontFamily : null;
     });
-    expect(titleFontFamily, 'title element must exist').not.toBeNull();
-    expect(titleFontFamily, 'Capacitor load must include MOE EduKai Android in computed font-family')
-      .toContain('MOE EduKai Android');
+    expect(titleFontFamily, "title element must exist").not.toBeNull();
+    expect(
+      titleFontFamily,
+      "Capacitor load must include MOE EduKai Android in computed font-family",
+    ).toContain("MOE EduKai Android");
 
     // No console errors from the Capacitor load either (the @font-face is
     // present but the font file at /assets-legacy/ is intercepted by the
@@ -271,16 +292,21 @@ test.describe('console load errors — EduKai 404 and BiauKai decode', () => {
 
     // Every loaded legacy stylesheet URL must carry a stable non-empty `v`
     // query parameter so edge-cached old objects are bustable on deploy.
-    expect(stylesUrls.length, 'at least one legacy stylesheet must be loaded').toBeGreaterThanOrEqual(1);
+    expect(
+      stylesUrls.length,
+      "at least one legacy stylesheet must be loaded",
+    ).toBeGreaterThanOrEqual(1);
     for (const url of stylesUrls) {
-      const v = new URL(url).searchParams.get('v');
+      const v = new URL(url).searchParams.get("v");
       expect(v, `legacy stylesheet URL must have non-empty v param: ${url}`).toBeTruthy();
     }
   });
 });
 
-test.describe('bare home URL — no unused font preload hints', () => {
-  test('normal web load at /: zero link[rel=preload][as=font] for optional legacy fonts', async ({ page }) => {
+test.describe("bare home URL — no unused font preload hints", () => {
+  test("normal web load at /: zero link[rel=preload][as=font] for optional legacy fonts", async ({
+    page,
+  }) => {
     const consoleErrors: string[] = [];
     const consoleWarnings: string[] = [];
 
@@ -288,8 +314,11 @@ test.describe('bare home URL — no unused font preload hints', () => {
     // Capture warning-level messages matching the preload-not-used pattern
     // if they appear; this is secondary evidence, not the primary assertion
     // (the primary contract is zero preload hint elements in the DOM).
-    page.on('console', (msg) => {
-      if (msg.type() === 'warning' && /preloaded using link preload but not used/i.test(msg.text())) {
+    page.on("console", (msg) => {
+      if (
+        msg.type() === "warning" &&
+        /preloaded using link preload but not used/i.test(msg.text())
+      ) {
         consoleWarnings.push(msg.text());
       }
     });
@@ -303,8 +332,8 @@ test.describe('bare home URL — no unused font preload hints', () => {
       delete window.Capacitor;
     });
 
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.goto("/");
+    await page.waitForLoadState("networkidle");
     await page.evaluate(() => document.fonts.ready);
 
     // Primary contract: AssetLoader must NOT insert any <link rel="preload"
@@ -313,22 +342,22 @@ test.describe('bare home URL — no unused font preload hints', () => {
     // unconditional preload hints waste downloads and trigger intermittent
     // Chromium warnings ("preloaded using link preload but not used").
     const preloadLinks = await page.evaluate(() => {
-      return Array.from(
-        document.querySelectorAll('link[rel="preload"][as="font"]'),
-      ).map((el) => ({
+      return Array.from(document.querySelectorAll('link[rel="preload"][as="font"]')).map((el) => ({
         href: (el as HTMLLinkElement).href,
         type: (el as HTMLLinkElement).type,
       }));
     });
-    expect(preloadLinks, 'bare home URL must have zero font preload hint elements').toEqual([]);
+    expect(preloadLinks, "bare home URL must have zero font preload hint elements").toEqual([]);
 
     // Secondary: if any preload-not-used warnings appeared, log them for
     // diagnostics — but the primary assertion above is the DOM contract.
     if (consoleWarnings.length > 0) {
-      console.log(`[preload-warnings] ${consoleWarnings.length} warnings:\n${consoleWarnings.map((w) => '  ' + w).join('\n')}`);
+      console.log(
+        `[preload-warnings] ${consoleWarnings.length} warnings:\n${consoleWarnings.map((w) => "  " + w).join("\n")}`,
+      );
     }
 
     // No console errors from the bare home load.
-    expect(consoleErrors, 'bare home URL must have zero console.error').toEqual([]);
+    expect(consoleErrors, "bare home URL must have zero console.error").toEqual([]);
   });
 });

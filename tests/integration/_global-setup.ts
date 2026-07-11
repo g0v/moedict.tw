@@ -1,4 +1,4 @@
-import { startTestServer, type TestServer } from '../helpers/miniflare-server';
+import { startTestServer, type TestServer } from "../helpers/miniflare-server";
 
 let server: TestServer | null = null;
 

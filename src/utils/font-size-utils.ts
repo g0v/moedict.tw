@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'font-size';
+const STORAGE_KEY = "font-size";
 const MIN_PT = 10;
 const MAX_PT = 42;
 

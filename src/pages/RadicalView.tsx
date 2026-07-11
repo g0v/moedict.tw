@@ -1,8 +1,8 @@
-import { useEffect, useState, type JSX, type MouseEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useRadicalTooltip } from '../hooks/useRadicalTooltip';
-import { fetchRadicalRows, type RadicalLang } from '../utils/radical-page-utils';
-import { addToLRU } from '../utils/word-record-utils';
+import { useEffect, useState, type JSX, type MouseEvent } from "react";
+import { useNavigate } from "react-router-dom";
+import { useRadicalTooltip } from "../hooks/useRadicalTooltip";
+import { fetchRadicalRows, type RadicalLang } from "../utils/radical-page-utils";
+import { addToLRU } from "../utils/word-record-utils";
 
 interface RadicalViewProps {
   lang: RadicalLang;
@@ -25,21 +25,21 @@ export function RadicalView({ lang }: RadicalViewProps) {
   useRadicalTooltip();
 
   useEffect(() => {
-    addToLRU('@', lang);
+    addToLRU("@", lang);
   }, [lang]);
 
   useEffect(() => {
     let active = true;
     setState({ loading: true, rows: [], error: null });
 
-    fetchRadicalRows(lang, '@')
+    fetchRadicalRows(lang, "@")
       .then((rows) => {
         if (!active) return;
         setState({ loading: false, rows, error: null });
       })
       .catch((error: unknown) => {
         if (!active) return;
-        const message = error instanceof Error ? error.message : '部首表載入失敗';
+        const message = error instanceof Error ? error.message : "部首表載入失敗";
         setState({ loading: false, rows: [], error: message });
       });
 
@@ -53,20 +53,22 @@ export function RadicalView({ lang }: RadicalViewProps) {
     navigate(to);
   };
 
-  const prefix = lang === 'c' ? '/~@' : '/@';
-  const tooltipPrefix = lang === 'c' ? '~@' : '@';
+  const prefix = lang === "c" ? "/~@" : "/@";
+  const tooltipPrefix = lang === "c" ? "~@" : "@";
 
   let resultContent: JSX.Element | null = null;
   if (state.loading) {
-    resultContent = <div className="def">載入中…</div>
+    resultContent = <div className="def">載入中…</div>;
   } else if (state.error) {
-    resultContent = <div className="def">{state.error}</div>
+    resultContent = <div className="def">{state.error}</div>;
   } else {
-    resultContent = 
+    resultContent = (
       <div className="entry-item list">
         {state.rows.map((row, stroke) => (
-          <div key={stroke} style={{ margin: '8px 0' }}>
-            <span className="stroke-count" style={{ marginRight: '8px' }}>{stroke}</span>
+          <div key={stroke} style={{ margin: "8px 0" }}>
+            <span className="stroke-count" style={{ marginRight: "8px" }}>
+              {stroke}
+            </span>
             <span className="stroke-list">
               {row.map((radical) => {
                 const to = `${prefix}${radical}`;
@@ -76,7 +78,7 @@ export function RadicalView({ lang }: RadicalViewProps) {
                     className="stroke-char"
                     href={to}
                     data-radical-id={`${tooltipPrefix}${radical}`}
-                    style={{ marginRight: '6px' }}
+                    style={{ marginRight: "6px" }}
                     onClick={(event) => onNavigate(event, to)}
                   >
                     {radical}
@@ -84,18 +86,19 @@ export function RadicalView({ lang }: RadicalViewProps) {
                 );
               })}
             </span>
-            <hr style={{ margin: '0', padding: '0', height: '0' }} />
+            <hr style={{ margin: "0", padding: "0", height: "0" }} />
           </div>
         ))}
       </div>
+    );
   }
 
   return (
     <div className="result">
-      <h1 className="title" style={{ marginTop: '0' }}>部首表</h1>
-      <div className="entry">
-        {resultContent}
-      </div>
+      <h1 className="title" style={{ marginTop: "0" }}>
+        部首表
+      </h1>
+      <div className="entry">{resultContent}</div>
     </div>
   );
 }

@@ -7,8 +7,8 @@ export interface HeteronymLike {
 }
 
 function normalize(value: unknown): string {
-  if (value == null) return '';
-  return String(value).replace(/\s+/gu, ' ').trim();
+  if (value == null) return "";
+  return String(value).replace(/\s+/gu, " ").trim();
 }
 
 function phoneticIdentity(heteronym: HeteronymLike): string {
@@ -24,9 +24,9 @@ function phoneticIdentity(heteronym: HeteronymLike): string {
 function hasIdentity(heteronym: HeteronymLike): boolean {
   return Boolean(
     normalize(heteronym.audio_id) ||
-      normalize(heteronym.bopomofo) ||
-      normalize(heteronym.pinyin) ||
-      normalize(heteronym.trs),
+    normalize(heteronym.bopomofo) ||
+    normalize(heteronym.pinyin) ||
+    normalize(heteronym.trs),
   );
 }
 

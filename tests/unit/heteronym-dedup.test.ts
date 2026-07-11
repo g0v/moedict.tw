@@ -65,7 +65,10 @@ describe("dedupeHeteronyms", () => {
   });
 
   it("leaves untouched heteronyms that have no identity fields at all", () => {
-    const input = [{ definitions: [{ def: "A" }] }, { definitions: [{ def: "B" }] }];
+    const input = [
+      { id: undefined, definitions: [{ def: "A" }] },
+      { id: undefined, definitions: [{ def: "B" }] },
+    ];
     expect(dedupeHeteronyms(input)).toHaveLength(2);
   });
 

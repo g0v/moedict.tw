@@ -113,7 +113,7 @@ function throwingVoice(): SpeechSynthesisVoice {
     default: false,
     localService: true,
     voiceURI: "throwing",
-  } as SpeechSynthesisVoice;
+  } as unknown as SpeechSynthesisVoice;
 }
 
 beforeEach(() => {

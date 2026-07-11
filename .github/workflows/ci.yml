@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: '24'
+          node-version: "24"
           cache: true
       - run: vp install --frozen-lockfile
       - run: vp check
@@ -43,7 +43,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: '24'
+          node-version: "24"
           cache: true
       - run: vp install --frozen-lockfile
       # --coverage applies the 100% ratchet from vite.config.ts.
@@ -64,7 +64,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: '24'
+          node-version: "24"
           cache: true
       - run: vp install --frozen-lockfile
       - run: vp run test:integration
@@ -74,12 +74,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      E2E_SKIP_BUILD: '1'
+      E2E_SKIP_BUILD: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: '24'
+          node-version: "24"
           cache: true
       - run: vp install --frozen-lockfile
       - name: Get Playwright version
@@ -120,12 +120,12 @@ jobs:
     # to regenerate (needs Linux: use `act`, Codespaces, or a Linux runner).
     continue-on-error: true
     env:
-      E2E_SKIP_BUILD: '1'
+      E2E_SKIP_BUILD: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: '24'
+          node-version: "24"
           cache: true
       - run: vp install --frozen-lockfile
       - name: Check if linux baselines exist

@@ -6,11 +6,11 @@ Cloudflare Workers 後端、R2 儲存。本檔是給 AI agent 與新進開發者
 
 ## 專案定位（多個 surface，別搞混）
 
-| Surface | 是什麼 | 原始碼 |
-|---|---|---|
-| **www.moedict.tw** | 現行主站：本 repo 的 Worker `cf-moedict-webkit-neo` + R2 | 本 repo |
-| www.moedict.org | 凍結的舊版靜態前端（GitHub Pages），只收安全性修正 | `~/w/moedict-webkit`（gh-pages） |
-| 行動 App | Capacitor 離線版，資料由本 repo `data/dictionary` 供給 | `~/w/moedict-app` |
+| Surface            | 是什麼                                                   | 原始碼                           |
+| ------------------ | -------------------------------------------------------- | -------------------------------- |
+| **www.moedict.tw** | 現行主站：本 repo 的 Worker `cf-moedict-webkit-neo` + R2 | 本 repo                          |
+| www.moedict.org    | 凍結的舊版靜態前端（GitHub Pages），只收安全性修正       | `~/w/moedict-webkit`（gh-pages） |
+| 行動 App           | Capacitor 離線版，資料由本 repo `data/dictionary` 供給   | `~/w/moedict-app`                |
 
 - 裸網域 `moedict.tw` 會 301 到 `www.moedict.tw`——線上驗證一律打 `www`。
 - 舊版 `~/w/moedict-webkit` 的 `view.ls` 是 UI 行為的 ground truth：
@@ -18,12 +18,12 @@ Cloudflare Workers 後端、R2 儲存。本檔是給 AI agent 與新進開發者
 
 ## 語言代碼（四本字典）
 
-| 代碼 | 字典 | Hash 前綴 | 路由 | pack 目錄 |
-|---|---|---|---|---|
-| `a` | 華語（國語辭典） | `#`  | `/`  | `pack/` |
-| `t` | 臺灣台語（閩南語） | `#'` | `/'` | `ptck/` |
-| `h` | 臺灣客語 | `#:` | `/:` | `phck/` |
-| `c` | 兩岸詞典 | `#~` | `/~` | `pcck/` |
+| 代碼 | 字典               | Hash 前綴 | 路由 | pack 目錄 |
+| ---- | ------------------ | --------- | ---- | --------- |
+| `a`  | 華語（國語辭典）   | `#`       | `/`  | `pack/`   |
+| `t`  | 臺灣台語（閩南語） | `#'`      | `/'` | `ptck/`   |
+| `h`  | 臺灣客語           | `#:`      | `/:` | `phck/`   |
+| `c`  | 兩岸詞典           | `#~`      | `/~` | `pcck/`   |
 
 （舊版 CLAUDE.md 此表有誤，以上為正確對應。）
 
@@ -65,8 +65,8 @@ memory/MEMORY.md  # 跨 session 的架構筆記（與本檔互補）
 vp install                    # 依 devEngines.packageManager 安裝相依
 vp run dev                    # predev 重建索引，再啟動 Vite + Miniflare
 vp run build                  # prebuild 重建索引、tsc -b，再執行 vp build
-vp check                      # Oxlint；專案既有格式不做全樹 Oxfmt
-vp run typecheck              # tsc -b --noEmit
+vp check                      # Oxfmt + type-aware Oxlint + TS diagnostics
+vp run typecheck              # canonical tsc -b --noEmit project build
 
 vp test                       # unit + integration 兩個 Vitest project
 vp run test:unit              # happy-dom unit tests
@@ -91,12 +91,10 @@ vp run deploy:staging   # CLOUDFLARE_ENV=staging vp run build && wrangler deploy
 vp run deploy           # 驗證通過後才部署 production
 ```
 
-- Staging 是獨立 Worker（`cf-moedict-webkit-neo-staging`），只有 *.workers.dev
-  網址、綁 `moedict-*-preview` R2 桶——**Worker 與 R2 bindings 隔離，但
-  `vars.ASSET_BASE_URL`/`DICTIONARY_BASE_URL` 仍指向正式站公開網址**
-  （`r2-assets.moedict.tw` 等；`/api/config` 與 `/assets/*` fallback 會用到），
-  所以 staging 無法驗證 preview-assets 桶的公開資產。設定在 `wrangler.jsonc`
-  的 `env.staging` 區塊。
+- Staging 是獨立 Worker（`cf-moedict-webkit-neo-staging`），只有 _.workers.dev
+  網址、綁 `moedict-_-preview`R2 桶——**Worker 與 R2 bindings 隔離，但`vars.ASSET_BASE_URL`/`DICTIONARY_BASE_URL` 仍指向正式站公開網址**
+（`r2-assets.moedict.tw` 等；`/api/config`與`/assets/\*`fallback 會用到），
+所以 staging 無法驗證 preview-assets 桶的公開資產。設定在`wrangler.jsonc`的`env.staging` 區塊。
 - **環境選擇發生在建置期**：`@cloudflare/vite-plugin` 讀 `CLOUDFLARE_ENV`
   環境變數（build 時），不是 `wrangler deploy --env`。
 - **陷阱**：`.wrangler/deploy/config.json` 重導向永遠指向「最後一次 build」的
@@ -111,11 +109,11 @@ vp run deploy           # 驗證通過後才部署 production
 
 ## R2 buckets 與資料上傳
 
-| Binding | Production | Staging/Preview |
-|---|---|---|
+| Binding    | Production         | Staging/Preview            |
+| ---------- | ------------------ | -------------------------- |
 | DICTIONARY | moedict-dictionary | moedict-dictionary-preview |
-| ASSETS | moedict-assets | moedict-assets-preview |
-| FONTS | moedict-fonts | moedict-fonts-preview |
+| ASSETS     | moedict-assets     | moedict-assets-preview     |
+| FONTS      | moedict-fonts      | moedict-fonts-preview      |
 
 - 正式上傳入口：`sh commands/upload_dictionary.sh`（rclone sync；預設上傳到
   **preview** 桶，正式站要 `R2_BUCKET=moedict-dictionary`）。需要事先設定
@@ -133,13 +131,13 @@ vp run deploy           # 驗證通過後才部署 production
 
 ## 邊緣快取（src/api/cache.ts）
 
-| 內容 | browser / edge TTL |
-|---|---|
+| 內容              | browser / edge TTL         |
+| ----------------- | -------------------------- |
 | 詞條 JSON（dict） | 300s / **86400s** + SWR 7d |
-| index / lookup | 60s / 300s |
-| search-index | 3600s / 7d |
-| HTML shell | 0 / 60s |
-| 字圖 PNG | 1d / 1y |
+| index / lookup    | 60s / 300s                 |
+| search-index      | 3600s / 7d                 |
+| HTML shell        | 0 / 60s                    |
+| 字圖 PNG          | 1d / 1y                    |
 
 - 上傳新字典資料後，已被快取的詞條最長 **24 小時**才會自然更新。
 - 立即清除：`POST /api/cache/purge`，帶 `CACHE_PURGE_TOKEN`（Bearer 或
@@ -209,7 +207,7 @@ vp run deploy           # 驗證通過後才部署 production
   逐一列舉屬性，否則 digest 全程比對到空字串、測試永遠「假通過」（靠正/負
   control 兩組互相驗證才抓到，測試檔內有完整記錄）。跑法：
   `LEGACY_CSS_BASELINE_REF=HEAD E2E_SKIP_BUILD=1 vp exec playwright test
-  --project=chromium tests/e2e/legacy-styles-regression.spec.ts`（先手動
+--project=chromium tests/e2e/legacy-styles-regression.spec.ts`（先手動
   `vp run build`，或拿掉 `E2E_SKIP_BUILD=1` 讓它自動 build）。
 
 ## 字典資料格式（pack 檔）
@@ -320,10 +318,12 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
   背景：TypeScript 7 已於 2026-07 GA，但 typescript-eslint 的
   typescript-estree 仍卡在 peer `typescript <6.1.0`，裝上 7.x 會直接崩潰
   （`Cannot read properties of undefined (reading 'Cjs')`）——兩者不能並存，
-  這也是 2026-07 從 eslint 遷移到 Oxlint 的直接原因。`vp check` 執行非
-  type-aware lint；型別檢查仍獨立走 `vp run typecheck`（`tsc -b --noEmit`）。
-  `check.fmt: false` 是刻意設定：本 repo 遷移前沒有全專案 formatter，且同時含
-  現代程式與不可重排的 legacy/vendor 資產，不能用 migration 順手全樹改格式。
+  這也是 2026-07 從 eslint 遷移到 Oxlint 的直接原因。`vp check` 會對所有 lint
+  範圍執行 type-aware Oxlint 與實驗性 TypeScript diagnostics；正式 project
+  reference 的 canonical build check 仍獨立走 `vp run typecheck`
+  （`tsc -b --noEmit`）。Oxfmt 也由 `vp check` 執行；`fmt.ignorePatterns` 排除
+  `data/**`、build/coverage 輸出與 worktrees，因此 legacy/vendor 資產不會被
+  formatter 重寫。
 - Oxlint 零設定預設值已涵蓋原本 `js.configs.recommended` +
   `tseslint.configs.recommended` 的完整規則集；`vite.config.ts` 的 `lint.rules`
   只列出預設關閉、需要手動打開的規則（含 no-var/prefer-const/
@@ -331,21 +331,17 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
   `no-unused-vars`）與 React 對應項（`react/rules-of-hooks`、
   `react/exhaustive-deps`、`react/only-export-components`）。跨 plugin 同名規則
   一律用 `<plugin>/<rule>` 前綴消歧義。既有的 `// eslint-disable-next-line
-  <rule>` 註解 Oxlint 會自動識別並比對；新寫的一律用
+<rule>` 註解 Oxlint 會自動識別並比對；新寫的一律用
   `// oxlint-disable-next-line <rule>`（多行說明時，disable 指令必須是緊接在
   程式碼前的最後一行註解，見 `scripts/build-pinyin-lookup.mjs` 範例）。
-- **Type-aware lint（`oxlint-tsgolint`，需 TS 7+）已裝好但預設不跑**：
-  `vp run lint:type-aware`（`vp lint --type-aware --type-check src worker`）可手動
-  執行，目前會回報約 35 個未經 triage 的建議級（warn）發現（多處
-  `navigate()` 缺 `void`/`.catch` 的 no-floating-promises、
-  `...getCORSHeaders(): HeadersInit` 的 no-misused-spread、monkey-patch 原生
-  方法的 unbound-method 等）。這些**故意**沒接進 `vp check` 或 CI——要接進
-  硬性 gate 前，需要逐條判斷是真的 bug 還是可接受的既有寫法。
-  範圍也要留意：`--type-aware --type-check` 靠逐檔自動找 tsconfig，只有
-  `src`／`worker`（`tsc -b` 本來就有 project reference 的範圍）能保證乾淨；
-  `tests/` 不在任何 leaf tsconfig 的 `include` 內（`tsc -b` 現在也不型別
-  檢查它），對它跑 `--type-aware` 會因為找不到 ambient 型別（如
-  `ExecutionContext`）報一堆假陽性，不要把 `tests/` 也丟進去。
+- **Type-aware lint（`oxlint-tsgolint`，需 TS 7+）預設啟用**：
+  `vite.config.ts` 的 `lint.options.typeAware` 與 `typeCheck` 都是 `true`，
+  所以 `vp lint`／`vp check` 會同時檢查 `src`、`worker`、tests、scripts 與
+  Playwright 設定。啟用時已修完 tests/tooling 的 TypeScript diagnostics；
+  tests 雖不屬於 `tsc -b` leaf project，仍由 Vite+ 的逐檔 diagnostics 把關。
+  目前另有約 43 個建議級（warn）發現，不阻擋 CI：主要是刻意忽略的 navigation
+  promise、`HeadersInit` union spread，以及測試 monkey-patch 的 unbound-method。
+  這些必須逐條判斷後再升為 error，不能批次加 `void` 或 disable 掩蓋。
 
 ## 授權紅線
 

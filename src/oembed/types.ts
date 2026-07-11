@@ -10,7 +10,7 @@
  * code whose trust/navigation assumptions don't apply here.
  */
 
-export type DictionaryLang = 'a' | 't' | 'h' | 'c';
+export type DictionaryLang = "a" | "t" | "h" | "c";
 
 export interface EmbedDefinition {
   type?: string;

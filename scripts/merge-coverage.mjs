@@ -16,28 +16,28 @@
  * reports what it found, merges what's there, and exits 0 either way.
  */
 
-import { createRequire } from 'node:module';
-import { readdirSync, readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { createRequire } from "node:module";
+import { readdirSync, readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-import libCoverage from 'istanbul-lib-coverage';
-import libReport from 'istanbul-lib-report';
-import reports from 'istanbul-reports';
+import libCoverage from "istanbul-lib-coverage";
+import libReport from "istanbul-lib-report";
+import reports from "istanbul-reports";
 
 const require = createRequire(import.meta.url);
 // v8-to-istanbul ships CJS — require it here to avoid the named-export
 // churn of the ESM interop.
-const v8ToIstanbul = require('v8-to-istanbul');
+const v8ToIstanbul = require("v8-to-istanbul");
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(__dirname, '..');
-const COVERAGE_DIR = path.join(REPO_ROOT, 'coverage');
-const PLAYWRIGHT_DIR = path.join(COVERAGE_DIR, 'playwright');
-const UNIT_FILE = path.join(COVERAGE_DIR, 'unit', 'coverage-final.json');
-const INTEGRATION_FILE = path.join(COVERAGE_DIR, 'integration', 'coverage-final.json');
-const OUT_DIR = path.join(COVERAGE_DIR, 'combined');
-const DIST_CLIENT = path.join(REPO_ROOT, 'dist', 'client');
+const REPO_ROOT = path.resolve(__dirname, "..");
+const COVERAGE_DIR = path.join(REPO_ROOT, "coverage");
+const PLAYWRIGHT_DIR = path.join(COVERAGE_DIR, "playwright");
+const UNIT_FILE = path.join(COVERAGE_DIR, "unit", "coverage-final.json");
+const INTEGRATION_FILE = path.join(COVERAGE_DIR, "integration", "coverage-final.json");
+const OUT_DIR = path.join(COVERAGE_DIR, "combined");
+const DIST_CLIENT = path.join(REPO_ROOT, "dist", "client");
 
 const coverageMap = libCoverage.createCoverageMap({});
 let contributingTiers = 0;
@@ -47,7 +47,7 @@ function ingestIstanbulFile(label, file) {
     console.log(`[merge-coverage] ${label}: skipped (no ${path.relative(REPO_ROOT, file)})`);
     return 0;
   }
-  const raw = JSON.parse(readFileSync(file, 'utf-8'));
+  const raw = JSON.parse(readFileSync(file, "utf-8"));
   coverageMap.merge(raw);
   const files = Object.keys(raw).length;
   console.log(`[merge-coverage] ${label}: merged ${files} file(s)`);
@@ -57,18 +57,18 @@ function ingestIstanbulFile(label, file) {
 
 async function ingestPlaywrightDir(dir) {
   if (!existsSync(dir)) {
-    console.log('[merge-coverage] playwright: skipped (no coverage/playwright/)');
+    console.log("[merge-coverage] playwright: skipped (no coverage/playwright/)");
     return 0;
   }
-  const files = readdirSync(dir).filter((f) => f.endsWith('.json'));
+  const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
   if (files.length === 0) {
-    console.log('[merge-coverage] playwright: skipped (empty coverage/playwright/)');
+    console.log("[merge-coverage] playwright: skipped (empty coverage/playwright/)");
     return 0;
   }
 
   let converted = 0;
   for (const file of files) {
-    const entries = JSON.parse(readFileSync(path.join(dir, file), 'utf-8'));
+    const entries = JSON.parse(readFileSync(path.join(dir, file), "utf-8"));
     for (const entry of entries) {
       if (!entry || !entry.url || !Array.isArray(entry.functions)) continue;
       const pathname = new URL(entry.url).pathname;
@@ -83,7 +83,7 @@ async function ingestPlaywrightDir(dir) {
         // sourcemap sometimes leaks node_modules references which would
         // skew the "% coverage" report.
         const rel = path.relative(REPO_ROOT, filePath);
-        return rel.startsWith('..') || rel.startsWith('node_modules');
+        return rel.startsWith("..") || rel.startsWith("node_modules");
       });
       try {
         await converter.load();
@@ -99,40 +99,43 @@ async function ingestPlaywrightDir(dir) {
     }
   }
 
-  console.log(`[merge-coverage] playwright: merged ${converted} script(s) from ${files.length} test file(s)`);
+  console.log(
+    `[merge-coverage] playwright: merged ${converted} script(s) from ${files.length} test file(s)`,
+  );
   if (converted > 0) contributingTiers += 1;
   return converted;
 }
 
 async function main() {
-  ingestIstanbulFile('unit', UNIT_FILE);
-  ingestIstanbulFile('integration', INTEGRATION_FILE);
+  ingestIstanbulFile("unit", UNIT_FILE);
+  ingestIstanbulFile("integration", INTEGRATION_FILE);
   await ingestPlaywrightDir(PLAYWRIGHT_DIR);
 
   if (contributingTiers === 0) {
-    console.error('[merge-coverage] nothing to merge — run at least one of vp run test:unit / test:integration / test:e2e with coverage enabled first.');
+    console.error(
+      "[merge-coverage] nothing to merge — run at least one of vp run test:unit / test:integration / test:e2e with coverage enabled first.",
+    );
     process.exit(1);
   }
 
   mkdirSync(OUT_DIR, { recursive: true });
-  writeFileSync(
-    path.join(OUT_DIR, 'coverage-final.json'),
-    JSON.stringify(coverageMap.toJSON()),
-  );
+  writeFileSync(path.join(OUT_DIR, "coverage-final.json"), JSON.stringify(coverageMap.toJSON()));
 
   const context = libReport.createContext({
     dir: OUT_DIR,
     coverageMap,
-    defaultSummarizer: 'pkg',
+    defaultSummarizer: "pkg",
   });
-  reports.create('lcovonly', { file: 'lcov.info' }).execute(context);
-  reports.create('text-summary').execute(context);
-  reports.create('text', { maxCols: 120, skipEmpty: true, skipFull: false }).execute(context);
+  reports.create("lcovonly", { file: "lcov.info" }).execute(context);
+  reports.create("text-summary").execute(context);
+  reports.create("text", { maxCols: 120, skipEmpty: true, skipFull: false }).execute(context);
 
-  console.log(`[merge-coverage] wrote ${path.relative(REPO_ROOT, OUT_DIR)}/coverage-final.json + lcov.info`);
+  console.log(
+    `[merge-coverage] wrote ${path.relative(REPO_ROOT, OUT_DIR)}/coverage-final.json + lcov.info`,
+  );
 }
 
 main().catch((err) => {
-  console.error('[merge-coverage] failed:', err);
+  console.error("[merge-coverage] failed:", err);
   process.exit(1);
 });

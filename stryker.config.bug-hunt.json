@@ -6,9 +6,7 @@
   "vitest": {
     "configFile": "vite.config.ts"
   },
-  "mutate": [
-    "src/utils/xref-switch-utils.ts"
-  ],
+  "mutate": ["src/utils/xref-switch-utils.ts"],
   "reporters": ["progress", "clear-text", "html", "json"],
   "coverageAnalysis": "all",
   "concurrency": 4,

@@ -6,10 +6,7 @@
   "vitest": {
     "configFile": "vite.config.ts"
   },
-  "mutate": [
-    "src/utils/pinyin-preference-utils.ts:312-431",
-    "src/utils/heteronym-dedup.ts"
-  ],
+  "mutate": ["src/utils/pinyin-preference-utils.ts:312-431", "src/utils/heteronym-dedup.ts"],
   "reporters": ["progress", "clear-text", "html", "json"],
   "coverageAnalysis": "perTest",
   "concurrency": 4,

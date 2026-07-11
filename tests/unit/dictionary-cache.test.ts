@@ -168,7 +168,7 @@ describe("fetchDictionaryEntry — LRU eviction", () => {
         [Symbol.iterator]() {
           return this;
         },
-      } as IterableIterator<string>;
+      } as unknown as MapIterator<unknown>;
     });
     let callCount = 0;
     globalThis.fetch = vi.fn(async () => {

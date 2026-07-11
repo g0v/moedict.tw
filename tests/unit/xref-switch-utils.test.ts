@@ -19,9 +19,7 @@ beforeEach(() => {
   clearLRUWords("h");
   clearLRUWords("c");
   vi.restoreAllMocks();
-  globalThis.fetch = vi.fn(
-    async () => new Response("missing", { status: 404 }),
-  ) as typeof fetch;
+  globalThis.fetch = vi.fn(async () => new Response("missing", { status: 404 })) as typeof fetch;
 });
 
 // Load the module with fresh state (clears XREF_CACHE / XREF_LOADED / XREF_LOADING

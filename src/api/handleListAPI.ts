@@ -1,5 +1,9 @@
-import { CACHE_CONTROL, listTagsForLang } from './cache';
-import { stripLangPrefix, tryDecodeURIComponent, type DictionaryLang as Lang } from '../utils/dictionary-route';
+import { CACHE_CONTROL, listTagsForLang } from "./cache";
+import {
+  stripLangPrefix,
+  tryDecodeURIComponent,
+  type DictionaryLang as Lang,
+} from "../utils/dictionary-route";
 /**
  * 分類詞彙列表 API
  * 處理 /api/={類名}、/api/'={類名}、/api/:={類名}、/api/~={類名} 的請求
@@ -29,13 +33,13 @@ interface ParsedList {
  * （此路由不接受 legacy `!` 別名，維持既有行為）。
  */
 export function parseListPath(pathname: string): ParsedList | null {
-  const raw = tryDecodeURIComponent(pathname.replace(/^\/api\//, ''));
+  const raw = tryDecodeURIComponent(pathname.replace(/^\/api\//, ""));
   if (raw === null) return null;
   const { lang, rest } = stripLangPrefix(raw);
 
-  if (!rest.startsWith('=')) return null;
+  if (!rest.startsWith("=")) return null;
 
-  const category = rest.slice(1).replace(/\.json$/, '');
+  const category = rest.slice(1).replace(/\.json$/, "");
   if (!category) return null;
 
   return { lang, category };
@@ -48,16 +52,16 @@ export function parseListPath(pathname: string): ParsedList | null {
  * 未解碼原字串判斷前綴形狀。
  */
 export function isListPath(pathname: string): boolean {
-  const seg = pathname.replace(/^\/api\//, '');
+  const seg = pathname.replace(/^\/api\//, "");
   const candidate = tryDecodeURIComponent(seg) ?? seg;
-  return stripLangPrefix(candidate).rest.startsWith('=');
+  return stripLangPrefix(candidate).rest.startsWith("=");
 }
 
 function corsHeaders(): Record<string, string> {
   return {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
   };
 }
 
@@ -65,21 +69,17 @@ function jsonResponse(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
-      'Content-Type': 'application/json; charset=utf-8',
+      "Content-Type": "application/json; charset=utf-8",
       ...corsHeaders(),
     },
   });
 }
 
-export async function handleListAPI(
-  request: Request,
-  url: URL,
-  env: ListEnv,
-): Promise<Response> {
+export async function handleListAPI(request: Request, url: URL, env: ListEnv): Promise<Response> {
   const parsed = parseListPath(url.pathname);
 
   if (!parsed) {
-    return jsonResponse({ error: 'Bad Request', message: '路徑格式錯誤' }, 400);
+    return jsonResponse({ error: "Bad Request", message: "路徑格式錯誤" }, 400);
   }
 
   const { lang, category } = parsed;
@@ -92,10 +92,7 @@ export async function handleListAPI(
   const obj = await env.DICTIONARY.get(key);
 
   if (!obj) {
-    return jsonResponse(
-      { error: 'Not Found', message: `找不到分類：${category}` },
-      404,
-    );
+    return jsonResponse({ error: "Not Found", message: `找不到分類：${category}` }, 404);
   }
 
   const data = await obj.text();
@@ -105,20 +102,20 @@ export async function handleListAPI(
   try {
     parsed_data = JSON.parse(data);
   } catch {
-    return jsonResponse({ error: 'Internal Error', message: '資料格式異常' }, 500);
+    return jsonResponse({ error: "Internal Error", message: "資料格式異常" }, 500);
   }
 
   if (!Array.isArray(parsed_data)) {
-    return jsonResponse({ error: 'Internal Error', message: '資料非陣列格式' }, 500);
+    return jsonResponse({ error: "Internal Error", message: "資料非陣列格式" }, 500);
   }
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json; charset=utf-8',
+    "Content-Type": "application/json; charset=utf-8",
     ...corsHeaders(),
   };
-  if (request.method === 'GET' || request.method === 'HEAD') {
-    headers['Cache-Control'] = CACHE_CONTROL.list;
-    headers['Cache-Tag'] = listTagsForLang(lang);
+  if (request.method === "GET" || request.method === "HEAD") {
+    headers["Cache-Control"] = CACHE_CONTROL.list;
+    headers["Cache-Tag"] = listTagsForLang(lang);
   }
 
   return new Response(data, {

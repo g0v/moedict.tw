@@ -15,18 +15,21 @@
  * 否則冷啟動時 <main> 還沒 render（Layout 仍在 loading 分支），effect 先跑一次拿到 null，
  * 之後 <main> 掛上時 deps 沒變、effect 不會重跑，導致要先點一次才會生效。
  */
-import { useCallback, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 
-const SWIPE_THRESHOLD = 60;       // 最小滑動距離（px）
-const MAX_VERTICAL_RATIO = 0.3;   // 最大允許垂直偏移比例
-const MAX_DURATION = 500;         // 最長手勢時間（ms）；超過視為慢速拖曳（多半在選字）
-const MIN_VELOCITY = 0.3;         // 最小水平速度（px/ms）；過慢視為選字而非甩動
-const EDGE_ZONE = 60;             // 邊緣起手感應區寬度（px）：只有從左／右緣起手才換頁
+const SWIPE_THRESHOLD = 60; // 最小滑動距離（px）
+const MAX_VERTICAL_RATIO = 0.3; // 最大允許垂直偏移比例
+const MAX_DURATION = 500; // 最長手勢時間（ms）；超過視為慢速拖曳（多半在選字）
+const MIN_VELOCITY = 0.3; // 最小水平速度（px/ms）；過慢視為選字而非甩動
+const EDGE_ZONE = 60; // 邊緣起手感應區寬度（px）：只有從左／右緣起手才換頁
 
 /** 此次觸控是否落在可編輯／可選取互動元素內 */
 function isEditableTarget(target: EventTarget | null): boolean {
-  const el = target instanceof Element ? target.closest('input, textarea, [contenteditable=""], [contenteditable="true"]') : null;
+  const el =
+    target instanceof Element
+      ? target.closest('input, textarea, [contenteditable=""], [contenteditable="true"]')
+      : null;
   return el != null;
 }
 
@@ -108,14 +111,14 @@ export function useSwipeNavigation(): (el: HTMLElement | null) => void {
       }
     };
 
-    el.addEventListener('touchstart', handleTouchStart, { passive: true });
-    el.addEventListener('touchmove', handleTouchMove, { passive: true });
-    el.addEventListener('touchend', handleTouchEnd, { passive: true });
+    el.addEventListener("touchstart", handleTouchStart, { passive: true });
+    el.addEventListener("touchmove", handleTouchMove, { passive: true });
+    el.addEventListener("touchend", handleTouchEnd, { passive: true });
 
     detach.current = () => {
-      el.removeEventListener('touchstart', handleTouchStart);
-      el.removeEventListener('touchmove', handleTouchMove);
-      el.removeEventListener('touchend', handleTouchEnd);
+      el.removeEventListener("touchstart", handleTouchStart);
+      el.removeEventListener("touchmove", handleTouchMove);
+      el.removeEventListener("touchend", handleTouchEnd);
     };
   }, []);
 }

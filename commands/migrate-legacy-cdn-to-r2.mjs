@@ -32,67 +32,67 @@
  * .migration-state/legacy-cdn-progress.ndjson，已成功或已確認 404 的 key
  * 會被跳過；因暫時性錯誤失敗的 key 下次執行會重試。
  */
-import { readdirSync, readFileSync, mkdirSync, existsSync, appendFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { spawn } from 'node:child_process';
+import { readdirSync, readFileSync, mkdirSync, existsSync, appendFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { spawn } from "node:child_process";
 
 const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
-const STATE_DIR = join(REPO_ROOT, '.migration-state');
-const PROGRESS_FILE = join(STATE_DIR, 'legacy-cdn-progress.ndjson');
-const BUCKET = 'moedict-assets';
-const WRANGLER_BIN = join(REPO_ROOT, 'node_modules/.bin/wrangler');
+const STATE_DIR = join(REPO_ROOT, ".migration-state");
+const PROGRESS_FILE = join(STATE_DIR, "legacy-cdn-progress.ndjson");
+const BUCKET = "moedict-assets";
+const WRANGLER_BIN = join(REPO_ROOT, "node_modules/.bin/wrangler");
 
 const HOSTS = {
-  stroke: 'https://829091573dd46381a321-9e8a43b8d3436eaf4353af683c892840.ssl.cf1.rackcdn.com',
-  a: 'https://203146b5091e8f0aafda-15d41c68795720c6e932125f5ace0c70.ssl.cf1.rackcdn.com',
-  t: 'https://1763c5ee9859e0316ed6-db85b55a6a3fbe33f09b9245992383bd.ssl.cf1.rackcdn.com',
-  h: 'https://a7ff62cf9d5b13408e72-351edcddf20c69da65316dd74d25951e.ssl.cf1.rackcdn.com',
+  stroke: "https://829091573dd46381a321-9e8a43b8d3436eaf4353af683c892840.ssl.cf1.rackcdn.com",
+  a: "https://203146b5091e8f0aafda-15d41c68795720c6e932125f5ace0c70.ssl.cf1.rackcdn.com",
+  t: "https://1763c5ee9859e0316ed6-db85b55a6a3fbe33f09b9245992383bd.ssl.cf1.rackcdn.com",
+  h: "https://a7ff62cf9d5b13408e72-351edcddf20c69da65316dd74d25951e.ssl.cf1.rackcdn.com",
 };
 
-const LANG_DIRS = { a: 'pack', t: 'ptck', h: 'phck', c: 'pcck' };
+const LANG_DIRS = { a: "pack", t: "ptck", h: "phck", c: "pcck" };
 
 // ---- CLI args ----
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {
     const m = a.match(/^--([^=]+)(?:=(.*))?$/);
     return m ? [m[1], m[2] ?? true] : [a, true];
-  })
+  }),
 );
 const LIMIT = args.limit ? Number(args.limit) : Infinity;
 const CONCURRENCY = args.concurrency ? Number(args.concurrency) : 8;
-const REPORT_ONLY = !!args['report-only'];
-const CATEGORY_FILTER = args.categories ? String(args.categories).split(',') : null;
-const RATE_LIMIT = args['rate-limit'] ? Number(args['rate-limit']) : 900;
-const RATE_WINDOW_MS = args['rate-window-ms'] ? Number(args['rate-window-ms']) : 5 * 60 * 1000;
+const REPORT_ONLY = !!args["report-only"];
+const CATEGORY_FILTER = args.categories ? String(args.categories).split(",") : null;
+const RATE_LIMIT = args["rate-limit"] ? Number(args["rate-limit"]) : 900;
+const RATE_WINDOW_MS = args["rate-window-ms"] ? Number(args["rate-window-ms"]) : 5 * 60 * 1000;
 
 // ---- 複刻 src/components/StrokeAnimation.tsx 的 extractStrokeWords() ----
 function extractStrokeWords(input) {
-  const plain = String(input || '')
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;|&#160;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
+  const plain = String(input || "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;|&#160;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'");
-  const withoutParen = plain.replace(/[（(].*/, '').trim();
+  const withoutParen = plain.replace(/[（(].*/, "").trim();
   return Array.from(withoutParen)
     .filter((ch) => /\p{Script=Han}/u.test(ch))
-    .join('');
+    .join("");
 }
 
 // ---- 複刻 src/utils/audio-utils.ts 的 normalizeAudioIdByLang() ----
 function normalizeAudioIdByLang(lang, audioId) {
-  const normalized = String(audioId || '').trim();
-  if (!normalized) return '';
-  if (lang !== 't') return normalized;
-  if (/^\d{1,4}$/.test(normalized)) return normalized.padStart(5, '0');
+  const normalized = String(audioId || "").trim();
+  if (!normalized) return "";
+  if (lang !== "t") return normalized;
+  if (/^\d{1,4}$/.test(normalized)) return normalized.padStart(5, "0");
   return normalized;
 }
 
 // ---- 複刻 src/pages/DictionaryPage.tsx 的 parseHakkaReadings() 腔調解析 ----
-const DIALECT_ORDER = '四海大平安南';
+const DIALECT_ORDER = "四海大平安南";
 const hakkaMatcher = () => /([四海大平安南])[\u20DE\u20DF](\S+)/g;
 
 function buildManifest() {
@@ -101,25 +101,26 @@ function buildManifest() {
   const hakkaVariantKeys = new Set();
 
   for (const [lang, dir] of Object.entries(LANG_DIRS)) {
-    const fullDir = join(REPO_ROOT, 'data/dictionary', dir);
-    const files = readdirSync(fullDir).filter((f) => f.endsWith('.txt'));
+    const fullDir = join(REPO_ROOT, "data/dictionary", dir);
+    const files = readdirSync(fullDir).filter((f) => f.endsWith(".txt"));
     for (const f of files) {
-      const text = readFileSync(join(fullDir, f), 'utf8');
+      const text = readFileSync(join(fullDir, f), "utf8");
       const obj = JSON.parse(text);
       for (const key of Object.keys(obj)) {
         const entry = obj[key];
-        if (entry && typeof entry.t === 'string') {
-          for (const ch of extractStrokeWords(entry.t)) strokeCps.add(ch.codePointAt(0).toString(16));
+        if (entry && typeof entry.t === "string") {
+          for (const ch of extractStrokeWords(entry.t))
+            strokeCps.add(ch.codePointAt(0).toString(16));
         }
         const heteronyms = Array.isArray(entry?.h) ? entry.h : [];
         for (const het of heteronyms) {
-          const rawAudioId = het && het['='] ? String(het['=']) : '';
+          const rawAudioId = het && het["="] ? String(het["="]) : "";
           if (!rawAudioId) continue;
-          if (lang === 'a' || lang === 't' || lang === 'h') {
+          if (lang === "a" || lang === "t" || lang === "h") {
             audioIds[lang].add(normalizeAudioIdByLang(lang, rawAudioId));
           }
-          if (lang === 'h') {
-            const trs = String((het && (het['p'] ?? het['T'])) || '');
+          if (lang === "h") {
+            const trs = String((het && (het["p"] ?? het["T"])) || "");
             const m = hakkaMatcher();
             let mm;
             while ((mm = m.exec(trs))) {
@@ -137,23 +138,47 @@ function buildManifest() {
   // buildAudioCandidates() 的註解）。playAudioUrl() 一律先試 .mp3 再退回
   // .ogg，所以兩種副檔名都要遷移，缺一個就會讓部分裝置播放失敗。
   const AUDIO_EXTENSIONS = [
-    { ext: 'ogg', contentType: 'audio/ogg' },
-    { ext: 'mp3', contentType: 'audio/mpeg' },
+    { ext: "ogg", contentType: "audio/ogg" },
+    { ext: "mp3", contentType: "audio/mpeg" },
   ];
 
   const tasks = [];
   for (const cp of strokeCps) {
-    tasks.push({ cat: 'stroke', key: cp, url: `${HOSTS.stroke}/${cp}.json`, r2Key: `stroke-json/${cp}.json`, contentType: 'application/json' });
+    tasks.push({
+      cat: "stroke",
+      key: cp,
+      url: `${HOSTS.stroke}/${cp}.json`,
+      r2Key: `stroke-json/${cp}.json`,
+      contentType: "application/json",
+    });
   }
   for (const { ext, contentType } of AUDIO_EXTENSIONS) {
     for (const id of audioIds.a) {
-      tasks.push({ cat: `audio-a-${ext}`, key: id, url: `${HOSTS.a}/${id}.${ext}`, r2Key: `audio/a/${id}.${ext}`, contentType });
+      tasks.push({
+        cat: `audio-a-${ext}`,
+        key: id,
+        url: `${HOSTS.a}/${id}.${ext}`,
+        r2Key: `audio/a/${id}.${ext}`,
+        contentType,
+      });
     }
     for (const id of audioIds.t) {
-      tasks.push({ cat: `audio-t-${ext}`, key: id, url: `${HOSTS.t}/${id}.${ext}`, r2Key: `audio/t/${id}.${ext}`, contentType });
+      tasks.push({
+        cat: `audio-t-${ext}`,
+        key: id,
+        url: `${HOSTS.t}/${id}.${ext}`,
+        r2Key: `audio/t/${id}.${ext}`,
+        contentType,
+      });
     }
     for (const k of hakkaVariantKeys) {
-      tasks.push({ cat: `audio-h-variant-${ext}`, key: k, url: `${HOSTS.h}/${k}.${ext}`, r2Key: `audio/h/${k}.${ext}`, contentType });
+      tasks.push({
+        cat: `audio-h-variant-${ext}`,
+        key: k,
+        url: `${HOSTS.h}/${k}.${ext}`,
+        r2Key: `audio/h/${k}.${ext}`,
+        contentType,
+      });
     }
   }
   return tasks;
@@ -163,11 +188,11 @@ function buildManifest() {
 function loadProgress() {
   const done = new Set();
   if (existsSync(PROGRESS_FILE)) {
-    const lines = readFileSync(PROGRESS_FILE, 'utf8').split('\n').filter(Boolean);
+    const lines = readFileSync(PROGRESS_FILE, "utf8").split("\n").filter(Boolean);
     for (const line of lines) {
       try {
         const rec = JSON.parse(line);
-        if (rec.status === 'ok' || rec.status === '404') done.add(`${rec.cat}:${rec.key}`);
+        if (rec.status === "ok" || rec.status === "404") done.add(`${rec.cat}:${rec.key}`);
       } catch {
         /* 忽略壞行 */
       }
@@ -178,7 +203,7 @@ function loadProgress() {
 
 mkdirSync(STATE_DIR, { recursive: true });
 function recordProgress(rec) {
-  appendFileSync(PROGRESS_FILE, JSON.stringify(rec) + '\n');
+  appendFileSync(PROGRESS_FILE, JSON.stringify(rec) + "\n");
 }
 
 // ---- R2 寫入的滑動視窗限流（呼應 AGENTS.md 記載的 ~1100 req/5min 帳號限制）----
@@ -189,7 +214,8 @@ function sleep(ms) {
 async function throttleR2Write() {
   for (;;) {
     const now = Date.now();
-    while (writeTimestamps.length && now - writeTimestamps[0] > RATE_WINDOW_MS) writeTimestamps.shift();
+    while (writeTimestamps.length && now - writeTimestamps[0] > RATE_WINDOW_MS)
+      writeTimestamps.shift();
     if (writeTimestamps.length < RATE_LIMIT) {
       writeTimestamps.push(now);
       return;
@@ -205,19 +231,23 @@ function putToR2(r2Key, bytes, contentType) {
     const child = spawn(
       WRANGLER_BIN,
       [
-        'r2', 'object', 'put', `${BUCKET}/${r2Key}`,
-        '--pipe', '--remote',
+        "r2",
+        "object",
+        "put",
+        `${BUCKET}/${r2Key}`,
+        "--pipe",
+        "--remote",
         `--content-type=${contentType}`,
-        '--cache-control=public, max-age=31536000, immutable',
+        "--cache-control=public, max-age=31536000, immutable",
       ],
-      { cwd: REPO_ROOT, stdio: ['pipe', 'pipe', 'pipe'] }
+      { cwd: REPO_ROOT, stdio: ["pipe", "pipe", "pipe"] },
     );
-    let stderr = '';
-    let stdout = '';
-    child.stdout.on('data', (d) => (stdout += d));
-    child.stderr.on('data', (d) => (stderr += d));
-    child.on('error', reject);
-    child.on('close', (code) => {
+    let stderr = "";
+    let stdout = "";
+    child.stdout.on("data", (d) => (stdout += d));
+    child.stderr.on("data", (d) => (stderr += d));
+    child.on("error", reject);
+    child.on("close", (code) => {
       if (code === 0) resolve({ ok: true });
       else resolve({ ok: false, code, stderr, stdout });
     });
@@ -227,7 +257,7 @@ function putToR2(r2Key, bytes, contentType) {
 }
 
 function isRateLimited(text) {
-  return /429|rate.?limit|Too Many Requests|error code:?\s*971/i.test(text || '');
+  return /429|rate.?limit|Too Many Requests|error code:?\s*971/i.test(text || "");
 }
 
 async function fetchWithRetry(url, attempts = 3) {
@@ -252,12 +282,12 @@ async function processTask(task, stats) {
   try {
     dl = await fetchWithRetry(task.url);
   } catch (e) {
-    recordProgress({ cat: task.cat, key: task.key, status: 'failed', error: String(e) });
+    recordProgress({ cat: task.cat, key: task.key, status: "failed", error: String(e) });
     stats.failed++;
     return;
   }
   if (dl.status === 404) {
-    recordProgress({ cat: task.cat, key: task.key, status: '404' });
+    recordProgress({ cat: task.cat, key: task.key, status: "404" });
     stats.notFound++;
     return;
   }
@@ -268,7 +298,7 @@ async function processTask(task, stats) {
     await throttleR2Write();
     const put = await putToR2(task.r2Key, dl.buf, task.contentType);
     if (put.ok) {
-      recordProgress({ cat: task.cat, key: task.key, status: 'ok', bytes: dl.buf.length });
+      recordProgress({ cat: task.cat, key: task.key, status: "ok", bytes: dl.buf.length });
       stats.uploaded++;
       stats.bytes += dl.buf.length;
       return;
@@ -280,15 +310,22 @@ async function processTask(task, stats) {
       console.error(`[rate-limit] backing off ${cooldown}ms after ${task.cat}:${task.key}`);
       continue;
     }
-    console.error(`[r2-put-error] ${task.cat}:${task.key} attempt=${attempt} code=${put.code} stderr=${put.stderr.slice(0, 300)}`);
+    console.error(
+      `[r2-put-error] ${task.cat}:${task.key} attempt=${attempt} code=${put.code} stderr=${put.stderr.slice(0, 300)}`,
+    );
     await sleep(1000 * 2 ** attempt);
   }
-  recordProgress({ cat: task.cat, key: task.key, status: 'failed', error: 'r2 put exhausted retries' });
+  recordProgress({
+    cat: task.cat,
+    key: task.key,
+    status: "failed",
+    error: "r2 put exhausted retries",
+  });
   stats.failed++;
 }
 
 async function main() {
-  console.log('Deriving manifest from data/dictionary ...');
+  console.log("Deriving manifest from data/dictionary ...");
   let tasks = buildManifest();
   const byCat = {};
   for (const t of tasks) byCat[t.cat] = (byCat[t.cat] || 0) + 1;
@@ -302,7 +339,7 @@ async function main() {
   if (Number.isFinite(LIMIT)) tasks = tasks.slice(0, LIMIT);
 
   if (REPORT_ONLY) {
-    console.log('Report-only mode, exiting without network calls.');
+    console.log("Report-only mode, exiting without network calls.");
     return;
   }
 
@@ -318,7 +355,7 @@ async function main() {
       if (totalDone % 200 === 0) {
         const elapsedS = (Date.now() - startTime) / 1000;
         console.log(
-          `[progress] ${totalDone}/${tasks.length} | ok=${stats.uploaded} 404=${stats.notFound} failed=${stats.failed} | ${(stats.bytes / 1e6).toFixed(1)}MB | ${(totalDone / elapsedS).toFixed(2)}/s | rateLimitHits=${stats.rateLimitHits}`
+          `[progress] ${totalDone}/${tasks.length} | ok=${stats.uploaded} 404=${stats.notFound} failed=${stats.failed} | ${(stats.bytes / 1e6).toFixed(1)}MB | ${(totalDone / elapsedS).toFixed(2)}/s | rateLimitHits=${stats.rateLimitHits}`,
         );
       }
     }
@@ -326,7 +363,7 @@ async function main() {
 
   await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 
-  console.log('=== DONE ===');
+  console.log("=== DONE ===");
   console.log(stats);
 }
 

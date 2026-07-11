@@ -90,6 +90,7 @@ rclone sync data/dictionary/ r2:<your-dictionary-bucket>/ \
 ```
 
 說明：
+
 - `search-index/` 不是原始資料的一部分，而是由 `vp run build-search-index` 根據 `data/dictionary/*ck/*.txt` 動態產生。
 - 專案會使用 `pack/pcck/phck/ptck`，也會讀取 `a/`、`c/` 與根目錄下 `@*.json`、`=*.json` 等檔案。
 - 若未先產生 `search-index/` 就直接同步 `data/dictionary/`，正式環境的右上角全文搜尋會缺資料。
@@ -114,25 +115,25 @@ rclone sync data/dictionary/ r2:<your-dictionary-bucket>/ \
       "binding": "FONTS",
       "bucket_name": "<your-fonts-bucket>",
       "preview_bucket_name": "<your-fonts-bucket-preview>",
-      "remote": true
+      "remote": true,
     },
     {
       "binding": "ASSETS",
       "bucket_name": "<your-assets-bucket>",
       "preview_bucket_name": "<your-assets-bucket-preview>",
-      "remote": true
+      "remote": true,
     },
     {
       "binding": "DICTIONARY",
       "bucket_name": "<your-dictionary-bucket>",
       "preview_bucket_name": "<your-dictionary-bucket-preview>",
-      "remote": true
-    }
+      "remote": true,
+    },
   ],
   "vars": {
     "ASSET_BASE_URL": "https://<your-assets-public-domain>",
-    "DICTIONARY_BASE_URL": "https://<your-dictionary-public-domain>"
-  }
+    "DICTIONARY_BASE_URL": "https://<your-dictionary-public-domain>",
+  },
 }
 ```
 
@@ -145,8 +146,8 @@ vp install
 vp run dev
 ```
 
-
 補充：
+
 - `vp run dev` 會以本機檔案系統提供 `data/assets/`、`data/dictionary/` 與 `data/dictionary/search-index/`，適合日常 UI 與互動除錯。
 - 若你需要完整 Cloudflare Worker / R2 預覽環境，再執行：
 
@@ -156,6 +157,7 @@ vp run dev:remote
 ```
 
 或完整worker預覽：
+
 ```bash
 vp exec wrangler login
 vp run preview
@@ -190,7 +192,6 @@ vp run deploy
 
 建議更新順序可先從 `moedict-data`（原始/整理資料）→ `moedict-process`（資料轉換流程）→ `moedict-webkit`（前端與打包整合）開始檢查。
 
-
 ## 自動測試
 
 ```bash
@@ -201,11 +202,13 @@ vp run test:unit
 project。若要連同 Playwright e2e 跑完整三層測試：
 
 1. 先安裝 Playwright：
+
 ```bash
 vp exec playwright install
 ```
 
 2. 執行：
+
 ```bash
 vp run test
 ```
@@ -213,6 +216,7 @@ vp run test
 ## 匯出閱讀器字典檔（多格式、分語系）
 
 請先區分程式與資料授權：
+
 - 本專案根目錄 `LICENSE` 為 **CC0 1.0 Universal**，適用於本專案自行撰寫的程式碼、腳本與整理流程。
 - 字典資料來自上游資料源，不應視為 CC0。特別是中華民國教育部《重編國語辭典修訂本》採 **CC BY-ND 3.0 TW** 創用 CC 授權，散布時需標示來源，且不得局部改作條目。
 
@@ -225,15 +229,17 @@ vp install
 ```
 
 如果只要產生分語系 StarDict 格式：
-```SKIP_MOBI=1 vp run build-reader-formats```
+`SKIP_MOBI=1 vp run build-reader-formats`
 
 如果只要產生特定語系，可用逗號分隔：
+
 ```bash
 READER_FORMAT_LANGS=h vp run build-reader-formats
 READER_FORMAT_LANGS=a,t SKIP_MOBI=1 vp run build-reader-formats
 ```
 
 如同步要產生 Kindle 格式，另外需安裝其中一種 `.mobi` 轉檔工具：
+
 - `ebook-convert`（Calibre）
 - `kindlegen`
 
@@ -261,6 +267,7 @@ ebook-convert --version
 ```
 
 補充：
+
 - `kindlegen` 已停止維護，通常需自行下載舊版二進位檔；若無特殊需求，建議優先使用 `ebook-convert`。
 - 若工具不在系統 PATH，可在執行時指定：
 
@@ -275,6 +282,7 @@ vp run build-reader-formats
 ```
 
 產出路徑（已在 `.gitignore` 排除）：
+
 - StarDict 格式（每語系各三檔）：
   - `build/stardict/a/moedict-a-html.dict`
   - `build/stardict/a/moedict-a-html.idx`
@@ -299,4 +307,4 @@ vp run build-reader-formats
 - 有些相容StarDict格式之閱讀器，需要同一組檔案同目錄放置（至少 `.dict + .idx + .ifo`），請依需求選單一語系匯入（`a`/`t`/`h`/`c`）。
 - Kindle 請直接使用對應語系的 `.mobi` 檔案匯入。
 - macOS 內建「字典.app」使用的是 Apple Dictionary `.dictionary` bundle，不能直接匯入 StarDict 的 `.dict/.idx/.ifo`。若要支援 macOS 內建字典，需要另做 Apple Dictionary 專用匯出流程。
-若目標裝置要求壓縮版，可再自行把 `.dict` 轉為 `.dict.dz`（不影響 `.idx/.ifo` 結構）。
+  若目標裝置要求壓縮版，可再自行把 `.dict` 轉為 `.dict.dz`（不影響 `.idx/.ifo` 結構）。

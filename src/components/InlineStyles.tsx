@@ -3,57 +3,57 @@
  * 注入原專案 page-rendering.tsx 中的內聯樣式
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 
 interface InlineStylesProps {
-	r2Endpoint?: string;
-	onReady?: () => void;
+  r2Endpoint?: string;
+  onReady?: () => void;
 }
 
 /**
  * 內聯樣式組件
  */
 export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
-	const [endpoint, setEndpoint] = useState(r2Endpoint || '');
-	const [readyNotified, setReadyNotified] = useState(false);
+  const [endpoint, setEndpoint] = useState(r2Endpoint || "");
+  const [readyNotified, setReadyNotified] = useState(false);
 
-	useEffect(() => {
-		if (r2Endpoint) {
-			setEndpoint(r2Endpoint.replace(/\/$/, ''));
-		}
-	}, [r2Endpoint]);
+  useEffect(() => {
+    if (r2Endpoint) {
+      setEndpoint(r2Endpoint.replace(/\/$/, ""));
+    }
+  }, [r2Endpoint]);
 
-	useEffect(() => {
-		if (!endpoint) {
-			// wrangler vars.ASSET_BASE_URL → /api/config.assetBaseUrl
-			fetch('/api/config')
-				.then((res) => res.json())
-				.then((data: { assetBaseUrl?: string }) => {
-					if (data.assetBaseUrl) {
-						setEndpoint(data.assetBaseUrl.replace(/\/$/, ''));
-					} else {
-						setEndpoint('/assets');
-					}
-				})
-				.catch(() => {
-					setEndpoint('/assets');
-				});
-		}
-	}, [endpoint]);
+  useEffect(() => {
+    if (!endpoint) {
+      // wrangler vars.ASSET_BASE_URL → /api/config.assetBaseUrl
+      fetch("/api/config")
+        .then((res) => res.json())
+        .then((data: { assetBaseUrl?: string }) => {
+          if (data.assetBaseUrl) {
+            setEndpoint(data.assetBaseUrl.replace(/\/$/, ""));
+          } else {
+            setEndpoint("/assets");
+          }
+        })
+        .catch(() => {
+          setEndpoint("/assets");
+        });
+    }
+  }, [endpoint]);
 
-	useEffect(() => {
-		if (endpoint && !readyNotified) {
-			onReady?.();
-			setReadyNotified(true);
-		}
-	}, [endpoint, onReady, readyNotified]);
+  useEffect(() => {
+    if (endpoint && !readyNotified) {
+      onReady?.();
+      setReadyNotified(true);
+    }
+  }, [endpoint, onReady, readyNotified]);
 
-	if (!endpoint) return null;
+  if (!endpoint) return null;
 
-	return (
-		<style
-			dangerouslySetInnerHTML={{
-				__html: `
+  return (
+    <style
+      dangerouslySetInnerHTML={{
+        __html: `
 		:root {
 			--moe-safe-area-top: env(safe-area-inset-top, 0px);
 			--moe-safe-area-bottom: env(safe-area-inset-bottom, 0px);
@@ -617,8 +617,8 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 			-webkit-user-select: text;
 			user-select: text;
 		}
-		`
-			}}
-		/>
-	);
+		`,
+      }}
+    />
+  );
 }

@@ -1,23 +1,38 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type TouchEvent as ReactTouchEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useRadicalTooltip } from '../hooks/useRadicalTooltip';
-import { cleanTextForTTS, speakText } from '../utils/tts-utils';
-import { getAudioUrl, playAudioUrl } from '../utils/audio-utils';
-import { AUDIO_CDN_MAP } from '../utils/media-cdn';
-import { rightAngle } from '../utils/ruby2hruby';
-import { decorateRuby } from '../utils/bopomofo-pinyin-utils';
-import { convertPinyinByLang } from '../utils/pinyin-preference-utils';
-import { addStarWord, addToLRU, hasStarWord, removeStarWord, writeLastLookup } from '../utils/word-record-utils';
-import { fetchDictionaryEntry, readCachedDictionaryEntry } from '../utils/dictionary-cache';
-import { setCurrentXrefs } from '../utils/xref-switch-utils';
-import { StrokeAnimation } from '../components/StrokeAnimation';
-import { applyHeadToDocument, getDictionaryHead } from '../ssr/head';
-import { CharacterImageView } from '../components/CharacterImageView';
-import { SvgIcon } from '../components/SvgIcon';
-import { TitlePronunciation } from '../components/TitlePronunciation';
-import { dedupeHeteronyms } from '../utils/heteronym-dedup';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type TouchEvent as ReactTouchEvent,
+} from "react";
+import { useNavigate } from "react-router-dom";
+import { useRadicalTooltip } from "../hooks/useRadicalTooltip";
+import { cleanTextForTTS, speakText } from "../utils/tts-utils";
+import { getAudioUrl, playAudioUrl } from "../utils/audio-utils";
+import { AUDIO_CDN_MAP } from "../utils/media-cdn";
+import { rightAngle } from "../utils/ruby2hruby";
+import { decorateRuby } from "../utils/bopomofo-pinyin-utils";
+import { convertPinyinByLang } from "../utils/pinyin-preference-utils";
+import {
+  addStarWord,
+  addToLRU,
+  hasStarWord,
+  removeStarWord,
+  writeLastLookup,
+} from "../utils/word-record-utils";
+import { fetchDictionaryEntry, readCachedDictionaryEntry } from "../utils/dictionary-cache";
+import { setCurrentXrefs } from "../utils/xref-switch-utils";
+import { StrokeAnimation } from "../components/StrokeAnimation";
+import { applyHeadToDocument, getDictionaryHead } from "../ssr/head";
+import { CharacterImageView } from "../components/CharacterImageView";
+import { SvgIcon } from "../components/SvgIcon";
+import { TitlePronunciation } from "../components/TitlePronunciation";
+import { dedupeHeteronyms } from "../utils/heteronym-dedup";
 
-export type DictionaryLang = 'a' | 't' | 'h' | 'c';
+export type DictionaryLang = "a" | "t" | "h" | "c";
 
 interface Definition {
   type?: string;
@@ -75,14 +90,15 @@ interface DictionaryPageProps {
 }
 
 // 內容中「可查字」的逐字連結。必須與 InlineStyles.tsx 的長按選字 CSS 選擇器保持一致。
-const CONTENT_LOOKUP_LINK_SELECTOR = '.def a, .definition a, .example a, .mandarin a, .quote a, .link a';
+const CONTENT_LOOKUP_LINK_SELECTOR =
+  ".def a, .definition a, .example a, .mandarin a, .quote a, .link a";
 const LONG_PRESS_MIN_DURATION_MS = 320;
 const LONG_PRESS_SUPPRESS_CLICK_MS = 450;
 
 function groupDefinitions(definitions: Definition[]): Map<string, Definition[]> {
   const grouped = new Map<string, Definition[]>();
   for (const definition of definitions) {
-    const key = String(definition.type || '');
+    const key = String(definition.type || "");
     const list = grouped.get(key) ?? [];
     list.push(definition);
     grouped.set(key, list);
@@ -90,11 +106,10 @@ function groupDefinitions(definitions: Definition[]): Map<string, Definition[]> 
   return grouped;
 }
 
-
 function splitPartOfSpeech(typeText: string): string[] {
   if (!typeText) return [];
   return typeText
-    .split(',')
+    .split(",")
     .map((tag) => untag(tag).trim())
     .filter(Boolean);
 }
@@ -106,7 +121,7 @@ function toStringArray(value: string[] | string | undefined): string[] {
 
 function splitCommaSeparatedItems(value: string[] | string | undefined): string[] {
   return toStringArray(value)
-    .flatMap((item) => String(item || '').split(/,+/))
+    .flatMap((item) => String(item || "").split(/,+/))
     .map((item) => item.trim())
     .filter(Boolean);
 }
@@ -115,11 +130,11 @@ function normalizeHref(rawHref: string): string | null {
   const href = rawHref.trim();
   if (!href) return null;
   if (/^(?:https?:|mailto:|tel:)/i.test(href)) return null;
-  if (href.startsWith('/')) return href;
+  if (href.startsWith("/")) return href;
 
   let token = href;
-  token = token.replace(/^\.\//, '');
-  token = token.replace(/^#/, '');
+  token = token.replace(/^\.\//, "");
+  token = token.replace(/^#/, "");
   token = token.trim();
   if (!token) return null;
   return `/${token}`;
@@ -135,47 +150,47 @@ function isContentLookupAnchor(anchor: HTMLAnchorElement): boolean {
 }
 
 function untag(input: string): string {
-  return input.replace(/<[^>]*>/g, '');
+  return input.replace(/<[^>]*>/g, "");
 }
 
 function escapeHtml(input: string): string {
-  return String(input || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+  return String(input || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function formatTranslation(value: string[] | string): string {
-  return untag(Array.isArray(value) ? value.join(', ') : value);
+  return untag(Array.isArray(value) ? value.join(", ") : value);
 }
 
 function formatExampleIcon(input: string): string {
-  return input.replace('例⃝', '<span class="specific">例</span>');
+  return input.replace("例⃝", '<span class="specific">例</span>');
 }
 
 function previewDebugText(input: string, max = 120): string {
-  const normalized = String(input || '').replace(/\s+/g, ' ').trim();
+  const normalized = String(input || "")
+    .replace(/\s+/g, " ")
+    .trim();
   return normalized.length > max ? `${normalized.slice(0, max)}...` : normalized;
 }
 
 function convertTaiwaneseRubyMarkers(input: string): string {
-  const source = String(input || '');
-  if (!source.includes('\uFFF9')) return source;
+  const source = String(input || "");
+  if (!source.includes("\uFFF9")) return source;
 
   let markerCount = 0;
   const converted = source.replace(
     /\uFFF9([\s\S]*?)\uFFFA([\s\S]*?)(?:\uFFFB([\s\S]*?))?(?=\uFFF9|$)/g,
     (_match, han, trs, mandarin) => {
-    markerCount += 1;
-    const mandarinPart = mandarin
-      ? `<br><span class="rt mandarin">${mandarin}</span>`
-      : '';
-    return `<span class="ruby"><span class="rb"><span class="ruby"><span class="rb">${han}</span><br><span class="rt trs pinyin">${trs}</span></span></span></span>${mandarinPart}`;
+      markerCount += 1;
+      const mandarinPart = mandarin ? `<br><span class="rt mandarin">${mandarin}</span>` : "";
+      return `<span class="ruby"><span class="rb"><span class="ruby"><span class="rb">${han}</span><br><span class="rt trs pinyin">${trs}</span></span></span></span>${mandarinPart}`;
     },
   );
-  console.debug('[taiwanese-ruby] marker conversion', {
+  console.debug("[taiwanese-ruby] marker conversion", {
     markerCount,
     sourcePreview: previewDebugText(source),
     convertedPreview: previewDebugText(converted),
@@ -183,38 +198,44 @@ function convertTaiwaneseRubyMarkers(input: string): string {
   return converted;
 }
 
-function parseTaiwaneseRubyLine(rawHtml: string): { headingHtml: string; mandarinHtml: string | null } | null {
+function parseTaiwaneseRubyLine(
+  rawHtml: string,
+): { headingHtml: string; mandarinHtml: string | null } | null {
   const convertedHtml = convertTaiwaneseRubyMarkers(rawHtml);
   if (!convertedHtml || !/class\s*=\s*["'][^"']*\bruby\b/i.test(convertedHtml)) {
-    console.debug('[taiwanese-ruby] no ruby node detected', {
+    console.debug("[taiwanese-ruby] no ruby node detected", {
       rawPreview: previewDebugText(rawHtml),
       convertedPreview: previewDebugText(convertedHtml),
     });
     return null;
   }
-  if (typeof DOMParser === 'undefined') return null;
+  if (typeof DOMParser === "undefined") return null;
 
   try {
-    const sanitized = convertedHtml.replace(/<\/?b>/g, '');
+    const sanitized = convertedHtml.replace(/<\/?b>/g, "");
     const parser = new DOMParser();
-    const doc = parser.parseFromString(`<div id="wrap">${sanitized}</div>`, 'text/html');
-    const wrap = doc.getElementById('wrap');
+    const doc = parser.parseFromString(`<div id="wrap">${sanitized}</div>`, "text/html");
+    const wrap = doc.getElementById("wrap");
     if (!wrap) return null;
 
-    const titleHtml = wrap.querySelector('.ruby .ruby .rb')?.innerHTML?.trim() || '';
-    const bopomofo = wrap.querySelector('.trs.pinyin')?.getAttribute('title') || '';
-    const py = (wrap.querySelector('.upper')?.textContent || wrap.querySelector('.trs.pinyin')?.textContent || '').trim();
+    const titleHtml = wrap.querySelector(".ruby .ruby .rb")?.innerHTML?.trim() || "";
+    const bopomofo = wrap.querySelector(".trs.pinyin")?.getAttribute("title") || "";
+    const py = (
+      wrap.querySelector(".upper")?.textContent ||
+      wrap.querySelector(".trs.pinyin")?.textContent ||
+      ""
+    ).trim();
     if (!titleHtml) return null;
 
     const { ruby } = decorateRuby({
-      LANG: 't',
+      LANG: "t",
       title: titleHtml,
       bopomofo: bopomofo || undefined,
       py: py || undefined,
     });
     const headingHtml = rightAngle(ruby);
-    const mandarinHtml = wrap.querySelector('.mandarin')?.innerHTML?.trim() || null;
-    console.debug('[taiwanese-ruby] parsed values', {
+    const mandarinHtml = wrap.querySelector(".mandarin")?.innerHTML?.trim() || null;
+    console.debug("[taiwanese-ruby] parsed values", {
       titleHtml,
       py,
       bopomofo,
@@ -223,34 +244,36 @@ function parseTaiwaneseRubyLine(rawHtml: string): { headingHtml: string; mandari
     });
     return { headingHtml, mandarinHtml };
   } catch {
-    console.debug('[taiwanese-ruby] parse failed', { rawPreview: previewDebugText(rawHtml) });
+    console.debug("[taiwanese-ruby] parse failed", { rawPreview: previewDebugText(rawHtml) });
     return null;
   }
 }
 
 function getLangTokenPrefix(lang: DictionaryLang): string {
-  if (lang === 't') return "'";
-  if (lang === 'h') return ':';
-  if (lang === 'c') return '~';
-  return '';
+  if (lang === "t") return "'";
+  if (lang === "h") return ":";
+  if (lang === "c") return "~";
+  return "";
 }
 
 function getLangName(lang: DictionaryLang): string {
-  if (lang === 't') return '台語';
-  if (lang === 'h') return '客語';
-  if (lang === 'c') return '兩岸';
-  return '華語';
+  if (lang === "t") return "台語";
+  if (lang === "h") return "客語";
+  if (lang === "c") return "兩岸";
+  return "華語";
 }
 
 function isSingleCharTerm(input: string): boolean {
-  const plain = untag(String(input || '')).replace(/\s+/g, '').trim();
+  const plain = untag(String(input || ""))
+    .replace(/\s+/g, "")
+    .trim();
   return Array.from(plain).length === 1;
 }
 
 function normalizeXrefWord(word: string): string {
-  return String(word || '')
+  return String(word || "")
     .trim()
-    .replace(/[`~]/g, '');
+    .replace(/[`~]/g, "");
 }
 
 interface HakkaReading {
@@ -260,33 +283,33 @@ interface HakkaReading {
 }
 
 function formatHakkaReadingHtml(reading: string, convertForSi: boolean): string {
-  const source = convertForSi ? convertPinyinByLang('h', reading, false) : reading;
+  const source = convertForSi ? convertPinyinByLang("h", reading, false) : reading;
   return escapeHtml(source)
-    .replace(/¹/g, '<sup>1</sup>')
-    .replace(/²/g, '<sup>2</sup>')
-    .replace(/³/g, '<sup>3</sup>')
-    .replace(/⁴/g, '<sup>4</sup>')
-    .replace(/⁵/g, '<sup>5</sup>');
+    .replace(/¹/g, "<sup>1</sup>")
+    .replace(/²/g, "<sup>2</sup>")
+    .replace(/³/g, "<sup>3</sup>")
+    .replace(/⁴/g, "<sup>4</sup>")
+    .replace(/⁵/g, "<sup>5</sup>");
 }
 
 function parseHakkaReadings(rawPinyin: string, audioId?: string): HakkaReading[] {
   if (!audioId) return [];
-  const source = String(rawPinyin || '');
+  const source = String(rawPinyin || "");
   if (!source) return [];
 
   const readings: HakkaReading[] = [];
-  const dialectOrder = '四海大平安南';
+  const dialectOrder = "四海大平安南";
   const matcher = /([四海大平安南])[\u20DE\u20DF](\S+)/g;
   let match: RegExpExecArray | null = matcher.exec(source);
 
   while (match) {
-    const dialect = match[1] || '';
-    const reading = match[2] || '';
+    const dialect = match[1] || "";
+    const reading = match[2] || "";
     const variant = dialectOrder.indexOf(dialect) + 1;
     if (dialect && reading && variant > 0) {
       readings.push({
         dialect,
-        readingHtml: formatHakkaReadingHtml(reading, dialect === '四'),
+        readingHtml: formatHakkaReadingHtml(reading, dialect === "四"),
         variant,
       });
     }
@@ -300,22 +323,16 @@ function getHakkaVariantAudioUrl(variant: number, audioId: string): string {
   return `${AUDIO_CDN_MAP.h}/${variant}-${audioId}.ogg`;
 }
 
-type TTSLabel = '英' | '德' | '法';
+type TTSLabel = "英" | "德" | "法";
 
-function XrefTranslationLine({
-  label,
-  value,
-}: {
-  label: TTSLabel;
-  value: string | string[];
-}) {
+function XrefTranslationLine({ label, value }: { label: TTSLabel; value: string | string[] }) {
   const cleaned = cleanTextForTTS(value);
   const handleClick = (event: MouseEvent<HTMLSpanElement>) => {
     event.stopPropagation();
     if (cleaned.trim()) speakText(label, cleaned);
   };
   const handleKeyDown = (event: KeyboardEvent<HTMLSpanElement>) => {
-    if (event.key === 'Enter' || event.key === ' ') {
+    if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       if (cleaned.trim()) speakText(label, cleaned);
     }
@@ -324,7 +341,13 @@ function XrefTranslationLine({
   return (
     <div className="xref-line">
       <span className="fw_lang">{label}</span>
-      <span className="fw_def" role="button" tabIndex={0} onClick={handleClick} onKeyDown={handleKeyDown}>
+      <span
+        className="fw_def"
+        role="button"
+        tabIndex={0}
+        onClick={handleClick}
+        onKeyDown={handleKeyDown}
+      >
         {formatTranslation(value)}
       </span>
     </div>
@@ -332,26 +355,26 @@ function XrefTranslationLine({
 }
 
 const CJK_RADICALS =
-  '⼀一⼁丨⼂丶⼃丿⼄乙⼅亅⼆二⼇亠⼈人⼉儿⼊入⼋八⼌冂⼍冖⼎冫⼏几⼐凵⼑刀⼒力⼓勹⼔匕⼕匚⼖匸⼗十⼘卜⼙卩⼚厂⼛厶⼜又⼝口⼞囗⼟土⼠士⼡夂⼢夊⼣夕⼤大⼥女⼦子⼧宀⼨寸⼩小⼪尢⼫尸⼬屮⼭山⼮巛⼯工⼰己⼱巾⼲干⼳幺⼴广⼵廴⼶廾⼷弋⼸弓⼹彐⼺彡⼻彳⼼心⼽戈⼾戶⼿手⽀支⽁攴⽂文⽃斗⽄斤⽅方⽆无⽇日⽈曰⽉月⽊木⽋欠⽌止⽍歹⽎殳⽏毋⽐比⽑毛⽒氏⽓气⽔水⽕火⽖爪⽗父⽘爻⽙爿⺦丬⽚片⽛牙⽜牛⽝犬⽞玄⽟玉⽠瓜⽡瓦⽢甘⽣生⽤用⽥田⽦疋⽧疒⽨癶⽩白⽪皮⽫皿⽬目⽭矛⽮矢⽯石⽰示⽱禸⽲禾⽳穴⽴立⽵竹⽶米⽷糸⺰纟⽸缶⽹网⽺羊⽻羽⽼老⽽而⽾耒⽿耳⾀聿⾁肉⾂臣⾃自⾄至⾅臼⾆舌⾇舛⾈舟⾉艮⾊色⾋艸⾌虍⾍虫⾎血⾏行⾐衣⾑襾⾒見⻅见⾓角⾔言⻈讠⾕谷⾖豆⾗豕⾘豸⾙貝⻉贝⾚赤⾛走⾜足⾝身⾞車⻋车⾟辛⾠辰⾡辵⻌辶⾢邑⾣酉⾤釆⾥里⾦金⻐钅⾧長⻓长⾨門⻔门⾩阜⾪隶⾫隹⾬雨⾭靑⾮非⾯面⾰革⾱韋⻙韦⾲韭⾳音⾴頁⻚页⾵風⻛风⾶飛⻜飞⾷食⻠饣⾸首⾹香⾺馬⻢马⾻骨⾼高⾽髟⾾鬥⾿鬯⿀鬲⿁鬼⿂魚⻥鱼⻦鸟⿃鳥⿄鹵⻧卤⿅鹿⿆麥⻨麦⿇麻⿈黃⻩黄⿉黍⿊黑⿋黹⿌黽⻪黾⿍鼎⿎鼓⿏鼠⿐鼻⿑齊⻬齐⿒齒⻮齿⿓龍⻰龙⿔龜⻳龟⿕龠';
+  "⼀一⼁丨⼂丶⼃丿⼄乙⼅亅⼆二⼇亠⼈人⼉儿⼊入⼋八⼌冂⼍冖⼎冫⼏几⼐凵⼑刀⼒力⼓勹⼔匕⼕匚⼖匸⼗十⼘卜⼙卩⼚厂⼛厶⼜又⼝口⼞囗⼟土⼠士⼡夂⼢夊⼣夕⼤大⼥女⼦子⼧宀⼨寸⼩小⼪尢⼫尸⼬屮⼭山⼮巛⼯工⼰己⼱巾⼲干⼳幺⼴广⼵廴⼶廾⼷弋⼸弓⼹彐⼺彡⼻彳⼼心⼽戈⼾戶⼿手⽀支⽁攴⽂文⽃斗⽄斤⽅方⽆无⽇日⽈曰⽉月⽊木⽋欠⽌止⽍歹⽎殳⽏毋⽐比⽑毛⽒氏⽓气⽔水⽕火⽖爪⽗父⽘爻⽙爿⺦丬⽚片⽛牙⽜牛⽝犬⽞玄⽟玉⽠瓜⽡瓦⽢甘⽣生⽤用⽥田⽦疋⽧疒⽨癶⽩白⽪皮⽫皿⽬目⽭矛⽮矢⽯石⽰示⽱禸⽲禾⽳穴⽴立⽵竹⽶米⽷糸⺰纟⽸缶⽹网⽺羊⽻羽⽼老⽽而⽾耒⽿耳⾀聿⾁肉⾂臣⾃自⾄至⾅臼⾆舌⾇舛⾈舟⾉艮⾊色⾋艸⾌虍⾍虫⾎血⾏行⾐衣⾑襾⾒見⻅见⾓角⾔言⻈讠⾕谷⾖豆⾗豕⾘豸⾙貝⻉贝⾚赤⾛走⾜足⾝身⾞車⻋车⾟辛⾠辰⾡辵⻌辶⾢邑⾣酉⾤釆⾥里⾦金⻐钅⾧長⻓长⾨門⻔门⾩阜⾪隶⾫隹⾬雨⾭靑⾮非⾯面⾰革⾱韋⻙韦⾲韭⾳音⾴頁⻚页⾵風⻛风⾶飛⻜飞⾷食⻠饣⾸首⾹香⾺馬⻢马⾻骨⾼高⾽髟⾾鬥⾿鬯⿀鬲⿁鬼⿂魚⻥鱼⻦鸟⿃鳥⿄鹵⻧卤⿅鹿⿆麥⻨麦⿇麻⿈黃⻩黄⿉黍⿊黑⿋黹⿌黽⻪黾⿍鼎⿎鼓⿏鼠⿐鼻⿑齊⻬齐⿒齒⻮齿⿓龍⻰龙⿔龜⻳龟⿕龠";
 
 function normalizeRadicalChar(input: string): string {
   try {
-    if (!input) return '';
-    const raw = input.replace(/<[^>]*>/g, '');
+    if (!input) return "";
+    const raw = input.replace(/<[^>]*>/g, "");
     const idx = CJK_RADICALS.indexOf(raw);
     if (idx >= 0 && idx % 2 === 0) {
       const normalized = CJK_RADICALS.charAt(idx + 1) || raw;
-      return normalized === '靑' ? '青' : normalized;
+      return normalized === "靑" ? "青" : normalized;
     }
-    return raw === '靑' ? '青' : raw;
+    return raw === "靑" ? "青" : raw;
   } catch {
-    return input === '靑' ? '青' : input || '';
+    return input === "靑" ? "青" : input || "";
   }
 }
 
 function RadicalGlyph({ char, lang }: { char: string; lang: DictionaryLang }) {
   const ch = normalizeRadicalChar(char);
-  const radicalToken = `${lang === 'c' ? '~@' : '@'}${ch}`;
+  const radicalToken = `${lang === "c" ? "~@" : "@"}${ch}`;
   return (
     <span className="glyph">
       <a
@@ -359,9 +382,9 @@ function RadicalGlyph({ char, lang }: { char: string; lang: DictionaryLang }) {
         className="xref"
         href={`./#${radicalToken}`}
         data-radical-id={radicalToken}
-        style={{ color: 'white' }}
+        style={{ color: "white" }}
       >
-        {' '}
+        {" "}
         {ch}
       </a>
     </span>
@@ -372,7 +395,7 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
   const navigate = useNavigate();
   const touchAnchorStartAtRef = useRef<number | null>(null);
   const suppressAnchorClickUntilRef = useRef(0);
-  const queryWord = useMemo(() => (word ?? '').trim(), [word]);
+  const queryWord = useMemo(() => (word ?? "").trim(), [word]);
   const langTokenPrefix = getLangTokenPrefix(lang);
   const [state, setState] = useState<DictionaryState>({
     loading: false,
@@ -383,7 +406,10 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const [isStarred, setIsStarred] = useState(false);
   const [strokesVisible, setStrokesVisible] = useState(false);
-  const storageWord = useMemo(() => untag((state.entry?.title || queryWord || '').trim()), [state.entry?.title, queryWord]);
+  const storageWord = useMemo(
+    () => untag((state.entry?.title || queryWord || "").trim()),
+    [state.entry?.title, queryWord],
+  );
 
   // 舊版 /word/N「指定義項」永久連結：1-based，跨該詞所有音項合併計數，
   // 不受 UI 依詞性分組顯示順序影響 — 對照的是同一份 definition 物件參照。
@@ -405,7 +431,7 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
   const highlightedDefRef = useRef<HTMLLIElement | null>(null);
   useEffect(() => {
     if (targetDefIdx == null) return;
-    highlightedDefRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    highlightedDefRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [targetDefIdx, state.entry]);
 
   // 設定 body 語言 class（同原 $('body').addClass("lang-#LANG")）
@@ -427,7 +453,7 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
   useEffect(() => {
     if (!queryWord) {
       setStrokesVisible(false);
-      setState({ loading: false, entry: null, terms: [], error: '未提供字詞' });
+      setState({ loading: false, entry: null, terms: [], error: "未提供字詞" });
       return;
     }
 
@@ -438,12 +464,17 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
       const payload = result.data as DictionaryAPIResponse | DictionaryErrorResponse;
 
       if (result.ok) {
-        setState({ loading: false, entry: payload as DictionaryAPIResponse, terms: [], error: null });
+        setState({
+          loading: false,
+          entry: payload as DictionaryAPIResponse,
+          terms: [],
+          error: null,
+        });
         return;
       }
 
       const terms = Array.isArray((payload as DictionaryErrorResponse).terms)
-        ? (payload as DictionaryErrorResponse).terms ?? []
+        ? ((payload as DictionaryErrorResponse).terms ?? [])
         : [];
       const message = (payload as DictionaryErrorResponse).message ?? `查詢失敗 (${result.status})`;
       setState({ loading: false, entry: null, terms, error: terms.length > 0 ? null : message });
@@ -472,7 +503,7 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
-        const message = error instanceof Error ? error.message : '查詢失敗';
+        const message = error instanceof Error ? error.message : "查詢失敗";
         setState({ loading: false, entry: null, terms: [], error: message });
       });
 
@@ -507,23 +538,29 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
     setIsStarred(!current);
   }, [lang, storageWord]);
 
-  const toggleStrokeAnimation = useCallback((event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setStrokesVisible((v) => !v);
-  }, []);
+  const toggleStrokeAnimation = useCallback(
+    (event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setStrokesVisible((v) => !v);
+    },
+    [],
+  );
 
   const onContentClick = (event: MouseEvent<HTMLDivElement>): void => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
-    const anchor = target.closest('a');
+    const anchor = target.closest("a");
     if (!anchor) return;
     const isLookupAnchor = isContentLookupAnchor(anchor);
-    if (isLookupAnchor && (hasActiveSelection() || Date.now() < suppressAnchorClickUntilRef.current)) {
+    if (
+      isLookupAnchor &&
+      (hasActiveSelection() || Date.now() < suppressAnchorClickUntilRef.current)
+    ) {
       event.preventDefault();
       return;
     }
-    const href = anchor.getAttribute('href');
+    const href = anchor.getAttribute("href");
     if (!href) return;
 
     const normalized = normalizeHref(href);
@@ -531,7 +568,7 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
     event.preventDefault();
     // 換頁前先收掉殘留的 tooltip：hideTooltip 為同步（直接設 display:none），
     // 派發事件當下即生效，因此可立即跳轉、不需延遲。
-    document.dispatchEvent(new Event('moedict:dismiss-tooltip'));
+    document.dispatchEvent(new Event("moedict:dismiss-tooltip"));
     navigate(normalized);
   };
 
@@ -540,7 +577,7 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
     if (event.touches.length !== 1) return;
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
-    const anchor = target.closest('a');
+    const anchor = target.closest("a");
     if (!(anchor instanceof HTMLAnchorElement)) return;
     if (!isContentLookupAnchor(anchor)) return;
     touchAnchorStartAtRef.current = Date.now();
@@ -615,17 +652,17 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
       <StrokeAnimation title={title} visible={strokesVisible} lang={lang} />
 
       {heteronyms.map((heteronym, idx) => {
-        const pronunAudioId = heteronym.audio_id || (lang === 't' ? heteronym.id : undefined);
+        const pronunAudioId = heteronym.audio_id || (lang === "t" ? heteronym.id : undefined);
         const rubyData =
-          lang === 'h'
+          lang === "h"
             ? {
-                ruby: '',
-                youyin: '',
-                bAlt: '',
-                pAlt: '',
-                cnSpecific: '',
-                pinyin: '',
-                bopomofo: '',
+                ruby: "",
+                youyin: "",
+                bAlt: "",
+                pAlt: "",
+                cnSpecific: "",
+                pinyin: "",
+                bopomofo: "",
               }
             : decorateRuby({
                 LANG: lang,
@@ -634,14 +671,18 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                 pinyin: heteronym.pinyin,
                 trs: heteronym.trs,
               });
-        const hakkaReadings = lang === 'h' ? parseHakkaReadings(heteronym.pinyin || heteronym.trs || '', heteronym.audio_id) : [];
-        const dialectSynonyms = (lang === 't' || lang === 'h') ? splitCommaSeparatedItems(heteronym.synonyms) : [];
+        const hakkaReadings =
+          lang === "h"
+            ? parseHakkaReadings(heteronym.pinyin || heteronym.trs || "", heteronym.audio_id)
+            : [];
+        const dialectSynonyms =
+          lang === "t" || lang === "h" ? splitCommaSeparatedItems(heteronym.synonyms) : [];
 
         const definitions = Array.isArray(heteronym.definitions) ? heteronym.definitions : [];
         const groups = groupDefinitions(definitions);
 
         return (
-          <div key={`${title}-${idx}`} className="entry" style={{ position: 'relative' }}>
+          <div key={`${title}-${idx}`} className="entry" style={{ position: "relative" }}>
             {/* 部首＋筆畫＋筆順動畫按鈕（同原 $char div.radical） */}
             <div className="radical">
               {(entry.radical || entry.stroke_count || entry.non_radical_stroke_count) && (
@@ -651,8 +692,8 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                     <span className="sym">+</span>
                     {entry.non_radical_stroke_count ?? 0}
                   </span>
-                  <span className="count"> = {entry.stroke_count ?? ''}</span>
-                  {'\u00A0'}
+                  <span className="count"> = {entry.stroke_count ?? ""}</span>
+                  {"\u00A0"}
                 </>
               )}
               {/* 紅底鉛筆按鈕（同原 a.iconic-circle.stroke.icon-pencil） */}
@@ -663,7 +704,7 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                 tabIndex={0}
                 onClick={toggleStrokeAnimation}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
+                  if (e.key === "Enter" || e.key === " ") {
                     toggleStrokeAnimation(e);
                   }
                 }}
@@ -674,20 +715,20 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
             {idx === 0 && (
               <span
                 className="star iconic-color"
-                title={isStarred ? '已加入記錄簿' : '加入字詞記錄簿'}
-                style={{ top: '50px', right: '0px', cursor: 'pointer' }}
+                title={isStarred ? "已加入記錄簿" : "加入字詞記錄簿"}
+                style={{ top: "50px", right: "0px", cursor: "pointer" }}
                 data-word={title}
                 data-lang={lang}
                 role="button"
                 tabIndex={0}
-                aria-label={isStarred ? '已加入記錄簿' : '加入字詞記錄簿'}
+                aria-label={isStarred ? "已加入記錄簿" : "加入字詞記錄簿"}
                 onClick={(event) => {
                   event.stopPropagation();
                   event.preventDefault();
                   toggleStar();
                 }}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
+                  if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
                     event.stopPropagation();
                     toggleStar();
@@ -695,9 +736,9 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                 }}
               >
                 <SvgIcon
-                  name={isStarred ? 'star' : 'starEmpty'}
+                  name={isStarred ? "star" : "starEmpty"}
                   size="1em"
-                  style={isStarred ? undefined : { transform: 'scale(1.12)' }}
+                  style={isStarred ? undefined : { transform: "scale(1.12)" }}
                   aria-hidden="true"
                 />
               </span>
@@ -708,7 +749,7 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                 youyin={rubyData.youyin}
                 bAlt={rubyData.bAlt}
                 pAlt={rubyData.pAlt}
-                pronunAudioId={lang !== 'h' ? pronunAudioId : undefined}
+                pronunAudioId={lang !== "h" ? pronunAudioId : undefined}
                 isPlaying={playingAudioId === pronunAudioId}
                 onToggleAudio={() => {
                   if (!pronunAudioId) return;
@@ -719,14 +760,14 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                 }}
               >
                 <span
-                  className={isSingleCharTitle ? 'single-char-stroke-trigger' : undefined}
-                  role={isSingleCharTitle ? 'button' : undefined}
+                  className={isSingleCharTitle ? "single-char-stroke-trigger" : undefined}
+                  role={isSingleCharTitle ? "button" : undefined}
                   tabIndex={isSingleCharTitle ? 0 : undefined}
                   onClick={isSingleCharTitle ? toggleStrokeAnimation : undefined}
                   onKeyDown={
                     isSingleCharTitle
                       ? (event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
+                          if (event.key === "Enter" || event.key === " ") {
                             toggleStrokeAnimation(event);
                           }
                         }
@@ -734,8 +775,8 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                   }
                 >
                   {(() => {
-                    if (lang === 'h') return <span dangerouslySetInnerHTML={{ __html: title }} />;
-                    const htmlRuby = rubyData.ruby || '';
+                    if (lang === "h") return <span dangerouslySetInnerHTML={{ __html: title }} />;
+                    const htmlRuby = rubyData.ruby || "";
                     if (!htmlRuby) return <span dangerouslySetInnerHTML={{ __html: title }} />;
                     const hruby = rightAngle(htmlRuby);
                     return <span dangerouslySetInnerHTML={{ __html: hruby }} />;
@@ -754,26 +795,42 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                           <span
                             role="button"
                             tabIndex={0}
-                            aria-label={playingAudioId === audioKey ? '停止播放' : '播放發音'}
+                            aria-label={playingAudioId === audioKey ? "停止播放" : "播放發音"}
                             className="part-of-speech"
-                            title={playingAudioId === audioKey ? '停止播放' : '播放發音'}
-                            style={{ cursor: 'pointer', fontSize: '1.4em', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                            title={playingAudioId === audioKey ? "停止播放" : "播放發音"}
+                            style={{
+                              cursor: "pointer",
+                              fontSize: "1.4em",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 4,
+                            }}
                             onClick={(event) => {
                               event.stopPropagation();
-                              playAudioUrl(getHakkaVariantAudioUrl(item.variant, heteronym.audio_id!), (playing) => {
-                                setPlayingAudioId(playing ? audioKey : null);
-                              });
+                              playAudioUrl(
+                                getHakkaVariantAudioUrl(item.variant, heteronym.audio_id!),
+                                (playing) => {
+                                  setPlayingAudioId(playing ? audioKey : null);
+                                },
+                              );
                             }}
                             onKeyDown={(event) => {
-                              if (event.key === 'Enter' || event.key === ' ') {
+                              if (event.key === "Enter" || event.key === " ") {
                                 event.preventDefault();
-                                playAudioUrl(getHakkaVariantAudioUrl(item.variant, heteronym.audio_id!), (playing) => {
-                                  setPlayingAudioId(playing ? audioKey : null);
-                                });
+                                playAudioUrl(
+                                  getHakkaVariantAudioUrl(item.variant, heteronym.audio_id!),
+                                  (playing) => {
+                                    setPlayingAudioId(playing ? audioKey : null);
+                                  },
+                                );
                               }
                             }}
                           >
-                            <SvgIcon name={playingAudioId === audioKey ? 'stop' : 'play'} size="1em" aria-hidden="true" />
+                            <SvgIcon
+                              name={playingAudioId === audioKey ? "stop" : "play"}
+                              size="1em"
+                              aria-hidden="true"
+                            />
                             {item.dialect}
                           </span>
                         </span>
@@ -784,7 +841,6 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                 </span>
               </div>
             )}
-
 
             {heteronym.alt && (
               <div className="cn-specific" lang="zh-Hans">
@@ -802,87 +858,138 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                       {tag}
                     </span>
                   ))}
-                  <ol className={posTags.length > 0 ? 'margin-modified' : undefined}>
+                  <ol className={posTags.length > 0 ? "margin-modified" : undefined}>
                     {items.map((def, defIdx) => {
-                      const parallelIdx = def.def ? def.def.indexOf('∥') : -1;
+                      const parallelIdx = def.def ? def.def.indexOf("∥") : -1;
                       const mainDef = parallelIdx >= 0 ? def.def!.slice(0, parallelIdx) : def.def;
                       const afterParallel = parallelIdx >= 0 ? def.def!.slice(parallelIdx) : null;
                       const flatDefIdx = definitionIndexMap.get(def);
-                      const isTargetDefinition = targetDefIdx != null && flatDefIdx === targetDefIdx;
+                      const isTargetDefinition =
+                        targetDefIdx != null && flatDefIdx === targetDefIdx;
                       return (
-                      <li
-                        key={`${type}-${defIdx}`}
-                        ref={isTargetDefinition ? highlightedDefRef : undefined}
-                        className={isTargetDefinition ? 'idx-permalink-target' : undefined}
-                      >
-                        {mainDef ? (
-                          <p className="definition">
-                            <span className="def" dangerouslySetInnerHTML={{ __html: mainDef }} />
-                          </p>
-                        ) : null}
-                        {toStringArray(def.example).map((text, exampleIdx) => (
-                          (() => {
-                            const html = formatExampleIcon(text);
-                            const parsedRubyLine = lang === 't' ? parseTaiwaneseRubyLine(html) : null;
+                        <li
+                          key={`${type}-${defIdx}`}
+                          ref={isTargetDefinition ? highlightedDefRef : undefined}
+                          className={isTargetDefinition ? "idx-permalink-target" : undefined}
+                        >
+                          {mainDef ? (
+                            <p className="definition">
+                              <span className="def" dangerouslySetInnerHTML={{ __html: mainDef }} />
+                            </p>
+                          ) : null}
+                          {toStringArray(def.example).map((text, exampleIdx) =>
+                            (() => {
+                              const html = formatExampleIcon(text);
+                              const parsedRubyLine =
+                                lang === "t" ? parseTaiwaneseRubyLine(html) : null;
+                              if (!parsedRubyLine) {
+                                return (
+                                  <div
+                                    key={`example-${exampleIdx}`}
+                                    className="example"
+                                    dangerouslySetInnerHTML={{ __html: html }}
+                                  />
+                                );
+                              }
+                              return (
+                                <div key={`example-${exampleIdx}`} className="example">
+                                  <span
+                                    className="h1"
+                                    dangerouslySetInnerHTML={{ __html: parsedRubyLine.headingHtml }}
+                                  />
+                                  {parsedRubyLine.mandarinHtml && (
+                                    <span
+                                      className="mandarin"
+                                      dangerouslySetInnerHTML={{
+                                        __html: parsedRubyLine.mandarinHtml,
+                                      }}
+                                    />
+                                  )}
+                                </div>
+                              );
+                            })(),
+                          )}
+                          {toStringArray(def.quote).map((text, quoteIdx) => {
+                            const parsedRubyLine =
+                              lang === "t" ? parseTaiwaneseRubyLine(text) : null;
                             if (!parsedRubyLine) {
                               return (
-                                <div key={`example-${exampleIdx}`} className="example" dangerouslySetInnerHTML={{ __html: html }} />
+                                <div
+                                  key={`quote-${quoteIdx}`}
+                                  className="quote"
+                                  dangerouslySetInnerHTML={{ __html: text }}
+                                />
                               );
                             }
                             return (
-                              <div key={`example-${exampleIdx}`} className="example">
-                                <span className="h1" dangerouslySetInnerHTML={{ __html: parsedRubyLine.headingHtml }} />
+                              <div key={`quote-${quoteIdx}`} className="quote">
+                                <span
+                                  className="h1"
+                                  dangerouslySetInnerHTML={{ __html: parsedRubyLine.headingHtml }}
+                                />
                                 {parsedRubyLine.mandarinHtml && (
-                                  <span className="mandarin" dangerouslySetInnerHTML={{ __html: parsedRubyLine.mandarinHtml }} />
+                                  <span
+                                    className="mandarin"
+                                    dangerouslySetInnerHTML={{
+                                      __html: parsedRubyLine.mandarinHtml,
+                                    }}
+                                  />
                                 )}
                               </div>
                             );
-                          })()
-                        ))}
-                        {toStringArray(def.quote).map((text, quoteIdx) => {
-                          const parsedRubyLine = lang === 't' ? parseTaiwaneseRubyLine(text) : null;
-                          if (!parsedRubyLine) {
-                            return <div key={`quote-${quoteIdx}`} className="quote" dangerouslySetInnerHTML={{ __html: text }} />;
-                          }
-                          return (
-                            <div key={`quote-${quoteIdx}`} className="quote">
-                              <span className="h1" dangerouslySetInnerHTML={{ __html: parsedRubyLine.headingHtml }} />
-                              {parsedRubyLine.mandarinHtml && (
-                                <span className="mandarin" dangerouslySetInnerHTML={{ __html: parsedRubyLine.mandarinHtml }} />
-                              )}
+                          })}
+                          {toStringArray(def.link).map((text, linkIdx) => {
+                            const parsedRubyLine =
+                              lang === "t" ? parseTaiwaneseRubyLine(text) : null;
+                            if (!parsedRubyLine) {
+                              return (
+                                <div
+                                  key={`link-${linkIdx}`}
+                                  className="link"
+                                  dangerouslySetInnerHTML={{ __html: text }}
+                                />
+                              );
+                            }
+                            return (
+                              <div key={`link-${linkIdx}`} className="link">
+                                <span
+                                  className="h1"
+                                  dangerouslySetInnerHTML={{ __html: parsedRubyLine.headingHtml }}
+                                />
+                                {parsedRubyLine.mandarinHtml && (
+                                  <span
+                                    className="mandarin"
+                                    dangerouslySetInnerHTML={{
+                                      __html: parsedRubyLine.mandarinHtml,
+                                    }}
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                          {toStringArray(def.synonyms).length > 0 && (
+                            <div className="synonyms">
+                              <span className="part-of-speech">似</span>
+                              <span>
+                                {untag(toStringArray(def.synonyms).join("、").replace(/,/g, "、"))}
+                              </span>
                             </div>
-                          );
-                        })}
-                        {toStringArray(def.link).map((text, linkIdx) => {
-                          const parsedRubyLine = lang === 't' ? parseTaiwaneseRubyLine(text) : null;
-                          if (!parsedRubyLine) {
-                            return <div key={`link-${linkIdx}`} className="link" dangerouslySetInnerHTML={{ __html: text }} />;
-                          }
-                          return (
-                            <div key={`link-${linkIdx}`} className="link">
-                              <span className="h1" dangerouslySetInnerHTML={{ __html: parsedRubyLine.headingHtml }} />
-                              {parsedRubyLine.mandarinHtml && (
-                                <span className="mandarin" dangerouslySetInnerHTML={{ __html: parsedRubyLine.mandarinHtml }} />
-                              )}
+                          )}
+                          {toStringArray(def.antonyms).length > 0 && (
+                            <div className="antonyms">
+                              <span className="part-of-speech">反</span>
+                              <span>
+                                {untag(toStringArray(def.antonyms).join("、").replace(/,/g, "、"))}
+                              </span>
                             </div>
-                          );
-                        })}
-                        {toStringArray(def.synonyms).length > 0 && (
-                          <div className="synonyms">
-                            <span className="part-of-speech">似</span>
-                            <span>{untag(toStringArray(def.synonyms).join('、').replace(/,/g, '、'))}</span>
-                          </div>
-                        )}
-                        {toStringArray(def.antonyms).length > 0 && (
-                          <div className="antonyms">
-                            <span className="part-of-speech">反</span>
-                            <span>{untag(toStringArray(def.antonyms).join('、').replace(/,/g, '、'))}</span>
-                          </div>
-                        )}
-                        {afterParallel && (
-                          <div style={{ margin: '0 0 22px -44px' }} dangerouslySetInnerHTML={{ __html: afterParallel }} />
-                        )}
-                      </li>
+                          )}
+                          {afterParallel && (
+                            <div
+                              style={{ margin: "0 0 22px -44px" }}
+                              dangerouslySetInnerHTML={{ __html: afterParallel }}
+                            />
+                          )}
+                        </li>
                       );
                     })}
                   </ol>
@@ -895,47 +1002,49 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                 <span>
                   {dialectSynonyms.map((item, synIdx) => (
                     <span key={`t-synonym-${synIdx}`}>
-                      {synIdx > 0 ? '、' : ''}
+                      {synIdx > 0 ? "、" : ""}
                       <span dangerouslySetInnerHTML={{ __html: item }} />
                     </span>
                   ))}
                 </span>
               </div>
             )}
-            {xrefsByHeteronymId.length > 0 && heteronym.id && (() => {
-              const xrefLinks: React.ReactNode[] = [];
-              for (const xref of xrefsByHeteronymId) {
-                const words = xref.byId[heteronym.id];
-                if (!words || words.length === 0) continue;
-                xrefLinks.push(
-                  <div key={`xref-by-id-${xref.lang}-${heteronym.id}`} className="xref-line">
-                    <span className="xref part-of-speech">{getLangName(xref.lang)}</span>
-                    <span className="xref">
-                      {words.map((xrefWord, wIdx) => {
-                        const normalizedXrefWord = normalizeXrefWord(xrefWord);
-                        const to = `/${getLangTokenPrefix(xref.lang)}${normalizedXrefWord}`;
-                        return (
-                          <span key={`xref-by-id-${xref.lang}-${heteronym.id}-${wIdx}`}>
-                            {wIdx > 0 ? '、' : ''}
-                            <a
-                              href={to}
-                              data-radical-id={`entry:${to}`}
-                              onClick={(event) => {
-                                event.preventDefault();
-                                navigate(to);
-                              }}
-                            >
-                              {normalizedXrefWord}
-                            </a>
-                          </span>
-                        );
-                      })}
-                    </span>
-                  </div>
-                );
-              }
-              return xrefLinks.length > 0 ? <div className="xrefs">{xrefLinks}</div> : null;
-            })()}
+            {xrefsByHeteronymId.length > 0 &&
+              heteronym.id &&
+              (() => {
+                const xrefLinks: React.ReactNode[] = [];
+                for (const xref of xrefsByHeteronymId) {
+                  const words = xref.byId[heteronym.id];
+                  if (!words || words.length === 0) continue;
+                  xrefLinks.push(
+                    <div key={`xref-by-id-${xref.lang}-${heteronym.id}`} className="xref-line">
+                      <span className="xref part-of-speech">{getLangName(xref.lang)}</span>
+                      <span className="xref">
+                        {words.map((xrefWord, wIdx) => {
+                          const normalizedXrefWord = normalizeXrefWord(xrefWord);
+                          const to = `/${getLangTokenPrefix(xref.lang)}${normalizedXrefWord}`;
+                          return (
+                            <span key={`xref-by-id-${xref.lang}-${heteronym.id}-${wIdx}`}>
+                              {wIdx > 0 ? "、" : ""}
+                              <a
+                                href={to}
+                                data-radical-id={`entry:${to}`}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  navigate(to);
+                                }}
+                              >
+                                {normalizedXrefWord}
+                              </a>
+                            </span>
+                          );
+                        })}
+                      </span>
+                    </div>,
+                  );
+                }
+                return xrefLinks.length > 0 ? <div className="xrefs">{xrefLinks}</div> : null;
+              })()}
           </div>
         );
       })}
@@ -959,7 +1068,7 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                   const to = `/${getLangTokenPrefix(xref.lang)}${normalizedXrefWord}`;
                   return (
                     <span key={`${xref.lang}-${normalizedXrefWord}-${idx}`}>
-                      {idx > 0 ? '、' : ''}
+                      {idx > 0 ? "、" : ""}
                       <a
                         href={to}
                         data-radical-id={`entry:${to}`}

@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react';
-import { formatBopomofo, formatPinyin } from '../utils/bopomofo-pinyin-utils';
-import { SvgIcon } from './SvgIcon';
+import type { ReactNode } from "react";
+import { formatBopomofo, formatPinyin } from "../utils/bopomofo-pinyin-utils";
+import { SvgIcon } from "./SvgIcon";
 
 /**
  * 順序不變量（order invariant）
@@ -30,7 +30,7 @@ import { SvgIcon } from './SvgIcon';
  */
 interface TitlePronunciationProps {
   children: ReactNode;
-  lang: 'a' | 't' | 'h' | 'c';
+  lang: "a" | "t" | "h" | "c";
   youyin?: string;
   bAlt?: string;
   pAlt?: string;
@@ -53,32 +53,32 @@ export function TitlePronunciation({
     <>
       {children}
       {youyin && <small className="youyin">{youyin}</small>}
-      {lang !== 'h' && pronunAudioId && (
+      {lang !== "h" && pronunAudioId && (
         <span className="audioBlock">
           <span
             role="button"
             tabIndex={0}
-            aria-label={isPlaying ? '停止播放' : '播放發音'}
+            aria-label={isPlaying ? "停止播放" : "播放發音"}
             className="playAudio part-of-speech"
-            title={isPlaying ? '停止播放' : '播放發音'}
+            title={isPlaying ? "停止播放" : "播放發音"}
             onClick={(event) => {
               event.stopPropagation();
               onToggleAudio();
             }}
             onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
+              if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
                 onToggleAudio();
               }
             }}
           >
-            <SvgIcon name={isPlaying ? 'stop' : 'play'} size="1em" aria-hidden="true" />
+            <SvgIcon name={isPlaying ? "stop" : "play"} size="1em" aria-hidden="true" />
           </span>
         </span>
       )}
       {(bAlt || pAlt) && (
         <small className="alternative">
-          {lang !== 'h' && pAlt && (
+          {lang !== "h" && pAlt && (
             <span className="pinyin" dangerouslySetInnerHTML={{ __html: formatPinyin(pAlt) }} />
           )}
           {bAlt && (

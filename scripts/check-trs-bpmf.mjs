@@ -46,14 +46,14 @@
  * CI:  static job.
  */
 
-import { readdirSync, readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { decorateRuby, isRubyBasePunctuation } from '../src/utils/bopomofo-pinyin-utils.ts';
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { decorateRuby, isRubyBasePunctuation } from "../src/utils/bopomofo-pinyin-utils.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(__dirname, '..');
-const PTCK_DIR = path.join(REPO_ROOT, 'data', 'dictionary', 'ptck');
+const REPO_ROOT = path.resolve(__dirname, "..");
+const PTCK_DIR = path.join(REPO_ROOT, "data", "dictionary", "ptck");
 
 // --- Known upstream data-quality issues in example-sentence romanization,
 // each confirmed against live upstream (sutian.moe.edu.tw) or plainly a
@@ -68,39 +68,39 @@ const PTCK_DIR = path.join(REPO_ROOT, 'data', 'dictionary', 'ptck');
 // and the check runs (and should pass) as normal — no manual
 // re-verification of this list is needed.
 function computeTrsHash(trs) {
-  return new Bun.CryptoHasher('sha256').update(trs).digest('hex').slice(0, 12);
+  return new Bun.CryptoHasher("sha256").update(trs).digest("hex").slice(0, 12);
 }
 
 const KNOWN_DATA_ISSUES = new Map([
   [
     // 攏總 (su/12790): upstream https://sutian.moe.edu.tw/zh-hant/su/12790/
     // confirms "lóng-tsóng"; this example has "lóng-tsóg" (missing "n").
-    'data/dictionary/ptck/15.txt#%u650F%u7E3D d[0].e[0]',
-    '20d917aec1f7',
+    "data/dictionary/ptck/15.txt#%u650F%u7E3D d[0].e[0]",
+    "20d917aec1f7",
   ],
   [
     // 好客 (su/2341): upstream https://sutian.moe.edu.tw/zh-hant/su/2341/
     // confirms "hònn-kheh"; this example has "hòonn-kheh" (extra "o").
-    'data/dictionary/ptck/4.txt#%u5E84%u982D d[0].e[0]',
-    '7dfd88dd755d',
+    "data/dictionary/ptck/4.txt#%u5E84%u982D d[0].e[0]",
+    "7dfd88dd755d",
   ],
   [
     // 代誌 (su/1370): upstream https://sutian.moe.edu.tw/zh-hant/su/1370/
     // confirms "tāi-tsì"; this example has "tāi-ts" (truncated).
-    'data/dictionary/ptck/67.txt#%u5FC3%u706B d[0].e[0]',
-    '153720d1943b',
+    "data/dictionary/ptck/67.txt#%u5FC3%u706B d[0].e[0]",
+    "153720d1943b",
   ],
   [
     // 深 example: stray trailing "2" (footnote-marker-shaped artifact) with
     // no corresponding syllable — not a reading error, just orphaned text.
-    'data/dictionary/ptck/113.txt#%u6DF1 d[1].e[1]',
-    'd01113d3143a',
+    "data/dictionary/ptck/113.txt#%u6DF1 d[1].e[1]",
+    "d01113d3143a",
   ],
   [
     // 做議量 example: stray trailing "(" with nothing after it — an
     // unclosed/orphaned parenthesis, not a reading error.
-    'data/dictionary/ptck/90.txt#%u505A%u8B70%u91CF d[0].e[0]',
-    '290fbc797cdf',
+    "data/dictionary/ptck/90.txt#%u505A%u8B70%u91CF d[0].e[0]",
+    "290fbc797cdf",
   ],
 ]);
 
@@ -120,7 +120,7 @@ function fail(source, trs, message) {
 function listTxtFiles(dir) {
   try {
     return readdirSync(dir)
-      .filter((f) => f.endsWith('.txt'))
+      .filter((f) => f.endsWith(".txt"))
       .sort()
       .map((f) => path.join(dir, f));
   } catch {
@@ -147,40 +147,40 @@ for (const file of listTxtFiles(PTCK_DIR)) {
   const rel = path.relative(REPO_ROOT, file);
   let data;
   try {
-    data = JSON.parse(readFileSync(file, 'utf8'));
+    data = JSON.parse(readFileSync(file, "utf8"));
   } catch (e) {
     console.error(`[check-trs-bpmf] FAIL: ${rel}: JSON.parse failed — ${e.message}`);
     failures++;
     continue;
   }
   totalParsed++;
-  if (!data || typeof data !== 'object') continue;
+  if (!data || typeof data !== "object") continue;
 
   for (const [key, entry] of Object.entries(data)) {
-    if (!entry || typeof entry !== 'object' || !Array.isArray(entry.h)) continue;
+    if (!entry || typeof entry !== "object" || !Array.isArray(entry.h)) continue;
 
     for (const het of entry.h) {
-      if (!het || typeof het !== 'object') continue;
+      if (!het || typeof het !== "object") continue;
 
-      if (typeof het.T === 'string' && het.T) {
+      if (typeof het.T === "string" && het.T) {
         conversionJobs.push({ source: `${rel}#${key} T`, trs: het.T });
       }
 
       if (!Array.isArray(het.d)) continue;
       for (const [di, d] of het.d.entries()) {
-        if (!d || typeof d !== 'object') continue;
-        for (const field of ['e', 'quote', 'link']) {
+        if (!d || typeof d !== "object") continue;
+        for (const field of ["e", "quote", "link"]) {
           const raw = d[field];
           if (!raw) continue;
           const items = Array.isArray(raw) ? raw : [raw];
           for (const [ii, item] of items.entries()) {
-            if (typeof item !== 'string') continue;
+            if (typeof item !== "string") continue;
             for (const m of item.matchAll(IAA_RE)) {
-              const han = m[1] || '';
-              const trs = m[2] || '';
+              const han = m[1] || "";
+              const trs = m[2] || "";
               const source = `${rel}#${key} d[${di}].${field}[${ii}]`;
               if (trs) conversionJobs.push({ source, trs });
-              for (const ch of han.replace(/[`~]/g, '')) {
+              for (const ch of han.replace(/[`~]/g, "")) {
                 if (/\s/.test(ch)) continue;
                 if (!hanCharsFirstSeen.has(ch)) hanCharsFirstSeen.set(ch, source);
               }
@@ -209,17 +209,21 @@ const ZHUYIN_RTC_RE = /<rtc class="zhuyin"[^>]*>([\s\S]*?)<\/rtc>/;
 for (const { source, trs } of conversionJobs) {
   let result;
   try {
-    result = decorateRuby({ LANG: 't', trs });
+    result = decorateRuby({ LANG: "t", trs });
   } catch (e) {
     fail(source, trs, `${source}: decorateRuby threw on ${JSON.stringify(trs)} — ${e.message}`);
     continue;
   }
 
   if (trs.trim() && !result.bopomofo.trim()) {
-    fail(source, trs, `${source}: empty bopomofo output for non-empty input ${JSON.stringify(trs)}`);
+    fail(
+      source,
+      trs,
+      `${source}: empty bopomofo output for non-empty input ${JSON.stringify(trs)}`,
+    );
   }
 
-  for (const field of ['bopomofo', 'bAlt']) {
+  for (const field of ["bopomofo", "bAlt"]) {
     const value = result[field];
     if (value && LEFTOVER_LATIN_RE.test(value)) {
       fail(
@@ -231,7 +235,7 @@ for (const { source, trs } of conversionJobs) {
     }
   }
 
-  for (const field of ['bopomofo', 'bAlt', 'pinyin', 'pAlt']) {
+  for (const field of ["bopomofo", "bAlt", "pinyin", "pAlt"]) {
     const value = result[field];
     if (value && ORPHANED_MARK_RE.test(value)) {
       fail(
@@ -246,7 +250,7 @@ for (const { source, trs } of conversionJobs) {
   // decorateRuby truncates `title`/`ruby` construction to the MAIN reading
   // only (bAlt/pAlt are extracted separately and never rendered as ruby),
   // so the expected count is scoped to trs.split('/')[0] too.
-  const mainTrs = trs.split('/')[0].normalize('NFD');
+  const mainTrs = trs.split("/")[0].normalize("NFD");
   const expectedSyllables = (mainTrs.match(SYLLABLE_RE) || []).length;
   if (expectedSyllables > 0) {
     const rtcMatch = result.ruby.match(ZHUYIN_RTC_RE);
@@ -273,7 +277,7 @@ for (const [ch, source] of hanCharsFirstSeen) {
   const independentPunctLike = INDEPENDENT_PUNCT_LIKE_RE.test(ch);
   const currentlyExcluded = isRubyBasePunctuation(ch);
   if (independentPunctLike !== currentlyExcluded) {
-    const codePoint = `U+${ch.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}`;
+    const codePoint = `U+${ch.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}`;
     console.error(
       `[check-trs-bpmf] FAIL: isRubyBasePunctuation disagrees with Unicode Punctuation/Symbol/` +
         `Separator for ${JSON.stringify(ch)} (${codePoint}, first seen ${source}): ` +
@@ -294,4 +298,4 @@ if (failures > 0) {
   console.error(`\n[check-trs-bpmf] ${failures} failure(s).`);
   process.exit(1);
 }
-console.log('[check-trs-bpmf] OK');
+console.log("[check-trs-bpmf] OK");
