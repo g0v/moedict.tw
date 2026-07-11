@@ -21,8 +21,9 @@ export const ASSET_CDN_BASE = 'https://r2-assets.moedict.tw';
  * Routine future data-only uploads remain R2-only and rely on the object's
  * own `Cache-Control: public, max-age=300` metadata (set by Task 3 on re-upload)
  * for a short 5-minute edge TTL — no Worker redeploy needed for CSS-only edits.
- * Bump this query version only for an emergency immediate bust of the old
- * 24h-cached unversioned object.
+ * Bump this query version only for an emergency immediate bust of any stale
+ * edge-cached stylesheet key (the original unversioned object at 24h, or a
+ * prior `?v=` version still cached at the 5-minute TTL).
  */
 export const LEGACY_STYLESHEET_VERSION = '20260711';
 

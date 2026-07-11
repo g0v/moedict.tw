@@ -35,8 +35,16 @@ async function routeStylesCss(page: Page, getCss: () => string): Promise<void> {
       headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
       body: getCss(),
     });
+  // Production appends ?v=<LEGACY_STYLESHEET_VERSION> (e.g. ?v=20260711) to
+  // bust the pre-existing unversioned edge-cached object. Register both the
+  // exact no-query URL and the query-bearing URL so the differential test
+  // intercepts the real production request instead of falling through to
+  // _fixtures.ts's blanket r2-*.test.local 404 (which would make both
+  // navigations identically unstyled → vacuously passing).
   await page.route('https://r2-assets.test.local/styles.css', handler);
+  await page.route('https://r2-assets.test.local/styles.css?*', handler);
   await page.route('**/assets/styles.css', handler); // About.tsx's own loader always uses this relative path
+  await page.route('**/assets/styles.css?*', handler);
 }
 
 // The CSS has relative url() references (fonts/, images/) that, when the
