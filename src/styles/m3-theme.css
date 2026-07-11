@@ -181,6 +181,12 @@ m3e-app-bar .caret {
   box-sizing: border-box;
   width: min(100%, calc(100vw - 16px)) !important;
  }
+@media (min-width: 768px) {
+  [class*="dropdownMenuRoot"] {
+    width: fit-content !important;
+    min-width: 160px;
+  }
+}
 [class*="dropdownMenuRoot"] a {
   color: var(--md-sys-color-on-surface, #1c1b1e) !important;
 }
