@@ -1,4 +1,5 @@
 import { CACHE_CONTROL } from './cache';
+import { tryDecodeURIComponent } from '../utils/dictionary-route';
 /**
  * 筆順 JSON 代理 API
  *
@@ -18,7 +19,7 @@ export async function handleStrokeAPI(
 ): Promise<Response> {
   const routePrefix = '/api/stroke-json/';
   // 取出 codepoint 部分，例如 /api/stroke-json/840b.json → 840b.json
-  const cp = decodeURIComponent(url.pathname.slice(routePrefix.length));
+  const cp = tryDecodeURIComponent(url.pathname.slice(routePrefix.length)) ?? '';
 
   // 僅接受單一路徑段，避免多段路徑造成重複請求或錯誤路由
   if (!cp || cp.includes('/') || !/^[0-9a-f]{4,6}\.json$/i.test(cp)) {

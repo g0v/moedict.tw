@@ -70,8 +70,8 @@ describe('/api/search-index/{lang}.json', () => {
 describe('/api/={category}.json (root list API)', () => {
   it('returns an array of strings', async () => {
     // Note: root /api/=x.json is served via handleDictionaryAPI (not handleListAPI).
-    // The JSON blob may contain packed entry data OR a category list — test both.
+    // 列表路由統一由 parseListPath 處理（.json 副檔名選配）——固定 200。
     const res = await fetchFromServer('/api/=%E8%BF%91%E7%BE%A9%E8%A9%9E.json');
-    expect([200, 404]).toContain(res.status);
+    expect(res.status).toBe(200);
   });
 });

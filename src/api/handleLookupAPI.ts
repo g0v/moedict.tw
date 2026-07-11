@@ -1,3 +1,5 @@
+import { tryDecodeURIComponent } from '../utils/dictionary-route';
+
 type LookupLang = 'a' | 't' | 'h' | 'c';
 
 interface LookupObjectLike {
@@ -67,8 +69,8 @@ export function parsePinyinLookupPath(pathname: string): { lang: LookupLang; typ
 	const match = pathname.match(/^\/api\/lookup\/pinyin\/([athc])\/([^/]+)\/(.+)\.json$/);
 	if (!match) return null;
 	const [, lang, rawType, rawTerm] = match;
-	const type = decodeURIComponent(rawType);
-	const term = normalizeLookupTerm(decodeURIComponent(rawTerm));
+	const type = tryDecodeURIComponent(rawType) ?? '';
+	const term = normalizeLookupTerm(tryDecodeURIComponent(rawTerm) ?? '');
 	if (!type || !term || !LOOKUP_LANG_SET.has(lang as LookupLang)) return null;
 	return {
 		lang: lang as LookupLang,
@@ -80,13 +82,13 @@ export function parsePinyinLookupPath(pathname: string): { lang: LookupLang; typ
 export function parseTrsLookupPath(pathname: string): { term: string } | null {
 	const noApi = pathname.match(/^\/api\/lookup\/trs\/(.+)$/);
 	if (noApi) {
-		const term = normalizeLookupTerm(decodeURIComponent(noApi[1]));
+		const term = normalizeLookupTerm(tryDecodeURIComponent(noApi[1]) ?? '');
 		return term ? { term } : null;
 	}
 
 	const legacy = pathname.match(/^\/lookup\/trs\/(.+)$/);
 	if (legacy) {
-		const term = normalizeLookupTerm(decodeURIComponent(legacy[1]));
+		const term = normalizeLookupTerm(tryDecodeURIComponent(legacy[1]) ?? '');
 		return term ? { term } : null;
 	}
 

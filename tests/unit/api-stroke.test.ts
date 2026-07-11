@@ -27,6 +27,7 @@ describe('handleStrokeAPI validation', () => {
     '/api/stroke-json/123.json',     // 3 hex chars
     '/api/stroke-json/840c',         // no .json
     '/api/stroke-json/nested/840c.json',
+    '/api/stroke-json/%', // 壞 percent-encoding：tryDecode fail-closed → 400，不可 500
   ])('returns 400 for invalid codepoint %s', async (path) => {
     const { request, url } = makeRequest(path);
     const response = await handleStrokeAPI(request, url, corsHeaders);

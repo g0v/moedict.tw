@@ -13,7 +13,7 @@
 import { describe, expect, it } from 'vitest';
 import { handleDictionaryAPI, lookupDictionaryEntry } from '../../src/api/handleDictionaryAPI';
 import { handleLookupAPI } from '../../src/api/handleLookupAPI';
-import { handleListAPI } from '../../src/api/handleListAPI';
+import { handleListAPI, isListPath, parseListPath } from '../../src/api/handleListAPI';
 
 interface R2Stub {
   get(key: string): Promise<{ text(): Promise<string> } | null>;
@@ -563,4 +563,49 @@ describe('handleListAPI', () => {
   // CORS origin mirroring is covered in tests/integration/api-list.test.ts;
   // happy-dom's Request drops the Origin header, so a direct-call unit test
   // can't exercise the `origin || '*'` branch here.
+});
+
+describe('parseListPath / isListPath (shared list-route grammar)', () => {
+  it('accepts both documented forms: bare and .json-suffixed', () => {
+    expect(parseListPath('/api/=成語')).toEqual({ lang: 'a', category: '成語' });
+    expect(parseListPath('/api/=成語.json')).toEqual({ lang: 'a', category: '成語' });
+    expect(parseListPath("/api/'=諺語.json")).toEqual({ lang: 't', category: '諺語' });
+    expect(parseListPath('/api/%3A%3D%E8%AB%BA%E8%AA%9E')).toEqual({ lang: 'h', category: '諺語' });
+  });
+
+  it('fails closed on empty category, non-list paths, and bad encoding', () => {
+    expect(parseListPath('/api/=')).toBeNull();
+    expect(parseListPath('/api/=.json')).toBeNull();
+    expect(parseListPath('/api/萌')).toBeNull();
+    expect(parseListPath('/api/%')).toBeNull();
+  });
+
+  it('isListPath gates list-shaped paths, rejects bad encoding', () => {
+    expect(isListPath('/api/=成語.json')).toBe(true);
+    expect(isListPath("/api/'=")).toBe(true); // 格式錯誤仍屬列表路由 → handler 回 400
+    expect(isListPath('/api/萌.json')).toBe(false);
+    expect(isListPath('/api/%')).toBe(false);
+    // 壞編碼但 raw 前綴仍是列表形 → 進 handleListAPI 拿 400，不漏到其他路由
+    expect(isListPath('/api/=%')).toBe(true);
+    expect(isListPath("/api/'=%")).toBe(true);
+  });
+
+  it('serves the documented .json list form identically to the bare form', async () => {
+    const env = {
+      DICTIONARY: makeR2({
+        'a/=成語.json': JSON.stringify(['守株待兔', '畫蛇添足']),
+      }),
+    };
+    const { request, url } = makeRequest('/api/=%E6%88%90%E8%AA%9E.json');
+    const res = await handleListAPI(request, url, env);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(['守株待兔', '畫蛇添足']);
+  });
+
+  it('400s (not 500s) on a malformed-encoding list request', async () => {
+    const env = { DICTIONARY: makeR2({}) };
+    const { request, url } = makeRequest('/api/%');
+    const res = await handleListAPI(request, url, env);
+    expect(res.status).toBe(400);
+  });
 });

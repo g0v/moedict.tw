@@ -83,3 +83,15 @@ describe('parseTrsLookupPath', () => {
     expect(parseTrsLookupPath('/api/lookup/trs/4321')).toBeNull();
   });
 });
+
+describe('malformed percent-encoding fails closed (no throw)', () => {
+  it('parsePinyinLookupPath returns null for undecodable term or type', () => {
+    expect(parsePinyinLookupPath('/api/lookup/pinyin/t/TL/%.json')).toBeNull();
+    expect(parsePinyinLookupPath('/api/lookup/pinyin/t/%/tsiah.json')).toBeNull();
+  });
+
+  it('parseTrsLookupPath returns null for undecodable terms on both route shapes', () => {
+    expect(parseTrsLookupPath('/api/lookup/trs/%')).toBeNull();
+    expect(parseTrsLookupPath('/lookup/trs/%')).toBeNull();
+  });
+});

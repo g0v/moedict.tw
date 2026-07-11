@@ -1,6 +1,6 @@
 import { CACHE_CONTROL, dictTagsForLang } from './cache';
 import { dedupeHeteronyms } from '../utils/heteronym-dedup';
-import { stripLangPrefix, type DictionaryLang } from '../utils/dictionary-route';
+import { stripLangPrefix, tryDecodeURIComponent, type DictionaryLang } from '../utils/dictionary-route';
 
 type SubRouteType = DictionaryLang | 'raw' | 'uni' | 'pua';
 
@@ -143,7 +143,7 @@ export function parseSubRoute(pathname: string): { routeType: SubRouteType; text
   const [, routeType, encodedText] = match;
   return {
     routeType: routeType as SubRouteType,
-    text: fixMojibake(decodeURIComponent(encodedText)),
+    text: fixMojibake(tryDecodeURIComponent(encodedText) ?? encodedText),
   };
 }
 
@@ -285,7 +285,9 @@ async function lookupRawSource(text: string, env: DictionaryEnv): Promise<Dictio
 export function parseTextFromUrl(pathname: string): { lang: DictionaryLang; cleanText: string } {
   const noSuffix = pathname.replace('/api/', '').replace(/\.json$/, '');
   const noLeadingSlash = noSuffix.replace(/^\//, '');
-  const decoded = decodeURIComponent(noLeadingSlash);
+  // 壞的 percent-encoding 不得往上冒成 500 —— fallback 用未解碼字串
+  // （查無此詞 → 走既有 404-with-terms 路徑）
+  const decoded = tryDecodeURIComponent(noLeadingSlash) ?? noLeadingSlash;
 
   const slashParts = decoded.split('/').filter(Boolean);
   if (slashParts.length >= 2 && isDictionaryLang(slashParts[0])) {

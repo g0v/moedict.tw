@@ -1,6 +1,6 @@
 import { handleDictionaryAPI } from '../src/api/handleDictionaryAPI';
 import { lookupDictionaryEntry } from '../src/api/handleDictionaryAPI';
-import { handleListAPI } from '../src/api/handleListAPI';
+import { handleListAPI, isListPath } from '../src/api/handleListAPI';
 import { handleLookupAPI } from '../src/api/handleLookupAPI';
 import { handleStrokeAPI } from '../src/api/handleStrokeAPI';
 import { handleOEmbedAPI } from '../src/oembed/handle-oembed-api';
@@ -11,7 +11,6 @@ import { CACHE_CONTROL, handleCachePurge } from '../src/api/cache';
 import {
   buildDefinitionDescription,
   parseDictionaryRoute,
-  stripLangPrefix,
   type DictionaryEntryLike,
 } from '../src/utils/dictionary-route';
 
@@ -547,10 +546,9 @@ export async function dispatch(
         return handleStrokeAPI(request, url, corsHeaders);
       }
 
-      // 分類詞彙列表 API（=成語、'=諺語、:=諺語、~=同實異名 等）——
-      // 語言前綴規則委派 stripLangPrefix，「去掉語言前綴後以 = 開頭」即列表路由
-      const listSegment = decodeURIComponent(url.pathname.replace('/api/', ''));
-      if (stripLangPrefix(listSegment).rest.startsWith('=')) {
+      // 分類詞彙列表 API（=成語、'=諺語、:=諺語、~=同實異名，選配 .json）——
+      // 判斷與解析統一在 handleListAPI 的 isListPath/parseListPath（安全 decode）
+      if (isListPath(url.pathname)) {
         console.log('🔍 [Index] 處理列表 API 請求:', url.pathname);
         return handleListAPI(request, url, env);
       }

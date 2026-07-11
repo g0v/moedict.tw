@@ -16,6 +16,7 @@ import {
   parseDictionaryRoute,
   stripLangPrefix,
   stripTags,
+  tryDecodeURIComponent,
 } from '../../src/utils/dictionary-route';
 
 describe('stripTags', () => {
@@ -391,5 +392,17 @@ describe('stripLangPrefix', () => {
     expect(stripLangPrefix('!食', { '!': 't' })).toEqual({ lang: 't', rest: '食' });
     expect(stripLangPrefix("'食", { '!': 't' })).toEqual({ lang: 't', rest: '食' });
     expect(stripLangPrefix('!食')).toEqual({ lang: 'a', rest: '!食' });
+  });
+});
+
+describe('tryDecodeURIComponent', () => {
+  it('decodes valid percent-encoding', () => {
+    expect(tryDecodeURIComponent('%E8%90%8C')).toBe('萌');
+    expect(tryDecodeURIComponent('plain')).toBe('plain');
+  });
+
+  it('returns null instead of throwing on malformed encoding', () => {
+    expect(tryDecodeURIComponent('%')).toBeNull();
+    expect(tryDecodeURIComponent('%E8%9')).toBeNull();
   });
 });

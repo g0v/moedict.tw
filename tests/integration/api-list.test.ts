@@ -21,13 +21,12 @@ describe('/api/=<category>.json — 華語 list route', () => {
   });
 
   it('accepts paths with a trailing .json (worker routes them to handleListAPI too)', async () => {
-    // Note: when a .json suffix is present, handleListAPI currently looks up
-    // `a/=近義詞.json.json` in R2, so this should surface as 404. The route
-    // still belongs to handleListAPI (not the generic dictionary fallback),
-    // which is what we're pinning here.
+    // README 文件化的 .json 形式：parseListPath 會剝掉選配副檔名，
+    // 與裸形式回同一份資料（過去這裡會變成 a/=近義詞.json.json → 404）。
     const res = await fetchFromServer('/api/=%E8%BF%91%E7%BE%A9%E8%A9%9E.json');
-    expect([200, 404]).toContain(res.status);
+    expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toMatch(/json/);
+    expect(await res.json()).toEqual(['一致', '相仿', '雷同']);
   });
 
   it('404s for an unknown category', async () => {
@@ -99,5 +98,17 @@ describe('handleListAPI — CORS', () => {
     });
     expect(res.status).toBe(404);
     expect(res.headers.get('access-control-allow-origin')).toBe('*');
+  });
+});
+
+describe('malformed percent-encoding (issue class: bare decodeURIComponent → 500)', () => {
+  it('/api/=% is list-shaped garbage → 400 from handleListAPI, not 500', async () => {
+    const res = await fetchFromServer('/api/=%');
+    expect(res.status).toBe(400);
+  });
+
+  it('/api/% falls through without throwing (never 500)', async () => {
+    const res = await fetchFromServer('/api/%');
+    expect(res.status).not.toBe(500);
   });
 });

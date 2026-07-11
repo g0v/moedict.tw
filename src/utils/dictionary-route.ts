@@ -28,6 +28,20 @@ export function stripTags(input: string): string {
 }
 
 /**
+ * decodeURIComponent 的不丟例外版本：壞的 percent-encoding（如路徑含裸 `%`）
+ * 回傳 null，呼叫端自行決定 fallback（fail-closed 或改用未解碼原字串）。
+ * 所有處理 request 路徑的 decode 一律用這個，禁止裸呼 decodeURIComponent
+ * ——例外往上冒就是 500。
+ */
+export function tryDecodeURIComponent(input: string): string | null {
+  try {
+    return decodeURIComponent(input);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 語言前綴 → 語言代碼的唯一對照表：`'`=t(臺灣台語)、`:`=h(臺灣客語)、
  * `~`=c(兩岸)、無前綴=a(華語)。API 端另接受 legacy `!` 作為 t 的別名
  * （舊 hash-bang 時代），頁面路由不接受。所有需要「去掉語言前綴」的
@@ -74,12 +88,8 @@ export type ClassifiedRoute =
 
 export function classifyRoute(pathname: string): ClassifiedRoute {
   const cleanPath = String(pathname || '').split('?')[0].replace(/^\/+/, '').replace(/\/+$/, '');
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(cleanPath);
-  } catch {
-    return { kind: 'invalid-encoding', raw: cleanPath };
-  }
+  let decoded = tryDecodeURIComponent(cleanPath);
+  if (decoded === null) return { kind: 'invalid-encoding', raw: cleanPath };
   if (!decoded) return { kind: 'default' };
 
   let idx: number | undefined;

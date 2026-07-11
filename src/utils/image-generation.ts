@@ -1,6 +1,6 @@
 import { Resvg, type ResvgRenderOptions } from '@cf-wasm/resvg';
 import { CACHE_CONTROL } from '../api/cache';
-import { stripLangPrefix, type DictionaryLang } from './dictionary-route';
+import { stripLangPrefix, tryDecodeURIComponent, type DictionaryLang } from './dictionary-route';
 
 interface FontSvgObject {
 	size: number;
@@ -88,8 +88,8 @@ export function parseTextFromUrl(pathname: string): { text: string; lang: Dictio
 		console.log('🔍 [ParseTextFromUrl] 移除 _json 前綴後:', text);
 	}
 
-	// URL 解碼
-	text = decodeURIComponent(text);
+	// URL 解碼（壞編碼 fallback 未解碼原字串，不冒 500）
+	text = tryDecodeURIComponent(text) ?? text;
 	console.log('🔍 [ParseTextFromUrl] URL 解碼後:', text);
 
 	// 處理特殊重定向

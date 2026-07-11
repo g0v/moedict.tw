@@ -193,3 +193,16 @@ describe('addBopomofo2', () => {
     expect(result[0].definitions).toEqual([{ def: '壯' }]);
   });
 });
+
+describe('malformed percent-encoding fails safe (no throw)', () => {
+  it('parseTextFromUrl falls back to the undecoded string', () => {
+    expect(parseTextFromUrl('/api/%')).toEqual({ lang: 'a', cleanText: '%' });
+    expect(() => parseTextFromUrl('/api/%E8%9')).not.toThrow();
+  });
+
+  it('parseSubRoute keeps the raw text when decoding fails', () => {
+    const sub = parseSubRoute('/a/%.json');
+    expect(sub).not.toBeNull();
+    expect(sub!.text).toBe('%');
+  });
+});
