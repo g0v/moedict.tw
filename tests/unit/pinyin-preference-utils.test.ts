@@ -200,8 +200,12 @@ describe('trsToBpmf (extended)', () => {
       // Single-syllable phrases keep their citation tone (no sandhi target).
       expect(trsToBpmf('t', 'hang.')).toBe('\u310F\u3124 ');
       expect(trsToBpmf('t', 'hang,')).toBe('\u310F\u3124 ');
-      // Multi-syllable: tone 1 -> tone 7 sandhi on the non-final syllable, the
-      // final syllable retains its citation tone.
+      // Multi-syllable: citation tones by default (no sandhi without opt-in).
+      expect(trsToBpmf('t', 'hang-hang')).toBe('\u310F\u3124 \u310F\u3124 ');
+      expect(trsToBpmf('t', 'hang hang')).toBe('\u310F\u3124 \u310F\u3124 ');
+      // With sandhi opt-in: tone 1 -> tone 7 on the non-final syllable,
+      // the final syllable retains its citation tone.
+      window.localStorage.setItem('bopomofo_sandhi_t', 'sandhi');
       expect(trsToBpmf('t', 'hang-hang')).toBe('\u310F\u3124\u02EB\u310F\u3124 ');
       expect(trsToBpmf('t', 'hang hang')).toBe('\u310F\u3124\u02EB\u310F\u3124 ');
     });
@@ -884,34 +888,46 @@ describe('applyTaigiSandhi', () => {
 });
 
 describe('trsToBpmf — sandhi integration', () => {
-  it('applies sandhi to multi-syllable Taigi by default', () => {
+  // Sandhi is opt-in (bopomofo_sandhi_t='sandhi'). The no-key default is
+  // citation tone, per MOE 臺羅標注說明: 「本辭典的聲調皆標注本調，不標變調」.
+
+  it('defaults to citation tones when no preference is set', () => {
+    // No localStorage key — citation tones preserved, matching MOE spec.
+    expect(trsToBpmf('t', 'huat-ínn')).toBe('ㄏㄨㄚㆵㆪˋ');
+    expect(trsToBpmf('t', 'hang-hang')).toBe('ㄏㄤ ㄏㄤ ');
+  });
+
+  it('applies sandhi when bopomofo_sandhi_t=sandhi is explicitly set', () => {
+    window.localStorage.setItem('bopomofo_sandhi_t', 'sandhi');
     // 'huat-ínn' -> sandhi'd 'hua̍t-ínn' -> bopomofo includes U+0358 on the
     // checked tone glyph for the first syllable; second syllable keeps its acute.
     expect(trsToBpmf('t', 'huat-ínn')).toBe('ㄏㄨㄚㆵ͘ㆪˋ');
   });
 
-  it('maps 免除 with sandhi on the first syllable', () => {
+  it('maps 免除 with sandhi on the first syllable when opted in', () => {
+    window.localStorage.setItem('bopomofo_sandhi_t', 'sandhi');
     expect(trsToBpmf('t', 'bián-tû')).toBe('ㆠㄧㄢ ㄉㄨˊ');
   });
 
-  it('does not apply sandhi to single-syllable input (last in phrase)', () => {
+  it('does not apply sandhi to single-syllable input even when opted in', () => {
+    window.localStorage.setItem('bopomofo_sandhi_t', 'sandhi');
     expect(trsToBpmf('t', 'huat')).toBe('ㄏㄨㄚㆵ');
   });
 
-  it('keeps citation tones across punctuation boundaries', () => {
+  it('keeps citation tones across punctuation boundaries even when opted in', () => {
+    window.localStorage.setItem('bopomofo_sandhi_t', 'sandhi');
     // Each side of a comma is its own phrase; both single-syllable -> no sandhi.
     expect(trsToBpmf('t', 'kong, kong')).toBe('ㄍㆲ ㄍㆲ ');
   });
 
-  it('respects bopomofo_sandhi_t=off opt-out (citation tones preserved)', () => {
-    window.localStorage.setItem('bopomofo_sandhi_t', 'off');
-    // Without sandhi, both syllables keep their citation tone marks.
-    expect(trsToBpmf('t', 'huat-ínn')).toBe('ㄏㄨㄚㆵㆪˋ');
+  it('legacy value "on" no longer triggers sandhi (only "sandhi" does)', () => {
+    window.localStorage.setItem('bopomofo_sandhi_t', 'on');
     expect(trsToBpmf('t', 'hang-hang')).toBe('ㄏㄤ ㄏㄤ ');
   });
 
-  it('opt-out with bopomofo_sandhi_t=on still applies sandhi (default branch)', () => {
-    window.localStorage.setItem('bopomofo_sandhi_t', 'on');
-    expect(trsToBpmf('t', 'hang-hang')).toBe('ㄏㄤ˫ㄏㄤ ');
+  it('explicit bopomofo_sandhi_t=off preserves citation tones', () => {
+    window.localStorage.setItem('bopomofo_sandhi_t', 'off');
+    expect(trsToBpmf('t', 'huat-ínn')).toBe('ㄏㄨㄚㆵㆪˋ');
+    expect(trsToBpmf('t', 'hang-hang')).toBe('ㄏㄤ ㄏㄤ ');
   });
 });

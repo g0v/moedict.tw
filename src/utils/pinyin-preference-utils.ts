@@ -442,8 +442,11 @@ export function trsToBpmf(lang: Lang, trs: string): string {
   if (lang === 'a' || lang === 'c') return trs;
 
   const input = String(trs || '');
+  // MOE 臺羅標注說明: 「本辭典的聲調皆標注本調，不標變調」— citation tone
+  // is canonical because tone-group segmentation is non-unique. Sandhi here
+  // is an approximate heuristic, not ground truth; it is opt-in only.
   const sandhiPref = readLocalStorage('bopomofo_sandhi_t');
-  const source = sandhiPref === 'off' ? input : applyTaigiSandhi(input);
+  const source = sandhiPref === 'sandhi' ? applyTaigiSandhi(input) : input;
 
   return source
     .replace(/(?:[A-Za-z]|[\u0300-\u030D])+/gu, (chunk) => {
