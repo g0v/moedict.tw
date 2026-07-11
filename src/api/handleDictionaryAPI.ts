@@ -39,6 +39,9 @@ interface XRefData {
 interface ConvertedDictionaryData {
   title?: unknown;
   heteronyms?: Array<Record<string, unknown>>;
+  radical?: unknown;
+  stroke_count?: unknown;
+  non_radical_stroke_count?: unknown;
 }
 
 const KEY_MAP: Record<string, string> = {
@@ -126,7 +129,11 @@ export async function handleDictionaryAPI(
 }
 
 export function parseSubRoute(pathname: string): { routeType: SubRouteType; text: string } | null {
-  const match = pathname.match(/^\/(a|t|h|c|raw|uni|pua)\/(.+?)\.json$/);
+  // .json is optional: README.md's documented examples for these 7 legacy
+  // endpoints (https://www.moedict.tw/raw/萌) omit it, while real external
+  // consumers found in the wild (blog posts, tutorials) use
+  // https://www.moedict.tw/a/萌.json. Both forms return the same payload.
+  const match = pathname.match(/^\/(a|t|h|c|raw|uni|pua)\/(.+?)(?:\.json)?$/);
   if (!match) return null;
   const [, routeType, encodedText] = match;
   return {
@@ -685,13 +692,22 @@ export function addBopomofo2(heteronyms: Array<Record<string, unknown>>): Array<
   });
 }
 
-export function stripAudioIdAndShape(data: unknown): { title?: unknown; heteronyms: Array<Record<string, unknown>> } {
+/** Response shape for the /raw, /uni, /pua legacy endpoints (README.md §API). */
+export interface RawFormatResponse {
+  title?: unknown;
+  heteronyms: Array<Record<string, unknown>>;
+  radical?: unknown;
+  stroke_count?: unknown;
+  non_radical_stroke_count?: unknown;
+}
+
+export function stripAudioIdAndShape(data: unknown): RawFormatResponse {
   if (!data || typeof data !== 'object') {
     return { heteronyms: [] };
   }
   const converted = data as ConvertedDictionaryData;
   const heteronyms = Array.isArray(converted.heteronyms) ? converted.heteronyms : [];
-  return {
+  const result: RawFormatResponse = {
     title: converted.title,
     heteronyms: heteronyms.map((heteronym) => {
       const withoutAudio = { ...heteronym };
@@ -699,9 +715,15 @@ export function stripAudioIdAndShape(data: unknown): { title?: unknown; heterony
       return withoutAudio;
     }),
   };
+  if (converted.radical !== undefined) result.radical = converted.radical;
+  if (converted.stroke_count !== undefined) result.stroke_count = converted.stroke_count;
+  if (converted.non_radical_stroke_count !== undefined) {
+    result.non_radical_stroke_count = converted.non_radical_stroke_count;
+  }
+  return result;
 }
 
-function convertToRawFormat(data: DictionaryEntry): { title?: unknown; heteronyms: Array<Record<string, unknown>> } {
+function convertToRawFormat(data: DictionaryEntry): RawFormatResponse {
   const convertedData = convertDictionaryStructure(data);
   if (Array.isArray(convertedData.heteronyms)) {
     convertedData.heteronyms = addBopomofo2(convertedData.heteronyms);
@@ -711,7 +733,7 @@ function convertToRawFormat(data: DictionaryEntry): { title?: unknown; heteronym
   return stripAudioIdAndShape(withRawCharCode);
 }
 
-function convertToUniFormat(data: DictionaryEntry): { title?: unknown; heteronyms: Array<Record<string, unknown>> } {
+function convertToUniFormat(data: DictionaryEntry): RawFormatResponse {
   const convertedData = convertDictionaryStructure(data);
   if (Array.isArray(convertedData.heteronyms)) {
     convertedData.heteronyms = addBopomofo2(convertedData.heteronyms);
@@ -721,7 +743,7 @@ function convertToUniFormat(data: DictionaryEntry): { title?: unknown; heteronym
   return stripAudioIdAndShape(withIds);
 }
 
-function convertToPuaFormat(data: DictionaryEntry): { title?: unknown; heteronyms: Array<Record<string, unknown>> } {
+function convertToPuaFormat(data: DictionaryEntry): RawFormatResponse {
   const convertedData = convertDictionaryStructure(data);
   if (Array.isArray(convertedData.heteronyms)) {
     convertedData.heteronyms = addBopomofo2(convertedData.heteronyms);

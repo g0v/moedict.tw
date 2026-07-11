@@ -63,6 +63,28 @@ describe('parseDictionaryRoute', () => {
     expect(parseDictionaryRoute('/萌')).toEqual({ lang: 'a', text: '萌' });
   });
 
+  it('parses a trailing /<digits> as the legacy definition-index permalink (g0v/moedict.tw#131)', () => {
+    expect(parseDictionaryRoute('/萌/2')).toEqual({ lang: 'a', text: '萌', idx: 2 });
+    expect(parseDictionaryRoute("/'食/1")).toEqual({ lang: 't', text: '食', idx: 1 });
+    expect(parseDictionaryRoute('/:字/10')).toEqual({ lang: 'h', text: '字', idx: 10 });
+    expect(parseDictionaryRoute('/~萌/3')).toEqual({ lang: 'c', text: '萌', idx: 3 });
+  });
+
+  it('idx is undefined (not present) when there is no trailing /<digits>', () => {
+    const result = parseDictionaryRoute('/萌');
+    expect(result?.idx).toBeUndefined();
+  });
+
+  it('still rejects non-word routes even with a trailing /<digits> — idx is ignored, not a bypass', () => {
+    expect(parseDictionaryRoute('/about/2')).toBeNull();
+    expect(parseDictionaryRoute('/@木/2')).toBeNull();
+    expect(parseDictionaryRoute('/=成語/2')).toBeNull();
+  });
+
+  it('a word that is itself all-digits is not misparsed as text+idx (no separating slash)', () => {
+    expect(parseDictionaryRoute('/123')).toEqual({ lang: 'a', text: '123' });
+  });
+
   it('decode-fails closed to null instead of throwing on malformed % escapes', () => {
     // A lone `%` (or any invalid percent-escape) makes decodeURIComponent
     // throw URIError. This path is reachable with fully attacker-supplied

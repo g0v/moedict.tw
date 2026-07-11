@@ -43,13 +43,20 @@ export function MiddlePoint() {
   }
 
   let segment: string;
+  let idx: number | undefined;
   try {
     const decoded = decodeURIComponent(trimmed);
     const parts = decoded.split('/');
-    if (parts.length !== 1 || !parts[0]) {
+    // 允許 /word/N 舊版「指定義項」永久連結（1-based，跨該詞所有音項合併計數）；
+    // N 僅在真正落到字典頁分支時才會被使用，部首/分類/記錄簿分支會忽略它。
+    if (parts.length === 2 && parts[0] && /^\d+$/.test(parts[1])) {
+      segment = parts[0];
+      idx = Number(parts[1]);
+    } else if (parts.length === 1 && parts[0]) {
+      segment = parts[0];
+    } else {
       return <Navigate to='/' replace />;
     }
-    segment = parts[0];
   } catch {
     return <Navigate to='/' replace />;
   }
@@ -84,18 +91,18 @@ export function MiddlePoint() {
 
   // 字典頁（依照開頭字元決定語言）
   if (segment.startsWith("'")) {
-    return <DictionaryT word={segment.slice(1)} />;
+    return <DictionaryT word={segment.slice(1)} idx={idx} />;
   }
 
   if (segment.startsWith(':')) {
-    return <DictionaryH word={segment.slice(1)} />;
+    return <DictionaryH word={segment.slice(1)} idx={idx} />;
   }
 
   if (segment.startsWith('~')) {
-    return <DictionaryC word={segment.slice(1)} />;
+    return <DictionaryC word={segment.slice(1)} idx={idx} />;
   }
 
   // 預設：華語字典
-  return <DictionaryA word={segment} />;
+  return <DictionaryA word={segment} idx={idx} />;
 }
 

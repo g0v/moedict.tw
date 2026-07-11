@@ -286,6 +286,14 @@ export async function dispatch(
       return handleEmbedPage(request, url, env);
     }
 
+    // 舊版 7 端點相容（/a /t /h /c /raw /uni /pua，README.md「目前 API 已有
+    // 7 個端點」文件範例網址不帶 .json；已支援的 .json 版本見下方 handleDictionaryAPI
+    // 的 parseSubRoute）。只攔截真的匹配這 7 個字首的兩段式路徑，避免影響單段
+    // 詞條路由（例如查詢字面詞彙「a」本身仍走 /:text 一般流程）。
+    if (/^\/(?:a|t|h|c|raw|uni|pua)\/[^/]+$/.test(url.pathname) && !url.pathname.endsWith('.json')) {
+      return handleDictionaryAPI(request, url, env);
+    }
+
     // lookup API（台語羅馬拼音索引 / 舊站 trs 相容）
     const lookupResponse = await handleLookupAPI(request, url, env);
     if (lookupResponse) {

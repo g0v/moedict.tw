@@ -66,6 +66,9 @@ interface DictionaryState {
 interface DictionaryPageProps {
   word?: string;
   lang: DictionaryLang;
+  /** 1-based index into the flat (ungrouped, cross-heteronym) definitions
+   *  list — legacy /word/N definition-index permalink (g0v/moedict.tw#131). */
+  idx?: number;
 }
 
 // 內容中「可查字」的逐字連結。必須與 InlineStyles.tsx 的長按選字 CSS 選擇器保持一致。
@@ -363,7 +366,7 @@ function RadicalGlyph({ char, lang }: { char: string; lang: DictionaryLang }) {
   );
 }
 
-export function DictionaryPage({ word, lang }: DictionaryPageProps) {
+export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPageProps) {
   const navigate = useNavigate();
   const touchAnchorStartAtRef = useRef<number | null>(null);
   const suppressAnchorClickUntilRef = useRef(0);
@@ -379,6 +382,29 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
   const [isStarred, setIsStarred] = useState(false);
   const [strokesVisible, setStrokesVisible] = useState(false);
   const storageWord = useMemo(() => untag((state.entry?.title || queryWord || '').trim()), [state.entry?.title, queryWord]);
+
+  // 舊版 /word/N「指定義項」永久連結：1-based，跨該詞所有音項合併計數，
+  // 不受 UI 依詞性分組顯示順序影響 — 對照的是同一份 definition 物件參照。
+  const heteronyms = useMemo(() => {
+    const raw = state.entry?.heteronyms;
+    return dedupeHeteronyms(Array.isArray(raw) ? raw : []);
+  }, [state.entry]);
+  const definitionIndexMap = useMemo(() => {
+    const map = new Map<Definition, number>();
+    let counter = 0;
+    for (const heteronym of heteronyms) {
+      for (const definition of heteronym.definitions ?? []) {
+        counter += 1;
+        map.set(definition, counter);
+      }
+    }
+    return map;
+  }, [heteronyms]);
+  const highlightedDefRef = useRef<HTMLLIElement | null>(null);
+  useEffect(() => {
+    if (targetDefIdx == null) return;
+    highlightedDefRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [targetDefIdx, state.entry]);
 
   // 設定 body 語言 class（同原 $('body').addClass("lang-#LANG")）
   useEffect(() => {
@@ -560,7 +586,6 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
 
   const title = entry.title || queryWord;
   const isSingleCharTitle = isSingleCharTerm(title);
-  const heteronyms = dedupeHeteronyms(Array.isArray(entry.heteronyms) ? entry.heteronyms : []);
   const translation = entry.translation ?? {};
   const english = translation.English ?? entry.English;
   const deutsch = translation.Deutsch ?? entry.Deutsch;
@@ -796,8 +821,14 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
                       const parallelIdx = def.def ? def.def.indexOf('∥') : -1;
                       const mainDef = parallelIdx >= 0 ? def.def!.slice(0, parallelIdx) : def.def;
                       const afterParallel = parallelIdx >= 0 ? def.def!.slice(parallelIdx) : null;
+                      const flatDefIdx = definitionIndexMap.get(def);
+                      const isTargetDefinition = targetDefIdx != null && flatDefIdx === targetDefIdx;
                       return (
-                      <li key={`${type}-${defIdx}`}>
+                      <li
+                        key={`${type}-${defIdx}`}
+                        ref={isTargetDefinition ? highlightedDefRef : undefined}
+                        className={isTargetDefinition ? 'idx-permalink-target' : undefined}
+                      >
                         {mainDef ? (
                           <p className="definition">
                             <span className="def" dangerouslySetInnerHTML={{ __html: mainDef }} />

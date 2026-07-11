@@ -710,3 +710,60 @@ describe('dispatch — default export fetch wrapper (line 544)', () => {
     expect(body.assetBaseUrl).toBe('https://r2-assets.test.local');
   });
 });
+
+describe('dispatch — bare-URL legacy sub-routes (/a /t /h /c /raw /uni /pua, no .json)', () => {
+  // 萌 → charCode 0x840C → 33804 % 1024 (lang a) or % 128 (t/h/c) → bucket 12
+  // either way (33804 % 128 = 12 too) → p{a,t,h,c}ck/12.txt, key escape('萌') = '%u840C'.
+  const packEntry = {
+    '%u840C': { t: '萌', c: 12, r: '艸', h: [{ b: 'ㄇㄥˊ', d: [{ f: '草木初生的芽。' }] }] },
+  };
+  const dictionaryWithAllLangBuckets = makeBucket({
+    'pack/12.txt': { body: JSON.stringify(packEntry) },
+    'ptck/12.txt': { body: JSON.stringify(packEntry) },
+    'phck/12.txt': { body: JSON.stringify(packEntry) },
+    'pcck/12.txt': { body: JSON.stringify(packEntry) },
+  });
+
+  it('routes /a/<word> (no .json) to handleDictionaryAPI\'s compact pack format, matching README.md\'s documented example', async () => {
+    const env = makeEnv({ DICTIONARY: dictionaryWithAllLangBuckets });
+    const res = await dispatch(req('/a/%E8%90%8C'), env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('application/json');
+    // /a /t /h /c serve the compact packed shape (short keys, t not title) —
+    // NOT the same as /raw /uni /pua, which decode to long keys.
+    const body = await res.json() as { t?: unknown };
+    expect(body.t).toBe('萌');
+  });
+
+  it.each(['t', 'h', 'c'])('routes /%s/<word> (no .json) to the compact pack format too', async (prefix) => {
+    const env = makeEnv({ DICTIONARY: dictionaryWithAllLangBuckets });
+    const res = await dispatch(req(`/${prefix}/%E8%90%8C`), env);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { t?: unknown };
+    expect(body.t).toBe('萌');
+  });
+
+  it.each(['raw', 'uni', 'pua'])('routes /%s/<word> (no .json) to the decoded format', async (prefix) => {
+    const env = makeEnv({ DICTIONARY: dictionaryWithAllLangBuckets });
+    const res = await dispatch(req(`/${prefix}/%E8%90%8C`), env);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { title?: unknown };
+    expect(body.title).toBe('萌');
+  });
+
+  it('does not intercept a bare single-segment lookup of the literal word "a" — falls through to the normal SPA shell', async () => {
+    // /a alone (one segment) must stay on the normal /:text dictionary/SPA
+    // route, not be swallowed by the two-segment /a/<word> sub-route check.
+    const fetcher = shellFetcher();
+    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv['SITE_ASSETS'] });
+    const res = await dispatch(req('/a'), env);
+    expect(fetcher.fetch).toHaveBeenCalled();
+    expect(res.headers.get('content-type')).not.toContain('application/json');
+  });
+
+  it('still requires .json for the top-level /:text.json route (unaffected by the bare-URL addition)', async () => {
+    const env = makeEnv({ DICTIONARY: dictionaryWithAllLangBuckets });
+    const res = await dispatch(req('/%E8%90%8C.json'), env);
+    expect(res.status).toBe(200);
+  });
+});

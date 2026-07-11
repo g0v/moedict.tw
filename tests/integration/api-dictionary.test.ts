@@ -128,6 +128,30 @@ describe('/raw, /uni, /pua sub-routes', () => {
       expect((body.heteronyms?.[0] as Record<string, unknown>).bopomofo2).toBeDefined();
     }
   });
+
+  it('/raw/萌.json includes radical/stroke_count/non_radical_stroke_count (README.md documented shape)', async () => {
+    const { status, body } = await fetchJson<DictEntry & { non_radical_stroke_count?: number }>('/raw/%E8%90%8C.json');
+    expect(status).toBe(200);
+    expect(body.radical).toBeDefined();
+    expect(body.stroke_count).toBeDefined();
+    expect(body.non_radical_stroke_count).toBeDefined();
+  });
+});
+
+describe('bare-URL forms of the 7 legacy endpoints (no .json, README.md example shape)', () => {
+  it.each(['a', 'raw', 'uni', 'pua'])('/%s/萌 (no .json) matches the .json form', async (prefix) => {
+    const withoutJson = await fetchJson<DictEntry>(`/${prefix}/%E8%90%8C`);
+    const withJson = await fetchJson<DictEntry>(`/${prefix}/%E8%90%8C.json`);
+    expect(withoutJson.status).toBe(200);
+    expect(withoutJson.body).toEqual(withJson.body);
+  });
+
+  it('/t/食 and /c/上訴 (no .json) also resolve', async () => {
+    const t = await fetchJson<Record<string, unknown>>('/t/%E9%A3%9F');
+    expect(t.status).toBe(200);
+    const c = await fetchJson<Record<string, unknown>>('/c/%E4%B8%8A%E8%A8%B4');
+    expect(c.status).toBe(200);
+  });
 });
 
 describe('/a/@radical.json (radical index pages)', () => {

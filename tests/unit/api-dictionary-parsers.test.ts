@@ -26,11 +26,25 @@ describe('parseSubRoute', () => {
     expect(parseSubRoute('/a/%E8%90%8C.json')).toEqual({ routeType: 'a', text: '萌' });
   });
 
+  it.each([
+    ['/a/萌', 'a', '萌'],
+    ['/t/食', 't', '食'],
+    ['/h/字', 'h', '字'],
+    ['/c/上訴', 'c', '上訴'],
+    ['/raw/萌', 'raw', '萌'],
+    ['/uni/萌', 'uni', '萌'],
+    ['/pua/萌', 'pua', '萌'],
+  ])('also parses the README-documented bare form (no .json): %s', (path, routeType, text) => {
+    // README.md's own example URLs (e.g. https://www.moedict.tw/raw/萌) omit
+    // .json; both forms must resolve to the same routeType/text.
+    expect(parseSubRoute(path)).toEqual({ routeType, text });
+  });
+
   it('returns null for non-matching paths', () => {
     expect(parseSubRoute('/萌.json')).toBeNull();
     expect(parseSubRoute('/api/萌.json')).toBeNull();
-    expect(parseSubRoute('/a/萌')).toBeNull(); // missing .json
     expect(parseSubRoute('/x/萌.json')).toBeNull(); // unsupported lang
+    expect(parseSubRoute('/x/萌')).toBeNull(); // unsupported lang, bare form
   });
 });
 

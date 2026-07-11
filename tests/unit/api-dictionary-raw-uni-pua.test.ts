@@ -91,16 +91,19 @@ describe('/raw/{word}.json → convertToRawFormat', () => {
   it('expands compact keys, adds bopomofo2, strips audio_id, and encodes PUA as {[hex]}', async () => {
     const env = makeEnv({
       [BUCKET_PATH]: makeBucketJson(
-        makePackEntry([
-          {
-            b: 'ㄇㄥˊ',
-            '=': 'audio-should-be-stripped',
-            d: [
-              { f: `前${PUA_F9264}後` },
-              { f: `周${PUA_F9064}圍` },
-            ],
-          },
-        ]),
+        makePackEntry(
+          [
+            {
+              b: 'ㄇㄥˊ',
+              '=': 'audio-should-be-stripped',
+              d: [
+                { f: `前${PUA_F9264}後` },
+                { f: `周${PUA_F9064}圍` },
+              ],
+            },
+          ],
+          { n: 8 },
+        ),
       ),
     });
     const { request, url } = makeRequest('/raw/%E8%90%8C.json');
@@ -109,7 +112,16 @@ describe('/raw/{word}.json → convertToRawFormat', () => {
     const body = await res.json() as {
       title?: unknown;
       heteronyms: Array<Record<string, unknown>>;
+      radical?: unknown;
+      stroke_count?: unknown;
+      non_radical_stroke_count?: unknown;
     };
+    // README.md's documented /raw/萌 example includes radical/stroke_count/
+    // non_radical_stroke_count alongside title/heteronyms — makePackEntry's
+    // default `c: 12, r: '艸'` fixture must survive stripAudioIdAndShape.
+    expect(body.radical).toBe('艸');
+    expect(body.stroke_count).toBe(12);
+    expect(body.non_radical_stroke_count).toBe(8);
     expect(body.title).toBe('萌');
     expect(Array.isArray(body.heteronyms)).toBe(true);
 
@@ -135,6 +147,17 @@ describe('/raw/{word}.json → convertToRawFormat', () => {
     expect(res.status).toBe(404);
     const body = await res.json() as { error: string; terms?: string[] };
     expect(body.error).toBe('Not Found');
+  });
+
+  it('also serves the README-documented bare URL (no .json)', async () => {
+    const env = makeEnv({
+      [BUCKET_PATH]: makeBucketJson(makePackEntry([{ b: 'ㄇㄥˊ', d: [{ f: '草木初生的芽。' }] }])),
+    });
+    const { request, url } = makeRequest('/raw/%E8%90%8C');
+    const res = await handleDictionaryAPI(request, url, env);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { title?: unknown };
+    expect(body.title).toBe('萌');
   });
 });
 

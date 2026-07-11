@@ -28,14 +28,24 @@ export function stripTags(input: string): string {
 }
 
 /**
- * Parses a pathname into { lang, text }, or null when it isn't a single
- * dictionary-entry route (about page, radical table, category/starred
- * lists). `pathname` is expected percent-encoded (e.g. `url.pathname`);
- * malformed `%` escapes decode-fail closed to null rather than throwing —
- * this is reachable with arbitrary caller-supplied input via the oEmbed
- * `url=` query parameter, not just internal navigation.
+ * Parses a pathname into { lang, text, idx? }, or null when it isn't a
+ * single dictionary-entry route (about page, radical table, category/
+ * starred lists). `pathname` is expected percent-encoded (e.g.
+ * `url.pathname`); malformed `%` escapes decode-fail closed to null rather
+ * than throwing — this is reachable with arbitrary caller-supplied input
+ * via the oEmbed `url=` query parameter, not just internal navigation.
+ *
+ * A trailing `/<digits>` segment (`/萌/2`) is the legacy definition-index
+ * permalink (g0v/moedict-webkit's `/:text/:idx` — deep-links to the idx-th
+ * definition across all of a word's heteronyms, 1-based). It's stripped
+ * before the lang/text checks below so every existing route shape keeps
+ * working unchanged; `idx` is only meaningful to word-entry consumers
+ * (DictionaryPage) and is silently ignored by anything else that doesn't
+ * ask for it (radical/list/starred routes, oEmbed, OG head text).
  */
-export function parseDictionaryRoute(pathname: string): { lang: DictionaryLang; text: string } | null {
+export function parseDictionaryRoute(
+  pathname: string,
+): { lang: DictionaryLang; text: string; idx?: number } | null {
   let raw: string;
   try {
     raw = decodeURIComponent(String(pathname || '').replace(/^\/+/, '').replace(/\/+$/, ''));
@@ -43,15 +53,23 @@ export function parseDictionaryRoute(pathname: string): { lang: DictionaryLang; 
     return null;
   }
   if (!raw) return null;
+
+  let idx: number | undefined;
+  const idxMatch = raw.match(/^(.+)\/(\d+)$/);
+  if (idxMatch) {
+    raw = idxMatch[1];
+    idx = Number(idxMatch[2]);
+  }
+
   if (raw === 'about' || raw === 'about.html') return null;
   if (raw.startsWith('@') || raw.startsWith('~@')) return null;
   if (raw.startsWith('=')) return null;
   if (raw.startsWith("'=*") || raw.startsWith(':=*') || raw.startsWith('~=*') || raw.startsWith('=*')) return null;
   if (raw.startsWith("'=") || raw.startsWith(':=') || raw.startsWith('~=')) return null;
-  if (raw.startsWith("'")) return { lang: 't', text: raw.slice(1) };
-  if (raw.startsWith(':')) return { lang: 'h', text: raw.slice(1) };
-  if (raw.startsWith('~')) return { lang: 'c', text: raw.slice(1) };
-  return { lang: 'a', text: raw };
+  if (raw.startsWith("'")) return { lang: 't', text: raw.slice(1), idx };
+  if (raw.startsWith(':')) return { lang: 'h', text: raw.slice(1), idx };
+  if (raw.startsWith('~')) return { lang: 'c', text: raw.slice(1), idx };
+  return { lang: 'a', text: raw, idx };
 }
 
 export function buildDefinitionDescription(entry: DictionaryEntryLike | null): string | null {

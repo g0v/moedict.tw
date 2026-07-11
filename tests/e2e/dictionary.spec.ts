@@ -375,3 +375,46 @@ test.describe('404 / fallback paths', () => {
     expect(response?.status()).toBe(200);
   });
 });
+
+test.describe('definition-index permalink (/word/N, g0v/moedict.tw#131)', () => {
+  // 萌 (a): 1 草木初生的芽 / 2 事物發生的開端或徵兆 / 3 人民 / 4 姓 / 5 發芽 / 6 發生
+  test('/萌/3 renders the entry and highlights the 3rd definition (人民)', async ({ page }) => {
+    const response = await page.goto('/%E8%90%8C/3');
+    expect(response?.status()).toBe(200);
+    await waitForEntryHydration(page, '萌');
+    const highlighted = page.locator('.idx-permalink-target');
+    await expect(highlighted).toHaveCount(1);
+    await expect(highlighted).toContainText('人民');
+  });
+
+  test('/萌/1 highlights the 1st definition, not the 3rd', async ({ page }) => {
+    const response = await page.goto('/%E8%90%8C/1');
+    expect(response?.status()).toBe(200);
+    await waitForEntryHydration(page, '萌');
+    const highlighted = page.locator('.idx-permalink-target');
+    await expect(highlighted).toHaveCount(1);
+    await expect(highlighted).toContainText('草木初生的芽');
+    await expect(highlighted).not.toContainText('人民');
+  });
+
+  test('/萌 (no idx) renders with no highlighted definition', async ({ page }) => {
+    const response = await page.goto('/%E8%90%8C');
+    expect(response?.status()).toBe(200);
+    await waitForEntryHydration(page, '萌');
+    await expect(page.locator('.idx-permalink-target')).toHaveCount(0);
+  });
+
+  test('/萌/999 (out-of-range idx) still renders the entry, highlighting nothing', async ({ page }) => {
+    const response = await page.goto('/%E8%90%8C/999');
+    expect(response?.status()).toBe(200);
+    await waitForEntryHydration(page, '萌');
+    await expect(page.locator('.idx-permalink-target')).toHaveCount(0);
+  });
+
+  test("/'食/1 (t lang) also resolves and does not misparse the idx as part of the word", async ({ page }) => {
+    const response = await page.goto("/'%E9%A3%9F/1");
+    expect(response?.status()).toBe(200);
+    await waitForEntryHydration(page, '食');
+    await expect(page).not.toHaveTitle(/食\/1/);
+  });
+});
