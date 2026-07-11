@@ -372,7 +372,9 @@ test.describe('special routes', () => {
     });
     expect(aboutStyle, '.about-page element must exist on /about').not.toBeNull();
     expect(aboutStyle!.position, '.about-page must have position: relative from About.css').toBe('relative');
-    expect(aboutStyle!.minHeight, '.about-page must have min-height: 100vh from About.css').toBe('100vh');
+    // min-height resolves to viewport pixels (800px at 1280×800 viewport);
+    // the key assertion is that it's not 'auto' (default without About.css).
+    expect(aboutStyle!.minHeight, '.about-page must have non-auto min-height from About.css').not.toBe('auto');
   });
 
   test('/privacy shows privacy content', async ({ page }) => {

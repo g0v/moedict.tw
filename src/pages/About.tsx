@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom';
 import { SvgIcon } from '../components/SvgIcon';
 import { applyHeadByPath, applyHeadToDocument, resolveHeadByPath } from '../ssr/head';
 import { LEGACY_STYLESHEET_VERSION } from '../utils/media-cdn';
+import './About.css';
 
 // 動態載入外部樣式
 function loadExternalStyles(r2Endpoint: string) {

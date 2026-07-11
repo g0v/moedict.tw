@@ -14,13 +14,15 @@
 export const ASSET_CDN_BASE = 'https://r2-assets.moedict.tw';
 
 /**
- * Cache-bust version for the legacy `data/assets/styles.css` stylesheet.
+ * Stable cache-bust version for the legacy `data/assets/styles.css` stylesheet.
  *
- * The stylesheet is served from R2 with `Cache-Control: max-age=86400` (24h
- * edge). Appending `?v=<version>` as a query parameter makes the edge treat
- * each version as a distinct cache key, so a new version busts the old object
- * without requiring a cache purge. Bump this when the stylesheet content
- * changes meaningfully (e.g. BiauKai src fix, EduKai gating).
+ * `?v=<version>` is a one-time cache namespace that bypasses the pre-existing
+ * unversioned `styles.css` object (edge-cached at `max-age=86400` / 24h).
+ * Routine future data-only uploads remain R2-only and rely on the object's
+ * own `Cache-Control: public, max-age=300` metadata (set by Task 3 on re-upload)
+ * for a short 5-minute edge TTL — no Worker redeploy needed for CSS-only edits.
+ * Bump this query version only for an emergency immediate bust of the old
+ * 24h-cached unversioned object.
  */
 export const LEGACY_STYLESHEET_VERSION = '20260711';
 

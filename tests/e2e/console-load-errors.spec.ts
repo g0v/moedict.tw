@@ -36,12 +36,19 @@ async function routeStylesCss(page: Page): Promise<{ loaded: () => boolean; urls
       body: css,
     });
   };
-  await page.route('https://r2-assets.test.local/styles.css*', handler);
-  await page.route('**/assets/styles.css*', handler);
+  // Tighter than styles.css* — two patterns: exact (no query) and query-only.
+  // styles.css* would also match styles.css.bak; styles.css?* matches only
+  // the versioned URL. Both are needed so RED (no query) and GREEN (with v)
+  // are intercepted without breaking interception.
+  await page.route('https://r2-assets.test.local/styles.css', handler);
+  await page.route('https://r2-assets.test.local/styles.css?*', handler);
+  await page.route('**/assets/styles.css', handler);
+  await page.route('**/assets/styles.css?*', handler);
   // When window.Capacitor is set, offline-api.ts intercepts /api/config and
   // returns assetBaseUrl: '/assets-legacy', so AssetLoader loads CSS from
   // /assets-legacy/styles.css — intercept that path too.
-  await page.route('**/assets-legacy/styles.css*', handler);
+  await page.route('**/assets-legacy/styles.css', handler);
+  await page.route('**/assets-legacy/styles.css?*', handler);
   return { loaded: () => loaded, urls };
 }
 

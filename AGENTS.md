@@ -173,7 +173,13 @@ bun run deploy           # 驗證通過後才部署 production
   `https://r2-assets.moedict.tw`），**直接對該網域發 `<link>` 請求，完全繞過
   本 Worker**；`About.tsx` 自己另一份載入邏輯固定打相對路徑
   `/assets/styles.css`（Worker 代理 fallback）。兩者的 `loadCSS()` 都不會在
-  失敗時重試另一條路徑。**既有 Playwright e2e/visual 套件目前完全測不到這個
+  失敗時重試另一條路徑。兩條路徑都附加 `?v=20260711` 查詢參數
+  （`LEGACY_STYLESHEET_VERSION`，定義在 `src/utils/media-cdn.ts`）——這是
+  一次性快取命名空間，用來繞過 pre-existing 未版本化的 `styles.css` 物件
+  （edge 快取 `max-age=86400` / 24h）。**例行後續 data-only 上傳**只需重傳
+  R2 物件並設 `Cache-Control: public, max-age=300`（5 分鐘 edge TTL），
+  不必重佈 Worker、不必 bump 版本；bump `?v=` 僅用於緊急立即 bust 舊的
+  24h 快取物件。**既有 Playwright e2e/visual 套件目前完全測不到這個
   檔案**：測試環境的 `ASSET_BASE_URL` 是假網域 `r2-assets.test.local`，被
   `tests/e2e/_fixtures.ts` 全域擋成 404，`tests/helpers/fixtures.ts` 的
   `collectAssetFixtures()` 也沒把 styles.css 種進 Miniflare 的 ASSETS
