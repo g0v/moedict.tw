@@ -26,6 +26,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mock } from 'vitest';
 import workerDefault, { dispatch } from '../../worker/index';
 import * as dictionaryAPI from '../../src/api/handleDictionaryAPI';
 import { resvgCalls } from '../helpers/stubs/resvg';
@@ -113,6 +114,30 @@ const SHELL_HTML = `<!doctype html><html><head>
   <meta name="twitter:site" content="old" />
   <meta name="twitter:creator" content="old" />
 </head><body></body></html>`;
+
+// 萌 → charCode 0x840C → 33804 % 1024 = 12 → pack path pack/12.txt
+// (bucketPath template is `p${lang}ck/${bucket}.txt` → "pack" for lang=a).
+// Dictionary stores `escape('萌')` = '%u840C' as the bucket key. Shared by
+// the metadata-injection, /embed, and /api/oembed dispatch test blocks.
+const DICT_ENTRY_FOR_MENG = {
+  '%u840C': {
+    heteronyms: [
+      {
+        definitions: [
+          { def: '植物發芽的樣子。' },
+          { def: '比喻事物的初始狀態' },
+        ],
+      },
+    ],
+  },
+};
+
+function shellFetcher(): { fetch: Mock } {
+  return {
+    fetch: vi.fn(async () =>
+      new Response(SHELL_HTML, { headers: { 'Content-Type': 'text/html' } })),
+  };
+}
 
 describe('dispatch — *.png image generation fallback', () => {
   it('returns an image/png response when a .png path has no matching asset', async () => {
@@ -317,30 +342,9 @@ describe('dispatch — HTML shell metadata injection with dictionary lookup', ()
   // resolve, dispatch calls lookupDictionaryEntry and builds a rich
   // description from heteronym definitions. This exercises stripTags,
   // buildDefinitionDescription, and the dictionary-lookup arm of
-  // injectHeadMetadata that bare /about never reaches.
-
-  // 萌 → charCode 0x840C → 33804 % 1024 = 12 → pack path pack/12.txt
-  // (bucketPath template is `p${lang}ck/${bucket}.txt` → "pack" for lang=a).
-  // Dictionary stores `escape('萌')` = '%u840C' as the bucket key.
-  const DICT_ENTRY_FOR_MENG = {
-    '%u840C': {
-      heteronyms: [
-        {
-          definitions: [
-            { def: '植物發芽的樣子。' },
-            { def: '比喻事物的初始狀態' },
-          ],
-        },
-      ],
-    },
-  };
-
-  function shellFetcher(): { fetch: ReturnType<typeof vi.fn> } {
-    return {
-      fetch: vi.fn(async () =>
-        new Response(SHELL_HTML, { headers: { 'Content-Type': 'text/html' } })),
-    };
-  }
+  // injectHeadMetadata that bare /about never reaches. DICT_ENTRY_FOR_MENG
+  // and shellFetcher are module-scoped above (reused by the /embed and
+  // /api/oembed dispatch test blocks further down).
 
   it('injects heteronym definitions into the og:description for /萌 (lang=a, line 48)', async () => {
     const fetcher = shellFetcher();
@@ -427,6 +431,81 @@ describe('dispatch — HTML shell metadata injection with dictionary lookup', ()
     // Rich description absent, but shell still renders.
     const body = await res.text();
     expect(body).not.toContain('植物發芽');
+  });
+});
+
+describe('dispatch — GET /embed/<word> (oEmbed iframe target)', () => {
+  it('renders the entry card for /embed/萌', async () => {
+    const env = makeEnv({
+      DICTIONARY: makeBucket({
+        'pack/12.txt': { body: JSON.stringify(DICT_ENTRY_FOR_MENG) },
+      }),
+    });
+    const res = await dispatch(req('/embed/%E8%90%8C'), env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toBe('text/html; charset=utf-8');
+    const body = await res.text();
+    expect(body).toContain('<h1>萌</h1>');
+    expect(body).toContain('植物發芽的樣子。');
+  });
+
+  it('404s for /embed/<unknown word>', async () => {
+    const env = makeEnv({ DICTIONARY: makeBucket() });
+    const res = await dispatch(req('/embed/%E8%90%8C'), env);
+    expect(res.status).toBe(404);
+  });
+
+  it('never falls through to the SPA shell for /embed paths', async () => {
+    // Regression guard: /embed must be intercepted before
+    // shouldRenderHtmlShell, or it would serve the full app shell instead
+    // of the lightweight card.
+    const fetcher = shellFetcher();
+    const env = makeEnv({
+      ASSETS: fetcher as unknown as AnyEnv['ASSETS'],
+      DICTIONARY: makeBucket({ 'pack/12.txt': { body: JSON.stringify(DICT_ENTRY_FOR_MENG) } }),
+    });
+    await dispatch(req('/embed/%E8%90%8C'), env);
+    expect(fetcher.fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('dispatch — GET /api/oembed (tokenless oEmbed API)', () => {
+  it('returns a rich oEmbed payload for a known entry', async () => {
+    const env = makeEnv({
+      DICTIONARY: makeBucket({
+        'pack/12.txt': { body: JSON.stringify(DICT_ENTRY_FOR_MENG) },
+      }),
+    });
+    const res = await dispatch(req(`/api/oembed?url=${encodeURIComponent('https://www.moedict.tw/萌')}`), env);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { type: string; html: string };
+    expect(body.type).toBe('rich');
+    expect(body.html).toContain('/embed/%E8%90%8C');
+  });
+
+  it('400s when url is missing', async () => {
+    const env = makeEnv({ DICTIONARY: makeBucket() });
+    const res = await dispatch(req('/api/oembed'), env);
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('dispatch — oEmbed discovery <link> in the HTML shell', () => {
+  it('adds a discovery <link rel="alternate" type="application/json+oembed"> for a dictionary entry route', async () => {
+    const fetcher = shellFetcher();
+    const env = makeEnv({ ASSETS: fetcher as unknown as AnyEnv['ASSETS'] });
+    const res = await dispatch(req('/%E8%90%8C'), env);
+    const body = await res.text();
+    expect(body).toContain('rel="alternate" type="application/json+oembed"');
+    expect(body).toContain('/api/oembed?url=');
+  });
+
+  it('omits the discovery <link> for non-entry routes like /about', async () => {
+    const fetcher = shellFetcher();
+    const env = makeEnv({ ASSETS: fetcher as unknown as AnyEnv['ASSETS'] });
+    const res = await dispatch(req('/about'), env);
+    const body = await res.text();
+    expect(body).not.toContain('application/json+oembed');
   });
 });
 

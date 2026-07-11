@@ -26,6 +26,7 @@ export default defineConfig({
         'src/ssr/**/*.ts',
         'src/utils/**/*.ts',
         'src/api/**/*.ts',
+        'src/oembed/**/*.ts',
         'worker/**/*.ts',
       ],
       exclude: [

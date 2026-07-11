@@ -3,9 +3,16 @@ import { lookupDictionaryEntry } from '../src/api/handleDictionaryAPI';
 import { handleListAPI } from '../src/api/handleListAPI';
 import { handleLookupAPI } from '../src/api/handleLookupAPI';
 import { handleStrokeAPI } from '../src/api/handleStrokeAPI';
+import { handleOEmbedAPI } from '../src/oembed/handle-oembed-api';
+import { handleEmbedPage } from '../src/oembed/handle-embed-page';
 import { escapeHeadContent, resolveHeadByPath } from '../src/ssr/head';
 import { handleImageGeneration } from '../src/utils/image-generation';
 import { CACHE_CONTROL, handleCachePurge } from '../src/api/cache';
+import {
+  buildDefinitionDescription,
+  parseDictionaryRoute,
+  type DictionaryEntryLike,
+} from '../src/utils/dictionary-route';
 
 interface Env {
 	/** wrangler vars：靜態資源公開端；見 /api/config.assetBaseUrl、/assets/* 代理 */
@@ -19,56 +26,6 @@ interface Env {
 	DICTIONARY: R2Bucket;
   ASSETS?: Fetcher | R2Bucket;
   FONTS: R2Bucket;
-}
-
-type DictionaryLang = 'a' | 't' | 'h' | 'c';
-
-interface DictionaryDefinition {
-  def?: string;
-}
-
-interface DictionaryHeteronym {
-  definitions?: DictionaryDefinition[];
-}
-
-interface DictionaryEntryLike {
-  heteronyms?: DictionaryHeteronym[];
-}
-
-export function stripTags(input: string): string {
-  return String(input || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
-}
-
-export function parseDictionaryRoute(pathname: string): { lang: DictionaryLang; text: string } | null {
-  const raw = decodeURIComponent(String(pathname || '').replace(/^\/+/, '').replace(/\/+$/, ''));
-  if (!raw) return null;
-  if (raw === 'about' || raw === 'about.html') return null;
-  if (raw.startsWith('@') || raw.startsWith('~@')) return null;
-  if (raw.startsWith('=')) return null;
-  if (raw.startsWith("'=*") || raw.startsWith(':=*') || raw.startsWith('~=*') || raw.startsWith('=*')) return null;
-  if (raw.startsWith("'=") || raw.startsWith(':=') || raw.startsWith('~=')) return null;
-  if (raw.startsWith("'")) return { lang: 't', text: raw.slice(1) };
-  if (raw.startsWith(':')) return { lang: 'h', text: raw.slice(1) };
-  if (raw.startsWith('~')) return { lang: 'c', text: raw.slice(1) };
-  return { lang: 'a', text: raw };
-}
-
-export function buildDefinitionDescription(entry: DictionaryEntryLike | null): string | null {
-  if (!entry?.heteronyms || entry.heteronyms.length === 0) return null;
-  const defs: string[] = [];
-  for (const heteronym of entry.heteronyms) {
-    const definitions = Array.isArray(heteronym.definitions) ? heteronym.definitions : [];
-    for (const definition of definitions) {
-      const clean = stripTags(definition.def || '');
-      if (!clean) continue;
-      defs.push(clean.replace(/[。．\s]+$/g, ''));
-      if (defs.length >= 4) break;
-    }
-    if (defs.length >= 4) break;
-  }
-  if (defs.length === 0) return null;
-  const sentence = `${defs.join('。')}。`;
-  return sentence.length > 180 ? `${sentence.slice(0, 179)}…` : sentence;
 }
 
 async function injectHeadMetadata(html: string, pathname: string, env: Env): Promise<string> {
@@ -96,6 +53,11 @@ async function injectHeadMetadata(html: string, pathname: string, env: Env): Pro
   const twitterSite = escapeHeadContent(head.twitterSite);
   const twitterCreator = escapeHeadContent(head.twitterCreator);
 
+  const oembedApiUrl = `https://www.moedict.tw/api/oembed?url=${encodeURIComponent(head.ogUrl)}&format=json`;
+  const oembedLink = dictionaryRoute?.text
+    ? `<link rel="alternate" type="application/json+oembed" href="${escapeHeadContent(oembedApiUrl)}" title="${title}" />\n  </head>`
+    : '</head>';
+
   return html
     .replace(/<title>[\s\S]*?<\/title>/i, `<title>${title}</title>`)
     .replace(/<meta\s+name=["']description["'][^>]*>/i, `<meta name="description" content="${description}" />`)
@@ -110,7 +72,8 @@ async function injectHeadMetadata(html: string, pathname: string, env: Env): Pro
     .replace(/<meta\s+name=["']twitter:description["'][^>]*>/i, `<meta name="twitter:description" content="${ogDescription}" />`)
     .replace(/<meta\s+name=["']twitter:image["'][^>]*>/i, `<meta name="twitter:image" content="${twitterImage}" />`)
     .replace(/<meta\s+name=["']twitter:site["'][^>]*>/i, `<meta name="twitter:site" content="${twitterSite}" />`)
-    .replace(/<meta\s+name=["']twitter:creator["'][^>]*>/i, `<meta name="twitter:creator" content="${twitterCreator}" />`);
+    .replace(/<meta\s+name=["']twitter:creator["'][^>]*>/i, `<meta name="twitter:creator" content="${twitterCreator}" />`)
+    .replace('</head>', oembedLink);
 }
 
 function isViteInternalRequest(url: URL): boolean {
@@ -294,6 +257,11 @@ export async function dispatch(
       });
     }
 
+    // 特殊路由：oEmbed 嵌入頁（/embed/<word>）— 見 src/oembed/handle-embed-page.ts
+    if (url.pathname === '/embed' || url.pathname.startsWith('/embed/')) {
+      return handleEmbedPage(request, url, env);
+    }
+
     // lookup API（台語羅馬拼音索引 / 舊站 trs 相容）
     const lookupResponse = await handleLookupAPI(request, url, env);
     if (lookupResponse) {
@@ -410,6 +378,11 @@ export async function dispatch(
       if (url.pathname === '/api/config') {
         console.log('🔍 [Index] 提供配置資訊');
         return respondWithConfigApi(request, env, ctx);
+      }
+
+      // Tokenless oEmbed API（/api/oembed?url=...）— 見 src/oembed/handle-oembed-api.ts
+      if (url.pathname === '/api/oembed') {
+        return handleOEmbedAPI(request, url, env);
       }
 
       // 全文檢索索引 API（從 DICTIONARY R2 讀取 search-index/{lang}.json）
