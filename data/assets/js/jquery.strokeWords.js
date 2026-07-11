@@ -650,7 +650,11 @@
   $(function() {
     var Word, demoMatrix, drawBackground, drawElementWithWord, drawElementWithWords, internalOptions, pathOutline;
     internalOptions = {
-      dim: 2150,
+      dim: 2048, // MOE stroke JSON uses a fixed 2048-unit em-square (verified: bbox center
+                  // lands at ~[1024,1024] across structurally unrelated chars — 一 十 龍 乙 鹽 嗣).
+                  // Was 2150, which offset every character ~2.4% up-left of the grid center
+                  // (g0v/moedict-webkit#272). No other change needed: drawBackground() derives
+                  // the grid size from this same `dim`, so border/trisection lines stay in sync.
       trackWidth: 150
     };
     demoMatrix = [1, 0, 0, 1, 100, 100];
