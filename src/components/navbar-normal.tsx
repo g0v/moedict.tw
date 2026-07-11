@@ -533,7 +533,13 @@ function DropdownSubmenu({
 	}
 
 	return (
-		<li className={styled.dropdownSubmenu} onMouseEnter={enterDropdown} onMouseLeave={leaveDropdown} onClick={pinDropdown}>
+		<li
+			className={styled.dropdownSubmenu}
+			style={{ ['--nav-submenu-trigger-name' as string]: `--nst-${submenuKeyPrefix}` }}
+			onMouseEnter={enterDropdown}
+			onMouseLeave={leaveDropdown}
+			onClick={pinDropdown}
+		>
 			<a
 				href="#"
 				className={`${lang} taxonomy`}

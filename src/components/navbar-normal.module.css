@@ -122,7 +122,7 @@
      (subpixel rounding / border rendering). */
   .dropdownSubmenu > .dropdownMenu::before {
     position: fixed;
-    position-anchor: --nav-submenu-trigger;
+    position-anchor: var(--nav-submenu-trigger-name);
     top: anchor(top);
     right: auto;
     bottom: anchor(bottom);
@@ -139,7 +139,7 @@
   .dropdownSubmenu.hover > a,
   .dropdownSubmenu.pinned > a {
     border-bottom: none;
-    anchor-name: --nav-submenu-trigger;
+    anchor-name: var(--nav-submenu-trigger-name);
   }
 
   .dropdownSubmenu.hover > a::after,
