@@ -115,6 +115,16 @@
     box-shadow: 0 6px 12px rgba(0, 0, 0, 0.175);
   }
 
+  .dropdownSubmenu > .dropdownMenu::before {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -8px;
+
+    width: 8px;
+    content: '';
+  }
+
   .dropdownSubmenu.pinned {
     outline: 1px solid #74b2e2;
   }
