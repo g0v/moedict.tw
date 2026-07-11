@@ -186,9 +186,11 @@ test('desktop nested submenu keeps ancestor hover bridge on its own trigger row'
 
 test('desktop root-level hover bridge reaches fixed submenu left edge', async ({ page }) => {
   // Root `.dropdownMenuRoot` has a 1px border outside its padding-right room for
-  // the row-scoped ::before bridge. enterDropdown positions the fixed flyout at
-  // the parent's border-box right edge (getBoundingClientRect includes border),
-  // so the bridge must extend at least that far — not stop at the padding edge.
+  // the row-scoped ::before bridge (bridge width === padding-right, so it stays
+  // fully unclipped by overflow-y:auto but ends exactly at the padding edge).
+  // enterDropdown now subtracts the live border-right-width so the fixed flyout
+  // lands at that same padding-box edge instead of the border-box edge — this
+  // assertion locks that alignment in.
   await page.goto('/~%E8%90%8C');
 
   await page.locator('nav .navbar-nav > li').first().locator('a').first().click();
