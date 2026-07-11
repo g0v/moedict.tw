@@ -699,7 +699,7 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
                     role="button"
                     tabIndex={0}
                     aria-label={playingAudioId === pronunAudioId ? '停止播放' : '播放發音'}
-                    className="playAudio part-of-speech"
+                    className="audio-control audio-control--icon"
                     title={playingAudioId === pronunAudioId ? '停止播放' : '播放發音'}
                     onClick={(event) => {
                       event.stopPropagation();
@@ -735,7 +735,7 @@ export function DictionaryPage({ word, lang }: DictionaryPageProps) {
                             role="button"
                             tabIndex={0}
                             aria-label={playingAudioId === audioKey ? '停止播放' : '播放發音'}
-                            className="part-of-speech"
+                            className="audio-control audio-control--label"
                             title={playingAudioId === audioKey ? '停止播放' : '播放發音'}
                             style={{ cursor: 'pointer', fontSize: '1.4em', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                             onClick={(event) => {

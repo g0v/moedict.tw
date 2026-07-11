@@ -168,14 +168,19 @@ m3e-app-bar .caret {
 }
 
 /* Dropdown flyout surface */
-[class*="dropdownMenuRoot"] {
+ [class*="dropdownMenuRoot"] {
   background-color: var(--md-sys-color-surface-container, #f6ecea) !important;
   color: var(--md-sys-color-on-surface, #1c1b1e);
   border: none !important;
   border-radius: var(--md-sys-shape-corner-medium, 12px) !important;
   box-shadow: var(--md-sys-elevation-level2, 0 4px 8px 3px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.3)) !important;
-  overflow: hidden;
-}
+  overflow-y: auto;
+  overflow-x: visible;
+ }
+ [class*="dropdownMenuRoot"] {
+  box-sizing: border-box;
+  width: min(100%, calc(100vw - 16px)) !important;
+ }
 [class*="dropdownMenuRoot"] a {
   color: var(--md-sys-color-on-surface, #1c1b1e) !important;
 }
@@ -217,6 +222,20 @@ m3e-app-bar .iconic-circle {
 .query-box {
   background-color: var(--md-sys-color-surface-container-low, #fdf6f4) !important;
   border-right: 1px solid var(--md-sys-color-outline-variant, #d8c2be) !important;
+}
+.mobile-search-toggle {
+  border: 1px solid var(--md-sys-color-outline, #a08c89) !important;
+  border-radius: var(--md-sys-shape-corner-medium, 12px) !important;
+  background: var(--md-sys-color-surface-container-high, #2f2827) !important;
+  color: var(--md-sys-color-on-surface, #ede0de) !important;
+}
+.mobile-search-toggle:hover,
+.mobile-search-toggle:focus-visible {
+  background: var(--md-sys-color-surface-container-highest, #3b3332) !important;
+  color: var(--md-sys-color-on-surface, #ede0de) !important;
+}
+.mobile-search-toggle-arrow {
+  color: var(--md-sys-color-primary, #ffb4a9) !important;
 }
 
 .fulltext-search-input {
@@ -349,6 +368,86 @@ body.lang-t .iconic-color { color: var(--md-sys-color-secondary, #77574f) !impor
 .result .entry-item a:hover,
 .result .entry-item a:focus-visible {
   color: var(--md-sys-color-primary, #904a41) !important;
+}
+
+/* Audio controls are actions, not grammatical-label chips. */
+.audio-control {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 2rem !important;
+  height: 2rem !important;
+  min-width: 2rem !important;
+  padding: 0 !important;
+  margin: 0 0.25rem !important;
+  border: 1px solid var(--md-sys-color-outline, #a08c89) !important;
+  border-radius: 50% !important;
+  background: var(--md-sys-color-secondary-container, #5d3f3b) !important;
+  color: var(--md-sys-color-on-secondary-container, #ffdad5) !important;
+  cursor: pointer !important;
+  vertical-align: middle;
+  line-height: 1 !important;
+}
+.audio-control:hover,
+.audio-control:focus-visible {
+  background: var(--md-sys-color-secondary, #e7bdb7) !important;
+  color: var(--md-sys-color-on-secondary, #442926) !important;
+}
+.audio-control svg,
+.audio-control m3e-icon {
+  width: 1.25rem !important;
+  height: 1.25rem !important;
+  margin: 0 !important;
+}
+.audio-control--icon {
+  width: 2rem !important;
+  min-width: 2rem !important;
+  padding: 0 !important;
+}
+.audio-control--label {
+  width: auto !important;
+  min-width: 0 !important;
+  height: 2rem !important;
+  padding: 0 0.625rem !important;
+  gap: 0.25rem !important;
+  border-radius: var(--md-sys-shape-corner-full, 9999px) !important;
+  font-size: 0.875rem !important;
+}
+.audio-control--label svg,
+.audio-control--label m3e-icon {
+  flex: 0 0 auto;
+}
+
+/* jQuery UI tooltips are legacy DOM but remain reachable from radical/stroke
+   interactions. Replace their light-theme black text with M3 dark roles. */
+.ui-tooltip {
+
+  color: var(--md-sys-color-on-surface, #ede0de) !important;
+  background: var(--md-sys-color-surface-container-high, #2f2827) !important;
+  border: 1px solid var(--md-sys-color-outline, #a08c89) !important;
+  border-radius: var(--md-sys-shape-corner-medium, 12px) !important;
+  box-shadow: var(--md-sys-elevation-level3, 0 6px 12px rgba(0, 0, 0, 0.35)) !important;
+}
+.ui-tooltip .title .h1,
+.ui-tooltip .title h1,
+.ui-tooltip .title .h1 a,
+.ui-tooltip .title h1 a,
+.ui-tooltip .stroke-list .stroke-char {
+  color: var(--md-sys-color-on-surface, #ede0de) !important;
+}
+.ui-tooltip .stroke-list .stroke-char:hover,
+.ui-tooltip .title .h1 a:hover,
+.ui-tooltip .title h1 a:hover {
+  color: var(--md-sys-color-primary, #ffb4a9) !important;
+}
+/* Legacy ruby rules use #666, which fails contrast on dark surfaces. */
+zhuyin,
+zhuyin yin,
+zhuyin diao,
+hruby zhuyin,
+hruby zhuyin yin,
+hruby zhuyin diao {
+  color: var(--md-sys-color-on-surface-variant, #d8c2be) !important;
 }
 
 .result .entry .title .single-char-stroke-trigger:hover {

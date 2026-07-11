@@ -501,26 +501,25 @@ function DropdownSubmenu({
 	handleLinkClick: (e: React.MouseEvent<HTMLAnchorElement>, path: string) => void;
 	submenuKeyPrefix: string;
 }) {
-	const enterDropdown: MouseEventHandler<HTMLLIElement> = (e) => {
-		const parent = e.currentTarget.parentElement;
-		const innerDropdownMenu = e.currentTarget.querySelector<HTMLUListElement>(`.${styled.dropdownMenu}`);
-		if (!innerDropdownMenu || !parent) return
-		const currentSiblings = Array.from(e.currentTarget.parentElement?.children ?? [])
-		currentSiblings.filter(el => el !== e.currentTarget).forEach(el => el.classList.remove(styled.pinned))
-		e.currentTarget.classList.add(styled.hover);
+ const enterDropdown: MouseEventHandler<HTMLLIElement> = (e) => {
+  const parent = e.currentTarget.parentElement;
+  const innerDropdownMenu = e.currentTarget.querySelector<HTMLUListElement>(`.${styled.dropdownMenu}`);
+  if (!innerDropdownMenu || !parent) return;
+  const currentSiblings = Array.from(e.currentTarget.parentElement?.children ?? []);
+  currentSiblings.filter(el => el !== e.currentTarget).forEach(el => el.classList.remove(styled.pinned));
+  e.currentTarget.classList.add(styled.hover);
 
-		const parentRect = parent.getBoundingClientRect()
-
-		innerDropdownMenu.style.left = `${parentRect.left + parentRect.width}px`
-		innerDropdownMenu.style.top = `${parentRect.top}px`
-
-		const currentTargetRect = e.currentTarget.getBoundingClientRect()
-		const innerDropdownMenuRect = innerDropdownMenu.getBoundingClientRect()
-
-		if (currentTargetRect.bottom > innerDropdownMenuRect.bottom) {
-			innerDropdownMenu.style.top = `${currentTargetRect.bottom - innerDropdownMenuRect.height}px`
-		}
-	}
+  const viewportMargin = 8;
+  const currentTargetRect = e.currentTarget.getBoundingClientRect();
+  const menuRect = innerDropdownMenu.getBoundingClientRect();
+  const preferredLeft = currentTargetRect.right + menuRect.width + viewportMargin <= window.innerWidth
+   ? currentTargetRect.right
+   : currentTargetRect.left - menuRect.width;
+  const maxLeft = Math.max(viewportMargin, window.innerWidth - menuRect.width - viewportMargin);
+  innerDropdownMenu.style.left = `${Math.min(Math.max(viewportMargin, preferredLeft), maxLeft)}px`;
+  const maxTop = Math.max(viewportMargin, window.innerHeight - menuRect.height - viewportMargin);
+  innerDropdownMenu.style.top = `${Math.min(Math.max(viewportMargin, currentTargetRect.top), maxTop)}px`;
+ }
 
 	const leaveDropdown: MouseEventHandler<HTMLLIElement> = (e) => {
 		e.currentTarget.classList.remove(styled.hover);
@@ -636,19 +635,27 @@ export function NavbarNormal({ currentLang }: NavbarNormalProps) {
 		});
 	}, [closeDictionaryDropdown, resolvedLang, location.pathname, navigate]);
 
-	const handleMenuToggle: MouseEventHandler<HTMLAnchorElement> = (e) => {
-		e.preventDefault()
-		const dropdownMenu = e.currentTarget.nextElementSibling;
-		if (!dropdownMenu) return
-		dropdownMenu.classList.toggle(styled.open);
+ const handleMenuToggle: MouseEventHandler<HTMLAnchorElement> = (e) => {
+  e.preventDefault();
+  const dropdownMenu = e.currentTarget.nextElementSibling as HTMLElement | null;
+  if (!dropdownMenu) return;
+  dropdownMenu.classList.toggle(styled.open);
 
-		if (!dropdownMenu.classList.contains(styled.open)) {
-			dropdownMenu.querySelectorAll(`.${styled.dropdownSubmenu}`).forEach(el => {
-				el.classList.remove(styled.pinned)
-				el.classList.remove(styled.hover)
-			});
-		}
-	}
+  if (dropdownMenu.classList.contains(styled.open)) {
+   const margin = 8;
+   const triggerRect = e.currentTarget.getBoundingClientRect();
+   const menuRect = dropdownMenu.getBoundingClientRect();
+   const left = Math.min(Math.max(margin, triggerRect.left), Math.max(margin, window.innerWidth - menuRect.width - margin));
+   const top = Math.min(Math.max(margin, triggerRect.bottom), Math.max(margin, window.innerHeight - menuRect.height - margin));
+   dropdownMenu.style.left = `${left}px`;
+   dropdownMenu.style.top = `${top}px`;
+  } else {
+   dropdownMenu.querySelectorAll(`.${styled.dropdownSubmenu}`).forEach(el => {
+    el.classList.remove(styled.pinned);
+    el.classList.remove(styled.hover);
+   });
+  }
+ }
 
 	return (
 		<>
