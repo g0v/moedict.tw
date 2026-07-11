@@ -644,11 +644,12 @@ export function NavbarNormal({ currentLang }: NavbarNormalProps) {
   if (dropdownMenu.classList.contains(styled.open)) {
    const margin = 8;
    const triggerRect = e.currentTarget.getBoundingClientRect();
+   const availableHeight = Math.max(120, window.innerHeight - triggerRect.bottom - margin);
+   dropdownMenu.style.maxHeight = `${availableHeight}px`;
    const menuRect = dropdownMenu.getBoundingClientRect();
    const left = Math.min(Math.max(margin, triggerRect.left), Math.max(margin, window.innerWidth - menuRect.width - margin));
-   const top = Math.min(Math.max(margin, triggerRect.bottom), Math.max(margin, window.innerHeight - menuRect.height - margin));
    dropdownMenu.style.left = `${left}px`;
-   dropdownMenu.style.top = `${top}px`;
+   dropdownMenu.style.top = `${triggerRect.bottom}px`;
   } else {
    dropdownMenu.querySelectorAll(`.${styled.dropdownSubmenu}`).forEach(el => {
     el.classList.remove(styled.pinned);
