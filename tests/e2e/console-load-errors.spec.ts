@@ -68,6 +68,46 @@ async function blockCssSubresources(page: Page): Promise<void> {
   await page.route('**/assets/images/subtle_stripes_x2.png', notFound);
 }
 
+// When window.Capacitor is set, offline-api.ts intercepts /api/* and serves
+// dictionary data from locally bundled files via originalFetch('/dictionary/...').
+// In the test environment these paths don't exist on the server, so route them
+// to the data/dictionary/ fixtures so the Capacitor-simulated page renders.
+async function routeDictionaryData(page: Page): Promise<void> {
+  const DATA_DICT = path.join(REPO_ROOT, 'data', 'dictionary');
+  await page.route('**/dictionary/**', (route: Route) => {
+    const reqUrl = route.request().url();
+    const url = new URL(reqUrl);
+    const key = url.pathname.replace(/^\/dictionary\//, '');
+    const filePath = path.join(DATA_DICT, key);
+    try {
+      const body = readFileSync(filePath);
+      return route.fulfill({
+        status: 200,
+        contentType: 'text/plain; charset=utf-8',
+        body: Buffer.from(body),
+      });
+    } catch {
+      return route.fulfill({ status: 404, contentType: 'text/plain', body: '' });
+    }
+  });
+  // Also route search-index and stroke-json that the offline API fetches
+  await page.route('**/search-index/**', (route: Route) => {
+    const url = new URL(route.request().url());
+    const key = url.pathname.replace(/^\/search-index\//, '');
+    const filePath = path.join(DATA_DICT, 'search-index', key);
+    try {
+      const body = readFileSync(filePath);
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json; charset=utf-8',
+        body: Buffer.from(body),
+      });
+    } catch {
+      return route.fulfill({ status: 404, contentType: 'text/plain', body: '' });
+    }
+  });
+}
+
 test.describe('console load errors — EduKai 404 and BiauKai decode', () => {
   test('normal web load: no EduKai fetch, no console.error, no BiauKai decode', async ({ page }) => {
     const consoleErrors: string[] = [];
@@ -169,6 +209,7 @@ test.describe('console load errors — EduKai 404 and BiauKai decode', () => {
 
     await blockCssSubresources(page);
     const stylesCssLoaded = await routeStylesCss(page);
+    await routeDictionaryData(page);
 
     // Simulate Capacitor runtime BEFORE the app's main.tsx runs
     await page.addInitScript(() => {
