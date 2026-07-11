@@ -15,13 +15,20 @@ const BIAUKAI_URL_PATTERN = '**/BiauKai.ttf*';
 // Intercept legacy styles.css the same way legacy-styles-regression.spec.ts does,
 // serving the current working-tree data/assets/styles.css so the MOEDICT-IOS-KAI
 // @font-face is present and exercises the BiauKai src URL.
-// Returns a thunk that reports whether the intercepted CSS was actually requested,
-// so callers can prove the BiauKai no-request assertion is non-vacuous.
-async function routeStylesCss(page: Page): Promise<() => boolean> {
+//
+// Route patterns accept optional query strings (glob `*`) so that versioned
+// URLs like `styles.css?v=20260711` are intercepted. Every intercepted URL is
+// recorded so the test can assert that each loaded legacy stylesheet URL
+// carries a stable non-empty `v` query parameter (cache-busting version).
+// Returns a thunk for whether the CSS was requested and an array of the
+// intercepted stylesheet URLs.
+async function routeStylesCss(page: Page): Promise<{ loaded: () => boolean; urls: string[] }> {
   const css = readFileSync(STYLES_CSS_PATH, 'utf-8');
   let loaded = false;
+  const urls: string[] = [];
   const handler = (route: Route) => {
     loaded = true;
+    urls.push(route.request().url());
     return route.fulfill({
       status: 200,
       contentType: 'text/css; charset=utf-8',
@@ -29,13 +36,13 @@ async function routeStylesCss(page: Page): Promise<() => boolean> {
       body: css,
     });
   };
-  await page.route('https://r2-assets.test.local/styles.css', handler);
-  await page.route('**/assets/styles.css', handler);
+  await page.route('https://r2-assets.test.local/styles.css*', handler);
+  await page.route('**/assets/styles.css*', handler);
   // When window.Capacitor is set, offline-api.ts intercepts /api/config and
   // returns assetBaseUrl: '/assets-legacy', so AssetLoader loads CSS from
   // /assets-legacy/styles.css — intercept that path too.
-  await page.route('**/assets-legacy/styles.css', handler);
-  return () => loaded;
+  await page.route('**/assets-legacy/styles.css*', handler);
+  return { loaded: () => loaded, urls };
 }
 
 // Collect console.error messages, excluding noise from the fixture's intentional
@@ -119,7 +126,7 @@ test.describe('console load errors — EduKai 404 and BiauKai decode', () => {
     page.on('pageerror', (err) => pageErrors.push(err.message));
 
     await blockCssSubresources(page);
-    const stylesCssLoaded = await routeStylesCss(page);
+    const { loaded: stylesCssLoaded, urls: stylesUrls } = await routeStylesCss(page);
 
     // Intercept EduKai requests (record without DNS-fail) — fulfill with 404
     // so the browser logs the error we're testing for, but networkidle fires.
@@ -201,6 +208,14 @@ test.describe('console load errors — EduKai 404 and BiauKai decode', () => {
     expect(titleFontFamily, 'title element must exist on the page').not.toBeNull();
     expect(titleFontFamily, 'title font-family must NOT include MOE EduKai Android on web')
       .not.toContain('MOE EduKai Android');
+
+    // Every loaded legacy stylesheet URL must carry a stable non-empty `v`
+    // query parameter so edge-cached old objects are bustable on deploy.
+    expect(stylesUrls.length, 'at least one legacy stylesheet must be loaded').toBeGreaterThanOrEqual(1);
+    for (const url of stylesUrls) {
+      const v = new URL(url).searchParams.get('v');
+      expect(v, `legacy stylesheet URL must have non-empty v param: ${url}`).toBeTruthy();
+    }
   });
 
   test('Capacitor-simulated load: moe-capacitor class present, EduKai in font stack', async ({ page }) => {
@@ -208,7 +223,7 @@ test.describe('console load errors — EduKai 404 and BiauKai decode', () => {
     collectConsoleErrors(page, consoleErrors);
 
     await blockCssSubresources(page);
-    const stylesCssLoaded = await routeStylesCss(page);
+    const { loaded: stylesCssLoaded, urls: stylesUrls } = await routeStylesCss(page);
     await routeDictionaryData(page);
 
     // Simulate Capacitor runtime BEFORE the app's main.tsx runs
@@ -246,5 +261,13 @@ test.describe('console load errors — EduKai 404 and BiauKai decode', () => {
     // Note: we don't assert zero console errors here because the test server
     // 404s the font file — the assertion is about the CSS stack, not the
     // actual font fetch in the test environment.
+
+    // Every loaded legacy stylesheet URL must carry a stable non-empty `v`
+    // query parameter so edge-cached old objects are bustable on deploy.
+    expect(stylesUrls.length, 'at least one legacy stylesheet must be loaded').toBeGreaterThanOrEqual(1);
+    for (const url of stylesUrls) {
+      const v = new URL(url).searchParams.get('v');
+      expect(v, `legacy stylesheet URL must have non-empty v param: ${url}`).toBeTruthy();
+    }
   });
 });
