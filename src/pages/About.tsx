@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { SvgIcon } from '../components/SvgIcon';
 import { applyHeadByPath, applyHeadToDocument, resolveHeadByPath } from '../ssr/head';
+import { LEGACY_STYLESHEET_VERSION } from '../utils/media-cdn';
 import './About.css';
 
 // 動態載入外部樣式
@@ -21,7 +22,7 @@ function loadExternalStyles(r2Endpoint: string) {
 	const link = document.createElement('link');
 	link.rel = 'stylesheet';
 	// 使用 /assets/ 路徑，讓 Worker 代理請求
-	link.href = `/assets/styles.css`;
+	link.href = `/assets/styles.css?v=${LEGACY_STYLESHEET_VERSION}`;
 	link.setAttribute('data-r2-styles', 'true');
 	document.head.appendChild(link);
 }

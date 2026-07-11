@@ -9810,7 +9810,7 @@ a .icon-flip-vertical:before {
 
 @font-face {
   font-family: MOEDICT-IOS-KAI;
-  src: url(/private/var/mobile/Library/Assets/com_apple_MobileAsset_Font/9965d7058b88c289dece8eaaaf085f46bc3c5b87.asset/AssetData/BiauKai.ttf) format("truetype");
+  src: local(BiauKai);
 }
 
 .vowel-030d,

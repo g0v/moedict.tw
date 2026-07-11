@@ -105,13 +105,17 @@ body {
 	color: #333;
 	font-size: 16px;
 	line-height: 1.4;
-  font-family: "Biaodian Pro Serif CNS", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif, "MOE EduKai Android", MOEDICT, "TW-Kai-98_1", "標楷體", serif;
+  font-family: "Biaodian Pro Serif CNS", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif, MOEDICT, "TW-Kai-98_1", "標楷體", serif;
 }
 
 .fulltext-search-input:focus {
 	outline: none;
 	border-color: #74b2e2;
 	box-shadow: 0 0 0 2px rgba(116, 178, 226, 0.18);
+}
+
+html.moe-capacitor .fulltext-search-input {
+  font-family: "Biaodian Pro Serif CNS", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif, "MOE EduKai Android", MOEDICT, "TW-Kai-98_1", "標楷體", serif;
 }
 
 .fulltext-search-icon {
@@ -508,11 +512,11 @@ body[data-ruby-pref='zhuyin'] .result .entry .title {
 }
 
 .result .entry .title {
+  --title-leading-family: Biaodian Pro Serif CNS;
   --title-zhuyin-x-shift: 0em;
   --title-zhuyin-y-shift: 0em;
   font-family:
-    "MOE EduKai Android",
-    Biaodian Pro Serif CNS,
+    var(--title-leading-family),
     Numeral LF Serif,
     MOEDICT,
     Fira Sans OT,
@@ -541,6 +545,11 @@ body[data-ruby-pref='zhuyin'] .result .entry .title {
     cursive,
     serif;
   font-weight: 400;
+}
+
+/* Capacitor-only: prepend EduKai as the leading family */
+html.moe-capacitor .result .entry .title {
+  --title-leading-family: "MOE EduKai Android", Biaodian Pro Serif CNS;
 }
 
 html.moe-android .result .entry .title {
@@ -572,6 +581,13 @@ html.moe-ios .result .entry .title {
 .result .entry .title hruby.rightangle ru[zhuyin] zhuyin,
 .result .entry .title hruby.rightangle ru[zhuyin] yin,
 .result .entry .title hruby.rightangle ru[zhuyin] diao {
+  font-family: MOEDICT, "Zhuyin Kaiti", cursive, serif !important;
+}
+
+/* Capacitor-only: prepend EduKai to zhuyin stack */
+html.moe-capacitor .result .entry .title hruby.rightangle ru[zhuyin] zhuyin,
+html.moe-capacitor .result .entry .title hruby.rightangle ru[zhuyin] yin,
+html.moe-capacitor .result .entry .title hruby.rightangle ru[zhuyin] diao {
   font-family: "MOE EduKai Android", MOEDICT, "Zhuyin Kaiti", cursive, serif !important;
 }
 

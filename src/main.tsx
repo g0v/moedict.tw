@@ -64,6 +64,10 @@ function applyPlatformClasses() {
   const ua = navigator.userAgent;
   document.documentElement.classList.toggle('moe-android', /\bAndroid\b/i.test(ua));
   document.documentElement.classList.toggle('moe-ios', /\b(iPhone|iPad|iPod)\b/i.test(ua));
+  document.documentElement.classList.toggle(
+    'moe-capacitor',
+    Boolean((window as Window & { Capacitor?: unknown }).Capacitor),
+  );
 }
 
 // 在渲染前先修正 URL 和設置攔截器

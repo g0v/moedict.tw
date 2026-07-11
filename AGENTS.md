@@ -179,16 +179,26 @@ vp run deploy           # 驗證通過後才部署 production
   `https://r2-assets.moedict.tw`），**直接對該網域發 `<link>` 請求，完全繞過
   本 Worker**；`About.tsx` 自己另一份載入邏輯固定打相對路徑
   `/assets/styles.css`（Worker 代理 fallback）。兩者的 `loadCSS()` 都不會在
-  失敗時重試另一條路徑。**既有 Playwright e2e/visual 套件目前完全測不到這個
+  失敗時重試另一條路徑。兩條路徑都附加 `?v=20260711` 查詢參數
+  （`LEGACY_STYLESHEET_VERSION`，定義在 `src/utils/media-cdn.ts`）——這是
+  一次性快取命名空間，用來繞過 pre-existing 未版本化的 `styles.css` 物件
+  （edge 快取 `max-age=86400` / 24h）。**例行後續 data-only 上傳**只需重傳
+  R2 物件並設 `Cache-Control: public, max-age=300`（5 分鐘 edge TTL），
+  不必重佈 Worker、不必 bump 版本；bump `?v=` 僅用於緊急立即 bust 任何過時
+  edge 快取的 stylesheet key（原始未版本化物件的 24h，或前一個 `?v=` 版本
+  仍快取在 5 分鐘 TTL）。**既有 Playwright e2e/visual 套件大多測不到這個
   檔案**：測試環境的 `ASSET_BASE_URL` 是假網域 `r2-assets.test.local`，被
   `tests/e2e/_fixtures.ts` 全域擋成 404，`tests/helpers/fixtures.ts` 的
   `collectAssetFixtures()` 也沒把 styles.css 種進 Miniflare 的 ASSETS
-  bucket——所以現有 `visual-snapshots.spec.ts` 的 baseline 全部是在「legacy
-  CSS 沒套用」的狀態下拍的。這是既有落差，不是本次改動造成，暫不處理（修這個
-  屬於獨立的測試基礎設施工作，範圍超出單一 CSS 檔案整理）。
+  bucket——所以 `visual-snapshots.spec.ts` 的 baseline 全部是在「legacy
+  CSS 沒套用」的狀態下拍的。**例外**：`legacy-styles-regression.spec.ts`
+  用 `page.route()` 攔截 styles.css（含 `?v=` 查詢版本）並灌入真實 CSS 做差分
+  比對；`console-load-errors.spec.ts` 同樣攔截並驗證載入。這兩個 spec 不受上述
+  404 限制。其餘既有落差不是本次改動造成，暫不處理（屬於獨立的測試基礎設施
+  工作，範圍超出單一 CSS 檔案整理）。
 - **驗證新/舊版 styles.css 是否零視覺差異，用
   `tests/e2e/legacy-styles-regression.spec.ts`**（新增，2026-07）：對每個代表
-  頁面，用 `page.route()` 攔截上述兩條 styles.css 請求路徑，先灌
+  頁面，用 `page.route()` 攔截上述兩條 styles.css 請求路徑（含 `?v=` 查詢版本），先灌
   `git show <ref>:data/assets/styles.css`、再灌 working tree 版本，比對兩次
   導覽後的 `getComputedStyle`（含 `::before`/`::after`，因為 Font
   Awesome/glyph 類選擇器幾乎全靠 `:before{content}` 呈現——純 PNG 截圖 diff
