@@ -1,6 +1,9 @@
 # Logs
 logs
 *.log
+
+# Local documentation artifacts
+docs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
