@@ -1,24 +1,35 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './_fixtures';
 
-// Regression coverage for the Material 3 redesign: #user-pref is now a real
-// <m3e-dialog> (modal, centered, scrim-backed) instead of the legacy fixed
-// panel pinned 45/50px beneath the navbar (the shape asserted by the old
-// version of this spec, from #99 / PR #101). The dialog manages its own
-// responsive sizing/scrolling internally, so instead of asserting an exact
-// pinned offset we assert the modal actually opens, never spills outside
-// the viewport on constrained screens, and is dismissible.
+// Regression coverage for the Material 3 redesign: the settings panel is now
+// a real <m3e-dialog id="m3-user-pref"> (modal, centered, scrim-backed)
+// instead of the legacy fixed panel pinned 45/50px beneath the navbar (the
+// shape asserted by the old version of this spec, from #99 / PR #101). The
+// dialog manages its own responsive sizing/scrolling internally, so instead
+// of asserting an exact pinned offset we assert the modal actually opens,
+// never spills outside the viewport on constrained screens, and is
+// dismissible.
+//
+// The id is deliberately "m3-user-pref", NOT "user-pref": the legacy remote
+// theme (data/assets/styles.css) ships `#user-pref { display: none; ... }`
+// as the old div-panel's default (toggled visible via an inline style,
+// pre-M3). That ID-selector rule has higher specificity than the new
+// component's own `:host { display: contents }` default and silently kept
+// the dialog `display: none` forever regardless of its `open` state — the
+// dialog was promoted to the top layer (`:modal` matched) but still
+// invisible. The explicit `display` assertion below exists specifically to
+// catch a regression of that exact bug if the id ever collides again.
 
 async function openPrefPanel(page: Page): Promise<void> {
   const gearButton = page.getByRole('button', { name: '偏好設定' });
   await gearButton.click();
   await page.waitForFunction(() => {
-    const el = document.getElementById('user-pref');
+    const el = document.getElementById('m3-user-pref');
     return el !== null && el.hasAttribute('open');
   });
 }
 
-test.describe('#user-pref settings dialog', () => {
+test.describe('#m3-user-pref settings dialog', () => {
   test('narrow mobile viewport: dialog opens and stays within the viewport', async ({ page }) => {
     // iPhone SE-sized viewport — short enough that the dialog would overflow
     // without its own internal max-height + scroll handling.
@@ -28,8 +39,9 @@ test.describe('#user-pref settings dialog', () => {
 
     await openPrefPanel(page);
 
-    const dialog = page.locator('#user-pref');
+    const dialog = page.locator('#m3-user-pref');
     await expect(dialog).toBeVisible();
+    expect(await dialog.evaluate((el) => getComputedStyle(el).display)).not.toBe('none');
 
     // The <m3e-dialog> host is `display: contents` (it renders no box of
     // its own); the actual visual surface is the internal native <dialog>
@@ -38,6 +50,11 @@ test.describe('#user-pref settings dialog', () => {
     const box = await surface.boundingBox();
     expect(box).not.toBeNull();
     if (!box) return;
+
+    // A real regression check: a `display:none`-collapsed dialog still
+    // reports a bounding box, but it's zero-sized. Assert real content area.
+    expect(box.width).toBeGreaterThan(100);
+    expect(box.height).toBeGreaterThan(100);
 
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.y).toBeGreaterThanOrEqual(0);
@@ -52,13 +69,17 @@ test.describe('#user-pref settings dialog', () => {
 
     await openPrefPanel(page);
 
-    const dialog = page.locator('#user-pref');
+    const dialog = page.locator('#m3-user-pref');
     await expect(dialog).toBeVisible();
+    expect(await dialog.evaluate((el) => getComputedStyle(el).display)).not.toBe('none');
 
     const surface = page.getByRole('dialog');
     const box = await surface.boundingBox();
     expect(box).not.toBeNull();
     if (!box) return;
+
+    expect(box.width).toBeGreaterThan(100);
+    expect(box.height).toBeGreaterThan(100);
 
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.y).toBeGreaterThanOrEqual(0);
@@ -72,11 +93,11 @@ test.describe('#user-pref settings dialog', () => {
     await page.waitForLoadState('networkidle');
 
     await openPrefPanel(page);
-    await expect(page.locator('#user-pref')).toBeVisible();
+    await expect(page.locator('#m3-user-pref')).toBeVisible();
 
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => {
-      const el = document.getElementById('user-pref');
+      const el = document.getElementById('m3-user-pref');
       return el !== null && !el.hasAttribute('open');
     });
   });
@@ -92,7 +113,7 @@ test.describe('#user-pref settings dialog', () => {
     // Playwright pierces shadow roots for role-based locators by default.
     await page.getByRole('button', { name: /close/i }).click();
     await page.waitForFunction(() => {
-      const el = document.getElementById('user-pref');
+      const el = document.getElementById('m3-user-pref');
       return el !== null && !el.hasAttribute('open');
     });
   });

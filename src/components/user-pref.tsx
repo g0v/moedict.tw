@@ -184,7 +184,16 @@ export function UserPref() {
 	}, []);
 
 	return (
-		<M3eDialog id="user-pref" open={open} dismissible onClosed={closePanel} onCancel={closePanel}>
+		// id is deliberately NOT "user-pref": the legacy remote theme
+		// (data/assets/styles.css) has `#user-pref { display: none; ... }`
+		// as its default (the old div-panel toggled visible via an inline
+		// style). That ID-selector rule has higher specificity than this
+		// component's own `:host { display: contents }` default and would
+		// silently keep the dialog display:none forever, regardless of its
+		// `open` state — confirmed via computed-style inspection, the
+		// dialog was promoted to the top layer (`:modal` matched) but
+		// still invisible. Use a namespaced id to avoid the collision.
+		<M3eDialog id="m3-user-pref" open={open} dismissible onClosed={closePanel} onCancel={closePanel}>
 			<span slot="header">偏好設定</span>
 			<ul>
 				{currentLang === 'a' && (
