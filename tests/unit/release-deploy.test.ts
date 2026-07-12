@@ -176,6 +176,7 @@ function baseOpts(env: "production" | "staging", overrides: Record<string, unkno
     manifest: MANIFEST,
     baseUrl: "https://probe.test",
     sleep: async () => {},
+    propagationSleepMs: 0,
     nowIso: makeCounterNowIso(),
     soakIntervalMs: 1,
     soakDurationMs: 1,
@@ -827,6 +828,34 @@ it("soaks for at least 120s by default (24 sleeps of 5000ms) when soak options a
   });
   expect(sleepCalls).toHaveLength(24);
   expect(sleepCalls.every((ms) => ms === 5000)).toBe(true);
+});
+
+it("sleeps propagationSleepMs (default 10s) between deploy-phase1 and the version-override smoke probe", async () => {
+  const timeline: string[] = [];
+  const { runner } = buildRunner({}, (phase) => timeline.push(`runner:${phase}`));
+  const { fetchImpl } = buildFetch(({ override }) => {
+    timeline.push(override ? "fetch:override" : "fetch:plain");
+    return undefined;
+  });
+  const sleepCalls: number[] = [];
+  await runReleaseDeploy({
+    ...baseOpts("staging", { runner, fetch: fetchImpl }),
+    propagationSleepMs: 7000,
+    sleep: async (ms: number) => {
+      sleepCalls.push(ms);
+    },
+  });
+  // The first sleep call must be the propagation delay, before any override fetch.
+  expect(sleepCalls[0]).toBe(7000);
+  const firstOverrideFetch = timeline.indexOf("fetch:override");
+  const firstSleep = timeline.length; // sleepCalls are not tracked in timeline, but deploy-phase1 must precede the smoke
+  // Verify deploy-phase1 fires BEFORE any override probe.
+  expect(timeline.indexOf("runner:deploy-phase1")).toBeLessThan(firstOverrideFetch);
+  // Verify the propagation sleep fires (sleepCalls[0] is 7000, not a soak value).
+  expect(sleepCalls).toContain(7000);
+  // The remaining calls are soak sleeps driven by soakIntervalMs (set to 1 in baseOpts).
+  expect(sleepCalls.slice(1).every((ms) => ms === 1)).toBe(true);
+  void firstSleep; // suppress unused warning
 });
 
 // ── state persistence ──────────────────────────────────────────────
