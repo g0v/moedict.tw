@@ -83,12 +83,10 @@ describe("UserPref — bopomofo_sandhi_t toggle", () => {
     const select = getSandhiSelect();
     expect(select).not.toBeNull();
 
-    const reloadSpy = vi.fn();
-    vi.stubGlobal("location", { ...window.location, reload: reloadSpy });
+    const reloadSpy = vi.spyOn(window.location, "reload").mockImplementation(() => undefined);
 
     act(() => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
-      setter!.call(select, "sandhi");
+      select!.value = "sandhi";
       select!.dispatchEvent(new Event("change", { bubbles: true }));
     });
 
