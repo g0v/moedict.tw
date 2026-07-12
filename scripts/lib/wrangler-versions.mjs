@@ -275,21 +275,36 @@ export async function listVersions(configPath, workerName, opts = {}) {
 }
 
 /**
- * Resolve the version UUID whose `annotations["workers/tag"]` equals `tag`.
- * Used to independently confirm the UUID parsed from `versions upload`'s
- * text output against the authoritative `--json` listing.
+ * Return every version entry whose `annotations["workers/tag"]` equals
+ * `tag`, without requiring uniqueness. Deterministic release IDs mean a
+ * retry (after a partial prior run, or a concurrent duplicate upload) can
+ * legitimately find 0, 1, or >1 matches — callers decide how to react
+ * (reuse a unique match, fail closed on ambiguity, or upload when absent).
+ * @param {Array<Record<string, unknown>>} versions
+ * @param {string} tag
+ * @returns {Array<Record<string, unknown>>}
+ */
+export function findVersionsByTag(versions, tag) {
+  if (!Array.isArray(versions)) {
+    throw new Error("findVersionsByTag: versions must be an array");
+  }
+  return versions.filter((v) => {
+    const annotations = /** @type {Record<string, unknown> | undefined} */ (v?.annotations);
+    return annotations?.["workers/tag"] === tag;
+  });
+}
+
+/**
+ * Resolve the version UUID whose `annotations["workers/tag"]` equals `tag`,
+ * requiring EXACTLY one match. Used to independently confirm the UUID
+ * parsed from `versions upload`'s text output against the authoritative
+ * `--json` listing.
  * @param {Array<Record<string, unknown>>} versions
  * @param {string} tag
  * @returns {string}
  */
 export function findVersionByTag(versions, tag) {
-  if (!Array.isArray(versions)) {
-    throw new Error("findVersionByTag: versions must be an array");
-  }
-  const matches = versions.filter((v) => {
-    const annotations = /** @type {Record<string, unknown> | undefined} */ (v?.annotations);
-    return annotations?.["workers/tag"] === tag;
-  });
+  const matches = findVersionsByTag(versions, tag);
   if (matches.length === 0) {
     throw new Error(`No version found with tag ${tag}`);
   }

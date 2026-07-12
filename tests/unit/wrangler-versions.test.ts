@@ -15,6 +15,7 @@ import {
   deployVersionSplit,
   findTagByVersionId,
   findVersionByTag,
+  findVersionsByTag,
   getCurrentDeployment,
   listVersions,
   requireSingleVersion100,
@@ -317,6 +318,36 @@ describe("findVersionByTag", () => {
       { id: NEW_UUID, annotations: { "workers/tag": TAG } },
     ];
     expect(() => findVersionByTag(versions, TAG)).toThrow(/Ambiguous/);
+  });
+});
+
+describe("findVersionsByTag", () => {
+  it("returns all matching version entries without requiring uniqueness", () => {
+    const versions = [
+      { id: OLD_UUID, annotations: { "workers/tag": TAG } },
+      { id: NEW_UUID, annotations: { "workers/tag": TAG } },
+      { id: "33333333-3333-4333-8333-333333333333", annotations: { "workers/tag": "other" } },
+    ];
+    expect(findVersionsByTag(versions, TAG)).toEqual([
+      { id: OLD_UUID, annotations: { "workers/tag": TAG } },
+      { id: NEW_UUID, annotations: { "workers/tag": TAG } },
+    ]);
+  });
+
+  it("returns an empty array when nothing matches (not an error — callers decide)", () => {
+    expect(findVersionsByTag([{ id: OLD_UUID, annotations: {} }], TAG)).toEqual([]);
+  });
+
+  it("returns an empty array for an empty versions list", () => {
+    expect(findVersionsByTag([], TAG)).toEqual([]);
+  });
+
+  it("throws when versions is not an array", () => {
+    expect(() => findVersionsByTag(null as never, TAG)).toThrow(/must be an array/);
+  });
+
+  it("treats a version with no annotations as non-matching, not a crash", () => {
+    expect(findVersionsByTag([{ id: OLD_UUID }], TAG)).toEqual([]);
   });
 });
 

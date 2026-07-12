@@ -107,6 +107,7 @@ function buildRunner(
   onCall?: (phase: string, argv: string[]) => void,
 ) {
   const calls: string[][] = [];
+  let versionsListCalls = 0;
   const runner = async (argv: string[]) => {
     calls.push(argv);
     const phase = phaseOf(argv);
@@ -114,6 +115,18 @@ function buildRunner(
     const override = overrides[phase];
     if (override) {
       return typeof override === "function" ? override(argv, calls.length) : override;
+    }
+    if (phase === "versions-list") {
+      versionsListCalls += 1;
+      // Default (no override): the FIRST versions-list call is always the
+      // orchestrator's pre-upload existence check (step 5) and, by
+      // default, finds nothing tagged yet — the common "fresh release, no
+      // prior upload" case every unmodified test below represents. Any
+      // LATER call is the post-upload confirm and finds the freshly
+      // uploaded version, matching the pre-existing fixture.
+      return versionsListCalls === 1
+        ? { exitCode: 0, stdout: "[]", stderr: "" }
+        : DEFAULT_RESPONSES["versions-list"];
     }
     const fallback = DEFAULT_RESPONSES[phase];
     if (!fallback) throw new Error(`unmocked wrangler phase: ${phase} (argv: ${argv.join(" ")})`);
@@ -384,11 +397,23 @@ describe("requires a safe old version before starting", () => {
 });
 describe("upload confirmation (upload UUID vs versions-list tag lookup)", () => {
   it("aborts before any deploy call when the uploaded UUID mismatches the unique versions-list tag match", async () => {
+    // Pre-upload existence check (call 1) finds nothing tagged yet; the
+    // post-upload confirm (call 2) disagrees with what `upload` itself
+    // reported — this is the CLI's own text-vs-JSON cross-check, distinct
+    // from the idempotent-reuse path exercised below.
+    let versionsListCall = 0;
     const { runner, calls } = buildRunner({
-      "versions-list": {
-        exitCode: 0,
-        stdout: JSON.stringify([{ id: OTHER_UUID, annotations: { "workers/tag": RELEASE_ID } }]),
-        stderr: "",
+      "versions-list": () => {
+        versionsListCall += 1;
+        return versionsListCall === 1
+          ? { exitCode: 0, stdout: "[]", stderr: "" }
+          : {
+              exitCode: 0,
+              stdout: JSON.stringify([
+                { id: OTHER_UUID, annotations: { "workers/tag": RELEASE_ID } },
+              ]),
+              stderr: "",
+            };
       },
     });
     const { fetchImpl } = buildFetch();
@@ -416,6 +441,225 @@ describe("upload confirmation (upload UUID vs versions-list tag lookup)", () => 
     });
     // Never claims success: no current-deployment state exists.
     expect(readCurrentDeployment({ baseDir: join(dir, "staging") })).toBeNull();
+  });
+});
+
+// ── idempotent tag resolution (retry-safe: deterministic release IDs) ──
+//
+// Cloudflare version tags are reusable, not unique. Since the release ID
+// is deterministic (same git SHA + client manifest digest -> same tag),
+// retrying the exact same build after ANY prior partial run must reuse an
+// already-uploaded version instead of uploading a duplicate — a second
+// upload with the same tag would make every future lookup permanently
+// ambiguous. These tests exercise the list-before-upload resolution added
+// to step 5, independent of the pre-existing post-upload confirm checked
+// above.
+describe("idempotent tag resolution", () => {
+  it("retry after a prior upload (no finalize yet): reuses the existing tagged version, never re-uploads, proceeds through new0/old100 normally", async () => {
+    const { runner, calls } = buildRunner({
+      "versions-list": {
+        exitCode: 0,
+        stdout: JSON.stringify([{ id: NEW_UUID, annotations: { "workers/tag": RELEASE_ID } }]),
+        stderr: "",
+      },
+    });
+    const { fetchImpl } = buildFetch();
+    const result = await runReleaseDeploy(baseOpts("staging", { runner, fetch: fetchImpl }));
+    expect(result.versionId).toBe(NEW_UUID);
+    expect(calls.some((c) => c.includes("upload"))).toBe(false);
+    const phase1 = calls.find((c) => phaseOf(c) === "deploy-phase1");
+    expect(phase1).toContain(`${NEW_UUID}@0%`);
+    expect(phase1).toContain(`${OLD_UUID}@100%`);
+    const history = readVersionHistory({ baseDir: join(dir, "staging") });
+    expect(history[0]).toMatchObject({
+      versionId: NEW_UUID,
+      tag: RELEASE_ID,
+      status: VERSION_STATUS.REUSED,
+    });
+  });
+
+  it("retry after a phase-1 smoke failure: the abandoned uploaded version (rolled out of the deployment but never deleted) is found and reused, not re-uploaded", async () => {
+    // Simulates a second `runReleaseDeploy` invocation after a prior run's
+    // override smoke failed and restored old@100 alone: the current
+    // deployment is back to a clean old@100 (from step 4's perspective),
+    // but `versions list` still carries the abandoned NEW_UUID upload.
+    const { runner, calls } = buildRunner({
+      "versions-list": {
+        exitCode: 0,
+        stdout: JSON.stringify([{ id: NEW_UUID, annotations: { "workers/tag": RELEASE_ID } }]),
+        stderr: "",
+      },
+    });
+    const { fetchImpl } = buildFetch();
+    await runReleaseDeploy(baseOpts("staging", { runner, fetch: fetchImpl }));
+    expect(calls.some((c) => c.includes("upload"))).toBe(false);
+    expect(calls.some((c) => phaseOf(c) === "deploy-promote")).toBe(true);
+    expect(calls.some((c) => phaseOf(c) === "finalize")).toBe(true);
+  });
+
+  it("current-already-release idempotency: when the sole matching tagged version is already live at 100%, returns success with zero mutating calls beyond the read-only pre-check", async () => {
+    const { runner, calls } = buildRunner({
+      // OLD_UUID (already the sole live version per the default
+      // deployments-list fixture) is ALSO the version carrying this
+      // release's tag — e.g. a CLI retry after finalize + final smoke
+      // already succeeded but the process exited before returning.
+      "versions-list": {
+        exitCode: 0,
+        stdout: JSON.stringify([{ id: OLD_UUID, annotations: { "workers/tag": RELEASE_ID } }]),
+        stderr: "",
+      },
+    });
+    const { fetchImpl, calls: fetchCalls } = buildFetch();
+    const result = await runReleaseDeploy(baseOpts("staging", { runner, fetch: fetchImpl }));
+    expect(result).toMatchObject({ versionId: OLD_UUID, alreadyCurrent: true });
+    // No mutating call at all: only the read-only deployments-list and
+    // versions-list queries, plus the bounded no-override final smoke.
+    const mutatingPhases: Record<string, true> = {
+      upload: true,
+      "deploy-phase1": true,
+      "deploy-promote": true,
+      "deploy-rollback": true,
+      "restore-old-alone": true,
+      finalize: true,
+    };
+    expect(calls.some((c) => mutatingPhases[phaseOf(c)])).toBe(false);
+    // The bounded final smoke ran WITHOUT the override header.
+    expect(fetchCalls.length).toBeGreaterThan(0);
+    expect(fetchCalls.every((c) => c.override === undefined)).toBe(true);
+    const current = readCurrentDeployment({ baseDir: join(dir, "staging") });
+    expect(current?.versionId).toBe(OLD_UUID);
+    expect(current?.percentage).toBe(100);
+  });
+
+  it("current-already-release idempotency also refreshes staging approval so production's gate sees a fresh approvedAt", async () => {
+    const { runner } = buildRunner({
+      "versions-list": {
+        exitCode: 0,
+        stdout: JSON.stringify([{ id: OLD_UUID, annotations: { "workers/tag": RELEASE_ID } }]),
+        stderr: "",
+      },
+    });
+    const { fetchImpl } = buildFetch();
+    const result = await runReleaseDeploy(baseOpts("staging", { runner, fetch: fetchImpl }));
+    const approval = readStagingApproval({ baseDir: dir });
+    expect(approval).toEqual({
+      gitSha: GIT_SHA,
+      clientManifestDigest: DIGEST,
+      approvedAt: result.deployedAt,
+    });
+  });
+
+  it("current-already-release idempotency for PRODUCTION: passes the approval gate, short-circuits with zero mutation, and never writes a staging approval", async () => {
+    saveStagingApproval(
+      { gitSha: GIT_SHA, clientManifestDigest: DIGEST, approvedAt: "2026-07-12T00:00:00Z" },
+      { baseDir: dir },
+    );
+    const { runner, calls } = buildRunner({
+      "versions-list": {
+        exitCode: 0,
+        stdout: JSON.stringify([{ id: OLD_UUID, annotations: { "workers/tag": RELEASE_ID } }]),
+        stderr: "",
+      },
+    });
+    const { fetchImpl } = buildFetch();
+    const result = await runReleaseDeploy(baseOpts("production", { runner, fetch: fetchImpl }));
+    expect(result).toMatchObject({ versionId: OLD_UUID, alreadyCurrent: true, env: "production" });
+    const mutatingPhases: Record<string, true> = {
+      upload: true,
+      "deploy-phase1": true,
+      "deploy-promote": true,
+      "deploy-rollback": true,
+      "restore-old-alone": true,
+      finalize: true,
+    };
+    expect(calls.some((c) => mutatingPhases[phaseOf(c)])).toBe(false);
+    // Production idempotent short-circuit never writes a staging approval —
+    // the pre-seeded one is left byte-for-byte unchanged.
+    expect(readStagingApproval({ baseDir: dir })).toEqual({
+      gitSha: GIT_SHA,
+      clientManifestDigest: DIGEST,
+      approvedAt: "2026-07-12T00:00:00Z",
+    });
+    const current = readCurrentDeployment({ baseDir: join(dir, "production") });
+    expect(current?.versionId).toBe(OLD_UUID);
+    expect(current?.percentage).toBe(100);
+  });
+
+  it("current-already-release idempotency still rolls back to nothing (throws, no false success) when the bounded final smoke fails", async () => {
+    const { runner } = buildRunner({
+      "versions-list": {
+        exitCode: 0,
+        stdout: JSON.stringify([{ id: OLD_UUID, annotations: { "workers/tag": RELEASE_ID } }]),
+        stderr: "",
+      },
+    });
+    const { fetchImpl } = buildFetch(() => new Response("err", { status: 500 }));
+    await expect(
+      runReleaseDeploy(baseOpts("staging", { runner, fetch: fetchImpl })),
+    ).rejects.toThrow();
+    expect(readCurrentDeployment({ baseDir: join(dir, "staging") })).toBeNull();
+  });
+
+  it("ambiguity before mutation: multiple existing versions already carry the release tag before any upload — fails closed, names both UUIDs, never mutates", async () => {
+    const { runner, calls } = buildRunner({
+      "versions-list": {
+        exitCode: 0,
+        stdout: JSON.stringify([
+          { id: NEW_UUID, annotations: { "workers/tag": RELEASE_ID } },
+          { id: OTHER_UUID, annotations: { "workers/tag": RELEASE_ID } },
+        ]),
+        stderr: "",
+      },
+    });
+    const { fetchImpl } = buildFetch();
+    await expect(
+      runReleaseDeploy(baseOpts("staging", { runner, fetch: fetchImpl })),
+    ).rejects.toThrow(new RegExp(`Ambiguous.*${NEW_UUID}.*${OTHER_UUID}`, "s"));
+    // Zero mutating calls: not even `upload` fired, since ambiguity is
+    // detected strictly before any mutation.
+    const mutatingPhases: Record<string, true> = {
+      upload: true,
+      "deploy-phase1": true,
+      "deploy-promote": true,
+      "deploy-rollback": true,
+      "restore-old-alone": true,
+      finalize: true,
+    };
+    expect(calls.some((c) => mutatingPhases[phaseOf(c)])).toBe(false);
+    expect(readVersionHistory({ baseDir: join(dir, "staging") })).toHaveLength(0);
+    expect(readCurrentDeployment({ baseDir: join(dir, "staging") })).toBeNull();
+  });
+
+  it("race duplicate after upload: a concurrent run tags a second version between this run's pre-check and its own upload — the post-upload confirm still catches the now-ambiguous tag and aborts before any deploy call", async () => {
+    let versionsListCall = 0;
+    const { runner, calls } = buildRunner({
+      "versions-list": () => {
+        versionsListCall += 1;
+        return versionsListCall === 1
+          ? { exitCode: 0, stdout: "[]", stderr: "" } // pre-check: still clear
+          : {
+              // post-upload confirm: a concurrent run's upload landed too
+              exitCode: 0,
+              stdout: JSON.stringify([
+                { id: NEW_UUID, annotations: { "workers/tag": RELEASE_ID } },
+                { id: OTHER_UUID, annotations: { "workers/tag": RELEASE_ID } },
+              ]),
+              stderr: "",
+            };
+      },
+    });
+    const { fetchImpl } = buildFetch();
+    await expect(
+      runReleaseDeploy(baseOpts("staging", { runner, fetch: fetchImpl })),
+    ).rejects.toThrow(/Ambiguous: 2 versions found with tag/);
+    const mutatingPhases: Record<string, true> = {
+      "deploy-phase1": true,
+      "deploy-promote": true,
+      "deploy-rollback": true,
+      "restore-old-alone": true,
+      finalize: true,
+    };
+    expect(calls.some((c) => mutatingPhases[phaseOf(c)])).toBe(false);
   });
 });
 
@@ -666,7 +910,7 @@ describe("fails clearly when Task 2 build output is absent", () => {
 // ── malformed CLI JSON / runner failure propagation ───────────────────
 
 describe("malformed CLI output and runner failures", () => {
-  it("propagates malformed versions-list JSON from the confirm-tag step", async () => {
+  it("propagates malformed versions-list JSON (fires on the pre-upload existence check, the first call to this phase)", async () => {
     const { runner } = buildRunner({
       "versions-list": { exitCode: 0, stdout: "not json", stderr: "" },
     });
@@ -789,6 +1033,7 @@ it("executes phases in the exact required order for a full success run", async (
   await runReleaseDeploy(baseOpts("staging", { runner, fetch: fetchImpl }));
   expect(timeline).toEqual([
     "runner:deployments-list",
+    "runner:versions-list",
     "runner:upload",
     "runner:versions-list",
     "runner:deploy-phase1",

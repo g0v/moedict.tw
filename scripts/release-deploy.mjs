@@ -4,9 +4,17 @@
  * Usage: node scripts/release-deploy.mjs  (CLOUDFLARE_ENV=staging|production, default production)
  *
  * Runs the full safe protocol: prod approval gate → require old@100 →
- * upload tagged version → deploy new@0/old@100 → version-override smoke →
- * promote new@100/old@0 → 120s continuous probe → finalize new@100 alone →
- * final smoke → save state → (staging only) record approval for prod.
+ * resolve tagged version idempotently (reuse an existing match, upload only
+ * when none exists, fail closed before any mutation on ambiguity, and
+ * short-circuit to idempotent success with no mutation at all when the
+ * resolved version is already the sole live version) → deploy new@0/old@100
+ * → version-override smoke → promote new@100/old@0 → 120s continuous probe
+ * → finalize new@100 alone → final smoke → save state → (staging only)
+ * record approval for prod. Release IDs are deterministic (git SHA +
+ * client manifest digest), so retrying the exact same build after any
+ * partial prior run must never blindly re-upload — Cloudflare version tags
+ * are reusable, not unique, so a duplicate upload would make the tag
+ * permanently ambiguous.
  *
  * `runReleaseDeploy` is the fully dependency-injected, unit-testable core.
  * `main()` supplies real adapters (process env, real Wrangler subprocess,
@@ -34,6 +42,8 @@ import {
   rollbackToVersion,
   listVersions,
   findVersionByTag,
+  findVersionsByTag,
+  validateVersionUuid,
   getCurrentDeployment,
   requireSingleVersion100,
 } from "./lib/wrangler-versions.mjs";
@@ -197,35 +207,102 @@ export async function runReleaseDeploy(opts = {}) {
   const oldDeployment = await getCurrentDeployment(configPath, workerName, { runner });
   const oldVersionUuid = requireSingleVersion100(oldDeployment);
 
-  // 5. Upload the new tagged version (first mutating call), confirmed via versions list.
-  const uploadedUuid = await uploadVersion(configPath, releaseId, { runner });
-  const versions = await listVersions(configPath, workerName, { runner });
-  const confirmedUuid = findVersionByTag(versions, releaseId);
-  if (confirmedUuid !== uploadedUuid) {
+  // 5. Resolve the tagged version idempotently. Release IDs are
+  //    deterministic (same git SHA + client manifest digest -> same tag),
+  //    so a retry after any prior partial run (upload succeeded but a
+  //    later phase failed and left the version unfinalized, or the whole
+  //    process crashed right after upload) must reuse the existing tagged
+  //    version rather than blindly uploading again — Cloudflare tags are
+  //    not unique, so a second upload with the same tag would make every
+  //    future lookup permanently ambiguous. List BEFORE uploading.
+  const preUploadVersions = await listVersions(configPath, workerName, { runner });
+  const preMatches = findVersionsByTag(preUploadVersions, releaseId);
+  let newVersionUuid;
+  if (preMatches.length > 1) {
+    const ids = preMatches.map((v) => /** @type {{ id: unknown }} */ (v).id).join(", ");
+    throw new Error(
+      `Ambiguous: ${preMatches.length} existing versions already carry tag ${releaseId} (${ids}) — ` +
+        `refusing to pick one before any mutating call; investigate manually (see docs/superpowers/recovery.md)`,
+    );
+  } else if (preMatches.length === 1) {
+    const reusedId = /** @type {{ id: unknown }} */ (preMatches[0]).id;
+    validateVersionUuid(/** @type {string} */ (reusedId));
+    newVersionUuid = /** @type {string} */ (reusedId);
     saveVersionEntry(
       {
-        versionId: uploadedUuid,
+        versionId: newVersionUuid,
         tag: releaseId,
         uploadedAt: nowIso(),
-        status: VERSION_STATUS.CONFIRM_FAILED,
+        status: VERSION_STATUS.REUSED,
       },
       stateOpts,
     );
-    throw new Error(
-      `Version UUID mismatch: upload output reported ${uploadedUuid}, but versions list confirms ` +
-        `${confirmedUuid} for tag ${releaseId}`,
+  } else {
+    const uploadedUuid = await uploadVersion(configPath, releaseId, { runner });
+    const versions = await listVersions(configPath, workerName, { runner });
+    const confirmedUuid = findVersionByTag(versions, releaseId);
+    if (confirmedUuid !== uploadedUuid) {
+      saveVersionEntry(
+        {
+          versionId: uploadedUuid,
+          tag: releaseId,
+          uploadedAt: nowIso(),
+          status: VERSION_STATUS.CONFIRM_FAILED,
+        },
+        stateOpts,
+      );
+      throw new Error(
+        `Version UUID mismatch: upload output reported ${uploadedUuid}, but versions list confirms ` +
+          `${confirmedUuid} for tag ${releaseId}`,
+      );
+    }
+    newVersionUuid = confirmedUuid;
+    saveVersionEntry(
+      {
+        versionId: newVersionUuid,
+        tag: releaseId,
+        uploadedAt: nowIso(),
+        status: VERSION_STATUS.UPLOADED,
+      },
+      stateOpts,
     );
   }
-  const newVersionUuid = confirmedUuid;
-  saveVersionEntry(
-    {
+
+  // 5b. Idempotency short-circuit: the resolved version is already the
+  //     sole live version (e.g. a prior run's finalize + final smoke
+  //     already succeeded and only the process/CLI exited before
+  //     returning). Re-confirm health with a bounded, no-override final
+  //     smoke against the manifest routes and return success WITHOUT any
+  //     further mutating Wrangler call — never re-run a rollout against a
+  //     version that is already correctly serving 100% of traffic.
+  if (newVersionUuid === oldVersionUuid) {
+    await finalSmoke(baseUrl, routes, releaseId, { fetch: fetchImpl, ...probeTimeoutOpts });
+    const deployedAt = nowIso();
+    saveVersionEntry(
+      {
+        versionId: newVersionUuid,
+        tag: releaseId,
+        uploadedAt: deployedAt,
+        status: VERSION_STATUS.FINALIZED,
+      },
+      stateOpts,
+    );
+    saveCurrentDeployment(
+      { workerName, versionId: newVersionUuid, tag: releaseId, percentage: 100, deployedAt },
+      stateOpts,
+    );
+    if (env === "staging") {
+      saveStagingApproval({ gitSha, clientManifestDigest, approvedAt: deployedAt }, approvalOpts);
+    }
+    return {
+      releaseId,
+      workerName,
       versionId: newVersionUuid,
-      tag: releaseId,
-      uploadedAt: nowIso(),
-      status: VERSION_STATUS.UPLOADED,
-    },
-    stateOpts,
-  );
+      env,
+      deployedAt,
+      alreadyCurrent: true,
+    };
+  }
 
   // 6. Deploy new@0 / old@100.
   await deployVersionSplit(

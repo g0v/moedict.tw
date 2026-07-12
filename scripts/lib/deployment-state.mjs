@@ -73,6 +73,7 @@ export const DEFAULT_BASE_DIR = ".wrangler/releases";
 
 /** Controlled vocabulary for `VersionHistoryEntry.status`. */
 export const VERSION_STATUS = Object.freeze({
+  REUSED: "reused",
   UPLOADED: "uploaded",
   CONFIRM_FAILED: "confirm-failed",
   SMOKE_FAILED: "smoke-failed",
