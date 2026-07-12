@@ -102,6 +102,137 @@ describe("dispatch — /api/config", () => {
   });
 });
 
+describe("dispatch — global version headers", () => {
+  const metadata = {
+    id: "uuid-dispatch-test",
+    tag: "release-dispatch-test",
+    timestamp: "2026-07-12T00:00:00Z",
+  };
+
+  it("decorates config API responses without changing JSON, CORS, or cache policy", async () => {
+    const res = await dispatch(req("/api/config"), makeEnv({ CF_VERSION_METADATA: metadata }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      assetBaseUrl: "https://r2-assets.test.local",
+      dictionaryBaseUrl: "https://r2-dictionary.test.local",
+    });
+    expect(res.headers.get("X-Moedict-Version")).toBe(metadata.id);
+    expect(res.headers.get("X-Moedict-Release")).toBe(metadata.tag);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+  });
+
+  it("decorates dictionary API responses without changing body, CORS, or cache policy", async () => {
+    const env = makeEnv({
+      CF_VERSION_METADATA: metadata,
+      DICTIONARY: makeBucket({ "search-index/a.json": { body: '{"words":[]}' } }),
+    });
+    const res = await dispatch(req("/api/search-index/a.json"), env);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe('{"words":[]}');
+    expect(res.headers.get("X-Moedict-Version")).toBe(metadata.id);
+    expect(res.headers.get("X-Moedict-Release")).toBe(metadata.tag);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expect(res.headers.get("Cache-Control")).toContain("s-maxage=604800");
+  });
+
+  it("uses unknown version and omits invalid release tags on OPTIONS", async () => {
+    const res = await dispatch(
+      req("/anything", { method: "OPTIONS" }),
+      makeEnv({ CF_VERSION_METADATA: { ...metadata, id: "", tag: "../invalid" } }),
+    );
+    expect(res.status).toBe(204);
+    expect(res.headers.get("X-Moedict-Version")).toBe("unknown");
+    expect(res.headers.get("X-Moedict-Release")).toBeNull();
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
+  });
+
+  it("decorates final 404 responses while preserving status and no-store", async () => {
+    const res = await dispatch(req("/some/random.txt"), makeEnv({ CF_VERSION_METADATA: metadata }));
+    expect(res.status).toBe(404);
+    expect(await res.text()).toBe("");
+    expect(res.headers.get("X-Moedict-Version")).toBe(metadata.id);
+    expect(res.headers.get("X-Moedict-Release")).toBe(metadata.tag);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+  });
+
+  it("decorates shell responses without changing status, body, or content type", async () => {
+    const shellHtml = "<html><head><title>old</title></head><body>shell</body></html>";
+    const fetcher = {
+      fetch: vi.fn(
+        async () =>
+          new Response(shellHtml, {
+            status: 200,
+            statusText: "Shell OK",
+            headers: { "Content-Type": "text/html" },
+          }),
+      ),
+    };
+    const res = await dispatch(
+      req("/about"),
+      makeEnv({
+        CF_VERSION_METADATA: metadata,
+        SITE_ASSETS: fetcher as unknown as AnyEnv["SITE_ASSETS"],
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(res.statusText).toBe("");
+    expect(await res.text()).toContain("<title>");
+    expect(res.headers.get("X-Moedict-Version")).toBe(metadata.id);
+    expect(res.headers.get("X-Moedict-Release")).toBe(metadata.tag);
+    expect(res.headers.get("Content-Type")).toMatch(/text\/html/);
+  });
+  it("preserves tagged-shell 304 semantics and metadata headers", async () => {
+    const env = makeEnv({
+      CF_VERSION_METADATA: metadata,
+      ASSETS: makeBucket({
+        "releases/release-dispatch-test/index.html": {
+          body: "<html><head><title>cached</title></head></html>",
+          contentType: "text/html",
+        },
+      }),
+    });
+    const res = await dispatch(req("/about", { headers: { "If-None-Match": '"etag-stub"' } }), env);
+    expect(res.status).toBe(304);
+    expect(await res.text()).toBe("");
+    expect(res.headers.get("ETag")).toBe('"etag-stub"');
+    expect(res.headers.get("X-Moedict-Shell-Source")).toBe("r2-release");
+    expect(res.headers.get("X-Moedict-Version")).toBe(metadata.id);
+    expect(res.headers.get("X-Moedict-Release")).toBe(metadata.tag);
+  });
+
+  it("decorates asset proxy responses without changing stream, status, CORS, cache, or ETag", async () => {
+    const fetcher = { fetch: vi.fn(async () => new Response("", { status: 404 })) };
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response("font bytes", {
+          status: 206,
+          statusText: "Partial Content",
+          headers: {
+            "Content-Type": "font/woff2",
+            "Cache-Control": "public, max-age=60",
+            ETag: '"asset-etag"',
+          },
+        }),
+    ) as typeof fetch;
+    const res = await dispatch(
+      req("/assets/some-font.woff2"),
+      makeEnv({
+        CF_VERSION_METADATA: metadata,
+        SITE_ASSETS: fetcher as unknown as AnyEnv["SITE_ASSETS"],
+      }),
+    );
+    expect(res.status).toBe(206);
+    expect(res.statusText).toBe("Partial Content");
+    expect(await res.text()).toBe("font bytes");
+    expect(res.headers.get("X-Moedict-Version")).toBe(metadata.id);
+    expect(res.headers.get("X-Moedict-Release")).toBe(metadata.tag);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expect(res.headers.get("Cache-Control")).toBe("public, max-age=60");
+    expect(res.headers.get("ETag")).toBe('"asset-etag"');
+  });
+});
+
 describe("respondWithConfigApi — no edge pin", () => {
   afterEach(() => {
     vi.unstubAllGlobals();

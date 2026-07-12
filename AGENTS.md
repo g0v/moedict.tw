@@ -83,27 +83,81 @@ vp run test:coverage          # 三層 coverage 合併至 coverage/combined/
 `vp run test:unit` / `vp run test:integration`。不要用裸 `bun test`——它不讀
 `vite.config.ts` 的 happy-dom、setup、alias 與 project 設定。
 
-## 部署（staging-first，這是規範不是建議）
+## 部署（零停機兩階段 rollout，這是規範不是建議）
+
+**沒有裸 `wrangler deploy` 這條路。** 標準指令一律走安全 orchestrator：
 
 ```bash
-vp run deploy:staging   # CLOUDFLARE_ENV=staging vp run build && wrangler deploy
-# → 在 https://cf-moedict-webkit-neo-staging.audreyt.workers.dev 驗證
-vp run deploy           # 驗證通過後才部署 production
+bun run deploy:staging   # 先 staging：build → 發布 R2 → 兩階段 rollout
+# → 自動於 https://cf-moedict-webkit-neo-staging.audreyt.workers.dev 做 0%/100% smoke + 120 秒 probe
+bun run deploy           # staging 通過後才部署 production；同樣 build → 發布 R2 → rollout
 ```
 
+`deploy`/`deploy:staging` 都是「同一次 build 產物」貫穿到底的三段 `&&` 鏈：
+`env -u CLOUDFLARE_ENV vp run build && env -u CLOUDFLARE_ENV node scripts/release-publish.mjs && env -u CLOUDFLARE_ENV node scripts/release-deploy.mjs`
+（production 每段都用 `env -u CLOUDFLARE_ENV` 明確清掉環境變數，讓 production
+絕不會被外層 shell/CI 殘留的 `CLOUDFLARE_ENV=staging` 汙染，fail-closed 而非
+沿用繼承值；staging 則是三段各自帶 `CLOUDFLARE_ENV=staging` 前綴。兩者都是
+因為 `&&` 串接的每個子命令是各自獨立的行程，環境變數前綴不會跨命令繼承）。
+**絕不能在 publish
+與 rollout 之間夾第二次 build**——那會讓 `release-deploy.mjs` 內部重新算出的
+release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完整協定見
+[`notes/零停機部署筆記.md`](./notes/零停機部署筆記.md)。
+
+- **兩階段 rollout**：`release-deploy.mjs` 用 `wrangler versions upload/deploy`
+  做 new0%/old100% → override smoke → new100%/old0% → ≥120 秒 probe →
+  finalize new100%。任一階段失敗自動 rollback 回舊版本 100%，絕不留下
+  未 smoke 的新版一次切到 100%。
+- **`CF_VERSION_METADATA` binding**（`wrangler.jsonc` top-level 與
+  `env.staging` 都要有、且都不可加 `"type"`）：`.id` 是 Cloudflare 產生的
+  version UUID；`.tag` 才是我們自訂的 release ID（`<git-short-sha>-<manifest-digest 前12碼>`），
+  兩者不可混用。`X-Moedict-Version` 回應標頭是 `.id`；`X-Moedict-Release`
+  是非空 `.tag`。
+- **release ID／R2 fallback**：`release-publish.mjs` 把 `dist/client/**` 上傳到
+  `releases/<release-id>/`，hashed `assets/**` 另複製一份到全域
+  `immutable/assets/`。Worker 的 HTML shell 走
+  `SITE_ASSETS → R2 releases/<tag>/index.html → 503 no-store`（絕不回 404）；
+  資產走 `SITE_ASSETS → R2 release → R2 immutable → 既有 legacy fallback`。
+- **staging → production gate（自動）**：staging 的 `deploy:staging` 在 final
+  smoke 通過「當下」自動寫入共用的 staging-approval 狀態
+  （git SHA + client manifest digest）；不存在也不需要任何手動
+  「儲存 approval」步驟或旗標。production 的 `deploy` 在任何 mutating
+  Wrangler 呼叫之前，會核對這個 approval：同一 git SHA、同一 digest、且
+  production 自己重建的 digest也要相符，三者缺一失敗，線上不變。
+- **`deploy:rollback` / `deploy:rollback:staging`**：真正可執行的緊急復原
+  （`scripts/release-rollback.mjs`），不是 stub。用法：
+  `CLOUDFLARE_ENV=<env> bun run deploy:rollback -- <known-good-version-uuid>`
+  ——**必須明確帶目標 version UUID**，不會自動猜「上一版」。流程：讀目前
+  唯一 100% version → 在 `versions list` 找到目標 UUID 的
+  `annotations["workers/tag"]` → 部署 `target@100%/current@0%` → 對固定核心
+  路由（`/`、`/api/config`、`/api/%E8%90%8C.json`，刻意不含 hashed
+  `/assets/*`，因為 rollback 不依賴任何 build manifest）做 bounded final
+  smoke → 通過才 finalize `target@100%` 單獨部署並寫入 env-namespaced
+  state；失敗則自動 restore 回 `current@100%/target@0%`，若 restore 也失敗，
+  兩個錯誤都會回報。人工緊急指令另見
+  [`docs/superpowers/recovery.md`](./docs/superpowers/recovery.md)。
+- **`deploy:publish-only` / `deploy:publish-only:staging`**：只 build 一次再
+  發布 R2（不做 version rollout），用於單獨驗證 R2 發布或分階段操作。
 - Staging 是獨立 Worker（`cf-moedict-webkit-neo-staging`），只有 _.workers.dev
   網址、綁 `moedict-_-preview`R2 桶——**Worker 與 R2 bindings 隔離，但`vars.ASSET_BASE_URL`/`DICTIONARY_BASE_URL` 仍指向正式站公開網址**
 （`r2-assets.moedict.tw` 等；`/api/config`與`/assets/\*`fallback 會用到），
 所以 staging 無法驗證 preview-assets 桶的公開資產。設定在`wrangler.jsonc`的`env.staging` 區塊。
 - **環境選擇發生在建置期**：`@cloudflare/vite-plugin` 讀 `CLOUDFLARE_ENV`
-  環境變數（build 時），不是 `wrangler deploy --env`。
-- **陷阱**：`.wrangler/deploy/config.json` 重導向永遠指向「最後一次 build」的
-  產物。跑完 `deploy:staging` 後直接裸打 `wrangler deploy` 會**再部署一次
-  staging**，不是 prod。所以一律用 `vp run deploy` / `vp run deploy:staging`
-  （它們都會先重新 build，把重導向翻回正確環境）。
+  環境變數（build 時），不是 `wrangler deploy --env`。這也是為什麼
+  `release-publish.mjs`／`release-deploy.mjs` 各自獨立讀
+  `process.env.CLOUDFLARE_ENV`，而不是依賴 build 期的 config 重導向。
+- **陷阱：generated config 是 build-time 產物**——`release-publish.mjs` 與
+  `release-deploy.mjs` 都讀 `dist/cf_moedict_webkit_neo/wrangler.json`
+  （由該次 `vp run build` 產生的 flattened config，決定 ASSETS bucket／
+  worker name／`targetEnvironment`）。若在兩次不同環境的 build 之間插入其他
+  操作、或跳過 build 直接手動跑 `release-publish.mjs`／`release-deploy.mjs`，
+  讀到的會是上一次 build 殘留的 config，環境判斷（`getAssetsBucketName`）
+  會 fail closed 報錯，而不是靜默用錯 bucket——這是設計如此，出現此錯誤
+  代表建置順序有誤，先重新從頭跑 `bun run deploy`/`deploy:staging`。
 - Cloudflare 具名環境的繼承規則：`assets`/`cache`/`observability` 可繼承；
-  `vars`/`r2_buckets`/`kv_namespaces`/`durable_objects`/`services` **不可繼承**，
-  必須在 `env.staging` 內重新宣告，否則部署出去就是缺 binding（曾因此全站 404）。
+  `vars`/`r2_buckets`/`kv_namespaces`/`durable_objects`/`services`/
+  `version_metadata` **不可繼承**，必須在 `env.staging` 內重新宣告，否則
+  部署出去就是缺 binding（曾因此全站 404）。
 - 正式站 Worker secrets：`CACHE_PURGE_TOKEN`、`CLOUDFLARE_API_TOKEN`
   （`wrangler secret list` 可確認存在；值不可讀）。
 
@@ -124,7 +178,8 @@ vp run deploy           # 驗證通過後才部署 production
   上傳後的驗證 GET 同樣會被限流，驗證程式也要有重試，否則會把 429 誤判成
   內容不一致。
 - 只改資料（`data/dictionary/**`）→ 上傳 R2 即可，不必重佈 Worker；
-  改到 `src/`、`worker/` 任何程式 → 必須 `vp run deploy` 才會上線。
+  改到 `src/`、`worker/` 任何程式 → 必須 `bun run deploy` 才會上線（見上方
+  「部署」一節的安全 rollout 鏈，不要單獨呼叫 `wrangler deploy`）。
 - `data/dictionary/lookup/pinyin/**` 與 `search-index/**` 是**衍生物**，
   由 `scripts/build-pinyin-lookup.mjs`、`build-search-index.mjs` 從 pack 檔重建
   （`predev`/`prebuild` 自動跑）。改 pack 資料後不要手改衍生檔，重建再一起上傳。

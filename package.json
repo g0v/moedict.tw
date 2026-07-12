@@ -34,11 +34,15 @@
     "test:e2e:visual:update": "playwright test --project=visual --update-snapshots",
     "test:coverage": "rm -rf coverage && vp run test:unit --coverage && vp run test:integration --coverage --coverage.reportsDirectory=coverage/integration --coverage.reporter=text-summary --coverage.reporter=json --coverage.reporter=lcov --coverage.thresholds.statements=0 --coverage.thresholds.branches=0 --coverage.thresholds.functions=0 --coverage.thresholds.lines=0 && vp run test:coverage:e2e && node scripts/merge-coverage.mjs",
     "test:coverage:e2e": "E2E_COVERAGE=1 vp run build && E2E_COVERAGE=1 E2E_SKIP_BUILD=1 playwright test --project=chromium",
+    "test:coverage:release": "vp test run --project unit tests/unit/release-deploy.test.ts tests/unit/release-rollback.test.ts tests/unit/wrangler-versions.test.ts tests/unit/smoke-probe.test.ts tests/unit/deployment-state.test.ts --coverage --coverage.include=scripts/release-deploy.mjs --coverage.include=scripts/release-rollback.mjs --coverage.include=scripts/lib/wrangler-versions.mjs --coverage.include=scripts/lib/smoke-probe.mjs --coverage.include=scripts/lib/deployment-state.mjs --coverage.reportsDirectory=coverage/release --coverage.thresholds.statements=100 --coverage.thresholds.functions=100 --coverage.thresholds.lines=100 --coverage.thresholds.branches=96",
     "stryker": "stryker run",
     "preview": "vp run build && wrangler dev",
-    "deploy": "vp run build && wrangler deploy",
-    "deploy:staging": "CLOUDFLARE_ENV=staging vp run build && wrangler deploy",
-    "cf-typegen": "wrangler types",
+    "deploy": "env -u CLOUDFLARE_ENV vp run build && env -u CLOUDFLARE_ENV node scripts/release-publish.mjs && env -u CLOUDFLARE_ENV node scripts/release-deploy.mjs",
+    "deploy:staging": "CLOUDFLARE_ENV=staging vp run build && CLOUDFLARE_ENV=staging node scripts/release-publish.mjs && CLOUDFLARE_ENV=staging node scripts/release-deploy.mjs",
+    "deploy:rollback": "env -u CLOUDFLARE_ENV node scripts/release-rollback.mjs",
+    "deploy:rollback:staging": "CLOUDFLARE_ENV=staging node scripts/release-rollback.mjs",
+    "deploy:publish-only": "env -u CLOUDFLARE_ENV vp run build && env -u CLOUDFLARE_ENV node scripts/release-publish.mjs",
+    "deploy:publish-only:staging": "CLOUDFLARE_ENV=staging vp run build && CLOUDFLARE_ENV=staging node scripts/release-publish.mjs",
     "prepare": "vp config"
   },
   "dependencies": {

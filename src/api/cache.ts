@@ -54,6 +54,10 @@ export const CACHE_CONTROL = {
   staticDay: "public, max-age=3600, s-maxage=86400",
   /** HTML SPA shell with path-specific head */
   htmlShell: "public, max-age=0, s-maxage=60",
+  /** Content-hashed /assets/* from R2 fallback — immutable, 1 year */
+  immutableAsset: "public, max-age=31536000, immutable",
+  /** 503 recovery response — never cached */
+  recovery: "no-store",
 } as const;
 
 export type PurgeOptions =

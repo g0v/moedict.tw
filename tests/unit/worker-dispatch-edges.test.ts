@@ -11,7 +11,7 @@
  *   - the HTML-shell metadata-injection dictionary-lookup branch (hits
  *     `parseDictionaryRoute` language prefixes, `stripTags`,
  *     `buildDefinitionDescription`, and the `injectHeadMetadata` dict path)
- *   - `getAssetFromBucket` (R2Bucket path) HEAD + GET + invalid method
+ *   - `/assets/*` via ASSET_BASE_URL proxy (legacy compatibility) HEAD + GET + invalid method
  *   - the `handleLookupAPI` 200 return branch
  *   - `handleListAPI` delegation via `/api/=category`
  *   - the fixed-star CORS block inside the ASSET_BASE_URL proxy
@@ -173,6 +173,22 @@ describe("dispatch — *.png image generation fallback", () => {
     expect(res.headers.get("content-type")).toBe("image/png");
   });
 
+  it("still generates a PNG when ASSETS.get is not a function (getAssetsBucket malformed-candidate branch)", async () => {
+    const pathSvg = '<svg><path d="M0 0 L10 10"/></svg>';
+    const env = makeEnv({
+      // Present but shaped wrong: has a `get` key, but it's not callable —
+      // exercises the `typeof candidate.get !== "function"` guard distinct
+      // from the `!candidate` guard covered above.
+      ASSETS: { get: "not-a-function" } as unknown as AnyEnv["ASSETS"],
+      FONTS: makeBucket({
+        "TW-Kai/U+840C.svg": { body: pathSvg, contentType: "image/svg+xml" },
+      }),
+    });
+    const res = await dispatch(req("/%E8%90%8C.png"), env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/png");
+  });
+
   it("still takes the .png branch when the ASSETS fetcher 404s on the path", async () => {
     // Confirms the `(!staticResponse || staticResponse.status === 404)`
     // disjunction covers the 404 arm.
@@ -253,8 +269,8 @@ describe("dispatch — final null-body 404", () => {
   it("returns 404 with empty body and no Content-Type for an unmatched non-asset, non-png path", async () => {
     // /random/thing.bin: not /api, not /assets, not .png, not HTML-shell-
     // eligible (the .bin extension disqualifies shouldRenderHtmlShell).
-    // Default makeEnv ASSETS is a bucket, not a fetcher, so passThroughAssets
-    // returns null and dispatch falls through to the trailing 404.
+    // serveAssetWithFallback returns null (non-hashed, no tag), no
+    // ASSET_BASE_URL proxy for .bin, and dispatch falls to the trailing 404.
     const res = await dispatch(req("/random/thing.bin"), makeEnv());
     expect(res.status).toBe(404);
     expect(await res.text()).toBe("");
@@ -270,9 +286,9 @@ describe("dispatch — final null-body 404", () => {
 describe("dispatch — /assets/* when ASSET_BASE_URL is undefined", () => {
   it("skips the ASSET_BASE_URL proxy branch and returns 404", async () => {
     // With ASSET_BASE_URL cleared, the `if (env.ASSET_BASE_URL && ...)`
-    // guard is false. passThroughAssets already returned a 404, so neither
-    // of the two `staticResponse.status !== 404` short-circuits returns.
-    // Control flows to the trailing `return new Response(null, { status: 404 })`.
+    // guard is false. serveAssetWithFallback returns null (SITE_ASSETS
+    // returns 404, no tag, non-hashed path), the proxy branch is skipped,
+    // and control flows to the trailing `return new Response(null, { status: 404 })`.
     const fetcher = { fetch: vi.fn(async () => new Response("", { status: 404 })) };
     const env = makeEnv({
       ASSET_BASE_URL: undefined,
@@ -284,33 +300,36 @@ describe("dispatch — /assets/* when ASSET_BASE_URL is undefined", () => {
 });
 
 describe("dispatch — HTML shell fetch returns non-OK", () => {
-  it("does not inject metadata when the shell fetch 500s; surfaces passthrough status", async () => {
-    // renderHtmlShell fetches `/` to get the shell HTML. When that response
-    // is !ok, renderHtmlShell returns null and dispatch falls to
-    // passThroughAssets. The fetcher returns 500 again for the original
-    // request, passing `staticResponse.status !== 404` — returned verbatim.
+  it("returns 503 recovery when the shell fetch 500s (no release tag)", async () => {
+    // With the zero-downtime fallback, a SITE_ASSETS 500 no longer
+    // falls through to passThroughAssets. Instead, renderHtmlShellWithFallback
+    // tries SITE_ASSETS (500), finds no release tag (CF_VERSION_METADATA
+    // absent), skips R2, and returns a self-contained 503 recovery page.
     const fetcher = {
       fetch: vi.fn(async () => new Response("upstream error", { status: 500 })),
     };
     const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv["SITE_ASSETS"] });
     const res = await dispatch(req("/about"), env);
-    expect(res.status).toBe(500);
-    // The body is the raw upstream body, NOT rewritten HTML — proof that
-    // injectHeadMetadata never ran.
-    expect(await res.text()).toBe("upstream error");
+    expect(res.status).toBe(503);
+    expect(res.headers.get("X-Moedict-Shell-Source")).toBe("recovery");
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(res.headers.get("Retry-After")).toBe("5");
+    // Body is the recovery HTML, NOT the upstream error.
+    const body = await res.text();
+    expect(body).toContain("萌典");
+    expect(body).not.toBe("upstream error");
   });
 
-  it("falls through cleanly when the shell fetch 404s too", async () => {
-    // 404 is the boundary case: renderHtmlShell's `!shellResponse.ok` guard
-    // is true, returns null, passThroughAssets' second call also 404s —
-    // ASSET_BASE_URL proxy skips (non-/assets/), .png branch skips, lands
-    // on the final 404.
+  it("returns 503 recovery when the shell fetch 404s (no release tag)", async () => {
+    // Same as above but with 404 — the 503 recovery is the ONLY
+    // both-stores-fail outcome for HTML routes.
     const fetcher = {
       fetch: vi.fn(async () => new Response("missing", { status: 404 })),
     };
     const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv["SITE_ASSETS"] });
     const res = await dispatch(req("/deep/link"), env);
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(503);
+    expect(res.headers.get("X-Moedict-Shell-Source")).toBe("recovery");
   });
 });
 
@@ -528,43 +547,48 @@ describe("dispatch — oEmbed discovery <link> in the HTML shell", () => {
   });
 });
 
-describe("dispatch — /assets/* via R2Bucket (getAssetFromBucket branches)", () => {
-  it("serves an /assets/* GET from the R2 bucket when ASSETS is a bucket", async () => {
+describe("dispatch — /assets/* via ASSET_BASE_URL proxy (legacy compatibility)", () => {
+  it("serves an /assets/* GET via the ASSET_BASE_URL proxy when R2 fallback misses", async () => {
+    // serveAssetWithFallback tries SITE_ASSETS (absent), R2 current release
+    // (no tag → skip), R2 global immutable (non-hashed path → skip), returns
+    // null. The ASSET_BASE_URL proxy then serves the asset from the legacy
+    // upstream.
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response("woff bytes", { status: 200, headers: { "Content-Type": "font/woff2" } }),
+    ) as typeof fetch;
     const env = makeEnv({
       ASSETS: makeBucket({ "font.woff2": { body: "woff bytes", contentType: "font/woff2" } }),
     });
     const res = await dispatch(req("/assets/font.woff2"), env);
     expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toBe("font/woff2");
-    expect(res.headers.get("etag")).toBe('"etag-stub"');
     expect(await res.text()).toBe("woff bytes");
   });
 
-  it("serves an /assets/* HEAD from the R2 bucket with an empty body", async () => {
+  it("serves an /assets/* HEAD via the ASSET_BASE_URL proxy", async () => {
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response("woff bytes", { status: 200, headers: { "Content-Type": "font/woff2" } }),
+    ) as typeof fetch;
     const env = makeEnv({
       ASSETS: makeBucket({ "font.woff2": { body: "woff bytes", contentType: "font/woff2" } }),
     });
     const res = await dispatch(req("/assets/font.woff2", { method: "HEAD" }), env);
     expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toBe("font/woff2");
-    expect(await res.text()).toBe("");
   });
 
-  it("returns 404 from the bucket when the /assets/* key is missing", async () => {
-    // getAssetFromBucket returns Response(404) when bucket.get is null;
-    // that response is not !== 404, so the ASSET_BASE_URL proxy engages and
-    // finally serves the upstream body.
+  it("returns 404 from the proxy when the /assets/* key is missing upstream", async () => {
+    // serveAssetWithFallback returns null (no tag, non-hashed), proxy
+    // engages and gets 404 from the upstream.
     globalThis.fetch = vi.fn(async () => new Response("", { status: 404 })) as typeof fetch;
     const env = makeEnv({ ASSETS: makeBucket() });
     const res = await dispatch(req("/assets/missing.woff2"), env);
-    // Proxy response surfaces (404 from upstream).
     expect(res.status).toBe(404);
   });
 
-  it("PUT on /assets/* returns null from getAssetFromBucket (line 184 — invalid method)", async () => {
-    // With ASSET_BASE_URL undefined and a POST method, the invalid-method
-    // branch at line 184 fires (returns null). passThroughAssets returns
-    // null, the proxy branch is skipped, and we fall to the final 404.
+  it("PUT on /assets/* with no ASSET_BASE_URL falls to 404", async () => {
+    // serveAssetWithFallback returns null, proxy is skipped (no
+    // ASSET_BASE_URL), .png branch skips, lands on the final 404.
     const env = makeEnv({
       ASSET_BASE_URL: undefined,
       ASSETS: makeBucket({ "foo.bin": { body: "bytes" } }),
@@ -573,16 +597,14 @@ describe("dispatch — /assets/* via R2Bucket (getAssetFromBucket branches)", ()
     expect(res.status).toBe(404);
   });
 
-  it("returns null when pathname is empty after stripping /assets/ (line 187 — no key)", async () => {
-    // A bare /assets/ request has no key. getAssetFromBucket's empty-key
-    // guard returns null; passThroughAssets returns null. ASSET_BASE_URL
-    // proxy then engages because pathname does start with /assets/.
+  it("returns null when pathname is empty after stripping /assets/", async () => {
+    // A bare /assets/ request: serveAssetWithFallback returns null, proxy
+    // engages because pathname starts with /assets/.
     globalThis.fetch = vi.fn(
       async () => new Response("empty-key upstream", { status: 200 }),
     ) as typeof fetch;
     const env = makeEnv({ ASSETS: makeBucket() });
     const res = await dispatch(req("/assets/"), env);
-    // Proxy runs; asset path is empty → assetUrl is `${base}/`.
     expect(res.status).toBe(200);
   });
 });
@@ -634,12 +656,16 @@ describe("dispatch — cfdict.txt 404 branch", () => {
 });
 
 describe("dispatch — ASSETS helper guard branches", () => {
-  it("returns 404 for an HTML-shell route when SITE_ASSETS has no fetcher", async () => {
+  it("returns 503 recovery for an HTML-shell route when SITE_ASSETS has no fetcher", async () => {
+    // Without SITE_ASSETS, renderHtmlShellWithFallback skips the fast path,
+    // finds no release tag (CF_VERSION_METADATA absent), skips R2, and
+    // returns the self-contained 503 recovery page.
     const env = makeEnv({
       SITE_ASSETS: undefined,
     });
     const res = await dispatch(req("/about"), env);
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(503);
+    expect(res.headers.get("X-Moedict-Shell-Source")).toBe("recovery");
   });
 
   it("treats SITE_ASSETS.fetch as absent when it is not callable", async () => {
@@ -656,7 +682,7 @@ describe("dispatch — ASSETS helper guard branches", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns the static response directly when passThroughAssets finds a non-404 fetcher response", async () => {
+  it("returns the static response directly when serveAssetWithFallback finds a non-404 fetcher response", async () => {
     const env = makeEnv({
       SITE_ASSETS: {
         fetch: vi.fn(

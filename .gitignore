@@ -8,6 +8,8 @@ docs/*
 !docs/*.mjs
 !docs/issue-triage/
 !docs/issue-triage/**
+!docs/superpowers/
+!docs/superpowers/**
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
