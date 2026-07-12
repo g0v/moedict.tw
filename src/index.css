@@ -348,17 +348,167 @@ button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
+/*
+ * Dark mode (g0v/moedict-webkit#245).
+ *
+ * `--moe-*` custom properties are only ever *defined* inside an active dark
+ * scope:
+ *   - `@media (prefers-color-scheme: dark)` guarded by `:not([data-theme=
+ *     "light"])`, for anyone who never opens 偏好設定 — pure OS-level
+ *     support, works even before src/main.tsx runs.
+ *   - `html[data-theme="dark"]`, set by src/utils/theme-utils.ts (driven by
+ *     the "外觀模式" control in #user-pref) and mirrored by the inline
+ *     bootstrap script in index.html to avoid a flash of the wrong theme.
+ * Every consuming rule below reads through `var(--moe-x, <original light
+ * value>)`, so light mode (system light, or an explicit "light" override)
+ * renders byte-identical to before — nothing here edits the legacy
+ * stylesheet or InlineStyles.tsx. The `html …` prefixes exist only to
+ * out-specificity the legacy `data/assets/styles.css` / InlineStyles.tsx
+ * rules being re-themed (both are loaded after this stylesheet), matching
+ * the `html.moe-capacitor …` / `body[data-ruby-pref] …` convention already
+ * used elsewhere in this file.
+ */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) {
+    --moe-bg: #121212;
+    --moe-surface: #1c1c1c;
+    --moe-surface-alt: #2a2a2a;
+    --moe-text: #e6e3df;
+    --moe-border: #3d3d3d;
+    --moe-link: #7fd0ff;
+    --moe-input-bg: #232323;
+    --moe-input-border: #4d4d4d;
+    --moe-panel-bg: #2a231d;
+    --moe-panel-border: #4a3c30;
+    --moe-panel-heading: #e7cdb0;
+    --moe-query-a: #241616;
+    --moe-query-t: #261414;
+    --moe-query-h: #142614;
+    --moe-query-c: #141426;
+    color-scheme: dark;
   }
-  a:hover {
-    color: #747bff;
+}
+
+html[data-theme="dark"] {
+  --moe-bg: #121212;
+  --moe-surface: #1c1c1c;
+  --moe-surface-alt: #2a2a2a;
+  --moe-text: #e6e3df;
+  --moe-border: #3d3d3d;
+  --moe-link: #7fd0ff;
+  --moe-input-bg: #232323;
+  --moe-input-border: #4d4d4d;
+  --moe-panel-bg: #2a231d;
+  --moe-panel-border: #4a3c30;
+  --moe-panel-heading: #e7cdb0;
+  --moe-query-a: #241616;
+  --moe-query-t: #261414;
+  --moe-query-h: #142614;
+  --moe-query-c: #141426;
+  color-scheme: dark;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+}
+
+/* Page chrome */
+html body {
+  background-color: var(--moe-bg, #fff);
+  color: var(--moe-text, #333);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) body {
+    background-image: none;
   }
-  button {
-    background-color: #f9f9f9;
-  }
+}
+html[data-theme="dark"] body {
+  background-image: none;
+}
+
+/* Sidebar search box: .query-box's own background lives in InlineStyles.tsx;
+   the per-language tint is a higher-specificity legacy `body.lang-X
+   #query-box` id rule, so it needs its own override to actually win. */
+html .query-box {
+  background-color: var(--moe-input-bg, hsl(0, 0%, 97%));
+}
+html body.lang-a #query-box {
+  background-color: var(--moe-query-a, #f3f0f0);
+}
+html body.lang-t #query-box {
+  background-color: var(--moe-query-t, #fbefef);
+}
+html body.lang-h #query-box {
+  background-color: var(--moe-query-h, #effbef);
+}
+html body.lang-c #query-box {
+  background-color: var(--moe-query-c, #efeffb);
+}
+
+/* Navbar full-text search (rules defined earlier in this same file) */
+.fulltext-search-input {
+  background: var(--moe-input-bg, #fff);
+  color: var(--moe-text, #333);
+  border-color: var(--moe-input-border, #cfcfd4);
+}
+.fulltext-search-panel {
+  background: var(--moe-surface, #fff);
+  border-color: var(--moe-border, #ddd);
+}
+.fulltext-search-result-title {
+  color: var(--moe-text, inherit);
+}
+.fulltext-search-result:hover,
+.fulltext-search-result.is-active {
+  background: var(--moe-surface-alt, #f4f8fc);
+}
+
+/* jquery-ui (cupertino theme) autocomplete panel backing the sidebar search */
+html .ui-widget-content {
+  background: var(--moe-surface, #f2f5f7);
+  color: var(--moe-text, #362b36);
+  border-color: var(--moe-border, #dddddd);
+}
+html .ui-widget-content a {
+  color: var(--moe-text, #362b36);
+}
+html .ui-menu-item {
+  border-bottom-color: var(--moe-border, #ddd);
+}
+
+/* Dictionary entry cards (legacy `.result { background: #fff }` / `.result
+   a { color: #000 }`) */
+html .result {
+  background: var(--moe-surface, #fff);
+  border-color: var(--moe-border, #d4d3d3);
+  color: var(--moe-text, #333);
+}
+html .result a {
+  color: var(--moe-link, #000);
+}
+
+/* Settings panel (#user-pref) */
+html #user-pref {
+  background-color: var(--moe-panel-bg, #d6cbbc);
+  border-right-color: var(--moe-panel-border, #c8baa6);
+}
+html #user-pref h4 {
+  color: var(--moe-panel-heading, #634f3c);
+}
+html .form-control {
+  background-color: var(--moe-input-bg, #fff);
+  border-color: var(--moe-input-border, #ccc);
+  color: var(--moe-text, #555);
+}
+html .btn-default {
+  background-color: var(--moe-surface-alt, #fff);
+  border-color: var(--moe-input-border, #ccc);
+  color: var(--moe-text, #333);
+}
+
+/* About page content card (legacy `.about .content { background: white }`) */
+html body.about .content {
+  background: var(--moe-surface, #fff);
 }
 
 /* 原 styles.css: `.nav, .dropdown, #query-box { font-size: 19px }`

@@ -7,6 +7,7 @@ import "./index.css";
 import App from "./App.tsx";
 import { applyHeadByPath } from "./ssr/head";
 import { resolveLegacyHashRoute } from "./utils/dictionary-route";
+import { applyTheme, readThemePref } from "./utils/theme-utils";
 
 /**
  * 在應用啟動前修正 URL，避免編碼字元顯示
@@ -87,7 +88,8 @@ function applyPlatformClasses() {
   );
 }
 
-// 在渲染前先修正 URL 和設置攔截器
+// 在渲染前先修正 URL、套用外觀模式和設置攔截器
+applyTheme(readThemePref());
 applyPlatformClasses();
 fixLegacyHashRoute();
 fixInitialURL();

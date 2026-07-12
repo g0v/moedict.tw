@@ -1,6 +1,22 @@
 <!doctype html>
 <html lang="zh-Hant" xml:lang="zh-Hant">
   <head>
+    <!-- 深色模式 (#245)：在任何樣式表載入前，將 localStorage 記錄的手動偏好
+         （"light"/"dark"）同步反映到 <html data-theme>，避免閃爍成錯誤的主
+         題色。"system"（預設值，或未曾設定）不需要這段 JS：純 CSS 的
+         `@media (prefers-color-scheme: dark)` 已經處理。邏輯需與
+         src/utils/theme-utils.ts 的 STORAGE_KEY／有效值保持一致。 -->
+    <script>
+      (function () {
+        try {
+          var t = window.localStorage.getItem("theme");
+          if (t === "light" || t === "dark") {
+            document.documentElement.setAttribute("data-theme", t);
+            document.documentElement.style.colorScheme = t;
+          }
+        } catch (e) {}
+      })();
+    </script>
     <meta charset="UTF-8" />
     <!-- use standard favicon.ico for compatibility -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />

@@ -8,10 +8,11 @@ import {
   readFontSize,
   writeFontSize,
 } from "../utils/font-size-utils";
+import { type ThemePref, applyTheme, readThemePref, writeThemePref } from "../utils/theme-utils";
 import { SvgIcon } from "./SvgIcon";
 
 type Lang = "a" | "t" | "h" | "c";
-type PrefKey = "phonetics" | "pinyin_a" | "pinyin_t" | "pinyin_h" | "bopomofo_sandhi_t";
+type PrefKey = "phonetics" | "pinyin_a" | "pinyin_t" | "pinyin_h" | "bopomofo_sandhi_t" | "theme";
 
 interface PrefOption {
   value: string;
@@ -25,6 +26,12 @@ interface JQueryCollection {
 }
 
 type JQueryFn = (selector: string) => JQueryCollection;
+
+const THEME_OPTIONS: PrefOption[] = [
+  { value: "system", label: "跟隨系統" },
+  { value: "light", label: "淺色" },
+  { value: "dark", label: "深色" },
+];
 
 const PHONETICS_OPTIONS: PrefOption[] = [
   { value: "rightangle", label: "注音拼音共同顯示" },
@@ -185,6 +192,7 @@ export function UserPref() {
     getStoredPref("bopomofo_sandhi_t", "off"),
   );
   const [fontSize, setFontSize] = useState<number>(() => readFontSize());
+  const [themePref, setThemePref] = useState<ThemePref>(() => readThemePref());
 
   useEffect(() => {
     const classList = document.body.classList;
@@ -199,6 +207,11 @@ export function UserPref() {
     applyPhoneticsBodyAttr(phonetics);
     setStoredPref("phonetics", phonetics);
   }, [phonetics]);
+
+  useEffect(() => {
+    applyTheme(themePref);
+    writeThemePref(themePref);
+  }, [themePref]);
 
   useEffect(() => {
     applyFontSize(fontSize);
@@ -272,6 +285,13 @@ export function UserPref() {
               }}
             />
           )}
+          <PrefList
+            name="theme"
+            label="外觀模式"
+            options={THEME_OPTIONS}
+            value={themePref}
+            onChange={(nextValue) => setThemePref(nextValue as ThemePref)}
+          />
           <PrefList
             name="phonetics"
             label="條目音標顯示方式"
