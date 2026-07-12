@@ -48,11 +48,22 @@ async function routeStrokeScripts(page: Page): Promise<void> {
   }
 }
 
-/** Force every stroke-json lookup to 404, simulating a missing codepoint. */
+/** Force every stroke-json data fetch (GET) to 404, simulating a missing codepoint.
+ * HEAD requests (used by useStrokeAvailability probe) are allowed through so the
+ * button stays enabled — the badge must show AFTER the panel opens, not be blocked
+ * by #132's pre-emptive disable which fires when the HEAD probe also 404s. */
 async function routeStrokeJsonNotFound(page: Page): Promise<void> {
-  await page.route("**/api/stroke-json/**", (route) =>
-    route.fulfill({ status: 404, contentType: "application/json", body: '{"error":"Not Found"}' }),
-  );
+  await page.route("**/api/stroke-json/**", async (route) => {
+    if (route.request().method() === "HEAD") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: "" });
+    } else {
+      await route.fulfill({
+        status: 404,
+        contentType: "application/json",
+        body: '{"error":"Not Found"}',
+      });
+    }
+  });
 }
 
 test.describe("missing stroke data (#76)", () => {
