@@ -22,7 +22,7 @@
  * 刻意保守：MOE 是小型政府網站不是 CDN，請用適度 concurrency 與 R2 rate limit，
  * 不對它做無界並發轟炸。
  */
-import { readdirSync, readFileSync, mkdirSync, existsSync, appendFileSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, unlinkSync, mkdirSync, existsSync, appendFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
@@ -30,6 +30,7 @@ import { spawn } from 'node:child_process';
 const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const STATE_DIR = join(REPO_ROOT, '.migration-state');
 const PROGRESS_FILE = join(STATE_DIR, 'moe-audio-repair-progress.ndjson');
+const CACHE_DIR = join(STATE_DIR, 'moe-mp3-cache');
 const BUCKET = 'moedict-assets';
 const WRANGLER_BIN = join(REPO_ROOT, 'node_modules/.bin/wrangler');
 const SUTIAN_BASE = 'https://sutian.moe.edu.tw';
@@ -46,6 +47,11 @@ const LIMIT = args.limit ? Number(args.limit) : Infinity;
 const CONCURRENCY = args.concurrency ? Number(args.concurrency) : 5;
 const DELAY_MS = args['delay-ms'] ? Number(args['delay-ms']) : 300;
 const MP3_ONLY = !!args['mp3-only'];
+// 下載（搜尋 sutian + 抓音檔）跟上傳（R2 PUT）拆成兩個獨立階段：下載完全不碰
+// Cloudflare R2 API，可以跟任何其他 R2 writer（包含主遷移腳本）安全並行，不會
+// 疊加帳號層級的 write 額度風險。--download-only 只做下載+快取到本機，
+// 之後不加這個 flag 的正常執行會優先讀本機快取，快取沒有才現場抓。
+const DOWNLOAD_ONLY = !!args['download-only'];
 // 這支腳本跟主遷移腳本（migrate-legacy-cdn-to-r2.mjs）共用同一個 Cloudflare
 // 帳號的 R2 write 額度；MP3-only 模式避免無必要的第二次 OGG PUT。
 const R2_RATE_LIMIT = args['r2-rate-limit'] ? Number(args['r2-rate-limit']) : 300;
@@ -80,18 +86,22 @@ function findMissingAudioIdEntries(onlyWords) {
 }
 
 function loadProgress() {
-  const done = new Set();
+  const done = new Set(); // 已上傳或已確認 MOE 也沒有 -> 兩種模式都跳過
+  const downloaded = new Set(); // 已下載快取到本機，尚未上傳 -> download-only 模式跳過；
+                                 // 正常（上傳）模式改讀快取檔，不用重打 sutian
   if (existsSync(PROGRESS_FILE)) {
     for (const line of readFileSync(PROGRESS_FILE, 'utf8').split('\n').filter(Boolean)) {
       try {
         const rec = JSON.parse(line);
         if (rec.status === 'uploaded' || rec.status === 'not-found-on-moe') done.add(rec.id);
+        else if (rec.status === 'downloaded') downloaded.add(rec.id);
       } catch { /* skip */ }
     }
   }
-  return done;
+  return { done, downloaded };
 }
 mkdirSync(STATE_DIR, { recursive: true });
+mkdirSync(CACHE_DIR, { recursive: true });
 function recordProgress(rec) {
   appendFileSync(PROGRESS_FILE, JSON.stringify(rec) + '\n');
 }
@@ -202,18 +212,51 @@ function transcodeToOgg(mp3Buf) {
   });
 }
 
+function cachePath(id) {
+  return join(CACHE_DIR, `${id}.mp3`);
+}
+
 async function processOne(target, idx, total, stats) {
   try {
-    const audioPath = await searchSutian(target.title);
-    if (!audioPath) {
-      recordProgress({ id: target.id, title: target.title, status: 'not-found-on-moe' });
-      stats.notFoundOnMoe++;
-      console.log(`[${idx + 1}/${total}] ${target.title} (${target.id}): MOE 也沒有`);
+    const cached = existsSync(cachePath(target.id));
+
+    if (DOWNLOAD_ONLY) {
+      if (cached) return; // 已經有快取，理論上不會走到這裡（loadProgress 已濾掉）
+      const audioPath = await searchSutian(target.title);
+      if (!audioPath) {
+        recordProgress({ id: target.id, title: target.title, status: 'not-found-on-moe' });
+        stats.notFoundOnMoe++;
+        console.log(`[${idx + 1}/${total}] ${target.title} (${target.id}): MOE 也沒有`);
+        return;
+      }
+      const audioRes = await fetchWithTimeout(`${SUTIAN_BASE}${audioPath}`);
+      if (!audioRes.ok) throw new Error(`audio fetch HTTP ${audioRes.status}`);
+      const buf = Buffer.from(await audioRes.arrayBuffer());
+      writeFileSync(cachePath(target.id), buf);
+      recordProgress({ id: target.id, title: target.title, status: 'downloaded', moePath: audioPath, bytes: buf.length });
+      stats.uploaded++; // 沿用同一個計數器命名（下載階段的「完成」）
+      console.log(`[${idx + 1}/${total}] ${target.title} (${target.id}): 已下載快取，來源=${audioPath}，${buf.length}B`);
+      await sleep(DELAY_MS);
       return;
     }
-    const audioRes = await fetchWithTimeout(`${SUTIAN_BASE}${audioPath}`);
-    if (!audioRes.ok) throw new Error(`audio fetch HTTP ${audioRes.status}`);
-    const buf = Buffer.from(await audioRes.arrayBuffer());
+
+    // 正常（上傳）模式：本機快取存在就直接讀，不用再打 sutian
+    let buf;
+    let audioPath = 'cache';
+    if (cached) {
+      buf = readFileSync(cachePath(target.id));
+    } else {
+      audioPath = await searchSutian(target.title);
+      if (!audioPath) {
+        recordProgress({ id: target.id, title: target.title, status: 'not-found-on-moe' });
+        stats.notFoundOnMoe++;
+        console.log(`[${idx + 1}/${total}] ${target.title} (${target.id}): MOE 也沒有`);
+        return;
+      }
+      const audioRes = await fetchWithTimeout(`${SUTIAN_BASE}${audioPath}`);
+      if (!audioRes.ok) throw new Error(`audio fetch HTTP ${audioRes.status}`);
+      buf = Buffer.from(await audioRes.arrayBuffer());
+    }
 
     // mp3 上傳跟 ogg 轉檔+上傳互不依賴（都只需要 buf），平行跑省一次 R2
     const mp3Task = putToR2(`audio/t/${target.id}.mp3`, buf, 'audio/mpeg');
@@ -233,6 +276,9 @@ async function processOne(target, idx, total, stats) {
 
     recordProgress({ id: target.id, title: target.title, status: 'uploaded', moePath: audioPath, bytes: buf.length, oggBytes });
     stats.uploaded++;
+    if (cached) {
+      try { unlinkSync(cachePath(target.id)); } catch { /* 不影響結果 */ }
+    }
     console.log(`[${idx + 1}/${total}] ${target.title} (${target.id}): 已修補，來源=${audioPath}，mp3=${buf.length}B ogg=${oggBytes}B`);
   } catch (e) {
     recordProgress({ id: target.id, title: target.title, status: 'failed', error: String(e) });
@@ -250,9 +296,10 @@ async function main() {
   let targets = findMissingAudioIdEntries(ALL ? null : wordArgs);
   console.log(`候選：${targets.length} 個缺 audio_id 的 t 詞條`);
 
-  const done = loadProgress();
+  const { done, downloaded } = loadProgress();
   targets = targets.filter((t) => !done.has(t.id));
-  console.log(`跳過已處理 ${done.size} 筆；剩餘 ${targets.length} 筆（concurrency=${CONCURRENCY}, R2 rate=${R2_RATE_LIMIT}/${R2_RATE_WINDOW_MS}ms）`);
+  if (DOWNLOAD_ONLY) targets = targets.filter((t) => !downloaded.has(t.id));
+  console.log(`跳過已處理 ${done.size} 筆、已快取 ${downloaded.size} 筆；剩餘 ${targets.length} 筆（mode=${DOWNLOAD_ONLY ? 'download-only' : 'upload'}, concurrency=${CONCURRENCY}, R2 rate=${R2_RATE_LIMIT}/${R2_RATE_WINDOW_MS}ms）`);
   if (Number.isFinite(LIMIT)) targets = targets.slice(0, LIMIT);
 
   const stats = { uploaded: 0, notFoundOnMoe: 0, failed: 0 };
