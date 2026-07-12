@@ -86,7 +86,9 @@ export function runWrangler(argv, spawnImpl = spawn) {
  * @returns {Promise<void>}
  */
 function defaultSleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
+  const { promise, resolve } = Promise.withResolvers();
+  setTimeout(() => resolve(), ms);
+  return promise;
 }
 
 /**
