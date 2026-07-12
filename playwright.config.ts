@@ -6,7 +6,7 @@ const BASE_URL = process.env.E2E_BASE_URL ?? `http://127.0.0.1:${PORT}`;
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
-  workers: 1,
+  workers: 3,
   retries: process.env.CI ? 1 : 0,
   reporter: [["list"], ["html", { outputFolder: "playwright-report", open: "never" }]],
   expect: {
