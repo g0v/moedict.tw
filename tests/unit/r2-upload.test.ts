@@ -101,6 +101,86 @@ describe("uploadObject", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe("ok");
   });
+
+  it("omits CLOUDFLARE_ENV from child env even when set in parent process", async () => {
+    const capturedOpts: Record<string, unknown>[] = [];
+    const prev = process.env.CLOUDFLARE_ENV;
+    process.env.CLOUDFLARE_ENV = "staging";
+    try {
+      await runWrangler(["vp", "exec", "wrangler", "--help"], (file, args, opts) => {
+        capturedOpts.push(opts as Record<string, unknown>);
+        const listeners: Record<string, (value?: unknown) => void> = {};
+        const stream = {
+          on: (event: string, cb: (value: unknown) => void) => (listeners[event] = cb),
+        };
+        const child = {
+          stdout: stream,
+          stderr: stream,
+          once: (event: string, cb: (value?: unknown) => void) => {
+            listeners[event] = cb;
+            if (event === "close") queueMicrotask(() => cb(0));
+          },
+        };
+        return child;
+      });
+    } finally {
+      if (prev === undefined) delete process.env.CLOUDFLARE_ENV;
+      else process.env.CLOUDFLARE_ENV = prev;
+    }
+    expect(capturedOpts).toHaveLength(1);
+    const env = capturedOpts[0].env as Record<string, string | undefined>;
+    expect(env).toBeDefined();
+    expect("CLOUDFLARE_ENV" in env).toBe(false);
+    // Other env vars survive (PATH is universally present in test environments)
+    expect(typeof env.PATH).toBe("string");
+  });
+
+  it("child env lacks CLOUDFLARE_ENV when absent in parent too", async () => {
+    const capturedOpts: Record<string, unknown>[] = [];
+    const prev = process.env.CLOUDFLARE_ENV;
+    delete process.env.CLOUDFLARE_ENV;
+    try {
+      await runWrangler(["vp", "exec", "wrangler", "--help"], (file, args, opts) => {
+        capturedOpts.push(opts as Record<string, unknown>);
+        const listeners: Record<string, (value?: unknown) => void> = {};
+        const stream = {
+          on: (event: string, cb: (value: unknown) => void) => (listeners[event] = cb),
+        };
+        const child = {
+          stdout: stream,
+          stderr: stream,
+          once: (event: string, cb: (value?: unknown) => void) => {
+            listeners[event] = cb;
+            if (event === "close") queueMicrotask(() => cb(0));
+          },
+        };
+        return child;
+      });
+    } finally {
+      if (prev !== undefined) process.env.CLOUDFLARE_ENV = prev;
+    }
+    const env = capturedOpts[0].env as Record<string, string | undefined>;
+    expect("CLOUDFLARE_ENV" in env).toBe(false);
+  });
+
+  it("default runner does not pass CLOUDFLARE_ENV to the real subprocess", async () => {
+    const prev = process.env.CLOUDFLARE_ENV;
+    process.env.CLOUDFLARE_ENV = "staging";
+    try {
+      const result = await runWrangler([
+        process.execPath,
+        "-e",
+        "process.stdout.write(JSON.stringify(Object.keys(process.env)))",
+      ]);
+      expect(result.exitCode).toBe(0);
+      const keys: string[] = JSON.parse(result.stdout);
+      expect(keys).not.toContain("CLOUDFLARE_ENV");
+      expect(keys).toContain("PATH");
+    } finally {
+      if (prev === undefined) delete process.env.CLOUDFLARE_ENV;
+      else process.env.CLOUDFLARE_ENV = prev;
+    }
+  });
 });
 
 // ── uploadWithConcurrency ─────────────────────────────────────────────

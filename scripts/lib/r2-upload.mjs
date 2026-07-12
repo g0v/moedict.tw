@@ -49,13 +49,26 @@ import { spawn } from "node:child_process";
 /**
  * Execute a command through Wrangler's project-local vp entrypoint.
  * Child errors reject; null/signal closes are failures (never success).
+ *
+ * Wrangler reads CLOUDFLARE_ENV from the environment and maps it to --env,
+ * which conflicts with the already-flattened generated configs (they have no
+ * [env.*] sections). Always strip CLOUDFLARE_ENV from the child env so the
+ * wrangler subprocess never sees it; callers already pass --config with the
+ * correctly-flattened generated config for the target environment.
+ *
  * @param {string[]} argv
  * @param {(file: string, args: string[], opts: object) => object} [spawnImpl]
  * @returns {Promise<RunnerResult>}
  */
 export function runWrangler(argv, spawnImpl = spawn) {
+  // Build a clean child env: inherit everything except CLOUDFLARE_ENV.
+  // eslint-disable-next-line no-unused-vars
+  const { CLOUDFLARE_ENV: _omit, ...childEnv } = process.env;
   return new Promise((resolve, reject) => {
-    const proc = spawnImpl(argv[0], argv.slice(1), { stdio: ["ignore", "pipe", "pipe"] });
+    const proc = spawnImpl(argv[0], argv.slice(1), {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: childEnv,
+    });
     let stdout = "";
     let stderr = "";
     proc.stdout?.on("data", (d) => (stdout += d.toString()));
