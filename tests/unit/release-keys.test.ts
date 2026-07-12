@@ -151,6 +151,17 @@ describe("isImmutableAsset", () => {
     expect(isImmutableAsset("/assets/images/bg-H5k9mN12.webp")).toBe(true);
   });
 
+  it("returns true for 8-char hash containing hyphen", () => {
+    // Hash segment `aB_cD-12` is exactly 8 base64url chars (including `-`).
+    expect(isImmutableAsset("assets/index-aB_cD-12.js")).toBe(true);
+  });
+
+  it("returns false for g0v-icon-invert.png (variable-length false positive)", () => {
+    // `icon-invert` spans a name-hyphen; with a variable-length `{8,}` pattern
+    // this would falsely match. With exactly-8 it must NOT match.
+    expect(isImmutableAsset("assets/g0v-icon-invert.png")).toBe(false);
+  });
+
   // Explicit non-hashed false cases
   it("returns false for non-hashed font under assets/", () => {
     expect(isImmutableAsset("assets/fonts/main.woff2")).toBe(false);

@@ -12,7 +12,7 @@
  *   backslash segments, and empty segments.
  * - `immutableKey` rejects paths not starting with `assets/`.
  * - `isImmutableAsset` only returns true for content-hashed filenames
- *   (Vite's `[name]-[hash].[ext]` convention with 8+ char base64url hash).
+ *   (Vite's `[name]-[hash].[ext]` convention with exactly 8-char base64url hash).
  * - `validateReleaseTag` rejects tags containing `/`, `\`, `..`, or
  *   percent-encoded traversal — the tag must be one safe path segment.
  */
@@ -110,18 +110,20 @@ export function immutableKey(requestPath: string): string {
 }
 
 /**
- * Vite content-hash pattern: `[name]-[hash].[ext]` where hash is 8+ chars
- * of base64url (`[A-Za-z0-9_]`). This matches the default Vite/Rollup hash
- * length (8 chars) and rejects static filenames that happen to contain
- * short hyphenated segments (e.g. `g0v-icon-invert.png` where `invert`
- * is 6 chars, or `main.woff2` which has no hash segment at all).
+ * Vite content-hash pattern: `[name]-[hash].[ext]` where hash is exactly 8
+ * base64url chars (`[A-Za-z0-9_-]`). This matches Vite/Rollup's default
+ * 8-character hash length. Using exactly 8 (not `{8,}`) prevents
+ * false-positives like `g0v-icon-invert.png` where `icon-invert` spans
+ * a name-hyphen and would match a variable-length pattern.
+ * Safe false-negative is preferable to false-positive (pinning a mutable
+ * file as immutable for a year).
  */
-const HASH_PATTERN = /^.+-[A-Za-z0-9_]{8,}\.[A-Za-z0-9]+$/;
+const HASH_PATTERN = /^.+-[A-Za-z0-9_-]{8}\.[A-Za-z0-9]+$/;
 
 /**
  * Check if a relative path is a content-hashed asset under `assets/`.
  *
- * Only files matching Vite's `[name]-[hash].[ext]` convention (8+ char
+ * Only files matching Vite's `[name]-[hash].[ext]` convention (exactly 8-char
  * base64url hash) are promoted to the global immutable store. Non-hashed
  * files (fonts, images, `.vite/deps`, numeric chunks without hash) remain
  * release-scoped.

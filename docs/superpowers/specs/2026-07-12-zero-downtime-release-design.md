@@ -399,6 +399,17 @@ All existing asset fallback behavior (R2 `ASSETS` bucket for
 `/manifest.appcache`, `/assets/*` proxy to `ASSET_BASE_URL`) is preserved.
 The new R2 release fallback is an additional layer, not a replacement.
 
+**Intentional improvement for direct legacy-R2 responses (`r2-legacy`):**
+When the Worker serves a non-hashed `/assets/*` file directly from the R2
+`ASSETS` bucket (step 3 of the asset fallback flow), it applies the same
+`Cache-Control: public, max-age=3600, s-maxage=86400` and fixed-star CORS
+headers used by `serveR2Object`, rather than proxying through
+`ASSET_BASE_URL`. This is an intentional, documented improvement: the
+direct R2 path avoids an extra network hop and ensures consistent caching
+and CORS behavior. The `X-Moedict-Asset-Source: r2-legacy` header
+distinguishes this path from the external `ASSET_BASE_URL` proxy (which
+does not set `X-Moedict-Asset-Source`).
+
 ## 7. R2 Response Handling
 
 ### Standard R2 Response Pattern
@@ -470,7 +481,7 @@ shell (bounded ~3KB HTML) but NOT for assets.
 | `X-Moedict-Version`      | `CF_VERSION_METADATA.id` (Cloudflare UUID) or `"unknown"`               | Version metadata binding |
 | `X-Moedict-Release`      | `CF_VERSION_METADATA.tag` (release ID); **omitted if tag absent/empty** | Version metadata binding |
 | `X-Moedict-Shell-Source` | `site-assets` \| `r2-release` \| `recovery`                             | Shell flow only          |
-| `X-Moedict-Asset-Source` | `site-assets` \| `r2-release` \| `r2-immutable` \| `legacy-proxy`       | Asset fallback flow only |
+| `X-Moedict-Asset-Source` | `site-assets` \| `r2-release` \| `r2-immutable` \| `r2-legacy`          | Asset fallback flow only |
 
 ### Structured Shell-Miss Log
 
@@ -490,7 +501,7 @@ skips R2 if tag absent):
   "r2Key": "releases/<tag>/index.html",
   "r2Result": "hit" | "miss" | "throw" | "skipped",
   "finalSource": "r2-release" | "recovery",
-  "finalStatus": 200 | 503
+  "finalStatus": 200 | 304 | 503
 }
 
 No secret data in logs. Use `console.log(JSON.stringify(...))` for

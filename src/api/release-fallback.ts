@@ -270,8 +270,7 @@ export async function renderHtmlShellWithFallback<E extends FallbackEnv>(
     }
 
     if (r2Object) {
-      const html = await r2Object.text();
-      const rewritten = await injectHead(html, pathname, env);
+      // Build metadata headers first — needed for both 304 and 200 paths.
       const headers = new Headers();
       r2Object.writeHttpMetadata(headers);
       headers.set("Content-Type", "text/html; charset=utf-8");
@@ -282,10 +281,36 @@ export async function renderHtmlShellWithFallback<E extends FallbackEnv>(
         headers.set(k, v);
       }
 
+      // ETag / If-None-Match → 304 BEFORE text()/injectHead (avoid unnecessary work)
+      if (request.headers.get("If-None-Match") === r2Object.httpEtag) {
+        console.log(
+          JSON.stringify({
+            event: "shell-miss",
+            pathname,
+            cfRay: request.headers.get("cf-ray") || null,
+            versionId: getVersionId(meta),
+            releaseTag: tag,
+            siteAssetsResult,
+            siteAssetsStatus,
+            r2Attempted: true,
+            r2Key: key,
+            r2Result,
+            finalSource: "r2-release",
+            finalStatus: 304,
+          }),
+        );
+        return new Response(null, { status: 304, headers });
+      }
+
+      // Only now read the body and inject head metadata.
+      const html = await r2Object.text();
+      const rewritten = await injectHead(html, pathname, env);
+
       console.log(
         JSON.stringify({
           event: "shell-miss",
           pathname,
+          cfRay: request.headers.get("cf-ray") || null,
           versionId: getVersionId(meta),
           releaseTag: tag,
           siteAssetsResult,
@@ -298,10 +323,6 @@ export async function renderHtmlShellWithFallback<E extends FallbackEnv>(
         }),
       );
 
-      // ETag / If-None-Match → 304
-      if (request.headers.get("If-None-Match") === r2Object.httpEtag) {
-        return new Response(null, { status: 304, headers });
-      }
       if (request.method === "HEAD") {
         return new Response(null, { status: 200, headers });
       }
@@ -313,6 +334,7 @@ export async function renderHtmlShellWithFallback<E extends FallbackEnv>(
       JSON.stringify({
         event: "shell-miss",
         pathname,
+        cfRay: request.headers.get("cf-ray") || null,
         versionId: getVersionId(meta),
         releaseTag: tag,
         siteAssetsResult,
@@ -330,6 +352,7 @@ export async function renderHtmlShellWithFallback<E extends FallbackEnv>(
       JSON.stringify({
         event: "shell-miss",
         pathname,
+        cfRay: request.headers.get("cf-ray") || null,
         versionId: getVersionId(meta),
         releaseTag: null,
         siteAssetsResult,

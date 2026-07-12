@@ -323,7 +323,7 @@ describe("renderHtmlShellWithFallback", () => {
     expect(res!.headers.get("X-Moedict-Shell-Source")).toBe("r2-release");
   });
 
-  it("returns 304 from R2 when If-None-Match matches the shell ETag", async () => {
+  it("returns 304 from R2 when If-None-Match matches the shell ETag, without calling text/injectHead", async () => {
     const shellKey = releaseKey("rel-1", "index.html");
     const fetcher = makeFetcher(new Response("error", { status: 500 }));
     const env = {
@@ -345,15 +345,18 @@ describe("renderHtmlShellWithFallback", () => {
     const etag = res1.headers.get("etag");
     expect(etag).toBeTruthy();
     // Second request with If-None-Match → 304
+    // injectHead must NOT be called on the 304 path (no body read/injection)
+    const injectSpy = vi.fn(async (h: string) => h);
     const res2 = await renderHtmlShellWithFallback(
       req("/about", { headers: { "If-None-Match": etag! } }),
       env as never,
       "/about",
-      async (h) => h,
+      injectSpy,
     );
     expect(res2.status).toBe(304);
     expect(res2.headers.get("X-Moedict-Shell-Source")).toBe("r2-release");
     expect(await res2.text()).toBe("");
+    expect(injectSpy).not.toHaveBeenCalled();
   });
 
   it("HEAD on SITE_ASSETS fast path returns empty body", async () => {
@@ -474,7 +477,7 @@ describe("serveAssetWithFallback", () => {
       ASSETS: makeBucket(),
       CF_VERSION_METADATA: undefined,
     };
-    const res = await serveAssetWithFallback(req("/assets/index-NotFound0.js"), env as never);
+    const res = await serveAssetWithFallback(req("/assets/index-NotFound.js"), env as never);
     expect(res).toBe(null);
   });
 
@@ -491,7 +494,31 @@ describe("serveAssetWithFallback", () => {
     };
     // Hashed path: isImmutableAsset → true, enters immutable block.
     // Release key miss, immutable key miss, legacy key miss → null.
-    const res = await serveAssetWithFallback(req("/assets/index-MissHash0.js"), env as never);
+    const res = await serveAssetWithFallback(req("/assets/index-MissHash.js"), env as never);
+    expect(res).toBe(null);
+  });
+
+  it("falls through to legacy when immutable R2 throws (tag present)", async () => {
+    const fetcher = makeFetcher(new Response("", { status: 404 }));
+    const throwingBucket = {
+      async get(key: string) {
+        // Release key lookup and legacy key lookup return null;
+        // immutable key lookup throws.
+        if (key.startsWith("immutable/")) throw new Error("R2 error");
+        return null;
+      },
+    } as unknown as R2BucketLike;
+    const env = {
+      SITE_ASSETS: fetcher,
+      ASSETS: throwingBucket,
+      CF_VERSION_METADATA: {
+        id: "uuid-1",
+        tag: "rel-1",
+        timestamp: "2026-07-12T00:00:00Z",
+      } as never,
+    };
+    // Hashed path: release key miss (null), immutable key throws, legacy miss → null.
+    const res = await serveAssetWithFallback(req("/assets/index-BU7Lztf4.js"), env as never);
     expect(res).toBe(null);
   });
 
@@ -635,7 +662,12 @@ describe("structured shell-miss logging", () => {
       } as never,
     };
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    await renderHtmlShellWithFallback(req("/about"), env as never, "/about", async (h) => h);
+    await renderHtmlShellWithFallback(
+      req("/about", { headers: { "cf-ray": "1a2b3c4d5e6f-LAX" } }),
+      env as never,
+      "/about",
+      async (h) => h,
+    );
     // Find the structured log call
     const structuredCall = logSpy.mock.calls.find((call) => {
       try {
@@ -649,6 +681,7 @@ describe("structured shell-miss logging", () => {
     const parsed = JSON.parse(structuredCall![0]);
     expect(parsed.event).toBe("shell-miss");
     expect(parsed.pathname).toBe("/about");
+    expect(parsed.cfRay).toBe("1a2b3c4d5e6f-LAX");
     expect(parsed.versionId).toBe("uuid-1");
     expect(parsed.releaseTag).toBe("rel-1");
     expect(parsed.siteAssetsResult).toBe("non-ok");
@@ -680,6 +713,7 @@ describe("structured shell-miss logging", () => {
     const parsed = JSON.parse(structuredCall![0]);
     expect(parsed.r2Attempted).toBe(false);
     expect(parsed.r2Result).toBe("skipped");
+    expect(parsed.cfRay).toBe(null);
     expect(parsed.finalSource).toBe("recovery");
     expect(parsed.finalStatus).toBe(503);
     expect(parsed.versionId).toBe("unknown");

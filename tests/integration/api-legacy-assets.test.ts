@@ -142,7 +142,7 @@ describe("R2 shell fallback (tagged release)", () => {
 
 describe("R2 immutable asset fallback", () => {
   it("serves hashed /assets/* from global immutable R2 when SITE_ASSETS is unavailable", async () => {
-    // /assets/index-AbCdEfGh.js matches isImmutableAsset (8+ char hash)
+    // /assets/index-AbCdEfGh.js matches isImmutableAsset (exactly 8-char base64url hash)
     // and should be served from immutable/assets/index-AbCdEfGh.js
     const res = await fetchFromTaggedServer("/assets/index-AbCdEfGh.js");
     expect(res.status).toBe(200);
