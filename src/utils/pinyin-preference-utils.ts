@@ -90,6 +90,47 @@ function tonePoj(segment: string): string {
   return noTone;
 }
 
+// DT (臺灣閩南語羅馬字拼音／臺通) uses the same tone-placement priority as
+// POJ (o > e > a > u > i > ng > m, per g0v/moedict-webkit#165's confirmed
+// community rule) but its own diacritic inventory, produced in-place by the
+// DT_TONES table above: acute stays on whichever letter the source TL mark
+// sat on unless repositioned here. Without this pass a cluster like "ui"
+// keeps its TL-native mark on the second vowel (TL: tsuí -> DT: zuí, still
+// wrong) instead of moving to the DT-priority vowel (zùi, correct per the
+// issue's "水 tsuí" example). Mirrors tonePoj's algorithm exactly, just
+// scanning for DT's post-conversion mark set instead of TL's.
+// Known limitation (not exercised by any concrete example in #165): DT's own
+// letter-shape rules run *before* this pass and rewrite a bare "o" into "or"
+// unless it's immediately followed by k/n/m (see the `o(...)r` replace above).
+// That insertion can separate an "oa"/"oe" cluster (e.g. "hoan" -> "horan")
+// before this function ever sees it, so the oa[inht]/oeh exception branches
+// below can silently miss and fall through to the plain "o" priority branch
+// instead. Fixing that would require reordering DT's pipeline to reposition
+// the tone mark before the letter-shape rewrite (on the original TL vowel
+// sequence) — out of scope here since #165 never reported a wrong oa/oe-
+// cluster DT example, only the "ui" cluster covered by the tests below.
+const DT_TONE_MARK_RE = /([\u0300\u0301\u0304\u0305\u0306\u0332])/;
+const DT_TONE_MARK_RE_GLOBAL = /[\u0300\u0301\u0304\u0305\u0306\u0332]/g;
+
+function toneDt(segment: string): string {
+  const toneMatch = segment.match(DT_TONE_MARK_RE);
+  if (!toneMatch) return segment;
+
+  const tone = toneMatch[1];
+  let noTone = segment.replace(DT_TONE_MARK_RE_GLOBAL, "");
+  if (/oa[inht]/i.test(noTone)) return noTone.replace(/(oa)([inht])/i, `$1${tone}$2`);
+  if (/oeh/i.test(noTone)) return noTone.replace(/(oe)(h)/i, `$1${tone}$2`);
+  if (/o/i.test(noTone)) return noTone.replace(/(o)/i, `$1${tone}`);
+  if (/e/i.test(noTone)) return noTone.replace(/(e)/i, `$1${tone}`);
+  if (/a/i.test(noTone)) return noTone.replace(/(a)/i, `$1${tone}`);
+  if (/u/i.test(noTone)) return noTone.replace(/(u)/i, `$1${tone}`);
+  if (/i/i.test(noTone)) return noTone.replace(/(i)/i, `$1${tone}`);
+  if (/ng/i.test(noTone)) return noTone.replace(/(n)(g)/i, `$1${tone}$2`);
+  if (/m/i.test(noTone)) return noTone.replace(/(m)/i, `$1${tone}`);
+  noTone += tone;
+  return noTone;
+}
+
 function toneToPfs(segment: string): string {
   const parts = segment.split(/([\u00B9\u00B2\u00B3\u2074\u2075]+)/);
   if (parts.length < 2) return segment;
@@ -182,6 +223,9 @@ function convertPinyinT(yin: string, isBody = true): string {
       .replace(/O([^\w\s\u2011]*)O/g, "o$1")
       .replace(/O([^.!?,\w\s\u2011]*)o([^.!?,\w\s\u2011]*)r?/g, "O$1$2")
       .replace(/([\u0300-\u0302\u0304\u0307\u030D])/g, (tone) => DT_TONES[tone])
+      .split(/([- \u2011.,!?])/)
+      .map((seg) => toneDt(seg))
+      .join("")
       .replace(/([aeiou])(r?[ptkh])/g, "$1\u0304$2")
       .replace(/\u200B/g, "")
       .replace(/[-\u2011][-\u2011]([aeiou])(?![\u0300\u0332\u0306\u0304])/g, "$1\u030A")
@@ -190,7 +234,7 @@ function convertPinyinT(yin: string, isBody = true): string {
       .replace(/[-\u2011][-\u2011](\u012B|i\u0304)/g, "\u2011\u2011i\u030A")
       .replace(/[-\u2011][-\u2011](\u0113|e\u0304)/g, "\u2011\u2011e\u030A")
       .replace(/[-\u2011][-\u2011](\u016B|u\u0304)/g, "\u2011\u2011u\u030A")
-      .replace(/nn($|[-\s])/g, "\u207F$1");
+      .replace(/nn($|[-\u2011\s.,!?;:、。！？；：])/g, "\u207F$1");
 
     if (isBody) {
       converted = converted.replace(
@@ -231,8 +275,8 @@ function convertPinyinT(yin: string, isBody = true): string {
     .replace(/u([^\w\s\u2011.!?,-]*)e/g, "o$1e")
     .replace(/i([^\w\s\u2011.!?,-]*)k($|[-\u2011\s])/g, "e$1k$2")
     .replace(/i([^\w\s\u2011.!?,-]*)ng/g, "e$1ng")
-    .replace(/nn($|[-\u2011\s])/g, "\u207F$1")
-    .replace(/nnh($|[-\u2011\s])/g, "h\u207F$1")
+    .replace(/nn($|[-\u2011\s.,!?;:、。！？；：])/g, "\u207F$1")
+    .replace(/nnh($|[-\u2011\s.,!?;:、。！？；：])/g, "h\u207F$1")
     .replace(/([ie])r/g, "$1\u0358")
     .replace(/\u030B/g, "\u0306");
 
