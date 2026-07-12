@@ -92,6 +92,15 @@ describe("computeClientManifestDigest", () => {
     expect(digest).toMatch(/^[0-9a-f]{12}$/);
   });
 
+  it("matches a hard-coded canonical UTF-8 SHA-256 vector", () => {
+    const entries = [
+      { path: "b.txt", sha256: "0".repeat(64), size: 1 },
+      { path: "a.txt", sha256: "1".repeat(64), size: 2 },
+    ];
+    // SHA-256 of the exact canonical UTF-8 bytes, first 12 hex.
+    expect(computeClientManifestDigest(entries)).toBe("a0ce953402e1");
+  });
+
   it("sorts entries internally — caller order does not affect digest", () => {
     const a = [
       { path: "b.txt", sha256: "0".repeat(64), size: 1 },
@@ -122,6 +131,13 @@ describe("computeClientManifestDigest", () => {
 describe("computeReleaseId", () => {
   it("produces <git-short-sha>-<first12-of-manifest-digest>", () => {
     expect(computeReleaseId("abc1234", "def456789012")).toBe("abc1234-def456789012");
+  });
+
+  it("rejects malformed SHA boundaries", () => {
+    expect(() => computeReleaseId("abc123", "def456789012")).toThrow();
+    expect(() => computeReleaseId("ABC1234", "def456789012")).toThrow();
+    expect(() => computeReleaseId("abc1234", "def45678901")).toThrow();
+    expect(() => computeReleaseId("abc1234", "DEF456789012")).toThrow();
   });
 
   it("rejects empty git SHA", () => {

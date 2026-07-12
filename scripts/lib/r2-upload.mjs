@@ -13,7 +13,7 @@
  */
 
 import { extname, join, relative, sep } from "node:path";
-import { mkdtempSync, writeFileSync, unlinkSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { releaseKey, immutableKey, isImmutableAsset } from "../../src/utils/release-keys.ts";
 
@@ -39,27 +39,30 @@ import { releaseKey, immutableKey, isImmutableAsset } from "../../src/utils/rele
 /**
  * @typedef {Object} FsAdapter
  * @property {(path: string) => Buffer} readFileSync
- * @property {(path: string) => { size: number; isDirectory(): boolean }} statSync
  * @property {(path: string, opts: { withFileTypes: true }) => Array<{ name: string; isDirectory(): boolean }>} readdirSync
  */
 
-// Default runner uses child_process spawnSync (argv, no shell)
+// Production runner uses the project-local Wrangler through `vp exec`; argv
+// is kept separate throughout (no shell interpolation).
 import { spawn } from "node:child_process";
 
 /**
- * Default runner: executes wrangler via argv (no shell string).
+ * Execute a command through Wrangler's project-local vp entrypoint.
+ * Child errors reject; null/signal closes are failures (never success).
  * @param {string[]} argv
+ * @param {(file: string, args: string[], opts: object) => object} [spawnImpl]
  * @returns {Promise<RunnerResult>}
  */
-async function defaultRunner(argv) {
-  return new Promise((resolve) => {
-    const proc = spawn(argv[0], argv.slice(1), { stdio: ["ignore", "pipe", "pipe"] });
+export function runWrangler(argv, spawnImpl = spawn) {
+  return new Promise((resolve, reject) => {
+    const proc = spawnImpl(argv[0], argv.slice(1), { stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     proc.stdout?.on("data", (d) => (stdout += d.toString()));
     proc.stderr?.on("data", (d) => (stderr += d.toString()));
-    proc.on("close", (code) => {
-      resolve({ exitCode: code ?? 0, stdout, stderr });
+    proc.once("error", reject);
+    proc.once("close", (code) => {
+      resolve({ exitCode: typeof code === "number" ? code : 1, stdout, stderr });
     });
   });
 }
@@ -123,7 +126,7 @@ export function cacheControlFor(key) {
 }
 
 /**
- * Upload a single object to R2 via `wrangler r2 object put`.
+ * Upload a single object to R2 via `vp exec wrangler r2 object put`.
  * Uses argv (not shell string) to prevent injection.
  * @param {string} bucketName
  * @param {string} key
@@ -131,11 +134,13 @@ export function cacheControlFor(key) {
  * @param {{ contentType?: string; cacheControl?: string; runner?: Runner }} [opts]
  */
 export async function uploadObject(bucketName, key, filePath, opts = {}) {
-  const runner = opts.runner ?? defaultRunner;
+  const runner = opts.runner ?? runWrangler;
   const contentType = opts.contentType ?? contentTypeFor(filePath);
   const cacheControl = opts.cacheControl ?? cacheControlFor(key);
 
   const argv = [
+    "vp",
+    "exec",
     "wrangler",
     "r2",
     "object",
@@ -194,16 +199,16 @@ export async function retryWithBackoff(fn, opts = {}) {
  * @returns {boolean}
  */
 function is429Error(err) {
-  if (!err) return false;
-  if (typeof err === "object") {
-    const e = /** @type {Record<string, unknown>} */ (err);
-    if (e.code === 971 || e.code === 429) return true;
-    const stderr = typeof e.stderr === "string" ? e.stderr : "";
-    if (stderr.includes("429") || stderr.includes("971")) return true;
-    const msg = typeof e.message === "string" ? e.message : "";
-    if (msg.includes("429") || msg.includes("971")) return true;
-  }
-  return false;
+  if (!err || typeof err !== "object") return false;
+  const e = /** @type {Record<string, unknown>} */ (err);
+  if (e.code === 971 || e.code === 429) return true;
+  const hasRateLimitText = (value) =>
+    typeof value === "string" &&
+    (/\bHTTP\s+429\b/i.test(value) ||
+      /\bstatus\s+429\b/i.test(value) ||
+      /\bToo Many Requests\b/i.test(value) ||
+      /\[code:\s*971\]/i.test(value));
+  return hasRateLimitText(e.stderr) || hasRateLimitText(e.message);
 }
 
 /**
@@ -218,7 +223,7 @@ export async function uploadWithConcurrency(files, bucketName, opts = {}) {
     throw new Error(`maxConcurrent must be a positive integer: ${requestedConcurrency}`);
   }
   const maxConcurrent = Math.min(requestedConcurrency, 4);
-  const runner = opts.runner ?? defaultRunner;
+  const runner = opts.runner ?? runWrangler;
   const sleep = opts.sleep ?? defaultSleep;
 
   let index = 0;
@@ -274,7 +279,7 @@ function enumerateFiles(dir, fs) {
  * @param {{ runner?: Runner; sleep?: (ms: number) => Promise<void>; fs?: FsAdapter; manifestJson?: string }} [opts]
  */
 export async function uploadReleaseToR2(releaseId, distClientDir, bucketName, opts = {}) {
-  const runner = opts.runner ?? defaultRunner;
+  const runner = opts.runner ?? runWrangler;
   const sleep = opts.sleep ?? defaultSleep;
   const fs = opts.fs ?? defaultFs;
   const manifestJson = opts.manifestJson ?? "{}";
@@ -312,16 +317,17 @@ export async function uploadReleaseToR2(releaseId, distClientDir, bucketName, op
     }
   }
 
-  // 3. Upload all files (NOT manifest yet)
+  // 3. Upload all files (NOT manifest yet).
   await uploadWithConcurrency(uploadEntries, bucketName, { runner, sleep });
 
-  // 4. Upload release-manifest.json LAST (only after all other uploads succeed)
-  // Write manifest content to a temp file — wrangler --file expects a path, not content.
+  // 4. Upload release-manifest.json LAST (only after all other uploads succeed).
+  // A failed object may leave already-started idempotent uploads running; the
+  // manifest remains withheld, which preserves the publication invariant.
   const manifestKey = releaseKey(releaseId, "release-manifest.json");
   const tmpDir = mkdtempSync(join(tmpdir(), "r2-manifest-"));
-  const manifestPath = join(tmpDir, "release-manifest.json");
-  writeFileSync(manifestPath, manifestJson);
   try {
+    const manifestPath = join(tmpDir, "release-manifest.json");
+    writeFileSync(manifestPath, manifestJson);
     await retryWithBackoff(
       () =>
         uploadObject(bucketName, manifestKey, manifestPath, {
@@ -332,16 +338,7 @@ export async function uploadReleaseToR2(releaseId, distClientDir, bucketName, op
       { sleep },
     );
   } finally {
-    try {
-      unlinkSync(manifestPath);
-    } catch {
-      /* ignore */
-    }
-    try {
-      unlinkSync(tmpDir);
-    } catch {
-      /* ignore */
-    }
+    rmSync(tmpDir, { recursive: true, force: true });
   }
 }
 

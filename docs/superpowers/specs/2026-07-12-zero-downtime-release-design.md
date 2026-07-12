@@ -526,7 +526,7 @@ variable (CI).
 ### Upload Order
 
 1. Upload all `dist/client/**` files to `releases/<id>/<relative-path>` with
-   correct `Content-Type`, `Cache-Control`, and `Cache-Tag` metadata.
+   correct `Content-Type` and `Cache-Control` metadata.
 2. Upload content-hashed `dist/client/assets/**` to
    `immutable/assets/<relative-path>` (same metadata).
 3. Upload `release-manifest.json` **last**, only after all objects succeed.
@@ -535,12 +535,18 @@ variable (CI).
 5. Verify: GET `release-manifest.json` and parse; confirm all listed files
    exist and match.
 
+The current `wrangler r2 object put --help` exposes no `Cache-Tag` or
+custom-metadata flag that maps to HTTP `Cache-Tag`. Do not invent an
+unsupported option: versioned release keys and content-addressed immutable
+keys provide cache identity, while `Cache-Control` supplies retention policy.
+
 ### Generated Config / Bucket Selection
 
 The publish script reads `dist/cf_moedict_webkit_neo/wrangler.json` (the
-generated config) to determine the `ASSETS` binding's `bucket_name` (prod)
-or `preview_bucket_name` (staging, when `CLOUDFLARE_ENV=staging`). It uses
-this bucket name for all R2 uploads.
+generated, flattened config) and uses the effective `ASSETS.bucket_name`.
+Absent `targetEnvironment` is production only; staging requires
+`targetEnvironment: "staging"` and its preview worker/bucket shape. Mismatched
+or unknown environments fail closed.
 
 ## 10. Deployment Orchestrator
 

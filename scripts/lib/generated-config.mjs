@@ -45,19 +45,42 @@ const require = createRequire(import.meta.url);
  * @returns {string}
  */
 export function getAssetsBucketName(config, env) {
+  const normalizedEnv = env ?? "production";
+  if (normalizedEnv !== "production" && normalizedEnv !== "staging") {
+    throw new Error(`Unsupported CLOUDFLARE_ENV: ${normalizedEnv}`);
+  }
+  const targetEnvironment = config.targetEnvironment;
+  const targetLabel = typeof targetEnvironment === "string" ? targetEnvironment : "<absent>";
+  if (
+    (normalizedEnv === "staging" && targetEnvironment !== "staging") ||
+    (normalizedEnv === "production" &&
+      targetEnvironment !== undefined &&
+      targetEnvironment !== "production")
+  ) {
+    throw new Error(
+      `Generated config targetEnvironment mismatch: expected ${normalizedEnv}, got ${targetLabel}`,
+    );
+  }
   const buckets = /** @type {Array<Record<string, unknown>> | undefined} */ (config.r2_buckets);
   if (!Array.isArray(buckets)) {
     throw new Error("ASSETS binding not found: r2_buckets missing in generated config");
   }
   const binding = buckets.find((b) => b.binding === "ASSETS");
-  if (!binding) {
-    throw new Error("ASSETS binding not found in generated config");
-  }
+  if (!binding) throw new Error("ASSETS binding not found in generated config");
   const bucketName = binding.bucket_name;
   if (typeof bucketName !== "string" || !bucketName) {
-    throw new Error(
-      `ASSETS binding has no bucket_name in generated config (env=${env ?? "production"})`,
-    );
+    throw new Error(`ASSETS binding has no bucket_name in generated config (env=${normalizedEnv})`);
+  }
+  const name = config.name;
+  if (typeof name !== "string" || !name) {
+    throw new Error("Worker name not found in generated config");
+  }
+  const stagingShape = normalizedEnv === "staging";
+  if (
+    stagingShape !== name.endsWith("-staging") ||
+    stagingShape !== bucketName.endsWith("-preview")
+  ) {
+    throw new Error(`Generated config worker/bucket shape mismatch for ${normalizedEnv}`);
   }
   return bucketName;
 }

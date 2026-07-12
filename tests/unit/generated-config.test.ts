@@ -1,3 +1,4 @@
+/// <reference types="node" />
 /**
  * Unit tests for generated wrangler config parsing (scripts/lib/generated-config.mjs).
  *
@@ -6,7 +7,8 @@
  * with NO preview_bucket_name field. The parser must select the effective
  * bucket_name, not assume preview_bucket_name survives flattening.
  */
-
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { describe, expect, it } from "vite-plus/test";
 import {
   getAssetsBucketName,
@@ -54,9 +56,19 @@ const STAGING_CONFIG = {
 // ── parseGeneratedConfig ─────────────────────────────────────────────
 
 describe("parseGeneratedConfig", () => {
-  it("parses JSON config from a file path", () => {
-    const config = parseGeneratedConfig(PROD_CONFIG);
+  it("parses the real generated config file path", () => {
+    const configPath = "dist/cf_moedict_webkit_neo/wrangler.json";
+    const config = parseGeneratedConfig(configPath);
     expect(config.name).toBe("cf-moedict-webkit-neo");
+  });
+
+  it("rejects missing and malformed config files", () => {
+    expect(() => parseGeneratedConfig("/tmp/does-not-exist-wrangler.json")).toThrow();
+    const dir = mkdtempSync(`${tmpdir()}/generated-config-`);
+    const path = `${dir}/bad.json`;
+    writeFileSync(path, "{bad");
+    expect(() => parseGeneratedConfig(path)).toThrow();
+    rmSync(dir, { recursive: true, force: true });
   });
 
   it("accepts an already-parsed config object", () => {
@@ -75,6 +87,19 @@ describe("getAssetsBucketName", () => {
   it("extracts ASSETS bucket_name for production (explicit env)", () => {
     expect(getAssetsBucketName(PROD_CONFIG, "production")).toBe("moedict-assets");
   });
+  it("rejects stale production config when staging is requested", () => {
+    expect(() => getAssetsBucketName(PROD_CONFIG, "staging")).toThrow(/targetEnvironment|shape/);
+  });
+
+  it("rejects staging config when production is requested", () => {
+    expect(() => getAssetsBucketName(STAGING_CONFIG, "production")).toThrow(
+      /targetEnvironment|shape/,
+    );
+  });
+
+  it("rejects unknown environments", () => {
+    expect(() => getAssetsBucketName(PROD_CONFIG, "preview")).toThrow(/Unsupported/);
+  });
 
   it("extracts ASSETS bucket_name for staging — uses bucket_name not preview_bucket_name", () => {
     // Staging generated config has NO preview_bucket_name; bucket_name is
@@ -86,6 +111,8 @@ describe("getAssetsBucketName", () => {
     // Even if a config had both, staging should use bucket_name (the
     // flattened effective value), not preview_bucket_name.
     const configWithBoth = {
+      name: "cf-moedict-webkit-neo-staging",
+      targetEnvironment: "staging",
       r2_buckets: [
         {
           binding: "ASSETS",

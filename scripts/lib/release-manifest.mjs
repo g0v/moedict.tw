@@ -18,7 +18,7 @@
 
 import { createHash } from "node:crypto";
 import { execSync } from "node:child_process";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
 /**
@@ -40,7 +40,6 @@ import { join, relative, sep } from "node:path";
 /**
  * @typedef {Object} FsAdapter
  * @property {(path: string) => Buffer} readFileSync
- * @property {(path: string) => { size: number; isDirectory(): boolean }} statSync
  * @property {(path: string, opts: { withFileTypes: true }) => Array<{ name: string; isDirectory(): boolean }>} readdirSync
  */
 
@@ -103,7 +102,7 @@ export function buildClientManifest(distClientDir, opts = {}) {
     return {
       path,
       sha256: createHash("sha256").update(content).digest("hex"),
-      size: fs.statSync(join(distClientDir, path)).size,
+      size: content.byteLength,
     };
   });
 }
@@ -196,7 +195,6 @@ export function buildReleaseManifest(distClientDir, opts = {}) {
 // Default adapters using real Node.js fs and git
 const defaultFs = {
   readFileSync: (p) => readFileSync(p),
-  statSync: (p) => statSync(p),
   readdirSync: (p, opts) =>
     /** @type {Array<{ name: string; isDirectory(): boolean }>} */ (readdirSync(p, opts)),
 };

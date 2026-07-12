@@ -13,11 +13,11 @@
  */
 
 import { createHash } from "node:crypto";
-import { readFileSync, unlinkSync, mkdtempSync } from "node:fs";
+import { readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { releaseKey, immutableKey, isImmutableAsset } from "../src/utils/release-keys.ts";
-import { retryWithBackoff } from "./lib/r2-upload.mjs";
+import { retryWithBackoff, runWrangler } from "./lib/r2-upload.mjs";
 
 /**
  * @typedef {Object} RunnerResult
@@ -35,27 +35,6 @@ import { retryWithBackoff } from "./lib/r2-upload.mjs";
  * @property {boolean} verified
  * @property {string[]} checkedKeys
  */
-
-// Default runner uses child_process spawn (argv, no shell)
-import { spawn } from "node:child_process";
-
-/**
- * Default runner: executes wrangler via argv (no shell string).
- * @param {string[]} argv
- * @returns {Promise<RunnerResult>}
- */
-async function defaultRunner(argv) {
-  return new Promise((resolve) => {
-    const proc = spawn(argv[0], argv.slice(1), { stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "";
-    let stderr = "";
-    proc.stdout?.on("data", (d) => (stdout += d.toString()));
-    proc.stderr?.on("data", (d) => (stderr += d.toString()));
-    proc.on("close", (code) => {
-      resolve({ exitCode: code ?? 0, stdout, stderr });
-    });
-  });
-}
 
 /**
  * Default sleep: real setTimeout. Tests inject a fake.
@@ -80,28 +59,26 @@ function defaultSleep(ms) {
  * @returns {Promise<Buffer>}
  */
 async function downloadR2Object(bucketName, key, opts = {}) {
-  const runner = opts.runner ?? defaultRunner;
+  const runner = opts.runner ?? runWrangler;
   const sleep = opts.sleep ?? defaultSleep;
   const tmpDir = mkdtempSync(join(tmpdir(), "r2-verify-"));
-  const filePath = join(tmpDir, "object.bin");
-
-  const argv = [
-    "wrangler",
-    "r2",
-    "object",
-    "get",
-    `${bucketName}/${key}`,
-    "--remote",
-    `--file=${filePath}`,
-  ];
-
   try {
+    const filePath = join(tmpDir, "object.bin");
+    const argv = [
+      "vp",
+      "exec",
+      "wrangler",
+      "r2",
+      "object",
+      "get",
+      `${bucketName}/${key}`,
+      "--remote",
+      `--file=${filePath}`,
+    ];
     await retryWithBackoff(
       async () => {
         const result = await runner(argv);
         if (result.exitCode !== 0) {
-          // Distinguish missing object (404) from other download errors.
-          // Both get thrown; retryWithBackoff only retries 429/971.
           const stderr = result.stderr ?? "";
           if (
             stderr.includes("not found") ||
@@ -110,7 +87,6 @@ async function downloadR2Object(bucketName, key, opts = {}) {
           ) {
             throw new Error(`Missing object: ${key} (exit ${result.exitCode}): ${stderr}`);
           }
-          // Non-429 non-404 error (429/971 will be retried by retryWithBackoff)
           throw new Error(`Download failed: ${key} (exit ${result.exitCode}): ${stderr}`);
         }
       },
@@ -118,16 +94,7 @@ async function downloadR2Object(bucketName, key, opts = {}) {
     );
     return readFileSync(filePath);
   } finally {
-    try {
-      unlinkSync(filePath);
-    } catch {
-      /* ignore */
-    }
-    try {
-      unlinkSync(tmpDir);
-    } catch {
-      /* ignore */
-    }
+    rmSync(tmpDir, { recursive: true, force: true });
   }
 }
 
@@ -147,7 +114,7 @@ async function downloadR2Object(bucketName, key, opts = {}) {
  * @returns {Promise<VerifyResult>}
  */
 export async function verifyRelease(bucketName, releaseId, manifest, opts = {}) {
-  const runner = opts.runner ?? defaultRunner;
+  const runner = opts.runner ?? runWrangler;
   const sleep = opts.sleep ?? defaultSleep;
   const checkedKeys = [];
 
@@ -162,6 +129,9 @@ export async function verifyRelease(bucketName, releaseId, manifest, opts = {}) 
     checkedKeys.push(key);
 
     // Hash binary bytes, never text
+    if (content.byteLength !== file.size) {
+      throw new Error(`Size mismatch: ${key} (expected ${file.size}, got ${content.byteLength})`);
+    }
     const hash = createHash("sha256").update(content).digest("hex");
     if (hash !== file.sha256) {
       throw new Error(`Hash mismatch: ${key} (expected ${file.sha256}, got ${hash})`);
@@ -175,6 +145,11 @@ export async function verifyRelease(bucketName, releaseId, manifest, opts = {}) 
     const content = await downloadR2Object(bucketName, immKey, { runner, sleep });
     checkedKeys.push(immKey);
 
+    if (content.byteLength !== file.size) {
+      throw new Error(
+        `Size mismatch: ${immKey} (expected ${file.size}, got ${content.byteLength})`,
+      );
+    }
     const hash = createHash("sha256").update(content).digest("hex");
     if (hash !== file.sha256) {
       throw new Error(`Hash mismatch: ${immKey} (expected ${file.sha256}, got ${hash})`);
@@ -204,6 +179,16 @@ export async function verifyRelease(bucketName, releaseId, manifest, opts = {}) 
   } catch {
     throw new Error(`Malformed manifest JSON: ${manifestKey}`);
   }
+  if (
+    !parsedManifest ||
+    typeof parsedManifest.id !== "string" ||
+    typeof parsedManifest.gitSha !== "string" ||
+    typeof parsedManifest.clientManifestDigest !== "string" ||
+    typeof parsedManifest.createdAt !== "string" ||
+    !Array.isArray(parsedManifest.files)
+  ) {
+    throw new Error(`Malformed manifest schema: ${manifestKey}`);
+  }
 
   // The caller's locally-built manifest is the authentication reference. The
   // release path and every manifest field must agree with that reference.
@@ -225,6 +210,11 @@ export async function verifyRelease(bucketName, releaseId, manifest, opts = {}) 
   if (parsedManifest.clientManifestDigest !== manifest.clientManifestDigest) {
     throw new Error(
       `Manifest digest mismatch: ${manifestKey} (expected ${manifest.clientManifestDigest}, got ${parsedManifest.clientManifestDigest})`,
+    );
+  }
+  if (parsedManifest.createdAt !== manifest.createdAt) {
+    throw new Error(
+      `Manifest createdAt mismatch: ${manifestKey} (expected ${manifest.createdAt}, got ${parsedManifest.createdAt})`,
     );
   }
 

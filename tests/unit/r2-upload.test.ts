@@ -7,10 +7,12 @@
  * correct MIME/cache-control/remote args, argv (not shell string) execution,
  * immutable promotion via shared isImmutableAsset, shared releaseKey/immutableKey.
  */
-
+import { existsSync } from "node:fs";
+import { dirname } from "node:path";
 import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vite-plus/test";
 import {
+  runWrangler,
   uploadObject,
   uploadReleaseToR2,
   uploadWithConcurrency,
@@ -31,9 +33,10 @@ describe("uploadObject", () => {
       cacheControl: "public, max-age=0, s-maxage=60",
       runner,
     });
-
     const args = calls[0];
-    expect(args[0]).toBe("wrangler");
+
+    expect(args[0]).toBe("vp");
+    expect(args.slice(0, 3)).toEqual(["vp", "exec", "wrangler"]);
     expect(args).toContain("r2");
     expect(args).toContain("object");
     expect(args).toContain("put");
@@ -49,6 +52,54 @@ describe("uploadObject", () => {
   it("throws on non-zero exit code", async () => {
     const runner = async () => ({ exitCode: 1, stdout: "", stderr: "fail" });
     await expect(uploadObject("b", "k", "/f", { runner })).rejects.toThrow();
+  });
+
+  it("rejects when the child emits an error", async () => {
+    await expect(
+      runWrangler(["vp", "exec", "wrangler", "--help"], (_file, _args, _opts) => {
+        const listeners: Record<string, (value?: unknown) => void> = {};
+        const stream = {
+          on: (event: string, cb: (value: unknown) => void) => (listeners[event] = cb),
+        };
+        const child = {
+          stdout: stream,
+          stderr: stream,
+          once: (event: string, cb: (value?: unknown) => void) => {
+            listeners[event] = cb;
+            if (event === "error") queueMicrotask(() => cb(new Error("ENOENT")));
+          },
+        };
+        return child;
+      }),
+    ).rejects.toThrow("ENOENT");
+  });
+
+  it("treats a null close code as a failed command", async () => {
+    const result = await runWrangler(
+      ["vp", "exec", "wrangler", "--help"],
+      (_file, _args, _opts) => {
+        const listeners: Record<string, (value?: unknown) => void> = {};
+        const stream = {
+          on: (event: string, cb: (value: unknown) => void) => (listeners[event] = cb),
+        };
+        const child = {
+          stdout: stream,
+          stderr: stream,
+          once: (event: string, cb: (value?: unknown) => void) => {
+            listeners[event] = cb;
+            if (event === "close") queueMicrotask(() => cb(null));
+          },
+        };
+        return child;
+      },
+    );
+    expect(result.exitCode).toBe(1);
+  });
+
+  it("default runner executes without an injected runner", async () => {
+    const result = await runWrangler([process.execPath, "-e", "process.stdout.write('ok')"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe("ok");
   });
 });
 
@@ -142,6 +193,48 @@ describe("retryWithBackoff", () => {
       retryWithBackoff(fn, { sleep, maxRetries: 5, initialDelay: 1000, maxDelay: 60000 }),
     ).rejects.toThrow("not a rate limit");
     expect(calls).toBe(1);
+  });
+
+  it("recognizes only anchored Wrangler/Cloudflare rate-limit output", async () => {
+    for (const stderr of [
+      "HTTP 429 Too Many Requests",
+      "status 429",
+      "Too Many Requests",
+      "[code: 971]",
+    ]) {
+      let calls = 0;
+      const result = await retryWithBackoff(
+        async () => {
+          calls++;
+          if (calls === 1) throw { stderr };
+          return "ok";
+        },
+        { sleep: () => Promise.resolve() },
+      );
+      expect(result).toBe("ok");
+      expect(calls).toBe(2);
+    }
+  });
+
+  it("does not treat unrelated key/text digits as rate limits", async () => {
+    for (const error of [
+      new Error("upload key contains 429"),
+      { stderr: "object key 971 is present" },
+      { message: "request id 429971" },
+    ]) {
+      let calls = 0;
+      await expect(
+        retryWithBackoff(
+          async () => {
+            calls++;
+            throw error;
+          },
+          { sleep: () => Promise.resolve() },
+        ),
+      ).rejects.toEqual(error);
+
+      expect(calls).toBe(1);
+    }
   });
 
   it("caps delay at maxDelay", async () => {
@@ -303,6 +396,44 @@ describe("uploadReleaseToR2", () => {
     // --file must be a real path, not the JSON content itself
     expect(filePath).not.toBe(manifestJson);
     expect(filePath).toMatch(/release-manifest\.json$/);
+  });
+  it("removes manifest temp directory after a successful upload", async () => {
+    let manifestPath = "";
+    const runner = async (argv: string[]) => {
+      const keyArg = argv.find((a) => a.startsWith("bucket/")) ?? "";
+      if (keyArg.includes("release-manifest.json")) {
+        manifestPath = (argv.find((a) => a.startsWith("--file=")) ?? "").slice("--file=".length);
+      }
+      return { exitCode: 0, stdout: "", stderr: "" };
+    };
+    await uploadReleaseToR2("cleanup-success", "dist/client", "bucket", {
+      runner,
+      fs: makeMemFs(new Map([["index.html", Buffer.from("x")]])),
+      manifestJson: "{}",
+    });
+    expect(manifestPath).toMatch(/release-manifest\.json$/);
+    expect(existsSync(dirname(manifestPath))).toBe(false);
+  });
+
+  it("removes manifest temp directory after a failed manifest upload", async () => {
+    let manifestPath = "";
+    const runner = async (argv: string[]) => {
+      const keyArg = argv.find((a) => a.startsWith("bucket/")) ?? "";
+      if (keyArg.includes("release-manifest.json")) {
+        manifestPath = (argv.find((a) => a.startsWith("--file=")) ?? "").slice("--file=".length);
+        return { exitCode: 1, stdout: "", stderr: "manifest failure" };
+      }
+      return { exitCode: 0, stdout: "", stderr: "" };
+    };
+    await expect(
+      uploadReleaseToR2("cleanup-failure", "dist/client", "bucket", {
+        runner,
+        fs: makeMemFs(new Map([["index.html", Buffer.from("x")]])),
+        manifestJson: "{}",
+      }),
+    ).rejects.toThrow();
+    expect(manifestPath).toMatch(/release-manifest\.json$/);
+    expect(existsSync(dirname(manifestPath))).toBe(false);
   });
 });
 
