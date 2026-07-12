@@ -58,6 +58,11 @@ reports/mutation/
 # One-time legacy-CDN migration progress state (commands/migrate-legacy-cdn-to-r2.mjs)
 .migration-state/
 
+# MOE stroke corpus local fetch/convert output (commands/fetch-moe-stroke.mjs,
+# commands/sync-moe-stroke-corpus.mjs) — never commit generated stroke-json.
+.moe-stroke-fetch/
+.moe-stroke-corpus/
+
 # Visual-regression: commit only linux baselines; local runs generate darwin/win32 variants.
 # The `visual` Playwright project uses its own name (not the browser) in the snapshot filename.
 tests/e2e/**/*-visual-darwin.png
