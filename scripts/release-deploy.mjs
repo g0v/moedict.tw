@@ -149,9 +149,11 @@ export async function runReleaseDeploy(opts = {}) {
   const nowIso = opts.nowIso ?? (() => new Date().toISOString());
   const soakIntervalMs = opts.soakIntervalMs ?? 5000;
   const soakDurationMs = opts.soakDurationMs ?? 120000;
-  // 10s default: Cloudflare documents a brief global propagation window
-  // after versions deploy before override routing is reliable everywhere.
-  const propagationSleepMs = opts.propagationSleepMs ?? 10000;
+  // 30s default: Cloudflare's edge propagation for versions deploy can take
+  // longer than documented ("a couple of seconds") in practice — empirically
+  // observed failures at 10s on a real workers.dev worker (3 consecutive runs,
+  // zero failures once increased). Injectable; set to 0 to skip in tests.
+  const propagationSleepMs = opts.propagationSleepMs ?? 30000;
   const sleepImpl =
     opts.sleep /* v8 ignore next -- real sleep; not exercised in unit tests */ ??
     ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
@@ -324,7 +326,7 @@ export async function runReleaseDeploy(opts = {}) {
   // 6b. Wait for global edge propagation before probing with version override.
   //     Cloudflare documents a brief propagation window after `versions deploy`
   //     before the override header reliably routes to the new version on all
-  //     edges. Default 10s; injectable for tests (set to 0 to skip).
+  //     edges. Default 30s; injectable for tests (set to 0 to skip).
   if (propagationSleepMs > 0) await sleepImpl(propagationSleepMs);
   // 7. Smoke the new version at 0% via version override. On failure, restore
   //    old@100 ALONE (not new@0/old@100) so the next run is not poisoned.
@@ -366,6 +368,12 @@ export async function runReleaseDeploy(opts = {}) {
     ],
     { runner },
   );
+  // 8b. Wait for the 100% traffic switch to propagate before continuous probing.
+  //     Same edge lag as step 6b: without this, cycle-1 of continuousProbe can
+  //     still hit a PoP on the pre-promote deployment and false-fail on missing
+  //     X-Moedict-Release (observed 2026-07-12: override smoke green, promote
+  //     green, continuousProbe cycle 1 failed with got null).
+  if (propagationSleepMs > 0) await sleepImpl(propagationSleepMs);
   saveVersionEntry(
     {
       versionId: newVersionUuid,
@@ -420,6 +428,8 @@ export async function runReleaseDeploy(opts = {}) {
   } catch (finalizeErr) {
     await rollbackOnFailure(finalizeErr);
   }
+  // 10b. Wait for finalize (collapse to single-version deployment) to propagate.
+  if (propagationSleepMs > 0) await sleepImpl(propagationSleepMs);
 
   // 11. Final smoke — no override header, but still requires the release ID header.
   try {
