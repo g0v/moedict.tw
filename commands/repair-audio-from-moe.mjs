@@ -14,11 +14,13 @@
  *
  * 用法：
  *   node commands/repair-audio-from-moe.mjs 花眉 王梨酥 靴管        # 指定詞目
- *   node commands/repair-audio-from-moe.mjs --all                  # 全部缺 = 的 t 詞條（19k+，會很久，未經速率測試，預設不做）
- *   node commands/repair-audio-from-moe.mjs --all --limit=200      # 全部裡的前 200 筆，用於抓速率/命中率
+ *   node commands/repair-audio-from-moe.mjs --all --mp3-only        # 全部缺 = 的 t 詞條
+ *   node commands/repair-audio-from-moe.mjs --all --mp3-only --limit=200
+ *                                                                    # 小批量測速/命中率
  *
- * 刻意保守：MOE 是小型政府網站不是 CDN，預設序列（concurrency=1）+ 每筆間隔，
- * 不對它做並發轟炸。
+ * MP3-only 是現行模式：MOE 只需下載/上傳 MP3；歷史 OGG fallback 不再轉檔或寫入。
+ * 刻意保守：MOE 是小型政府網站不是 CDN，請用適度 concurrency 與 R2 rate limit，
+ * 不對它做無界並發轟炸。
  */
 import { readdirSync, readFileSync, mkdirSync, existsSync, appendFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';

@@ -6,14 +6,15 @@
 
 ### 1) 筆畫 JSON 與四本字典發音音檔（`src/utils/media-cdn.ts`）
 - CDN：`https://r2-assets.moedict.tw`（R2 bucket `moedict-assets`，同 `ASSET_BASE_URL`）
-- Key 版面（音檔一律有 `.ogg`（2013 年原始上傳）與 `.mp3`（2019 年補上，
-  iPad Safari 對 ogg 支援不穩時的備援）兩種副檔名；`playAudioUrl()` 一律先試
-  `.mp3` 再退回 `.ogg`，見 `audio-utils.ts` 的 `buildAudioCandidates()`）：
+- Key 版面：**MP3 是現行遷移與播放的 canonical 格式**；`playAudioUrl()` 會先試
+  `.mp3`，只有 MP3 播放失敗才退回 `.ogg`，見 `audio-utils.ts` 的
+  `buildAudioCandidates()`。因此新增/補遷移只需要 MP3；歷史上已存在的 OGG
+  物件可以保留，但 OGG 不再是完成或部署的 gate：
   - 筆畫 JSON：`stroke-json/{codepoint-hex}.json`（4–6 碼小寫十六進位 Unicode codepoint，僅 JSON）
-  - 華語／兩岸音檔：`audio/a/{audioId}.{ogg,mp3}`（`c` 沿用同一路由，兩岸詞典無自己的音檔）
-  - 台語音檔：`audio/t/{audioId}.{ogg,mp3}`（1–4 碼純數字 id 會補零到 5 碼，見 `normalizeAudioIdByLang`）
-  - 客語音檔：`audio/h/{variant}-{audioId}.{ogg,mp3}`（`variant` 為腔調序號 1–6，對應
-    `四海大平安南`；客語**沒有**不帶腔調前綴的純 `{audioId}.{ogg,mp3}`，見下方「資料完整性」）
+  - 華語／兩岸音檔：`audio/a/{audioId}.mp3`（`c` 沿用同一路由，兩岸詞典無自己的音檔）
+  - 台語音檔：`audio/t/{audioId}.mp3`（1–4 碼純數字 id 會補零到 5 碼，見 `normalizeAudioIdByLang`）
+  - 客語音檔：`audio/h/{variant}-{audioId}.mp3`（`variant` 為腔調序號 1–6，對應
+    `四海大平安南`；客語**沒有**不帶腔調前綴的純 `{audioId}.mp3`，見下方「資料完整性」）
 - 使用位置：`src/api/handleStrokeAPI.ts`（Worker 代理，解 CORS）、
   `src/utils/audio-utils.ts`、`src/pages/DictionaryPage.tsx`
   （`getHakkaVariantAudioUrl`）、`src/offline-api.ts`（Capacitor 離線 fallback）、
@@ -36,26 +37,23 @@
 - 使用位置：`wrangler.jsonc`、`worker/index.ts`
 
 ## 二、資料完整性（新增詞條的音檔/筆畫從哪裡來）
-
-R2 上的筆畫 JSON 與音檔是**一次性遷移**的結果（見下方「已停用」一節），不是
-從 pack 資料自動推導/重建。`data/dictionary/{pack,ptck,phck,pcck}` 若因上游
-（moedict-data／twblg）同步新增了帶 `audio_id` 的詞條，其對應的
-`audio/{lang}/{audioId}.ogg`／`.mp3`（或客語的 `audio/h/{variant}-{audioId}.{ogg,mp3}`）
-物件**不會自動出現在 R2**——除非重新執行：
+R2 上的筆畫 JSON 與 MP3 音檔是**一次性遷移**的結果（見下方「已停用」一節），
+不是從 pack 資料自動推導/重建。`data/dictionary/{pack,ptck,phck,pcck}` 若因
+上游（moedict-data／twblg）同步新增了帶 `audio_id` 的詞條，其對應的
+`audio/{lang}/{audioId}.mp3`（或客語的 `audio/h/{variant}-{audioId}.mp3`）
+物件**不會自動出現在 R2**——除非重新執行 MP3-only 遷移：
 
 ```bash
-node commands/migrate-legacy-cdn-to-r2.mjs
+node commands/migrate-legacy-cdn-to-r2.mjs --extensions=mp3
 ```
 
-此腳本會重新從 `data/dictionary` 推導完整 key 集合，跳過已存在
+此腳本會重新從 `data/dictionary` 推導 MP3 key 集合，跳過已存在
 （`.migration-state/legacy-cdn-progress.ndjson` 記錄的 `ok`/`404`）的物件，
-只嘗試新增的部分——但**只在舊版 Rackspace 來源仍可連線時有效**。若 Rackspace
-帳號已完全關閉，新詞條的音檔/筆畫資料需要另尋來源（通常是原始
-moedict-webkit 音檔庫或重新錄製）。
+只嘗試新增的部分。歷史 OGG 物件可以繼續留在 R2，但不再為新增資料轉檔或上傳。
 
-客語（`h`）的「純」`{audioId}.{ogg,mp3}`（不帶腔調前綴）在上游從未存在
+客語（`h`）的「純」`{audioId}.mp3`（不帶腔調前綴）在上游從未存在
 ——`DictionaryPage.tsx` 對 `lang==='h'` 一律不顯示該按鈕，實際播放的是
-`{variant}-{audioId}.{ogg,mp3}`，因此遷移腳本刻意不處理這個分類。
+`{variant}-{audioId}.mp3`，因此遷移腳本刻意不處理這個分類。
 
 ## 三、已停用：Rackspace CDN（歷史記錄，2026-07 遷移）
 

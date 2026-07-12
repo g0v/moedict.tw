@@ -18,15 +18,14 @@
  * parseHakkaReadings）。經抽樣驗證（0/20 純 h 命中 vs 30/30 腔調組合命中），
  * 純 h audio_id 這個分類故意不遷移。
  *
- * 注意二：每個音檔 id 有 .ogg（2013）與 .mp3（2019 補上）兩種副檔名，
- * playAudioUrl() 一律先試 .mp3 再退回 .ogg（見 audio-utils.ts
- * buildAudioCandidates()），兩種都要遷移。
+ * 注意二：MP3 是現行 canonical 音檔格式；playAudioUrl() 先試 .mp3，只有 MP3
+ * 播放失敗才退回歷史 OGG。現行遷移預設以 `--extensions=mp3` 執行，OGG
+ * 物件可以保留但不再為新增資料轉檔/上傳，也不再是部署 gate。
  *
  * 用法：
  *   node commands/migrate-legacy-cdn-to-r2.mjs [--report-only] [--limit=N]
- *     [--concurrency=8] [--categories=stroke,audio-a-ogg,audio-a-mp3,
- *       audio-t-ogg,audio-t-mp3,audio-h-variant-ogg,audio-h-variant-mp3]
- *     [--rate-limit=900] [--rate-window-ms=300000]
+ *     [--extensions=mp3] [--concurrency=8] [--rate-limit=900]
+ *     [--rate-window-ms=300000]
  *
  * 可重複執行（idempotent）：進度記錄在
  * .migration-state/legacy-cdn-progress.ndjson，已成功或已確認 404 的 key
@@ -133,14 +132,9 @@ function buildManifest() {
     }
   }
 
-  // 每個 lang host 對同一個 audioId 同時提供 .ogg（2013 年原始上傳）與 .mp3
-  // （2019 年補上，iPad Safari ogg 支援不穩定時的備援，見 audio-utils.ts
-  // buildAudioCandidates() 的註解）。playAudioUrl() 一律先試 .mp3 再退回
-  // .ogg，所以兩種副檔名都要遷移，缺一個就會讓部分裝置播放失敗。
-  // 佇列順序刻意依「client 端優先嘗試順序」與「流量權重」排列：
-  // stroke（全語言共用，資料量小）→ a（華語/兩岸共用，流量最大）→
-  // t（台語）→ h（客語腔調組合）；每個語言內先 mp3 後 ogg（對應
-  // buildAudioCandidates() 的嘗試順序）。這讓「先跑到一半就要部署」時，
+  // MP3 是 canonical 格式；OGG 是歷史 fallback，現行遷移用 --extensions=mp3
+  // 明確只建立 MP3 task，避免不必要的第二次 R2 PUT。佇列順序依流量權重：
+  // stroke（全語言共用）→ a（華語/兩岸）→ t（台語）→ h（客語腔調組合）。
   const AUDIO_EXTENSIONS = [
     { ext: 'mp3', contentType: 'audio/mpeg' },
     { ext: 'ogg', contentType: 'audio/ogg' },
