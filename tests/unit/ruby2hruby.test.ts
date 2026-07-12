@@ -2,7 +2,10 @@
  * Coverage for src/utils/ruby2hruby.ts — exercises the DOMParser-based ruby
  * restructuring: zhuyin rtc becomes <ru zhuyin><zhuyin><yin>.../<diao>...</>,
  * ordered rtcs wrap preceding rbs with order/span/annotation attrs, and
- * leftover <rt>s get hidden via inline style.
+ * leftover <rt>s get hidden via inline style and aria-hidden (g0v/moedict-
+ * webkit#100 — CSS generated content already renders the same reading
+ * visibly/accessibly, so the duplicate real <rt> node must be excluded from
+ * the accessibility tree to avoid a doubled screen-reader announcement).
  */
 
 import { describe, expect, it } from "vite-plus/test";
@@ -130,8 +133,21 @@ describe("ruby2hruby — ordered rtc (non-zhuyin)", () => {
     expect(out).toContain('span="1"');
     expect(out).toContain('annotation="meng"');
     // The <rt> is hidden via inline style (visual ruby display is handled by
-    // the zhuyin <yin>/<diao> sub-elements, not the original <rt>).
-    expect(out).toMatch(/<rt[^>]*style="text-indent:[^"]*">meng<\/rt>/);
+    // the zhuyin <yin>/<diao> sub-elements, not the original <rt>) and is
+    // additionally aria-hidden so assistive tech doesn't announce the same
+    // reading twice (g0v/moedict-webkit#100).
+    expect(out).toMatch(/<rt[^>]*style="text-indent:[^"]*"[^>]*aria-hidden="true"[^>]*>meng<\/rt>/);
+  });
+
+  it("g0v/moedict-webkit#100: hidden <rt> is aria-hidden so screen readers don't double-announce the reading", () => {
+    const out = ruby2hruby(
+      '<rb>萌</rb><rtc class="zhuyin"><rt>ㄇㄥˊ</rt></rtc><rtc class="romanization"><rt>meng</rt></rtc>',
+    );
+    // CSS (ru[annotation]::before { content: attr(annotation) }) already
+    // draws "meng" visibly and is exposed via the accessible-name
+    // computation, so the leftover real <rt> node carrying the same text
+    // must be pulled out of the accessibility tree entirely.
+    expect(out).toContain('aria-hidden="true"');
   });
 });
 

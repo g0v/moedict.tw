@@ -174,9 +174,19 @@ export function ruby2hruby(html: string): string {
       });
     });
 
+    // g0v/moedict-webkit#100: the visible reading (bopomofo/pinyin) is drawn
+    // by CSS generated content (`ru[annotation]::before { content:
+    // attr(annotation) }` in index.css), which modern browsers/AT already
+    // expose in accessible-name computation. This leftover <rt> duplicates
+    // that same text as a real, visually-hidden DOM node — kept only so the
+    // reading stays selectable/copyable (CSS generated content itself is
+    // never selectable). Without aria-hidden, screen readers announce the
+    // reading twice (e.g. "méng 萌 ㄇㄥ ˊ méng"); aria-hidden removes it from
+    // the accessibility tree while leaving text selection/copy untouched.
     ruby.querySelectorAll("rtc").forEach((rtc) => rtc.remove());
     ruby.querySelectorAll("rt").forEach((rt) => {
       rt.setAttribute("style", "text-indent: -9999px; color: transparent");
+      rt.setAttribute("aria-hidden", "true");
     });
 
     return ruby.innerHTML.replace(
