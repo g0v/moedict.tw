@@ -245,6 +245,10 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
 
 台語（twblg）補充資料 `moedict-data-twblg/uni/*.csv` 的整合現況（2026-07）：
 
+- `詞目總檔.csv` — **屬性 `2` 的無義項音讀已整合**：若詞目已有 pack 條目，
+  追加 `{T, d: [], reading?}` heteronym；`T` 寫成 NFD，不複製 `主編碼`（前端會把
+  台語 `_` 當音檔 ID）。主站用文/白/俗/替 badge 標示，並顯示「本音讀無義項」；
+  只有無義項、沒有既有 pack 條目的詞目仍只收入 `t/index.json`。
 - `又音.csv` — **已整合**（以 `主編碼` 對 heteronym `_` id，append 進 `T` 斜線；
   1365 個 id 中 30 個在 pack 裡無對應詞條，為上游孤兒）。類型 2（俗唸作）、
   3（合音唸作）被扁平化為同一斜線格式，未保留類型標籤。

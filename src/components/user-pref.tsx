@@ -11,7 +11,7 @@ import {
 import { SvgIcon } from "./SvgIcon";
 
 type Lang = "a" | "t" | "h" | "c";
-type PrefKey = "phonetics" | "pinyin_a" | "pinyin_t" | "pinyin_h";
+type PrefKey = "phonetics" | "pinyin_a" | "pinyin_t" | "pinyin_h" | "bopomofo_sandhi_t";
 
 interface PrefOption {
   value: string;
@@ -47,6 +47,11 @@ const PINYIN_T_OPTIONS: PrefOption[] = [
   { value: "TL", label: "臺羅拼音" },
   { value: "DT", label: "臺通拼音" },
   { value: "POJ", label: "白話字" },
+];
+
+const BOPOMOFO_SANDHI_T_OPTIONS: PrefOption[] = [
+	{ value: 'off', label: '本調（辭典標注）' },
+	{ value: 'sandhi', label: '自動推算連讀變調（約略）' },
 ];
 
 const PINYIN_H_OPTIONS: PrefOption[] = [
@@ -176,6 +181,7 @@ export function UserPref() {
   const [pinyinA, setPinyinA] = useState(() => getStoredPref("pinyin_a", "HanYu"));
   const [pinyinT, setPinyinT] = useState(() => getStoredPref("pinyin_t", "TL"));
   const [pinyinH, setPinyinH] = useState(() => getStoredPref("pinyin_h", "TH"));
+  const [bopomofoSandhiT, setBopomofoSandhiT] = useState(() => getStoredPref("bopomofo_sandhi_t", "off"));
   const [fontSize, setFontSize] = useState<number>(() => readFontSize());
 
   useEffect(() => {
@@ -234,6 +240,19 @@ export function UserPref() {
               onChange={(nextValue) => {
                 setStoredPref("pinyin_t", nextValue);
                 setPinyinT(nextValue);
+                window.location.reload();
+              }}
+            />
+          )}
+          {currentLang === "t" && (
+            <PrefList
+              name="bopomofo_sandhi_t"
+              label="方音符號聲調"
+              options={BOPOMOFO_SANDHI_T_OPTIONS}
+              value={bopomofoSandhiT}
+              onChange={(nextValue) => {
+                setStoredPref("bopomofo_sandhi_t", nextValue);
+                setBopomofoSandhiT(nextValue);
                 window.location.reload();
               }}
             />

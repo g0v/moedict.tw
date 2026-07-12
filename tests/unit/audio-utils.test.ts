@@ -132,9 +132,7 @@ afterEach(() => {
 describe("getAudioUrl", () => {
   it("uses the 華語 CDN for lang=a", () => {
     const url = getAudioUrl("a", "12345");
-    expect(url).toMatch(
-      /203146b5091e8f0aafda-15d41c68795720c6e932125f5ace0c70\.ssl\.cf1\.rackcdn\.com\/12345\.ogg$/,
-    );
+    expect(url).toMatch(/r2-assets\.moedict\.tw\/audio\/a\/12345\.ogg$/);
   });
 
   it("falls back to the 華語 CDN at runtime for unknown langs", () => {
@@ -142,15 +140,11 @@ describe("getAudioUrl", () => {
   });
 
   it("uses the 客語 CDN for lang=h", () => {
-    expect(getAudioUrl("h", "42")).toMatch(
-      /a7ff62cf9d5b13408e72-351edcddf20c69da65316dd74d25951e\.ssl\.cf1\.rackcdn\.com\/42\.ogg$/,
-    );
+    expect(getAudioUrl("h", "42")).toMatch(/r2-assets\.moedict\.tw\/audio\/h\/42\.ogg$/);
   });
 
-  it("uses the 台語 legacy CDN for lang=t", () => {
-    expect(getAudioUrl("t", "12345")).toMatch(
-      /1763c5ee9859e0316ed6-db85b55a6a3fbe33f09b9245992383bd\.ssl\.cf1\.rackcdn\.com\/12345\.ogg$/,
-    );
+  it("uses the 台語 CDN for lang=t", () => {
+    expect(getAudioUrl("t", "12345")).toMatch(/r2-assets\.moedict\.tw\/audio\/t\/12345\.ogg$/);
   });
 
   it("zero-pads 台語 audio IDs to 5 digits", () => {

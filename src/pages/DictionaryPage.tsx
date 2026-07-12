@@ -52,6 +52,7 @@ interface Heteronym {
   alt?: string;
   audio_id?: string;
   synonyms?: string[] | string;
+  reading?: string;
   definitions?: Definition[];
 }
 
@@ -680,6 +681,9 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
 
         const definitions = Array.isArray(heteronym.definitions) ? heteronym.definitions : [];
         const groups = groupDefinitions(definitions);
+        const readingType = lang === "t" ? untag(heteronym.reading ?? "").trim() : "";
+        const isReadingOnly =
+          lang === "t" && definitions.length === 0 && Boolean(heteronym.trs?.trim());
 
         return (
           <div key={`${title}-${idx}`} className="entry" style={{ position: "relative" }}>
@@ -750,6 +754,7 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                 bAlt={rubyData.bAlt}
                 pAlt={rubyData.pAlt}
                 pronunAudioId={lang !== "h" ? pronunAudioId : undefined}
+                readingType={readingType}
                 isPlaying={playingAudioId === pronunAudioId}
                 onToggleAudio={() => {
                   if (!pronunAudioId) return;
@@ -996,6 +1001,11 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                 </div>
               );
             })}
+            {isReadingOnly && (
+              <p className="reading-only-note" role="note">
+                本音讀無義項。
+              </p>
+            )}
             {dialectSynonyms.length > 0 && (
               <div className="synonyms">
                 <span className="part-of-speech">似</span>
