@@ -249,6 +249,24 @@ test.describe("Taigi title pronunciation selection/copy (g0v/moedict-webkit#186)
     // the romanization also yanks the stroke-order panel open/closed.
     expect(outcome.after).toBe(outcome.before);
     expect(outcome.selectionSurvived).toBe(true);
+test.describe("教育部《異體字字典》連結 (g0v/moedict-webkit#3)", () => {
+  test("單字條目顯示連結到教育部異體字字典查詢頁", async ({ page }) => {
+    await page.goto("/%E8%90%8C");
+    await waitForEntryHydration(page, "萌");
+    const link = page.locator("a.variants-link").first();
+    await expect(link).toBeVisible();
+    await expect(link).toHaveAttribute(
+      "href",
+      "https://dict.variants.moe.edu.tw/search.jsp?QTP=0&WORD=%E8%90%8C",
+    );
+    await expect(link).toHaveAttribute("target", "_blank");
+    await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  test("多字詞條（非單字）不顯示異體字字典連結", async ({ page }) => {
+    await page.goto("/~%E4%B8%8A%E8%A8%B4");
+    await waitForEntryHydration(page, "上訴");
+    await expect(page.locator("a.variants-link")).toHaveCount(0);
   });
 });
 

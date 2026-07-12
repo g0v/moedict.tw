@@ -745,6 +745,18 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
               >
                 <SvgIcon name="pencil" size="1em" aria-hidden="true" />
               </a>
+              {idx === 0 && isSingleCharTitle && (
+                <a
+                  className="iconic-circle stroke variants-link"
+                  title="教育部《異體字字典》"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  href={`https://dict.variants.moe.edu.tw/search.jsp?QTP=0&WORD=${encodeURIComponent(title)}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <SvgIcon name="book" size="1em" aria-hidden="true" />
+                </a>
+              )}
             </div>
             {idx === 0 && (
               <span
