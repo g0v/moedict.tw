@@ -4,7 +4,7 @@
  *
  * Most tests verify the container contract without loading real stroke scripts
  * (CDN is blocked by _fixtures.ts to save ~20 s/test). The replay-click test
- * (test 88) must verify that clicking a *rendered* #strokes container replays
+ * must verify that clicking a *rendered* #strokes container replays
  * rather than closing the panel; it therefore routes the 5 stroke-animation
  * dependencies from local data/assets/js/ and uses the seeded 840c.json fixture
  * so the canvas actually draws and gives the div measurable width.
