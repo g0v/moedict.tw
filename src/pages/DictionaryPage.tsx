@@ -32,6 +32,7 @@ import { CharacterImageView } from "../components/CharacterImageView";
 import { SvgIcon } from "../components/SvgIcon";
 import { TitlePronunciation } from "../components/TitlePronunciation";
 import { dedupeHeteronyms } from "../utils/heteronym-dedup";
+import { stripTags } from "../utils/dictionary-route";
 
 export type DictionaryLang = "a" | "t" | "h" | "c";
 
@@ -55,6 +56,9 @@ interface Heteronym {
   synonyms?: string[] | string;
   reading?: string;
   definitions?: Definition[];
+  /** TWBLG 文/白/俗/替讀音分類（g0v/moedict-webkit#96、#233），僅 lang='t' 有值；
+   *  API 回傳時已包成 autolink 的 `<a href="...">文</a>`，渲染前需 stripTags。 */
+  reading?: string;
 }
 
 interface DictionaryAPIResponse {
@@ -694,6 +698,9 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
             : [];
         const dialectSynonyms =
           lang === "t" || lang === "h" ? splitCommaSeparatedItems(heteronym.synonyms) : [];
+        // TWBLG 文/白/俗/替讀音分類（g0v/moedict-webkit#96、#233）：資料只在
+        // lang='t' 的 ptck pack 出現，其餘語言的 heteronym 沒有這個欄位。
+        const readingType = lang === "t" ? stripTags(heteronym.reading || "") : "";
 
         const definitions = Array.isArray(heteronym.definitions) ? heteronym.definitions : [];
         const groups = groupDefinitions(definitions);

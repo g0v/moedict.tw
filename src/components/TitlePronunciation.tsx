@@ -19,6 +19,10 @@ import { SvgIcon } from "./SvgIcon";
  * alternative 之前，沿用同一個「先窄範圍互動元件、後 block-level 替代讀音」
  * 的順序慣例，不打亂 legacy ground truth。
  *
+ * `small.reading-type` 是新增的元素（g0v/moedict-webkit#96、#233：TWBLG
+ * 單字文/白/俗/替讀音分類），legacy 沒有對應節點；為了不干擾既有四個
+ * 節點間已鎖定的相對順序，固定加在最後面。
+ *
  * `.alternative` 內的 `.pinyin`/`.bopomofo` 是 block-level（遠端 legacy CSS），
  * 插錯位置會把播放鍵擠下去——已踩過一次（commit 把 .alternative 插到
  * .audioBlock 之前，造成視覺回歸）。本元件把順序固化在唯一可測試的地方，
@@ -40,6 +44,7 @@ import { SvgIcon } from "./SvgIcon";
  *   lang='h'（客語）一律不渲染，因為客語拼音本身就是可直接選取/複製的一般
  *   文字，不需要這個按鈕（g0v/moedict-webkit#256 只回報中文/閩南語）。
  * - readingType: TWBLG 文/白/俗/替分類（falsy 則不渲染）
+ * - readingType: TWBLG 異讀分類純文字代碼（文/白/俗/替；falsy 則不渲染）
  */
 interface TitlePronunciationProps {
   children: ReactNode;
