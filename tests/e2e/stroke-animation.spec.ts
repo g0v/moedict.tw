@@ -2,17 +2,42 @@
  * Regression for closed issue #41 (字典條目若是只有一個字，則點擊時會顯示筆順動畫)
  * and moedict-webkit#230 (click-to-replay on the stroke grid itself).
  *
- * We don't run the real stroke animation (that depends on external CDN
- * scripts which Playwright intentionally blocks via _fixtures.ts). What we
- * verify is the contract: a single-character entry exposes a click target
- * titled "筆順動畫" and, when clicked, the `#strokes` container mounts and
- * does NOT carry any lingering `<i class="icon-spinner">` webfont markup;
- * and separately, that `#strokes` is its own accessible replay control
- * (role=button/tabIndex/aria-label, Enter-activatable) that does not close
- * the panel the way a second click on the outer toggle does.
+ * Most tests verify the container contract without loading real stroke scripts
+ * (CDN is blocked by _fixtures.ts to save ~20 s/test). The replay-click test
+ * (test 88) must verify that clicking a *rendered* #strokes container replays
+ * rather than closing the panel; it therefore routes the 5 stroke-animation
+ * dependencies from local data/assets/js/ and uses the seeded 840c.json fixture
+ * so the canvas actually draws and gives the div measurable width.
  */
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import type { Page, Route } from "@playwright/test";
 import { expect, test } from "./_fixtures";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(__dirname, "..", "..");
+const JS_DIR = path.join(REPO_ROOT, "data", "assets", "js");
+
+const STROKE_SCRIPTS = [
+  "jquery-2.1.1.min.js",
+  "raf.min.js",
+  "gl-matrix-min.js",
+  "sax.js",
+  "jquery.strokeWords.js",
+];
+
+/** Serve stroke-animation JS from local data/assets/js/ instead of the blocked CDN. */
+async function routeStrokeScripts(page: Page): Promise<void> {
+  for (const name of STROKE_SCRIPTS) {
+    const body = readFileSync(path.join(JS_DIR, name), "utf-8");
+    const handler = (route: Route) =>
+      route.fulfill({ status: 200, contentType: "application/javascript; charset=utf-8", body });
+    await page.route(`https://r2-assets.test.local/js/${name}`, handler);
+    await page.route(`**/assets/js/${name}`, handler);
+  }
+}
 
 test.describe("stroke animation trigger", () => {
   test("single-char entry exposes a 筆順動畫 button that mounts #strokes on click", async ({
@@ -88,6 +113,11 @@ test.describe("stroke animation trigger", () => {
   test("clicking #strokes replays without closing the panel (unlike the outer toggle)", async ({
     page,
   }) => {
+    // Route the 5 stroke-animation JS files from local data/assets/js/ so the
+    // scripts actually load and draw 12 canvas strokes for 萌. Without this the
+    // CDN is blocked by _fixtures.ts, #strokes stays empty (zero width), and
+    // Playwright's actionability check rejects the click.
+    await routeStrokeScripts(page);
     await page.goto("/%E8%90%8C");
     await page.waitForLoadState("networkidle");
 
@@ -96,6 +126,10 @@ test.describe("stroke animation trigger", () => {
 
     const strokes = page.locator("#strokes");
     await expect(strokes).toHaveCount(1, { timeout: 5_000 });
+
+    // Wait for at least one canvas to appear — proves scripts loaded and drew
+    // something, giving #strokes measurable width for the click below.
+    await expect(strokes.locator("canvas").first()).toBeAttached({ timeout: 15_000 });
 
     // Clicking the grid itself must NOT collapse the panel the way a second
     // click on the outer pencil toggle does.

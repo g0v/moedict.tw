@@ -294,18 +294,20 @@ export function collectAssetFixtures(): FixtureEntry[] {
     });
   }
 
-  // Stub stroke-json fixture for 萌 (U+840C = 0x840c) so the useStrokeAvailability
-  // HEAD probe gets a 200 in e2e tests that don't explicitly mock it. This keeps the
-  // pencil button enabled so tests can click it; the stroke-missing-data spec then
-  // routes the GET fetch to 404 separately (while letting HEAD pass) to trigger the badge.
-  // The body is a minimal valid stroke-json array (1 stroke, 1 command) — real shape is
-  // [{outline:[…], track:[…]}, …]; any parseable JSON array satisfies the Worker HEAD.
-  entries.push({
-    bucket: "ASSETS",
-    key: "stroke-json/840c.json",
-    body: new TextEncoder().encode(JSON.stringify([{ outline: ["M 0 0 L 100 100"], track: [] }])),
-    httpMetadata: { contentType: "application/json; charset=utf-8" },
-  });
+  // Real stroke-json for 萌 (U+840C) from tests/fixtures/stroke-json/840c.json.
+  // Serves two purposes: (1) useStrokeAvailability HEAD probe returns 200 so the
+  // pencil button stays enabled; (2) jquery.strokeWords.js can actually render
+  // 12 strokes in #strokes, giving the container non-zero width so Playwright's
+  // actionability check passes for the replay-click test.
+  const strokeJson840c = path.join(FIXTURES_DIR, "stroke-json", "840c.json");
+  if (existsSync(strokeJson840c)) {
+    entries.push({
+      bucket: "ASSETS",
+      key: "stroke-json/840c.json",
+      body: readFileSync(strokeJson840c),
+      httpMetadata: { contentType: "application/json; charset=utf-8" },
+    });
+  }
 
   return entries;
 }
