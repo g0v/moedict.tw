@@ -41,7 +41,14 @@ const args = Object.fromEntries(
 const wordArgs = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const ALL = !!args.all;
 const LIMIT = args.limit ? Number(args.limit) : Infinity;
-const DELAY_MS = args['delay-ms'] ? Number(args['delay-ms']) : 1200;
+const CONCURRENCY = args.concurrency ? Number(args.concurrency) : 5;
+const DELAY_MS = args['delay-ms'] ? Number(args['delay-ms']) : 300;
+// 這支腳本跟主遷移腳本（migrate-legacy-cdn-to-r2.mjs）共用同一個 Cloudflare
+// 帳號的 R2 write 額度。主腳本自己吃 1050/300s；這裡只拿一小份（預設
+// 300/300s），兩者合計仍在帳號實測上限（~1100/5min，見 AGENTS.md）附近，
+// 不會互搶到跳 429。若觀察到 429，先降這裡的 --r2-rate-limit，不要調高。
+const R2_RATE_LIMIT = args['r2-rate-limit'] ? Number(args['r2-rate-limit']) : 300;
+const R2_RATE_WINDOW_MS = 300000;
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -100,33 +107,139 @@ function extractAudioPathForExactMatch(html, word) {
   return dataSrcMatch[2];
 }
 
+/** 帶 timeout 的 fetch，避免單一卡住的請求把整個 worker 卡死。 */
+async function fetchWithTimeout(url, timeoutMs = 20000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function searchSutian(word) {
   const url = `${SUTIAN_BASE}/zh-hant/tshiau/?lui=tai_su&tsha=${encodeURIComponent(word)}`;
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url);
   if (!res.ok) throw new Error(`sutian search HTTP ${res.status}`);
   const html = await res.text();
   return extractAudioPathForExactMatch(html, word);
 }
 
-function putToR2(r2Key, bytes, contentType) {
+// 平滑限流：用最小間隔而非「視窗內配額用完才擋」，避免大量並發時整批衝進
+// 配額、接著所有 worker 一起卡在同一個「等最舊時間戳過期」上（實測會卡到
+// 近 5 分鐘沒有任何進度，看起來像卡死，其實只是限流器設計不好）。
+const MIN_R2_WRITE_INTERVAL_MS = R2_RATE_WINDOW_MS / R2_RATE_LIMIT;
+let nextR2WriteSlot = 0;
+async function throttleR2Write() {
+  const myLot = Math.max(nextR2WriteSlot, Date.now());
+  nextR2WriteSlot = myLot + MIN_R2_WRITE_INTERVAL_MS;
+  const wait = myLot - Date.now();
+  if (wait > 0) await sleep(wait);
+}
+
+function isRateLimited(text) {
+  return /429|rate.?limit|Too Many Requests|error code:?\s*971/i.test(text || '');
+}
+
+let globalCooldownUntil = 0;
+
+function putToR2Once(r2Key, bytes, contentType) {
   return new Promise((resolve, reject) => {
     const child = spawn(
       WRANGLER_BIN,
       ['r2', 'object', 'put', `${BUCKET}/${r2Key}`, '--pipe', '--remote', `--content-type=${contentType}`, '--cache-control=public, max-age=31536000, immutable'],
       { cwd: REPO_ROOT, stdio: ['pipe', 'pipe', 'pipe'] }
     );
+    const killTimer = setTimeout(() => child.kill('SIGKILL'), 30000);
     let stderr = '';
     child.stderr.on('data', (d) => (stderr += d));
-    child.on('error', reject);
-    child.on('close', (code) => (code === 0 ? resolve({ ok: true }) : resolve({ ok: false, stderr })));
+    child.on('error', (e) => { clearTimeout(killTimer); reject(e); });
+    child.on('close', (code) => { clearTimeout(killTimer); resolve(code === 0 ? { ok: true } : { ok: false, stderr }); });
     child.stdin.write(bytes);
     child.stdin.end();
   });
 }
 
+/** 帶限流與 429 退避重試的 R2 上傳；呼應主遷移腳本同款邏輯。 */
+async function putToR2(r2Key, bytes, contentType) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const now = Date.now();
+    if (now < globalCooldownUntil) await sleep(globalCooldownUntil - now);
+    await throttleR2Write();
+    const res = await putToR2Once(r2Key, bytes, contentType);
+    if (res.ok) return res;
+    if (isRateLimited(res.stderr)) {
+      const cooldown = Math.min(30000 * 2 ** attempt, 5 * 60 * 1000);
+      globalCooldownUntil = Date.now() + cooldown;
+      console.error(`[rate-limit] R2 429，退避 ${cooldown}ms（${r2Key}）`);
+      continue;
+    }
+    if (attempt === 4) return res;
+    await sleep(1000 * 2 ** attempt);
+  }
+}
+
+function transcodeToOgg(mp3Buf) {
+  return new Promise((resolve, reject) => {
+    const child = spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-ac', '2', '-c:a', 'vorbis', '-strict', '-2', '-q:a', '4', '-f', 'ogg', 'pipe:1'], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    const killTimer = setTimeout(() => child.kill('SIGKILL'), 20000);
+    const chunks = [];
+    let stderr = '';
+    child.stdout.on('data', (d) => chunks.push(d));
+    child.stderr.on('data', (d) => (stderr += d));
+    child.on('error', (e) => { clearTimeout(killTimer); reject(e); });
+    child.on('close', (code) => {
+      clearTimeout(killTimer);
+      if (code === 0 && chunks.length) resolve(Buffer.concat(chunks));
+      else reject(new Error(`ffmpeg exited ${code}: ${stderr.slice(0, 300)}`));
+    });
+    child.stdin.write(mp3Buf);
+    child.stdin.end();
+  });
+}
+
+async function processOne(target, idx, total, stats) {
+  try {
+    const audioPath = await searchSutian(target.title);
+    if (!audioPath) {
+      recordProgress({ id: target.id, title: target.title, status: 'not-found-on-moe' });
+      stats.notFoundOnMoe++;
+      console.log(`[${idx + 1}/${total}] ${target.title} (${target.id}): MOE 也沒有`);
+      return;
+    }
+    const audioRes = await fetchWithTimeout(`${SUTIAN_BASE}${audioPath}`);
+    if (!audioRes.ok) throw new Error(`audio fetch HTTP ${audioRes.status}`);
+    const buf = Buffer.from(await audioRes.arrayBuffer());
+
+    // mp3 上傳跟 ogg 轉檔+上傳互不依賴（都只需要 buf），平行跑省一次 R2
+    // 呼叫的等待時間。
+    const mp3Task = putToR2(`audio/t/${target.id}.mp3`, buf, 'audio/mpeg');
+    const oggTask = transcodeToOgg(buf)
+      .then((oggBuf) => putToR2(`audio/t/${target.id}.ogg`, oggBuf, 'audio/ogg').then((r) => ({ ...r, bytes: oggBuf.length })))
+      .catch((oggErr) => ({ ok: false, stderr: String(oggErr) }));
+
+    const [put, oggResult] = await Promise.all([mp3Task, oggTask]);
+    if (!put.ok) throw new Error(`R2 put failed: ${put.stderr?.slice(0, 200)}`);
+    const oggBytes = oggResult.ok ? oggResult.bytes : 0;
+    if (!oggResult.ok) console.error(`  (ogg 失敗，mp3 已成功: ${oggResult.stderr?.slice(0, 150)})`);
+
+    recordProgress({ id: target.id, title: target.title, status: 'uploaded', moePath: audioPath, bytes: buf.length, oggBytes });
+    stats.uploaded++;
+    console.log(`[${idx + 1}/${total}] ${target.title} (${target.id}): 已修補，來源=${audioPath}，mp3=${buf.length}B ogg=${oggBytes}B`);
+  } catch (e) {
+    recordProgress({ id: target.id, title: target.title, status: 'failed', error: String(e) });
+    stats.failed++;
+    console.error(`[${idx + 1}/${total}] ${target.title} (${target.id}): 失敗 ${e}`);
+  }
+  await sleep(DELAY_MS);
+}
+
 async function main() {
   if (!ALL && wordArgs.length === 0) {
-    console.error('用法: node commands/repair-audio-from-moe.mjs <詞目...> 或 --all [--limit=N]');
+    console.error('用法: node commands/repair-audio-from-moe.mjs <詞目...> 或 --all [--limit=N] [--concurrency=5]');
     process.exit(1);
   }
   let targets = findMissingAudioIdEntries(ALL ? null : wordArgs);
@@ -134,34 +247,18 @@ async function main() {
 
   const done = loadProgress();
   targets = targets.filter((t) => !done.has(t.id));
-  console.log(`跳過已處理 ${done.size} 筆；剩餘 ${targets.length} 筆`);
+  console.log(`跳過已處理 ${done.size} 筆；剩餘 ${targets.length} 筆（concurrency=${CONCURRENCY}, R2 rate=${R2_RATE_LIMIT}/${R2_RATE_WINDOW_MS}ms）`);
   if (Number.isFinite(LIMIT)) targets = targets.slice(0, LIMIT);
 
   const stats = { uploaded: 0, notFoundOnMoe: 0, failed: 0 };
-  for (const [i, target] of targets.entries()) {
-    try {
-      const audioPath = await searchSutian(target.title);
-      if (!audioPath) {
-        recordProgress({ id: target.id, title: target.title, status: 'not-found-on-moe' });
-        stats.notFoundOnMoe++;
-        console.log(`[${i + 1}/${targets.length}] ${target.title} (${target.id}): MOE 也沒有`);
-      } else {
-        const audioRes = await fetch(`${SUTIAN_BASE}${audioPath}`);
-        if (!audioRes.ok) throw new Error(`audio fetch HTTP ${audioRes.status}`);
-        const buf = Buffer.from(await audioRes.arrayBuffer());
-        const put = await putToR2(`audio/t/${target.id}.mp3`, buf, 'audio/mpeg');
-        if (!put.ok) throw new Error(`R2 put failed: ${put.stderr.slice(0, 200)}`);
-        recordProgress({ id: target.id, title: target.title, status: 'uploaded', moePath: audioPath, bytes: buf.length });
-        stats.uploaded++;
-        console.log(`[${i + 1}/${targets.length}] ${target.title} (${target.id}): 已修補，來源=${audioPath}，${buf.length} bytes`);
-      }
-    } catch (e) {
-      recordProgress({ id: target.id, title: target.title, status: 'failed', error: String(e) });
-      stats.failed++;
-      console.error(`[${i + 1}/${targets.length}] ${target.title} (${target.id}): 失敗 ${e}`);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < targets.length) {
+      const idx = cursor++;
+      await processOne(targets[idx], idx, targets.length, stats);
     }
-    await sleep(DELAY_MS);
   }
+  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
   console.log('=== 完成 ===', stats);
 }
 

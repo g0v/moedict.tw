@@ -187,21 +187,21 @@ function recordProgress(rec) {
   appendFileSync(PROGRESS_FILE, JSON.stringify(rec) + '\n');
 }
 
-// ---- R2 寫入的滑動視窗限流（呼應 AGENTS.md 記載的 ~1100 req/5min 帳號限制）----
-const writeTimestamps = [];
+// ---- R2 寫入限流：平滑最小間隔，而非「配額用完就整批卡住」----
+// （視窗計數版本在高並發+快速上游時會整批衝進配額，接著所有 worker 一起卡在
+// 「等最舊時間戳過期」上，卡到近 5 分鐘沒有任何進度、看起來像卡死——見
+// repair-audio-from-moe.mjs 同款修法的註解，這裡是同一個 bug。）
+// 呼應 AGENTS.md 記載的 ~1100 req/5min 帳號限制。
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
+const MIN_WRITE_INTERVAL_MS = RATE_WINDOW_MS / RATE_LIMIT;
+let nextWriteSlot = 0;
 async function throttleR2Write() {
-  for (;;) {
-    const now = Date.now();
-    while (writeTimestamps.length && now - writeTimestamps[0] > RATE_WINDOW_MS) writeTimestamps.shift();
-    if (writeTimestamps.length < RATE_LIMIT) {
-      writeTimestamps.push(now);
-      return;
-    }
-    await sleep(RATE_WINDOW_MS - (now - writeTimestamps[0]) + 50);
-  }
+  const myLot = Math.max(nextWriteSlot, Date.now());
+  nextWriteSlot = myLot + MIN_WRITE_INTERVAL_MS;
+  const wait = myLot - Date.now();
+  if (wait > 0) await sleep(wait);
 }
 
 // ---- wrangler r2 object put（stdin pipe，不落地暫存檔）----
