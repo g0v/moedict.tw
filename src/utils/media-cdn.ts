@@ -13,7 +13,7 @@
  * 若未來調整網域，這是唯一該改的地方；handleStrokeAPI.ts、audio-utils.ts、
  * DictionaryPage.tsx、offline-api.ts、vite.config.ts 都從這裡 import。
  */
-export const ASSET_CDN_BASE = 'https://r2-assets.moedict.tw';
+export const ASSET_CDN_BASE = "https://r2-assets.moedict.tw";
 
 /**
  * Stable cache-bust version for the legacy `data/assets/styles.css` stylesheet.
@@ -27,7 +27,7 @@ export const ASSET_CDN_BASE = 'https://r2-assets.moedict.tw';
  * edge-cached stylesheet key (the original unversioned object at 24h, or a
  * prior `?v=` version still cached at the 5-minute TTL).
  */
-export const LEGACY_STYLESHEET_VERSION = '20260711';
+export const LEGACY_STYLESHEET_VERSION = "20260711";
 
 /** 筆畫 JSON：`${STROKE_JSON_BASE_URL}/{codepoint-hex}.json` */
 export const STROKE_JSON_BASE_URL = `${ASSET_CDN_BASE}/stroke-json`;
@@ -38,7 +38,7 @@ export const STROKE_JSON_BASE_URL = `${ASSET_CDN_BASE}/stroke-json`;
  * 客語（`h`）另有腔調組合音檔 `${AUDIO_CDN_MAP.h}/{variant}-{audioId}.ogg`
  * （見 DictionaryPage.tsx 的 getHakkaVariantAudioUrl / parseHakkaReadings）。
  */
-export const AUDIO_CDN_MAP: Record<'a' | 't' | 'h' | 'c', string> = {
+export const AUDIO_CDN_MAP: Record<"a" | "t" | "h" | "c", string> = {
   a: `${ASSET_CDN_BASE}/audio/a`,
   t: `${ASSET_CDN_BASE}/audio/t`,
   h: `${ASSET_CDN_BASE}/audio/h`,
