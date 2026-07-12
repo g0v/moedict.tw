@@ -830,7 +830,7 @@ it("soaks for at least 120s by default (24 sleeps of 5000ms) when soak options a
   expect(sleepCalls.every((ms) => ms === 5000)).toBe(true);
 });
 
-it("sleeps propagationSleepMs (default 10s) between deploy-phase1 and the version-override smoke probe", async () => {
+it("sleeps propagationSleepMs (default 30s) after each versions-deploy before the next probe phase", async () => {
   const timeline: string[] = [];
   const { runner } = buildRunner({}, (phase) => timeline.push(`runner:${phase}`));
   const { fetchImpl } = buildFetch(({ override }) => {
@@ -845,17 +845,15 @@ it("sleeps propagationSleepMs (default 10s) between deploy-phase1 and the versio
       sleepCalls.push(ms);
     },
   });
-  // The first sleep call must be the propagation delay, before any override fetch.
-  expect(sleepCalls[0]).toBe(7000);
+  // Three propagation sleeps: after phase1, after promote, after finalize.
+  // Interleaved with soak sleeps (soakIntervalMs=1 from baseOpts → one 1ms sleep).
+  expect(sleepCalls.filter((ms) => ms === 7000)).toHaveLength(3);
+  expect(sleepCalls[0]).toBe(7000); // first is always post-phase1, before override smoke
   const firstOverrideFetch = timeline.indexOf("fetch:override");
-  const firstSleep = timeline.length; // sleepCalls are not tracked in timeline, but deploy-phase1 must precede the smoke
-  // Verify deploy-phase1 fires BEFORE any override probe.
   expect(timeline.indexOf("runner:deploy-phase1")).toBeLessThan(firstOverrideFetch);
-  // Verify the propagation sleep fires (sleepCalls[0] is 7000, not a soak value).
-  expect(sleepCalls).toContain(7000);
-  // The remaining calls are soak sleeps driven by soakIntervalMs (set to 1 in baseOpts).
-  expect(sleepCalls.slice(1).every((ms) => ms === 1)).toBe(true);
-  void firstSleep; // suppress unused warning
+  // Soak sleeps remain the short interval, not the propagation value.
+  expect(sleepCalls.some((ms) => ms === 1)).toBe(true);
+  expect(sleepCalls.every((ms) => ms === 7000 || ms === 1)).toBe(true);
 });
 
 // ── state persistence ──────────────────────────────────────────────
