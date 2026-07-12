@@ -32,80 +32,225 @@
 
 **Files:**
 
+- Create: `src/utils/release-keys.ts` (shared R2 key derivation: `releaseKey`, `immutableKey`, `isImmutableAsset` — imported by Worker AND Bun scripts)
+- Create: `tests/unit/release-keys.test.ts` (key derivation, safety, publisher↔Worker round-trip equality)
 - Modify: `worker/index.ts` (shell flow, asset flow, version headers, 503 recovery, structured logging)
 - Modify: `src/api/cache.ts` (new cache control constants for immutable assets, 503 recovery)
-- Modify: `wrangler.jsonc` (add `version_metadata` binding)
-- Create: `src/api/release-fallback.ts` (R2 fallback logic, extracted for testability)
+- Modify: `wrangler.jsonc` (add `version_metadata` binding top-level + `env.staging` redeclaration)
+- Create: `src/api/release-fallback.ts` (R2 fallback logic, version metadata helpers, extracted for testability)
 - Create: `tests/unit/release-fallback.test.ts` (direct-call unit tests)
 - Modify: `tests/unit/worker-dispatch.test.ts` (new dispatch paths, version headers, 503)
 - Modify: `tests/integration/api-legacy-assets.test.ts` (R2 fallback with Miniflare R2)
 
 **Interfaces:**
 
-- Consumes: `env.SITE_ASSETS` (Fetcher), `env.ASSETS` (R2Bucket), `env.CF_VERSION_METADATA` (version_metadata binding: `{ id: string; tag: string; timestamp: string }` or undefined)
-- Produces: HTML shell responses with `X-Moedict-Version`, `X-Moedict-Release`, `X-Moedict-Shell-Source` headers; 503 recovery response when all sources fail; R2 asset fallback with `X-Moedict-Asset-Source` header
+- Consumes: `env.SITE_ASSETS` (Fetcher), `env.ASSETS` (R2Bucket), `env.CF_VERSION_METADATA` (version_metadata binding: `{ id: string; tag: string; timestamp: string }` or undefined; `id` = Cloudflare version UUID, `tag` = release ID)
+- Produces: HTML shell responses with `X-Moedict-Version` (UUID), `X-Moedict-Release` (release ID, omitted if tag absent/empty), `X-Moedict-Shell-Source` headers; 503 recovery response when all sources fail or tag absent; R2 asset fallback with `X-Moedict-Asset-Source` header
 
-- [ ] **Step 1: Write failing tests for version metadata guard**
+- [ ] **Step 1: Write failing tests for shared R2 key derivation**
 
-Create `tests/unit/release-fallback.test.ts`. Write tests for:
+Create `tests/unit/release-keys.test.ts`. Write tests for:
 
 ```typescript
-describe("getVersionTag", () => {
-  it("returns tag when CF_VERSION_METADATA is present with non-empty tag", () => {
-    // env.CF_VERSION_METADATA = { id: "uuid-123", tag: "abc123-def456", timestamp: "..." }
-    // expect getVersionTag(env) === "abc123-def456"
+describe("releaseKey", () => {
+  it("maps 'index.html' to releases/<tag>/index.html", () => {
+    // expect releaseKey("abc123", "index.html") === "releases/abc123/index.html"
   });
-  it("returns 'unknown' when CF_VERSION_METADATA is undefined", () => {
-    // env.CF_VERSION_METADATA = undefined
-    // expect getVersionTag(env) === "unknown"
+  it("maps '/assets/index-XYZ.js' to releases/<tag>/assets/index-XYZ.js", () => {
+    // expect releaseKey("abc123", "/assets/index-XYZ.js") === "releases/abc123/assets/index-XYZ.js"
   });
-  it("returns 'unknown' when CF_VERSION_METADATA.tag is empty string", () => {
-    // env.CF_VERSION_METADATA = { id: "x", tag: "", timestamp: "..." }
-    // expect getVersionTag(env) === "unknown"
+  it("normalizes one optional leading slash", () => {
+    // expect releaseKey("t", "assets/foo.js") === releaseKey("t", "/assets/foo.js")
   });
-  it("returns 'unknown' when CF_VERSION_METADATA is null", () => {
-    // env.CF_VERSION_METADATA = null
-    // expect getVersionTag(env) === "unknown"
+});
+describe("immutableKey", () => {
+  it("maps '/assets/index-XYZ.js' to immutable/assets/index-XYZ.js (never .../assets/assets/...)", () => {
+    // expect immutableKey("/assets/index-XYZ.js") === "immutable/assets/index-XYZ.js"
+  });
+  it("maps 'assets/index-XYZ.js' identically (leading slash optional)", () => {
+    // expect immutableKey("assets/index-XYZ.js") === "immutable/assets/index-XYZ.js"
+  });
+});
+describe("key safety", () => {
+  it("rejects empty path", () => {
+    /* expect throw */
+  });
+  it("rejects '..' traversal", () => {
+    /* expect throw on "assets/../../foo" */
+  });
+  it("rejects backslash segments", () => {
+    /* expect throw on "assets\\foo" */
+  });
+  it("rejects non-assets paths for immutableKey", () => {
+    /* expect throw on "foo.txt" */
+  });
+  it("never decodes %2e%2e into traversal", () => {
+    /* expect throw on "assets/%2e%2e/foo" */
+  });
+});
+describe("publisher↔Worker key equality", () => {
+  it("publisher relative path 'assets/index-XYZ.js' and Worker request '/assets/index-XYZ.js' map to same immutable key", () => {
+    // expect immutableKey("assets/index-XYZ.js") === immutableKey("/assets/index-XYZ.js")
+  });
+  it("release key for publisher 'dist/client/assets/index-XYZ.js' relative 'assets/index-XYZ.js' matches Worker request '/assets/index-XYZ.js'", () => {
+    // expect releaseKey("t", "assets/index-XYZ.js") === releaseKey("t", "/assets/index-XYZ.js")
   });
 });
 ```
 
-**RED expectation:** Import fails (module doesn't exist yet).  
+**RED expectation:** Import fails (module doesn't exist yet).
+**Test command:** `bun run test:unit -- tests/unit/release-keys.test.ts`
+
+- [ ] **Step 2: Implement shared key derivation module**
+
+Create `src/utils/release-keys.ts` — a pure TypeScript module importable by both the Worker (production) and Bun deployment scripts:
+
+```typescript
+/**
+ * Shared R2 key derivation for release and immutable asset paths.
+ * Imported by Worker (worker/index.ts) and Bun scripts (scripts/lib/*).
+ * SINGLE source of truth — no duplicate string concatenation anywhere.
+ */
+
+/** Normalize a relative path: strip one leading '/', reject unsafe segments. */
+function normalizeRelativePath(path: string): string {
+  if (!path || typeof path !== "string") throw new Error("path must be non-empty string");
+  let normalized = path.startsWith("/") ? path.slice(1) : path;
+  if (!normalized) throw new Error("path must not be empty after normalization");
+  // Reject backslash
+  if (normalized.includes("\\")) throw new Error(`backslash not allowed: ${path}`);
+  // Reject traversal (literal or encoded)
+  const decoded = decodeURIComponent(normalized);
+  if (decoded.includes("..")) throw new Error(`traversal not allowed: ${path}`);
+  const segments = normalized.split("/");
+  if (segments.some((s) => s === ".." || s === ""))
+    throw new Error(`empty/traversal segment: ${path}`);
+  return normalized;
+}
+
+/** R2 key for a file under a specific release: releases/<tag>/<relative-path> */
+export function releaseKey(tag: string, relativePath: string): string {
+  if (!tag) throw new Error("tag must be non-empty");
+  return `releases/${tag}/${normalizeRelativePath(relativePath)}`;
+}
+
+/** R2 key for a content-hashed asset under the global immutable prefix.
+ *  Request '/assets/index-XYZ.js' → 'immutable/assets/index-XYZ.js'
+ *  Never produces 'immutable/assets/assets/...' — the leading slash is stripped. */
+export function immutableKey(requestPath: string): string {
+  const normalized = normalizeRelativePath(requestPath);
+  // Require path to start with 'assets/'
+  if (!normalized.startsWith("assets/")) {
+    throw new Error(`immutableKey requires path under assets/: ${requestPath}`);
+  }
+  return `immutable/${normalized}`;
+}
+
+/** Check if a relative path is under assets/ (for publisher use) */
+export function isImmutableAsset(relativePath: string): boolean {
+  return normalizeRelativePath(relativePath).startsWith("assets/");
+}
+```
+
+**GREEN expectation:** All key derivation tests pass.
+**Test command:** `bun run test:unit -- tests/unit/release-keys.test.ts`
+
+- [ ] **Step 3: Write failing tests for version metadata guard**
+
+Create `tests/unit/release-fallback.test.ts`. Write tests for:
+
+```typescript
+describe("getVersionId", () => {
+  it("returns id (UUID) when CF_VERSION_METADATA is present", () => {
+    // env.CF_VERSION_METADATA = { id: "uuid-123", tag: "abc123-def456", timestamp: "..." }
+    // expect getVersionId(env) === "uuid-123"
+  });
+  it("returns 'unknown' when CF_VERSION_METADATA is undefined", () => {
+    // expect getVersionId(env) === "unknown"
+  });
+  it("returns 'unknown' when CF_VERSION_METADATA is null", () => {
+    // expect getVersionId(env) === "unknown"
+  });
+});
+describe("getReleaseTag", () => {
+  it("returns tag when non-empty", () => {
+    // expect getReleaseTag(env) === "abc123-def456"
+  });
+  it("returns null when tag is empty string", () => {
+    // CF_VERSION_METADATA = { id: "x", tag: "", timestamp: "..." }
+    // expect getReleaseTag(env) === null
+  });
+  it("returns null when CF_VERSION_METADATA is undefined", () => {
+    // expect getReleaseTag(env) === null
+  });
+});
+describe("getVersionHeaders", () => {
+  it("sets X-Moedict-Version to id (UUID) and X-Moedict-Release to tag", () => {
+    // metadata = { id: "uuid-123", tag: "abc123", timestamp: "..." }
+    // headers = getVersionHeaders(metadata)
+    // expect headers["X-Moedict-Version"] === "uuid-123"
+    // expect headers["X-Moedict-Release"] === "abc123"
+  });
+  it("omits X-Moedict-Release when tag is empty", () => {
+    // metadata = { id: "uuid-123", tag: "", timestamp: "..." }
+    // headers = getVersionHeaders(metadata)
+    // expect headers["X-Moedict-Release"] === undefined
+    // expect headers["X-Moedict-Version"] === "uuid-123"
+  });
+  it("sets X-Moedict-Version to 'unknown' when metadata undefined", () => {
+    // headers = getVersionHeaders(undefined)
+    // expect headers["X-Moedict-Version"] === "unknown"
+    // expect headers["X-Moedict-Release"] === undefined
+  });
+});
+```
+
+**RED expectation:** Import fails (module doesn't exist yet).
 **Test command:** `bun run test:unit -- tests/unit/release-fallback.test.ts`
 
-- [ ] **Step 2: Implement `getVersionTag` and `getVersionHeaders`**
+- [ ] **Step 4: Implement `getVersionId`, `getReleaseTag`, and `getVersionHeaders`**
 
 Create `src/api/release-fallback.ts`:
 
 ```typescript
 export interface VersionMetadata {
-  id: string;
-  tag: string;
-  timestamp: string;
+  id: string; // Cloudflare version UUID
+  tag: string; // Release ID (our --tag value)
+  timestamp: string; // ISO 8601
 }
 
-export function getVersionTag(metadata: VersionMetadata | undefined | null): string {
+/** Returns Cloudflare version UUID or "unknown" */
+export function getVersionId(metadata: VersionMetadata | undefined | null): string {
+  return metadata?.id ?? "unknown";
+}
+
+/** Returns release tag (ID) or null if absent/empty */
+export function getReleaseTag(metadata: VersionMetadata | undefined | null): string | null {
   if (!metadata || typeof metadata.tag !== "string" || metadata.tag === "") {
-    return "unknown";
+    return null;
   }
   return metadata.tag;
 }
 
+/** Returns headers object with X-Moedict-Version (UUID) and optionally X-Moedict-Release (tag) */
 export function getVersionHeaders(
   metadata: VersionMetadata | undefined | null,
 ): Record<string, string> {
-  const tag = getVersionTag(metadata);
-  return {
-    "X-Moedict-Version": tag,
-    "X-Moedict-Release": tag,
+  const headers: Record<string, string> = {
+    "X-Moedict-Version": getVersionId(metadata),
   };
+  const tag = getReleaseTag(metadata);
+  if (tag) {
+    headers["X-Moedict-Release"] = tag;
+  }
+  return headers;
 }
 ```
 
-**GREEN expectation:** All 4 tests pass.  
+**GREEN expectation:** All version metadata tests pass.
 **Test command:** `bun run test:unit -- tests/unit/release-fallback.test.ts`
 
-- [ ] **Step 3: Write failing tests for R2 shell fallback**
+- [ ] **Step 5: Write failing tests for R2 shell fallback**
 
 ```typescript
 describe("renderHtmlShellWithFallback", () => {
@@ -116,13 +261,13 @@ describe("renderHtmlShellWithFallback", () => {
   });
   it("falls back to R2 when SITE_ASSETS returns non-OK, source=r2-release", async () => {
     // SITE_ASSETS.fetch("/") returns 500
-    // env.ASSETS.get("releases/<tag>/index.html") returns R2 object with HTML
+    // env.ASSETS.get(releaseKey(tag, "index.html")) returns R2 object with HTML
     // expect response.status === 200
     // expect response.headers.get("X-Moedict-Shell-Source") === "r2-release"
   });
   it("falls back to R2 when SITE_ASSETS throws, source=r2-release", async () => {
     // SITE_ASSETS.fetch throws
-    // env.ASSETS.get("releases/<tag>/index.html") returns R2 object
+    // env.ASSETS.get(releaseKey(tag, "index.html")) returns R2 object
     // expect response.status === 200, source === "r2-release"
   });
   it("falls back to R2 when SITE_ASSETS fetcher is null, source=r2-release", async () => {
@@ -142,6 +287,20 @@ describe("renderHtmlShellWithFallback", () => {
     // SITE_ASSETS returns 500, R2.get throws
     // expect response.status === 503, source === "recovery"
   });
+  it("skips R2 fallback and returns 503 when tag is absent (undefined metadata)", async () => {
+    // env.CF_VERSION_METADATA = undefined
+    // SITE_ASSETS returns 500
+    // env.ASSETS.get is never called (skip R2)
+    // expect response.status === 503, source === "recovery"
+    // expect X-Moedict-Version === "unknown", no X-Moedict-Release header
+  });
+  it("skips R2 fallback and returns 503 when tag is empty string", async () => {
+    // env.CF_VERSION_METADATA = { id: "uuid", tag: "", timestamp: "..." }
+    // SITE_ASSETS returns 500
+    // env.ASSETS.get is never called
+    // expect response.status === 503, source === "recovery"
+    // expect X-Moedict-Version === "uuid", no X-Moedict-Release header
+  });
   it("injects head metadata into R2-served shell", async () => {
     // R2 shell HTML has <title>placeholder</title>
     // After injection, title matches resolveHeadByPath for pathname
@@ -150,34 +309,30 @@ describe("renderHtmlShellWithFallback", () => {
     // request.method = "HEAD"
     // expect response.status === 200, body is null
   });
-  it("uses 'unknown' as R2 key when version tag is undefined", async () => {
-    // env.CF_VERSION_METADATA = undefined
-    // SITE_ASSETS returns 500
-    // R2.get("releases/unknown/index.html") returns object
-    // expect source === "r2-release"
-  });
 });
 ```
 
-**RED expectation:** Import of `renderHtmlShellWithFallback` fails.  
+**RED expectation:** Import of `renderHtmlShellWithFallback` fails.
 **Test command:** `bun run test:unit -- tests/unit/release-fallback.test.ts`
 
-- [ ] **Step 4: Implement `renderHtmlShellWithFallback`**
+- [ ] **Step 6: Implement `renderHtmlShellWithFallback`**
 
 In `src/api/release-fallback.ts`, implement the full shell fallback flow:
 
 1. Try `SITE_ASSETS.fetch("/")` → if OK, inject head metadata, set `X-Moedict-Shell-Source: site-assets`, return.
-2. On non-OK/throw, try `env.ASSETS.get("releases/<tag>/index.html")` → if found, inject head metadata, set `X-Moedict-Shell-Source: r2-release`, return.
-3. Both fail → return 503 recovery with `no-store`, `Retry-After: 5`, auto-refresh meta, `X-Moedict-Shell-Source: recovery`.
-4. Log structured shell-miss event on SITE_ASSETS failure.
-5. Set `X-Moedict-Version` and `X-Moedict-Release` on all responses.
+2. On non-OK/throw, check `getReleaseTag(metadata)`: if null, skip R2 and go to step 4.
+3. If tag present, try `env.ASSETS.get(releaseKey(tag, "index.html"))` → if found, inject head metadata, set `X-Moedict-Shell-Source: r2-release`, return.
+4. Both fail (or tag absent) → return 503 recovery with `no-store`, `Retry-After: 5`, auto-refresh meta, `X-Moedict-Shell-Source: recovery`. **Never return null.**
+5. Log structured shell-miss event on SITE_ASSETS failure.
+6. Set `X-Moedict-Version` (via `getVersionId`) and `X-Moedict-Release` (via `getReleaseTag`, only if non-null) on all responses.
+7. Import `releaseKey` from `src/utils/release-keys.ts` — do NOT concatenate strings manually.
 
 Extract from `worker/index.ts` the existing `injectHeadMetadata` function (or import it). Use `CACHE_CONTROL.htmlShell` for R2-served shell.
 
-**GREEN expectation:** All shell fallback tests pass.  
+**GREEN expectation:** All shell fallback tests pass.
 **Test command:** `bun run test:unit -- tests/unit/release-fallback.test.ts`
 
-- [ ] **Step 5: Write failing tests for R2 asset fallback**
+- [ ] **Step 7: Write failing tests for R2 asset fallback**
 
 ```typescript
 describe("serveAssetWithFallback", () => {
@@ -187,13 +342,15 @@ describe("serveAssetWithFallback", () => {
   });
   it("falls back to R2 current release for non-hashed /assets/* path", async () => {
     // SITE_ASSETS returns 404
-    // env.ASSETS.get("releases/<tag>/assets/styles.css") returns object
+    // env.ASSETS.get(releaseKey(tag, "/assets/styles.css")) returns object
+    // → key is "releases/<tag>/assets/styles.css"
     // expect X-Moedict-Asset-Source === "r2-release"
   });
   it("falls back to R2 global immutable for hashed /assets/* path", async () => {
     // SITE_ASSETS returns 404
-    // env.ASSETS.get("releases/<tag>/assets/index-XXXX.js") returns null
-    // env.ASSETS.get("immutable/assets/assets/index-XXXX.js") returns object
+    // env.ASSETS.get(releaseKey(tag, "/assets/index-XXXX.js")) returns null
+    // env.ASSETS.get(immutableKey("/assets/index-XXXX.js")) returns object
+    // → immutable key is "immutable/assets/index-XXXX.js" (NOT "immutable/assets/assets/...")
     // expect X-Moedict-Asset-Source === "r2-immutable"
   });
   it("falls back to legacy ASSET_BASE_URL proxy when all R2 fails", async () => {
@@ -223,38 +380,51 @@ describe("serveAssetWithFallback", () => {
 });
 ```
 
-**RED expectation:** Import of `serveAssetWithFallback` fails.  
+**RED expectation:** Import of `serveAssetWithFallback` fails.
 **Test command:** `bun run test:unit -- tests/unit/release-fallback.test.ts`
 
-- [ ] **Step 6: Implement `serveAssetWithFallback`**
+- [ ] **Step 8: Implement `serveAssetWithFallback`**
 
 In `src/api/release-fallback.ts`, implement the asset fallback chain:
 
 1. `SITE_ASSETS.fetch(request)` → if OK, return (fast path, unchanged).
-2. R2 current release: `env.ASSETS.get("releases/<tag>/<relative-path>")` → if found, serve with `X-Moedict-Asset-Source: r2-release`.
-3. R2 global immutable (for `/assets/*` hashed paths only): `env.ASSETS.get("immutable/assets/<relative-path>")` → if found, serve with immutable cache + `X-Moedict-Asset-Source: r2-immutable`.
+2. R2 current release: `env.ASSETS.get(releaseKey(tag, requestPath))` → if found, serve with `X-Moedict-Asset-Source: r2-release`.
+3. R2 global immutable (for `/assets/*` hashed paths only): `env.ASSETS.get(immutableKey(requestPath))` → if found, serve with immutable cache + `X-Moedict-Asset-Source: r2-immutable`.
+   - `immutableKey("/assets/index-XYZ.js")` → `"immutable/assets/index-XYZ.js"` (leading slash stripped, never doubled).
 4. Legacy fallback: existing `ASSET_BASE_URL` proxy (unchanged).
 5. R2 responses: `writeHttpMetadata`, ETag/If-None-Match 304, HEAD, CORS, cache headers.
 6. Stream bodies: `new Response(object.body, ...)` — never `await object.text()` for assets.
+7. Import `releaseKey` and `immutableKey` from `src/utils/release-keys.ts` — do NOT concatenate strings manually.
 
-**GREEN expectation:** All asset fallback tests pass.  
+**GREEN expectation:** All asset fallback tests pass.
 **Test command:** `bun run test:unit -- tests/unit/release-fallback.test.ts`
 
-- [ ] **Step 7: Write failing tests for 503 recovery response**
+- [ ] **Step 9: Write failing tests for 503 recovery response**
 
 ```typescript
 describe("createRecoveryResponse", () => {
   it("returns 503 with no-store, Retry-After, and auto-refresh meta", () => {
-    // const res = createRecoveryResponse("unknown");
+    // const res = createRecoveryResponse({ id: "uuid-123", tag: "abc123" });
     // expect res.status === 503
     // expect res.headers.get("Cache-Control") === "no-store"
     // expect res.headers.get("Retry-After") === "5"
     // expect res.headers.get("X-Moedict-Shell-Source") === "recovery"
     // expect await res.text() contains "<meta http-equiv=\"refresh\" content=\"5\">"
   });
-  it("includes version headers", () => {
-    // const res = createRecoveryResponse("abc123-def456");
-    // expect res.headers.get("X-Moedict-Version") === "abc123-def456"
+  it("sets X-Moedict-Version to UUID and X-Moedict-Release to tag", () => {
+    // const res = createRecoveryResponse({ id: "uuid-123", tag: "abc123" });
+    // expect res.headers.get("X-Moedict-Version") === "uuid-123"
+    // expect res.headers.get("X-Moedict-Release") === "abc123"
+  });
+  it("omits X-Moedict-Release when tag is empty/absent", () => {
+    // const res = createRecoveryResponse({ id: "uuid-123", tag: "" });
+    // expect res.headers.get("X-Moedict-Version") === "uuid-123"
+    // expect res.headers.get("X-Moedict-Release") === null
+  });
+  it("sets X-Moedict-Version to 'unknown' when metadata undefined", () => {
+    // const res = createRecoveryResponse(undefined);
+    // expect res.headers.get("X-Moedict-Version") === "unknown"
+    // expect res.headers.get("X-Moedict-Release") === null
   });
   it("body is self-contained HTML (no external deps)", () => {
     // body does not contain "<link" or "<script src"
@@ -262,43 +432,45 @@ describe("createRecoveryResponse", () => {
 });
 ```
 
-**RED expectation:** `createRecoveryResponse` not exported.  
+**RED expectation:** `createRecoveryResponse` not exported.
 **Test command:** `bun run test:unit -- tests/unit/release-fallback.test.ts`
 
-- [ ] **Step 8: Implement `createRecoveryResponse`**
+- [ ] **Step 10: Implement `createRecoveryResponse`**
 
 ```typescript
-export function createRecoveryResponse(versionTag: string): Response {
+export function createRecoveryResponse(metadata: VersionMetadata | undefined | null): Response {
   const html = `<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta http-equiv="refresh" content="5"><title>萌典 — 服務暫時無法使用</title><style>body{font-family:system-ui,sans-serif;text-align:center;padding:3rem;color:#333}h1{font-size:1.5rem}p{color:#666}</style></head><body><h1>萌典服務暫時無法使用</h1><p>正在自動重試，請稍候…</p></body></html>`;
-  return new Response(html, {
-    status: 503,
-    headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "no-store",
-      "Retry-After": "5",
-      "X-Moedict-Shell-Source": "recovery",
-      "X-Moedict-Version": versionTag,
-      "X-Moedict-Release": versionTag,
-    },
-  });
+  const headers: Record<string, string> = {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Retry-After": "5",
+    "X-Moedict-Shell-Source": "recovery",
+    "X-Moedict-Version": getVersionId(metadata),
+  };
+  const tag = getReleaseTag(metadata);
+  if (tag) {
+    headers["X-Moedict-Release"] = tag;
+  }
+  return new Response(html, { status: 503, headers });
 }
 ```
 
-**GREEN expectation:** All recovery tests pass.  
+**GREEN expectation:** All recovery tests pass.
 **Test command:** `bun run test:unit -- tests/unit/release-fallback.test.ts`
 
-- [ ] **Step 9: Write failing tests for structured shell-miss logging**
+- [ ] **Step 11: Write failing tests for structured shell-miss logging**
 
 ```typescript
 describe("shell-miss structured logging", () => {
-  it("logs JSON with event, pathname, version, siteAssetsResult, r2Result, finalSource", async () => {
+  it("logs JSON with event, pathname, versionId, releaseTag, siteAssetsResult, r2Result, finalSource", async () => {
     // const logs: string[] = [];
     // vi.spyOn(console, "log").mockImplementation((msg) => logs.push(msg));
     // Trigger shell miss (SITE_ASSETS 500, R2 hit)
     // const logEntry = JSON.parse(logs.find(l => l.includes('"shell-miss"'))!);
     // expect logEntry.event === "shell-miss"
     // expect logEntry.pathname === "/"
-    // expect logEntry.version === "abc123-def456"
+    // expect logEntry.versionId === "uuid-123"
+    // expect logEntry.releaseTag === "abc123"
     // expect logEntry.siteAssetsResult === "non-ok"
     // expect logEntry.r2Result === "hit"
     // expect logEntry.finalSource === "r2-release"
@@ -316,94 +488,113 @@ describe("shell-miss structured logging", () => {
     // expect logEntry.r2Result === "miss"
     // expect logEntry.finalSource === "recovery"
   });
+  it("logs r2Result='skipped' when tag is absent", async () => {
+    // CF_VERSION_METADATA = undefined
+    // SITE_ASSETS returns 500
+    // expect logEntry.r2Attempted === false
+    // expect logEntry.r2Result === "skipped"
+    // expect logEntry.finalSource === "recovery"
+  });
 });
 ```
 
-**RED expectation:** No structured log is emitted.  
+**RED expectation:** No structured log is emitted.
 **Test command:** `bun run test:unit -- tests/unit/release-fallback.test.ts`
 
-- [ ] **Step 10: Implement structured shell-miss logging**
+- [ ] **Step 12: Implement structured shell-miss logging**
 
 In `renderHtmlShellWithFallback`, when `SITE_ASSETS` fails, emit:
 
-```typescript
+````typescript
 console.log(
   JSON.stringify({
     event: "shell-miss",
     pathname,
     cfRay: request.headers.get("cf-ray") ?? "",
-    version: versionTag,
-    release: versionTag,
+    versionId: getVersionId(metadata),
+    releaseTag: getReleaseTag(metadata),
     siteAssetsResult: siteAssetsOk ? "ok" : siteAssetsThrew ? "throw" : "non-ok",
     siteAssetsStatus: siteAssetsStatus,
-    r2Key: `releases/${versionTag}/index.html`,
-    r2Result: r2Object ? "hit" : r2Threw ? "throw" : "miss",
+    r2Attempted: r2Attempted,
+    r2Key: r2Attempted ? releaseKey(tag, "index.html") : null,
+    r2Result: r2Attempted ? (r2Object ? "hit" : r2Threw ? "throw" : "miss") : "skipped",
     finalSource: finalSource,
     finalStatus: finalStatus,
   }),
 );
-```
 
 No secret data in logs.
 
-**GREEN expectation:** All logging tests pass.  
+**GREEN expectation:** All logging tests pass.
 **Test command:** `bun run test:unit -- tests/unit/release-fallback.test.ts`
 
-- [ ] **Step 11: Wire fallback into `worker/index.ts` dispatch**
+- [ ] **Step 13: Wire fallback into `worker/index.ts` dispatch**
 
 Modify `worker/index.ts`:
 
 1. Add `CF_VERSION_METADATA` to the `Env` interface:
    ```typescript
    CF_VERSION_METADATA?: VersionMetadata;
-   ```
+````
+
 2. Replace `renderHtmlShell` call in `dispatch()` with `renderHtmlShellWithFallback`.
 3. Replace `passThroughAssets` with `serveAssetWithFallback` for the asset flow.
-4. Add version headers to all Worker responses (API, static, shell, 503).
+4. Add version headers to all Worker responses (API, static, shell, 503) via `getVersionHeaders`.
 5. Remove the old `renderHtmlShell` function (replaced by `renderHtmlShellWithFallback`).
 6. Remove the old `passThroughAssets` and `getAssetFromBucket` functions (replaced by `serveAssetWithFallback`).
 7. Preserve all existing legacy behavior (badge, appcache, ASSET_BASE_URL proxy, PNG generation).
+8. Import `releaseKey` and `immutableKey` from `src/utils/release-keys.ts` — no manual string concatenation for R2 keys.
 
-**Test command:** `bun run test:unit -- tests/unit/worker-dispatch.test.ts tests/unit/release-fallback.test.ts`
+**Test command:** `bun run test:unit -- tests/unit/worker-dispatch.test.ts tests/unit/release-fallback.test.ts tests/unit/release-keys.test.ts`
 
-- [ ] **Step 12: Add `version_metadata` binding to `wrangler.jsonc`**
+- [ ] **Step 14: Add `version_metadata` binding to `wrangler.jsonc`**
 
-Add to the top level of `wrangler.jsonc` (not inside `env`):
+Add to the top level of `wrangler.jsonc`:
 
 ```jsonc
 "version_metadata": {
-  "binding": "CF_VERSION_METADATA",
-  "type": "json"
+  "binding": "CF_VERSION_METADATA"
 }
 ```
 
-Also add to `env.staging` (version_metadata does NOT inherit per Cloudflare rules).
+Also redeclare in `env.staging` (version_metadata inheritance is ambiguous in the schema; redeclaring guarantees the binding is present):
 
-- [ ] **Step 13: Update existing dispatch tests for new headers**
+```jsonc
+"env": {
+  "staging": {
+    "version_metadata": { "binding": "CF_VERSION_METADATA" }
+  }
+}
+```
+
+Note: `version_metadata` accepts only `{ "binding": "<name>" }` — no `"type"` property.
+
+- [ ] **Step 15: Update existing dispatch tests for new headers**
 
 Modify `tests/unit/worker-dispatch.test.ts`:
 
 1. Add `CF_VERSION_METADATA: { id: "test-uuid", tag: "test-tag", timestamp: "2026-07-12T00:00:00Z" }` to `makeEnv`.
-2. Verify `X-Moedict-Version` header on all responses.
-3. Verify `X-Moedict-Shell-Source` on shell responses.
-4. Verify 503 recovery when both SITE_ASSETS and R2 fail (new test).
-5. Verify legacy behavior still works (existing tests should pass with updated env).
+2. Verify `X-Moedict-Version` header (value = "test-uuid") on all responses.
+3. Verify `X-Moedict-Release` header (value = "test-tag") on responses when tag present.
+4. Verify `X-Moedict-Shell-Source` on shell responses.
+5. Verify 503 recovery when both SITE_ASSETS and R2 fail (new test).
+6. Verify 503 recovery when tag is absent (CF_VERSION_METADATA undefined, new test).
+7. Verify legacy behavior still works (existing tests should pass with updated env).
 
-**Test command:** `bun run test:unit -- tests/unit/worker-dispatch.test.ts`
-
-- [ ] **Step 14: Add integration tests for R2 fallback**
+- [ ] **Step 16: Add integration tests for R2 fallback**
 
 Modify `tests/integration/api-legacy-assets.test.ts` (or create new):
 
-1. Seed R2 `ASSETS` bucket with `releases/<tag>/index.html` in test setup.
+1. Seed R2 `ASSETS` bucket with `releaseKey(tag, "index.html")` in test setup (using shared module).
 2. Test: SITE_ASSETS miss → R2 shell served with correct headers.
-3. Test: R2 asset fallback for `/assets/*` path.
+3. Test: R2 asset fallback for `/assets/*` path — verify `immutableKey` produces correct key (no doubled `assets/`).
 4. Test: 304 If-None-Match with real R2 ETag.
 5. Test: HEAD request with R2.
+6. Test: Tag absent → 503 recovery (no R2 access).
 
 **Test command:** `bun run test:integration -- tests/integration/api-legacy-assets.test.ts`
 
-- [ ] **Step 15: Run full test suite and verify coverage**
+- [ ] **Step 17: Run full test suite and verify coverage**
 
 ```bash
 bun run lint
@@ -415,11 +606,11 @@ bun run test:integration
 
 Verify coverage is 100% and no new `/* v8 ignore */` is needed (or within cap of 20).
 
-- [ ] **Step 16: Commit Task 1**
+- [ ] **Step 18: Commit Task 1**
 
 ```bash
 git add -A
-git commit -m "feat: runtime R2 fallback + version metadata (Task 1)"
+git commit -m "feat: runtime R2 fallback + version metadata + shared key derivation (Task 1)"
 ```
 
 ---
@@ -428,9 +619,9 @@ git commit -m "feat: runtime R2 fallback + version metadata (Task 1)"
 
 **Files:**
 
-- Create: `scripts/lib/release-manifest.mjs` (manifest generation, deterministic SHA-256, release ID)
+- Create: `scripts/lib/release-manifest.mjs` (manifest generation: enumerate `dist/client/**`, deterministic SHA-256, release ID)
 - Create: `scripts/lib/generated-config.mjs` (parse generated wrangler config, bucket selection)
-- Create: `scripts/lib/r2-upload.mjs` (R2 upload with ≤4 concurrency, 429 backoff)
+- Create: `scripts/lib/r2-upload.mjs` (R2 upload with ≤4 concurrency, 429 backoff; uses shared `releaseKey`/`immutableKey` from `src/utils/release-keys.ts`)
 - Create: `scripts/release-publish.mjs` (publish CLI: upload all files, manifest last)
 - Create: `scripts/release-verify.mjs` (verify CLI: re-GET every object, compare hash)
 - Create: `tests/unit/release-manifest.test.ts`
@@ -439,42 +630,55 @@ git commit -m "feat: runtime R2 fallback + version metadata (Task 1)"
 
 **Interfaces:**
 
-- Consumes: `dist/client/**` (build output), `dist/cf_moedict_webkit_neo/.vite/manifest.json` (Vite manifest), `dist/cf_moedict_webkit_neo/wrangler.json` (generated config), `CLOUDFLARE_ENV` env var
-- Produces: R2 objects under `releases/<id>/` and `immutable/assets/`, `release-manifest.json`
+- Consumes: `dist/client/**` (build output, recursively enumerated for our own client manifest), `dist/cf_moedict_webkit_neo/wrangler.json` (generated config), `CLOUDFLARE_ENV` env var, `src/utils/release-keys.ts` (shared key derivation)
+- Produces: R2 objects under `releases/<id>/` (via `releaseKey`) and `immutable/assets/` (via `immutableKey`), `release-manifest.json`
 
 - [ ] **Step 1: Write failing tests for release manifest generation**
 
 Create `tests/unit/release-manifest.test.ts`:
 
 ```typescript
+describe("buildClientManifest", () => {
+  it("recursively enumerates dist/client/** and returns sorted {path, sha256, size} records", () => {
+    // Mock fs with dist/client/index.html, dist/client/assets/index-XX.js
+    // expect manifest entries sorted by path
+    // expect each entry has path (relative to dist/client/), sha256 (hex), size (bytes)
+  });
+  it("excludes nothing — every file is included", () => {
+    // All files under dist/client/ appear in manifest
+  });
+});
+
+describe("computeClientManifestDigest", () => {
+  it("produces deterministic SHA-256 of sorted manifest JSON", () => {
+    // Build manifest array, sort by path, deterministic JSON (no spaces, sorted keys)
+    // SHA-256 of that JSON string, first 12 hex chars
+  });
+  it("same files in different enumeration order → same digest", () => {
+    // Deterministic sort ensures stability
+  });
+});
+
 describe("computeReleaseId", () => {
-  it("produces <git-short-sha>-<first12-of-manifest-sha256>", () => {
+  it("produces <git-short-sha>-<first12-of-manifest-digest>", () => {
     // Mock git short SHA as "abc1234"
-    // Mock manifest JSON as { "b": {...}, "a": {...} }
-    // Deterministic sorted: JSON.stringify({ a: ..., b: ... }, sortedKeys)
-    // SHA-256 of that, first 12 hex chars
-    // expect result === "abc1234-<first12hex>"
-  });
-  it("sorts manifest keys deterministically before hashing", () => {
-    // Same manifest with different key order → same digest
-  });
-  it("uses stable JSON stringification (no spaces, sorted keys recursively)", () => {
-    // Nested objects are also sorted
+    // Mock digest as "def456789012"
+    // expect result === "abc1234-def456789012"
   });
 });
 
 describe("buildReleaseManifest", () => {
-  it("lists all files under dist/client/ with relative paths", () => {
-    // Mock fs with dist/client/index.html, dist/client/assets/index-XX.js
-    // expect manifest.files contains "index.html", "assets/index-XX.js"
-  });
-  it("includes id, gitSha, clientManifestDigest, createdAt", () => {
+  it("includes id, gitSha, clientManifestDigest, createdAt, files", () => {
     // expect manifest has all required fields
+    // files is the sorted array from buildClientManifest
+  });
+  it("release-manifest.json is NOT included in the manifest enumeration", () => {
+    // release-manifest.json is uploaded separately, not part of digest
   });
 });
 ```
 
-**RED expectation:** Module doesn't exist.  
+**RED expectation:** Module doesn't exist.
 **Test command:** `bun run test:unit -- tests/unit/release-manifest.test.ts`
 
 - [ ] **Step 2: Implement `release-manifest.mjs`**
@@ -482,7 +686,39 @@ describe("buildReleaseManifest", () => {
 ```javascript
 import { createHash } from "node:crypto";
 import { execSync } from "node:child_process";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
 
+/** Recursively enumerate all files under a directory, returning relative paths. */
+function enumerateFiles(dir) {
+  const results = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...enumerateFiles(full));
+    } else {
+      results.push(full);
+    }
+  }
+  return results;
+}
+
+/** Build client manifest by enumerating dist/client/** — NOT relying on Vite manifest. */
+export function buildClientManifest(distClientDir) {
+  const files = enumerateFiles(distClientDir)
+    .map((abs) => relative(distClientDir, abs).replace(/\\/g, "/")) // normalize to forward slashes
+    .sort();
+  return files.map((path) => {
+    const content = readFileSync(join(distClientDir, path));
+    return {
+      path,
+      sha256: createHash("sha256").update(content).digest("hex"),
+      size: statSync(join(distClientDir, path)).size,
+    };
+  });
+}
+
+/** Deterministic JSON stringification (no spaces, sorted keys recursively). */
 export function deterministicStringify(obj) {
   if (obj === null || typeof obj !== "object") return JSON.stringify(obj);
   if (Array.isArray(obj)) return "[" + obj.map(deterministicStringify).join(",") + "]";
@@ -492,9 +728,9 @@ export function deterministicStringify(obj) {
   );
 }
 
-export function computeClientManifestDigest(manifestJson) {
-  const parsed = JSON.parse(manifestJson);
-  const stable = deterministicStringify(parsed);
+/** Compute SHA-256 of sorted manifest JSON, first 12 hex chars. */
+export function computeClientManifestDigest(manifestEntries) {
+  const stable = deterministicStringify(manifestEntries); // entries already sorted by path
   return createHash("sha256").update(stable).digest("hex").slice(0, 12);
 }
 
@@ -505,10 +741,21 @@ export function getGitShortSha() {
 export function computeReleaseId(gitShortSha, clientManifestDigest) {
   return `${gitShortSha}-${clientManifestDigest}`;
 }
-```
 
-**GREEN expectation:** All manifest tests pass.  
-**Test command:** `bun run test:unit -- tests/unit/release-manifest.test.ts`
+export function buildReleaseManifest(distClientDir) {
+  const files = buildClientManifest(distClientDir);
+  const clientManifestDigest = computeClientManifestDigest(files);
+  const gitSha = getGitShortSha();
+  const id = computeReleaseId(gitSha, clientManifestDigest);
+  return {
+    id,
+    gitSha,
+    clientManifestDigest,
+    createdAt: new Date().toISOString(),
+    files,
+  };
+}
+```
 
 - [ ] **Step 3: Write failing tests for generated config parsing**
 
@@ -602,9 +849,13 @@ Implement:
 - `uploadObject(bucketName, key, filePath, metadata)` — calls `wrangler r2 object put <bucket>/<key> --file=<path> --remote --content-type=<ct> --cache-control=<cc>`
 - `uploadWithConcurrency(files, bucketName, maxConcurrent=4)` — bounded concurrency pool
 - `retryWithBackoff(fn, maxRetries=5, initialDelay=1000, maxDelay=60000)` — exponential backoff on 429
-- `uploadReleaseToR2(releaseId, distClientDir, bucketName, immutableAssetsDir)` — uploads all files, manifest last
+- `uploadReleaseToR2(releaseId, distClientDir, bucketName)` — uploads all files using `releaseKey` and `immutableKey` from `src/utils/release-keys.ts`, manifest last
+  - For each file in `dist/client/**`: upload to `releaseKey(releaseId, relativePath)`
+  - For each file in `dist/client/assets/**` (content-hashed): ALSO upload to `immutableKey(relativePath)` — use `isImmutableAsset()` to check
+  - Upload `release-manifest.json` last via `releaseKey(releaseId, "release-manifest.json")`
+  - **Never** concatenate R2 key strings manually — always use shared functions
 
-**GREEN expectation:** All upload tests pass.  
+**GREEN expectation:** All upload tests pass.
 **Test command:** `bun run test:unit -- tests/unit/r2-upload.test.ts`
 
 - [ ] **Step 7: Write failing tests for verification**
@@ -639,9 +890,11 @@ describe("verifyRelease", () => {
 - [ ] **Step 8: Implement `release-verify.mjs`**
 
 ```javascript
+import { releaseKey } from "../../src/utils/release-keys.ts";
+
 export async function verifyRelease(bucketName, releaseId, manifest) {
   for (const file of manifest.files) {
-    const key = `releases/${releaseId}/${file.path}`;
+    const key = releaseKey(releaseId, file.path); // shared key derivation
     const response = await fetchR2Object(bucketName, key);
     if (!response.ok) throw new Error(`Missing object: ${key}`);
     const hash = createHash("sha256")
@@ -650,7 +903,7 @@ export async function verifyRelease(bucketName, releaseId, manifest) {
     if (hash !== file.sha256) throw new Error(`Hash mismatch: ${key}`);
   }
   // Verify manifest itself
-  const manifestKey = `releases/${releaseId}/release-manifest.json`;
+  const manifestKey = releaseKey(releaseId, "release-manifest.json");
   const manifestResp = await fetchR2Object(bucketName, manifestKey);
   if (!manifestResp.ok) throw new Error(`Missing manifest: ${manifestKey}`);
 }
@@ -734,17 +987,23 @@ describe("uploadVersion", () => {
 });
 
 describe("deployVersionSplit", () => {
-  it("calls wrangler versions deploy with --version-tag and --percentage", async () => {
-    // expect command: wrangler versions deploy --config <generated> --version-tag <tag> --percentage 0
+  it("calls wrangler versions deploy with positional <uuid>@<percentage> specs", async () => {
+    // expect command: wrangler versions deploy --config <generated> <new-uuid>@0% <old-uuid>@100% -y
   });
   it("deploys new@0 old@100 for phase 1", async () => {
-    // expect percentage=0 for new version
+    // expect command args contain "<new-uuid>@0% <old-uuid>@100%"
   });
-  it("deploys new@100 for phase 2 promotion", async () => {
-    // expect percentage=100 for new version
+  it("deploys new@100 old@0 for phase 2 promotion step 1", async () => {
+    // expect command args contain "<new-uuid>@100% <old-uuid>@0%"
   });
-  it("rolls back with old@100 on probe failure", async () => {
-    // expect command: wrangler versions deploy --version-id <old-uuid> --percentage 100
+  it("finalizes new@100 alone after soak", async () => {
+    // expect command args contain "<new-uuid>@100%"
+  });
+  it("rolls back with old@100 new@0 on probe failure", async () => {
+    // expect command: wrangler versions deploy --config <generated> <old-uuid>@100% <new-uuid>@0% -y
+  });
+  it("never mixes --version-tag with positional ID specs", async () => {
+    // expect command does NOT contain --version-tag or --percentage
   });
 });
 
@@ -772,8 +1031,8 @@ describe("listVersions", () => {
 Functions:
 
 - `uploadVersion(configPath, tag)` → `wrangler versions upload --config <configPath> --tag <tag> --json`
-- `deployVersionSplit(configPath, versionTag, percentage)` → `wrangler versions deploy --config <configPath> --version-tag <versionTag> --percentage <percentage> -y`
-- `rollbackToVersion(configPath, versionId)` → `wrangler versions deploy --config <configPath> --version-id <versionId> --percentage 100 -y`
+- `deployVersionSplit(configPath, ...specs)` → `wrangler versions deploy --config <configPath> <uuid>@<percentage> [<uuid>@<percentage>...] -y` (positional UUID@percentage specs, NOT --version-tag/--percentage)
+- `rollbackToVersion(configPath, oldUuid, newUuid)` → `wrangler versions deploy --config <configPath> <old-uuid>@100% <new-uuid>@0% -y`
 - `listVersions(configPath, workerName)` → `wrangler versions list --config <configPath> --name <workerName> --json`
 - `getCurrentDeployment(configPath, workerName)` → `wrangler deployments list --config <configPath> --name <workerName> --json`
 - `requireSingleVersion100(deployments)` → throws if not exactly one version at 100%
@@ -838,8 +1097,8 @@ describe("smokeWithVersionOverride", () => {
     // Mock: return 500
     // expect probe fails
   });
-  it("requires X-Moedict-Version header matching release tag", async () => {
-    // Mock: return 200 but missing X-Moedict-Version
+  it("requires X-Moedict-Release header matching release tag", async () => {
+    // Mock: return 200 but missing X-Moedict-Release
     // expect probe fails
   });
   it("probes all critical routes: /, /api/config, /api/<word>.json, /assets/*", async () => {
@@ -879,8 +1138,7 @@ describe("continuousProbe", () => {
 
 Functions:
 
-- `smokeWithVersionOverride(url, workerName, versionUuid, routes)` — probe all routes with `Cloudflare-Workers-Version-Overrides` header, require 200 + `X-Moedict-Version` on each
-- `continuousProbe(url, routes, durationMs, intervalMs=5000)` — probe continuously, return on first failure or after duration
+- `smokeWithVersionOverride(url, workerName, versionUuid, routes)` — probe all routes with `Cloudflare-Workers-Version-Overrides` header, require 200 + `X-Moedict-Release` on each
 
 **GREEN expectation:** All smoke probe tests pass.  
 **Test command:** `bun run test:unit -- tests/unit/smoke-probe.test.ts`
@@ -897,26 +1155,30 @@ describe("releaseDeployOrchestrator", () => {
     // Mock: capture upload command
     // expect --tag matches release ID
   });
-  it("deploys new@0 old@100 for phase 1", async () => {
+  it("deploys new@0 old@100 for phase 1 (positional UUID@percentage)", async () => {
     // Mock: capture deploy command
-    // expect percentage=0
+    // expect args: <new-uuid>@0% <old-uuid>@100% -y
   });
   it("smokes with version override header before promotion", async () => {
-    // Mock: smoke probe called with correct header
+    // Mock: smoke probe called with correct header (exact worker name + new UUID)
   });
   it("aborts promotion if smoke fails", async () => {
     // Mock: smoke returns failure
     // expect no promotion deploy
   });
-  it("promotes to new@100 for phase 2", async () => {
+  it("promotes to new@100 old@0 for phase 2 step 1 (both versions live)", async () => {
     // Mock: capture deploy command
-    // expect percentage=100
+    // expect args: <new-uuid>@100% <old-uuid>@0% -y
   });
-  it("rolls back on continuous probe failure", async () => {
+  it("rolls back on continuous probe failure (old@100 new@0)", async () => {
     // Mock: probe returns failure
-    // expect rollback deploy with old UUID at 100%
+    // expect rollback deploy: <old-uuid>@100% <new-uuid>@0% -y
   });
-  it("soaks for 120s after promotion", async () => {
+  it("finalizes new@100 alone after soak passes", async () => {
+    // Mock: soak passes
+    // expect finalize deploy: <new-uuid>@100% -y
+  });
+  it("soaks for 120s after new@100/old@0 deploy", async () => {
     // Mock: track time
     // expect soak duration >= 120s
   });
@@ -944,15 +1206,16 @@ Full orchestrator flow:
 4. For production: check staging approval gate (git SHA + digest equality).
 5. Get current deployment, require one version at 100%.
 6. Upload new version with `--tag <release-id>`.
-7. Deploy new@0 old@100.
+7. Deploy new@0 old@100: `versions deploy <new-uuid>@0% <old-uuid>@100% -y`.
 8. Get new version UUID from `versions list`.
-9. Smoke with version override header on all routes.
+9. Smoke with version override header on all routes. Require `X-Moedict-Release` header.
 10. If smoke fails: abort (version stays at 0%).
-11. Promote: deploy new@100.
+11. Promote step 1: deploy new@100 old@0: `versions deploy <new-uuid>@100% <old-uuid>@0% -y` (both versions remain live).
 12. Continuous probe for 120s.
-13. If probe fails: rollback old@100, abort.
-14. Final browser smoke.
-15. Save deployment state.
+13. If probe fails: rollback `versions deploy <old-uuid>@100% <new-uuid>@0% -y`, abort.
+14. If soak passes: finalize `versions deploy <new-uuid>@100% -y` (new alone at 100%).
+15. Final browser smoke.
+16. Save deployment state.
 
 **GREEN expectation:** All orchestrator tests pass.  
 **Test command:** `bun run test:unit -- tests/unit/release-deploy.test.ts`
@@ -1012,10 +1275,11 @@ Verify top-level and `env.staging` both have:
 
 ```jsonc
 "version_metadata": {
-  "binding": "CF_VERSION_METADATA",
-  "type": "json"
+  "binding": "CF_VERSION_METADATA"
 }
 ```
+
+Note: no `"type"` property. Redeclared in `env.staging` to guarantee presence.
 
 - [ ] **Step 3: Update `AGENTS.md` deploy section**
 
@@ -1040,9 +1304,8 @@ Document manual recovery commands:
 ```bash
 # List current versions
 vp exec wrangler versions list --json
-
-# Rollback to a specific version at 100%
-vp exec wrangler versions deploy --config <generated> --version-id <uuid> --percentage 100
+# Rollback to a specific version at 100% (positional UUID@percentage)
+vp exec wrangler versions deploy --config <generated> <uuid>@100% -y
 
 # List deployments
 vp exec wrangler deployments list --json

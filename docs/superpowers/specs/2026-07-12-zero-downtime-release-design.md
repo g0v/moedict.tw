@@ -39,24 +39,27 @@ any probe fails, automatically roll back to the old version at 100%.
 
 1. Upload the new Worker version via `wrangler versions upload --tag <release-id>`.
 2. Deploy traffic split: new version at 0%, old version at 100%
-   (`wrangler versions deploy "<new-uuid>@0" --version-tag "<release-id>"`).
+   (`wrangler versions deploy <new-uuid>@0% <old-uuid>@100% -y`).
 3. Smoke-test the new version using the
    `Cloudflare-Workers-Version-Overrides: <exact-worker-name>="<new-UUID>"`
    request header on every page/asset route. Require a matching
-   `X-Moedict-Version` response header on every probe. Any non-200 or missing
+   `X-Moedict-Release` response header on every probe. Any non-200 or missing
    header aborts before promotion.
 
 **Phase 2 — Promote & Probe (new100 / old0):**
 
-1. Deploy traffic split: new version at 100%, old version at 0%.
+1. Deploy traffic split: new@100, old@0
+   (`wrangler versions deploy <new-uuid>@100% <old-uuid>@0% -y`) so both
+   versions remain in the deployment during the probe/soak.
 2. Continuously probe critical routes (HTML shell, `/api/config`, dictionary
    API, static assets) against the custom domain (now serving the new
    version at 100%).
 3. If any probe returns non-200 or throws, immediately roll back:
-   `wrangler versions deploy "<old-uuid>@100"`.
+   `wrangler versions deploy <old-uuid>@100% <new-uuid>@0% -y`.
 4. Soak for at least 2 × HTML-shell TTL (2 × 60s = 120s) to let edge caches
    expire.
-5. Final browser smoke against the custom domain.
+5. Finalize: `wrangler versions deploy <new-uuid>@100% -y` (new alone at 100%).
+6. Final browser smoke against the custom domain.
 
 ### B — Durable R2 Release Fallback
 
@@ -90,17 +93,37 @@ meta tag.
 
 - **git-short-sha**: 7-character `git rev-parse --short HEAD` at build time.
 - **client-manifest SHA256**: SHA-256 of the deterministic, sorted JSON
-  serialization of the Vite client manifest
-  (`dist/cf_moedict_webkit_neo/.vite/manifest.json`), first 12 hex characters.
-- **Deterministic serialization**: Sort all top-level keys recursively,
-  stringify with stable replacer (no spaces, sorted keys), then SHA-256.
+  serialization of our own client manifest (see below), first 12 hex characters.
+
+### Client Manifest (Self-Defined)
+
+The current build does not guarantee `dist/.../.vite/manifest.json` exists or
+has a stable shape. We define our own client manifest by recursively
+enumerating `dist/client/**` (excluding nothing — every file is included):
+
+```typescript
+interface ClientManifestEntry {
+  path: string; // relative path from dist/client/ (e.g. "assets/index-BU7Lztf4.js")
+  sha256: string; // hex SHA-256 of file content
+  size: number; // file size in bytes
+}
+```
+
+The manifest is a sorted array of these records (sorted by `path`), serialized
+as deterministic JSON (no spaces, sorted keys), then SHA-256 hashed. The first
+12 hex characters of that hash is the client manifest digest.
+
+The `release-manifest.json` uploaded to R2 contains this manifest plus metadata
+(`id`, `gitSha`, `clientManifestDigest`, `createdAt`, `files`). The
+`release-manifest.json` itself is uploaded separately and is NOT included in
+the manifest enumeration or digest computation.
 
 ### No Circular Embedding
 
 The release ID is computed from build outputs only. It is NOT embedded in
 the client bundle (which would change the manifest hash, creating a circular
 dependency). The release ID is passed to the Worker via the
-`CF_VERSION_METADATA` binding at deploy time and written to R2
+`CF_VERSION_METADATA` binding's `tag` field at deploy time and written to R2
 `releases/<id>/release-manifest.json`.
 
 ### Staging and Prod Build Separately
@@ -140,6 +163,17 @@ releases/<id>/<relative-path>          ← all current release files (dist/clien
 immutable/assets/<relative-path>        ← content-hashed dist/client/assets/** (global)
 ```
 
+### Key Mapping Example
+
+For a request to `/assets/index-BU7Lztf4.js`:
+
+1. Current release key: `releases/<tag>/assets/index-BU7Lztf4.js`
+2. Global immutable key: `immutable/assets/index-BU7Lztf4.js`
+
+The relative path from `dist/client/` is preserved verbatim under both
+prefixes. A request to `/assets/foo-hash.js` maps exactly to
+`immutable/assets/foo-hash.js` — no path transformation.
+
 - `releases/<id>/index.html`: The SPA shell HTML, same as
   `dist/client/index.html`.
 - `releases/<id>/release-manifest.json`: Metadata about the release
@@ -160,6 +194,38 @@ know `<old-id>`. The global `immutable/assets/` path solves this: all
 content-hashed assets are copied there, and the Worker's asset fallback
 checks the global path after the current release path.
 
+### Shared Key Derivation Module
+
+R2 key derivation has ONE shared pure TypeScript implementation at
+`src/utils/release-keys.ts`, imported by both the Worker (production) and
+Bun deployment scripts. No duplicate string concatenation anywhere.
+
+```typescript
+/** R2 key for a file under a specific release: releases/<tag>/<relative-path> */
+export function releaseKey(tag: string, relativePath: string): string;
+
+/** R2 key for a content-hashed asset: immutable/assets/<relative-path>
+ *  Request '/assets/index-XYZ.js' → 'immutable/assets/index-XYZ.js'
+ *  Never produces 'immutable/assets/assets/...' — leading slash is stripped. */
+export function immutableKey(requestPath: string): string;
+
+/** Check if a relative path is under assets/ (for publisher use) */
+export function isImmutableAsset(relativePath: string): boolean;
+```
+
+**Safety guarantees:**
+
+- Normalize one optional leading slash (`/assets/foo.js` → `assets/foo.js`).
+- Reject empty paths, `..` traversal (literal or `%2e%2e` encoded), backslash
+  segments, and empty segments.
+- `immutableKey` rejects paths not starting with `assets/`.
+- Only content-hashed files under `assets/` are promoted to `immutable/`;
+  non-hashed files remain release-scoped only.
+- Publisher↔Worker key equality: the publisher's relative path
+  (`assets/index-XYZ.js`) and the Worker's request path (`/assets/index-XYZ.js`)
+  map to the same R2 key. Round-trip tests verify this with real
+  representative Vite paths.
+
 ### No Automatic GC in v1
 
 Retain all immutable assets and release trees indefinitely. This protects
@@ -173,38 +239,72 @@ future concern, NOT a delivered TODO.
 
 ```typescript
 interface VersionMetadata {
-  id: string; // Release ID: <git-short-sha>-<manifest-digest-12>
-  tag: string; // Same as id; the wrangler versions --tag value
+  id: string; // Cloudflare-generated version UUID (NOT the release ID)
+  tag: string; // Release ID: <git-short-sha>-<manifest-digest-12> (our --tag value)
   timestamp: string; // ISO 8601 deployment timestamp
 }
 ```
 
+The `id` field is the **Cloudflare version UUID** assigned by the platform
+when a version is uploaded via `wrangler versions upload`. It is NOT the
+release ID. The `tag` field is the value passed via `--tag` to
+`wrangler versions upload`, which we set to our release ID.
+
 ### Wrangler Config
 
-Add to `wrangler.jsonc` (top level, not inside `env`):
+Add to `wrangler.jsonc`:
 
 ```jsonc
 "version_metadata": {
-  "binding": "CF_VERSION_METADATA",
-  "type": "json"
+  "binding": "CF_VERSION_METADATA"
 }
 ```
 
-This is a Cloudflare Workers binding type that injects `{ id, tag, timestamp }`
-at deploy time. It is available in modern wrangler (≥ 3.x). The `id` is the
-Cloudflare-generated version UUID, `tag` is the `--tag` value passed to
-`wrangler versions upload`, and `timestamp` is the ISO 8601 deployment time.
+The `version_metadata` binding accepts only `{ "binding": "<name>" }` — no
+`"type"` property. It is available in modern wrangler (≥ 3.x).
 
-### Guard Undefined/Empty
+### Environment Inheritance
+
+The `version_metadata` binding appears in both `RawConfig` (top-level) and
+`RawEnvironment` (per-env) in the wrangler config schema. Whether it is
+inherited from top-level into `env.staging` is ambiguous in the schema. Per
+the non-inheritable bindings precedent (`vars`, `r2_buckets`,
+`durable_objects`, `services` are all non-inherited and must be redeclared
+per environment), we **redeclare `version_metadata` in `env.staging`** to
+guarantee the binding is present in staging. If it is also inherited, the
+redeclaration is harmless (same value); if it is not inherited, the
+redeclaration is required.
+
+```jsonc
+// Top-level
+"version_metadata": { "binding": "CF_VERSION_METADATA" }
+// env.staging (redeclared to guarantee presence)
+"env": {
+  "staging": {
+    "version_metadata": { "binding": "CF_VERSION_METADATA" }
+  }
+}
+```
+
+### Guard Undefined/Empty Tag
 
 The new version may coexist at 0% with an old version that lacks the
 `CF_VERSION_METADATA` binding (because it was deployed before this feature).
 The Worker MUST guard against `env.CF_VERSION_METADATA` being `undefined` or
-having an empty `tag` string. When absent/empty, the Worker omits
-`X-Moedict-Version` and `X-Moedict-Release` headers and uses a default
-release tag (e.g., `"unknown"`) for R2 fallback key construction.
+having an empty `tag` string.
 
-### Bootstrap Experiment
+When metadata or tag is absent/empty:
+
+- **Do NOT** construct `releases/unknown/...` R2 keys. There is no release
+  tree for an unknown tag.
+- **Skip the R2 release fallback** entirely. After `SITE_ASSETS` failure,
+  proceed directly to the diagnostic 503 recovery response.
+- `X-Moedict-Version` header: use the Cloudflare version UUID (`id`) if
+  present, otherwise `"unknown"`.
+- `X-Moedict-Release` header: emit only when `tag` is non-empty. Omit the
+  header entirely if tag is absent/empty.
+
+### Bootstrap Safety
 
 If Cloudflare rejects the `version_metadata` binding (because the feature is
 not yet available for this account or Worker), the deploy MUST abort safely
@@ -236,16 +336,21 @@ shouldRenderHtmlShell?
   → renderHtmlShell(request, env, pathname)
     → try SITE_ASSETS.fetch("/")  [fast path]
       → if OK: inject head metadata, set source=site-assets, return Response
-      → if non-OK or throw: fall through to R2
-    → R2 fallback: env.ASSETS.get("releases/<tag>/index.html")
+      → if non-OK or throw: fall through to R2 (if tag present) or 503
+    → if tag present: R2 fallback: env.ASSETS.get("releases/<tag>/index.html")
       → if found: inject head metadata, set source=r2-release, return Response
-    → Both fail: return self-contained 503
+    → Both fail (or tag absent): return self-contained 503
       → Cache-Control: no-store
       → Retry-After: 5
       → <meta http-equiv="refresh" content="5"> in body
       → X-Moedict-Shell-Source: recovery
   → if shellResponse: return shellResponse
 ```
+
+**No fallthrough to null.** The 503 recovery is the ONLY both-stores-fail
+outcome for HTML routes. The function returns a Response, never `null`, when
+`shouldRenderHtmlShell` is true. This is the structural guarantee of design B:
+no HTML shell route can produce a 404 from the shell flow.
 
 ### Asset Flow (After SITE_ASSETS Miss)
 
@@ -266,20 +371,22 @@ passThroughAssets(request, env)
 ### 503 Recovery Response
 
 Never return 404 for an HTML shell route. When both `SITE_ASSETS` and R2
-fail:
+fail (or when R2 fallback is skipped because tag is absent):
 
 ```typescript
-new Response(recoveryHtml, {
-  status: 503,
-  headers: {
-    "Content-Type": "text/html; charset=utf-8",
-    "Cache-Control": "no-store",
-    "Retry-After": "5",
-    "X-Moedict-Shell-Source": "recovery",
-    "X-Moedict-Version": versionMetadata?.tag ?? "unknown",
-    "X-Moedict-Release": releaseTag,
-  },
-});
+const headers: HeadersInit = {
+  "Content-Type": "text/html; charset=utf-8",
+  "Cache-Control": "no-store",
+  "Retry-After": "5",
+  "X-Moedict-Shell-Source": "recovery",
+};
+// Version header: use Cloudflare UUID if present, else "unknown"
+headers["X-Moedict-Version"] = versionMetadata?.id ?? "unknown";
+// Release header: emit ONLY when tag is non-empty
+if (versionMetadata?.tag) {
+  headers["X-Moedict-Release"] = versionMetadata.tag;
+}
+new Response(recoveryHtml, { status: 503, headers });
 ```
 
 The recovery HTML is a minimal self-contained page with
@@ -358,32 +465,33 @@ shell (bounded ~3KB HTML) but NOT for assets.
 
 ### Response Headers on All Worker Responses
 
-| Header                   | Value                                                               | Source                   |
-| ------------------------ | ------------------------------------------------------------------- | ------------------------ |
-| `X-Moedict-Version`      | `CF_VERSION_METADATA.tag` or `"unknown"`                            | Version metadata binding |
-| `X-Moedict-Release`      | Current release tag (from `CF_VERSION_METADATA.tag` or R2 manifest) | Version metadata binding |
-| `X-Moedict-Shell-Source` | `site-assets` \| `r2-release` \| `recovery`                         | Shell flow only          |
-| `X-Moedict-Asset-Source` | `site-assets` \| `r2-release` \| `r2-immutable` \| `legacy-proxy`   | Asset fallback flow only |
+| Header                   | Value                                                                   | Source                   |
+| ------------------------ | ----------------------------------------------------------------------- | ------------------------ |
+| `X-Moedict-Version`      | `CF_VERSION_METADATA.id` (Cloudflare UUID) or `"unknown"`               | Version metadata binding |
+| `X-Moedict-Release`      | `CF_VERSION_METADATA.tag` (release ID); **omitted if tag absent/empty** | Version metadata binding |
+| `X-Moedict-Shell-Source` | `site-assets` \| `r2-release` \| `recovery`                             | Shell flow only          |
+| `X-Moedict-Asset-Source` | `site-assets` \| `r2-release` \| `r2-immutable` \| `legacy-proxy`       | Asset fallback flow only |
 
 ### Structured Shell-Miss Log
 
-When `SITE_ASSETS.fetch("/")` fails and the Worker falls through to R2:
+When `SITE_ASSETS.fetch("/")` fails and the Worker falls through to R2 (or
+skips R2 if tag absent):
 
 ```json
 {
   "event": "shell-miss",
   "pathname": "/",
   "cfRay": "<cf-ray header>",
-  "version": "<tag or unknown>",
-  "release": "<release tag>",
+  "versionId": "<CF_VERSION_METADATA.id or unknown>",
+  "releaseTag": "<CF_VERSION_METADATA.tag or null>",
   "siteAssetsResult": "non-ok" | "throw" | "no-fetcher",
   "siteAssetsStatus": 500,
+  "r2Attempted": true | false,
   "r2Key": "releases/<tag>/index.html",
-  "r2Result": "hit" | "miss" | "throw",
+  "r2Result": "hit" | "miss" | "throw" | "skipped",
   "finalSource": "r2-release" | "recovery",
   "finalStatus": 200 | 503
 }
-```
 
 No secret data in logs. Use `console.log(JSON.stringify(...))` for
 structured logging (Cloudflare observability captures `console.log`).
@@ -431,10 +539,12 @@ Deployment state is persisted under `.wrangler/releases/` (already
 gitignored via `.wrangler` in `.gitignore`).
 
 ```
+
 .wrangler/releases/
-  current.json          ← { workerName, versionId, tag, percentage, deployedAt }
-  versions.json        ← [{ versionId, tag, uploadedAt, status }]
-```
+current.json ← { workerName, versionId, tag, percentage, deployedAt }
+versions.json ← [{ versionId, tag, uploadedAt, status }]
+
+````
 
 ### Parse Current Deployment
 
@@ -451,10 +561,14 @@ Before any deployment:
 # Upload new version (does not activate)
 wrangler versions upload --config <generated-config> --tag <release-id>
 
-# Deploy at 0% / old at 100%
+# Deploy new at 0%, old at 100% (using UUID IDs from versions list)
 wrangler versions deploy --config <generated-config> \
-  --version-tag <release-id> --percentage 0
-```
+  <new-uuid>@0% <old-uuid>@100% -y
+````
+
+Note: `versions deploy` uses positional `<uuid>@<percentage>` specs, NOT
+`--version-tag` with `--percentage`. The `--tag` is only for `versions
+upload`. Never mix `--version-tag` with positional ID specs.
 
 ### Phase 1 Smoke (Version Override)
 
@@ -463,24 +577,36 @@ wrangler versions deploy --config <generated-config> \
 # Smoke every route with the version override header:
 curl -H 'Cloudflare-Workers-Version-Overrides: cf-moedict-webkit-neo="<new-uuid>"' \
   https://www.moedict.tw/
-# Require: response status 200 AND X-Moedict-Version header matches new tag
+# Require: response status 200 AND X-Moedict-Release header matches <release-id>
 ```
 
-Every page and asset route is probed. Any non-200 or missing/mismatched
-version header aborts before promotion.
+The override header key is the exact Worker name (`cf-moedict-webkit-neo` for
+prod, staging Worker name for staging). The value is the new version's UUID
+(from `versions list --json`), quoted. Every page and asset route is probed.
+Any non-200 or missing/mismatched release header aborts before promotion.
 
 ### Phase 2: Promote & Probe
 
+Promotion is a two-step process so both versions remain in the deployment
+during the 120s probe/soak, and the old version can be explicitly restored
+on any probe failure:
+
 ```bash
-# Promote new to 100%, old to 0%
+# Step 1: Deploy new@100, old@0 (both remain in deployment)
 wrangler versions deploy --config <generated-config> \
-  --version-tag <release-id> --percentage 100
+  <new-uuid>@100% <old-uuid>@0% -y
+
+# ... continuous probes for 120s (see below) ...
+
+# Step 2 (only after soak passes): Finalize new@100 alone
+wrangler versions deploy --config <generated-config> \
+  <new-uuid>@100% -y
 ```
 
 ### Continuous Probes
 
-After promotion, continuously probe critical routes against the custom
-domain (now serving 100% new version):
+After the new@100/old@0 deploy, continuously probe critical routes against
+the custom domain (now serving 100% new version):
 
 - `/` (HTML shell)
 - `/api/config`
@@ -490,15 +616,16 @@ domain (now serving 100% new version):
 Probe every 5s. If any probe returns non-200 or throws, immediately:
 
 ```bash
-# Rollback: old version back to 100%
+# Rollback: old version back to 100%, new to 0%
 wrangler versions deploy --config <generated-config> \
-  --version-id <old-uuid> --percentage 100
+  <old-uuid>@100% <new-uuid>@0% -y
 ```
 
 ### Soak
 
-Soak for at least 120s (2 × 60s HTML-shell TTL) after promotion, with
-continuous probing. Then final browser smoke.
+Soak for at least 120s (2 × 60s HTML-shell TTL) after the new@100/old@0
+deploy, with continuous probing. If all probes pass, finalize with
+new@100 alone. Then final browser smoke.
 
 ### Staging → Production Gate
 
@@ -556,8 +683,8 @@ Document (but don't automate) manual recovery commands:
 # List current versions
 vp exec wrangler versions list --json
 
-# Rollback to a specific version at 100%
-vp exec wrangler versions deploy --config <generated> --version-id <uuid> --percentage 100
+# Rollback to a specific version at 100% (using positional UUID@percentage)
+vp exec wrangler versions deploy --config <generated> <uuid>@100% -y
 
 # List deployments
 vp exec wrangler deployments list --json
@@ -574,20 +701,30 @@ pass (GREEN).
 
 Coverage for:
 
+- **Shared key derivation** (`src/utils/release-keys.ts`):
+  - `releaseKey(tag, "index.html")` → `releases/<tag>/index.html`
+  - `releaseKey(tag, "/assets/index-XYZ.js")` → `releases/<tag>/assets/index-XYZ.js`
+  - `immutableKey("/assets/index-XYZ.js")` → `immutable/assets/index-XYZ.js` (never `immutable/assets/assets/...`)
+  - `immutableKey("assets/index-XYZ.js")` === `immutableKey("/assets/index-XYZ.js")` (leading slash normalized)
+  - Rejects empty path, `..` traversal, `%2e%2e` encoded traversal, backslash, empty segments
+  - `immutableKey` rejects paths not starting with `assets/`
+  - Publisher↔Worker key equality: publisher relative `assets/index-XYZ.js` and Worker request `/assets/index-XYZ.js` map to same key
+  - Round-trip with real representative Vite paths (e.g., `assets/index-BU7Lztf4.js`, `assets/g0v-萌典-DC5dDw0x.css`)
 - Shell fallback: `SITE_ASSETS` OK → `site-assets` source
 - Shell fallback: `SITE_ASSETS` non-OK → R2 hit → `r2-release` source
 - Shell fallback: `SITE_ASSETS` throws → R2 hit → `r2-release` source
 - Shell fallback: both fail → 503 recovery, `recovery` source, `Retry-After`
-- Shell fallback: no `SITE_ASSETS` fetcher → R2 fallback
+- Shell fallback: no `SITE_ASSETS` fetcher → R2 fallback (if tag present)
+- Shell fallback: `CF_VERSION_METADATA` undefined → skip R2, 503 recovery
+- Shell fallback: `CF_VERSION_METADATA` tag empty → skip R2, 503 recovery
 - Asset fallback: `SITE_ASSETS` miss → R2 current release hit
 - Asset fallback: R2 current release miss → R2 global immutable hit
 - Asset fallback: all R2 miss → legacy proxy (unchanged)
 - HEAD requests for all R2 fallback paths
 - 304 If-None-Match for R2 objects
-- `X-Moedict-Version` / `X-Moedict-Release` headers present
+- `X-Moedict-Version` header = `CF_VERSION_METADATA.id` (UUID) or `"unknown"`
+- `X-Moedict-Release` header = `CF_VERSION_METADATA.tag`; omitted if absent/empty
 - `X-Moedict-Shell-Source` / `X-Moedict-Asset-Source` headers
-- `CF_VERSION_METADATA` undefined → `"unknown"` version, no crash
-- `CF_VERSION_METADATA` empty tag → `"unknown"` version, no crash
 - 503 response: `no-store`, `Retry-After: 5`, auto-refresh meta
 - Legacy precedence preserved (existing routes unchanged)
 
@@ -600,12 +737,11 @@ testing:
 - Generated config parsing: bucket name selection (staging vs prod)
 - Upload-before-manifest ordering: manifest last
 - Upload abort on object failure
-- Verification abort on hash mismatch
-- Exact command/header syntax for `wrangler versions upload`
-- Exact command/header syntax for `wrangler versions deploy`
-- Exact `Cloudflare-Workers-Version-Overrides` header syntax
-- 0% smoke gate: all probes must return 200 + version header
-- Rollback on probe failure
+- Exact command syntax for `wrangler versions upload` (`--tag <release-id>`)
+- Exact command syntax for `wrangler versions deploy` (`<uuid>@<percentage>` positional, `-y`)
+- Exact `Cloudflare-Workers-Version-Overrides` header syntax (key = exact Worker name, value = new UUID)
+- 0% smoke gate: all probes must return 200 + `X-Moedict-Release` header
+- Rollback on probe failure: `<old-uuid>@100% <new-uuid>@0% -y`
 - Staging approval gate: git SHA + digest equality
 - Prod digest mismatch abort
 
@@ -636,16 +772,19 @@ Only for observable routes (not internal plumbing):
 
 ### Task 1: Runtime R2 Fallback + Metadata (Worker)
 
-**Scope:** Modify `worker/index.ts` and `src/api/cache.ts` to implement the
-R2 shell/asset fallback, `CF_VERSION_METADATA` binding, observability
-headers, 503 recovery, and structured shell-miss logging.
+**Scope:** Create the shared R2 key derivation module, modify `worker/index.ts`
+and `src/api/cache.ts` to implement the R2 shell/asset fallback,
+`CF_VERSION_METADATA` binding, observability headers, 503 recovery, and
+structured shell-miss logging.
 
 **Files:**
 
+- Create: `src/utils/release-keys.ts` (shared R2 key derivation: `releaseKey`, `immutableKey`, `isImmutableAsset`)
+- Create: `tests/unit/release-keys.test.ts` (key derivation, safety, publisher↔Worker round-trip equality)
 - Modify: `worker/index.ts` (shell flow, asset flow, headers, 503)
 - Modify: `src/api/cache.ts` (new cache control constants)
-- Modify: `wrangler.jsonc` (add `version_metadata` binding)
-- Create: `src/api/release-fallback.ts` (R2 fallback logic, extracted)
+- Modify: `wrangler.jsonc` (add `version_metadata` binding top-level + `env.staging`)
+- Create: `src/api/release-fallback.ts` (R2 fallback logic, version metadata helpers, extracted)
 - Create: `tests/unit/release-fallback.test.ts` (direct-call unit tests)
 - Modify: `tests/unit/worker-dispatch.test.ts` (new dispatch paths)
 - Modify: `tests/integration/api-legacy-assets.test.ts` (R2 fallback)
@@ -653,7 +792,9 @@ headers, 503 recovery, and structured shell-miss logging.
 ### Task 2: Deterministic Release Publication / Verification Library + CLI
 
 **Scope:** Create the publish/verify library and CLI scripts for R2
-upload, manifest generation, and verification.
+upload, manifest generation (self-defined, not Vite manifest), and
+verification. Consumes `src/utils/release-keys.ts` from Task 1 for all R2
+key derivation — no duplicate string concatenation.
 
 **Files:**
 
@@ -707,36 +848,73 @@ protocol + continuous probes and final browser smoke.
 
 ## 14. Design Contradictions Found
 
-During self-review, the following potential contradictions were identified
-and resolved:
+During self-review and user verification, the following contradictions were
+identified and resolved:
 
-1. **`version_metadata` binding type**: Initially considered using `vars`
-   for version metadata. Resolved: `version_metadata` is a real Cloudflare
-   binding type (`{ id, tag, timestamp }`) available in modern wrangler. Use
-   it directly. Guard against undefined for old-version coexistence.
+1. **`version_metadata` binding config syntax**: The wrangler config schema
+   confirms `version_metadata` accepts only `{ "binding": "<name>" }` — no
+   `"type"` property. Resolved: use `"version_metadata": { "binding":
+"CF_VERSION_METADATA" }` without `"type"`.
 
-2. **R2 bucket for staging fallback**: The staging `ASSET_BASE_URL` var
+2. **`CF_VERSION_METADATA.id` vs release ID**: The `id` field is the
+   Cloudflare-generated version UUID, NOT our release ID. The `tag` field is
+   our release ID (set via `--tag` at upload). Resolved: `X-Moedict-Version`
+   uses `.id` (UUID); `X-Moedict-Release` uses `.tag` (release ID); R2 keys
+   use `.tag`.
+
+3. **Absent tag → no `releases/unknown/...` keys**: When metadata/tag is
+   absent/empty, do NOT construct `releases/unknown/...` R2 keys. Resolved:
+   skip R2 release fallback entirely and return diagnostic 503 after
+   SITE_ASSETS failure.
+
+4. **Client manifest path**: The build does not guarantee
+   `dist/.../.vite/manifest.json`. Resolved: define our own client manifest
+   by recursively enumerating `dist/client/**`, sorted `{path, sha256, size}`
+   records, deterministic JSON, SHA-256 of that JSON. No Vite manifest
+   dependency.
+
+5. **`versions deploy` command syntax**: Uses positional
+   `<uuid>@<percentage>` specs, NOT `--version-tag` with `--percentage`.
+   Resolved: `versions deploy <new-uuid>@0% <old-uuid>@100% -y`. Never mix
+   `--version-tag` with positional ID specs.
+
+6. **Promotion state**: Deploy new@100/old@0 first so both remain in
+   deployment during 120s probe/soak; only after soak passes, finalize
+   new@100 alone. Any probe failure executes explicit old@100 deployment.
+   Resolved: two-step promotion with both versions live during soak.
+
+7. **R2 bucket for staging fallback**: The staging `ASSET_BASE_URL` var
    points to prod `r2-assets.moedict.tw`. Resolved: the R2 release
    fallback uses the environment's own `ASSETS` R2 binding (preview bucket
    for staging, prod bucket for production), discovered from the generated
    config. Never use `ASSET_BASE_URL` for release fallback.
 
-3. **Asset streaming vs. head injection**: `renderHtmlShell` does
+8. **Asset streaming vs. head injection**: `renderHtmlShell` does
    `await response.text()` for head metadata injection. Resolved: this is
    acceptable for the shell (bounded ~3KB HTML). Assets are streamed
    directly (`object.body`) without text conversion.
 
-4. **Release ID and circular embedding**: The release ID includes the
+9. **Release ID and circular embedding**: The release ID includes the
    client manifest digest. If the release ID were embedded in the client
    bundle, it would change the manifest digest. Resolved: the release ID
    is computed from build outputs only and passed via the
    `CF_VERSION_METADATA` binding at deploy time. It is NOT in the client
    bundle.
 
-5. **Staging and prod built separately**: `CLOUDFLARE_ENV` is build-time.
-   Resolved: staging and prod are built independently. Production requires
-   staging approval (same git SHA + client manifest digest equality) plus
-   re-built prod digest equality.
+10. **Staging and prod built separately**: `CLOUDFLARE_ENV` is build-time.
+    Resolved: staging and prod are built independently. Production requires
+    staging approval (same git SHA + client manifest digest equality) plus
+    re-built prod digest equality.
+
+11. **`version_metadata` env inheritance**: The binding appears in both
+    `RawConfig` and `RawEnvironment` in the schema; inheritance is
+    ambiguous. Resolved: redeclare in `env.staging` to guarantee presence
+    (non-inheritable bindings precedent).
+
+12. **R2 immutable key mapping**: Request `/assets/foo-hash.js` maps exactly
+    to `immutable/assets/foo-hash.js`; current release key is
+    `releases/<tag>/assets/foo-hash.js`. Verified: the relative path from
+    `dist/client/` is preserved verbatim under both prefixes.
 
 ## 15. Future Concerns (Documented, Not Delivered)
 
