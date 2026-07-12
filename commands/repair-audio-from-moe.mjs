@@ -43,10 +43,9 @@ const ALL = !!args.all;
 const LIMIT = args.limit ? Number(args.limit) : Infinity;
 const CONCURRENCY = args.concurrency ? Number(args.concurrency) : 5;
 const DELAY_MS = args['delay-ms'] ? Number(args['delay-ms']) : 300;
+const MP3_ONLY = !!args['mp3-only'];
 // 這支腳本跟主遷移腳本（migrate-legacy-cdn-to-r2.mjs）共用同一個 Cloudflare
-// 帳號的 R2 write 額度。主腳本自己吃 1050/300s；這裡只拿一小份（預設
-// 300/300s），兩者合計仍在帳號實測上限（~1100/5min，見 AGENTS.md）附近，
-// 不會互搶到跳 429。若觀察到 429，先降這裡的 --r2-rate-limit，不要調高。
+// 帳號的 R2 write 額度；MP3-only 模式避免無必要的第二次 OGG PUT。
 const R2_RATE_LIMIT = args['r2-rate-limit'] ? Number(args['r2-rate-limit']) : 300;
 const R2_RATE_WINDOW_MS = 300000;
 
@@ -215,13 +214,17 @@ async function processOne(target, idx, total, stats) {
     const buf = Buffer.from(await audioRes.arrayBuffer());
 
     // mp3 上傳跟 ogg 轉檔+上傳互不依賴（都只需要 buf），平行跑省一次 R2
-    // 呼叫的等待時間。
     const mp3Task = putToR2(`audio/t/${target.id}.mp3`, buf, 'audio/mpeg');
-    const oggTask = transcodeToOgg(buf)
-      .then((oggBuf) => putToR2(`audio/t/${target.id}.ogg`, oggBuf, 'audio/ogg').then((r) => ({ ...r, bytes: oggBuf.length })))
-      .catch((oggErr) => ({ ok: false, stderr: String(oggErr) }));
-
-    const [put, oggResult] = await Promise.all([mp3Task, oggTask]);
+    let put;
+    let oggResult = { ok: true, bytes: 0 };
+    if (MP3_ONLY) {
+      put = await mp3Task;
+    } else {
+      const oggTask = transcodeToOgg(buf)
+        .then((oggBuf) => putToR2(`audio/t/${target.id}.ogg`, oggBuf, 'audio/ogg').then((r) => ({ ...r, bytes: oggBuf.length })))
+        .catch((oggErr) => ({ ok: false, stderr: String(oggErr) }));
+      [put, oggResult] = await Promise.all([mp3Task, oggTask]);
+    }
     if (!put.ok) throw new Error(`R2 put failed: ${put.stderr?.slice(0, 200)}`);
     const oggBytes = oggResult.ok ? oggResult.bytes : 0;
     if (!oggResult.ok) console.error(`  (ogg 失敗，mp3 已成功: ${oggResult.stderr?.slice(0, 150)})`);

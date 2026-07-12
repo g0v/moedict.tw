@@ -63,6 +63,7 @@ const LIMIT = args.limit ? Number(args.limit) : Infinity;
 const CONCURRENCY = args.concurrency ? Number(args.concurrency) : 8;
 const REPORT_ONLY = !!args['report-only'];
 const CATEGORY_FILTER = args.categories ? String(args.categories).split(',') : null;
+const EXTENSION_FILTER = args.extensions ? new Set(String(args.extensions).split(',')) : null;
 const RATE_LIMIT = args['rate-limit'] ? Number(args['rate-limit']) : 900;
 const RATE_WINDOW_MS = args['rate-window-ms'] ? Number(args['rate-window-ms']) : 5 * 60 * 1000;
 
@@ -140,11 +141,10 @@ function buildManifest() {
   // stroke（全語言共用，資料量小）→ a（華語/兩岸共用，流量最大）→
   // t（台語）→ h（客語腔調組合）；每個語言內先 mp3 後 ogg（對應
   // buildAudioCandidates() 的嘗試順序）。這讓「先跑到一半就要部署」時，
-  // 覆蓋率集中在使用者實際會撞到的路徑，而不是雨露均霑但每個語言都殘缺。
   const AUDIO_EXTENSIONS = [
     { ext: 'mp3', contentType: 'audio/mpeg' },
     { ext: 'ogg', contentType: 'audio/ogg' },
-  ];
+  ].filter(({ ext }) => !EXTENSION_FILTER || EXTENSION_FILTER.has(ext));
   const AUDIO_LANGS = [
     { ids: audioIds.a, host: HOSTS.a, prefix: 'audio/a', catBase: 'audio-a' },
     { ids: audioIds.t, host: HOSTS.t, prefix: 'audio/t', catBase: 'audio-t' },
