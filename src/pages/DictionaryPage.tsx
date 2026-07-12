@@ -550,6 +550,12 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
 
   const toggleStrokeAnimation = useCallback(
     (event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>) => {
+      // g0v/moedict-webkit#186: 主要拼音/注音現在可以直接在可見字形上拖曳選
+      // 取複製；拖曳放開時瀏覽器仍會在同一個元素上送出一個 click（mousedown
+      // /mouseup 落在同一元素），若不擋下就會在使用者複製拼音的當下意外開
+      // 合筆順動畫，蓋掉剛選好的文字。只在滑鼠事件、且確實有非空選取時才略
+      // 過；鍵盤 Enter/Space 觸發（KeyboardEvent）不受影響。
+      if (event.type === "click" && hasActiveSelection()) return;
       event.preventDefault();
       event.stopPropagation();
       if (strokeAnimationDisabled) return;
