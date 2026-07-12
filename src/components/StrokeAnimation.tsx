@@ -282,7 +282,10 @@ export function StrokeAnimation({ title, visible, lang = "a" }: StrokeAnimationP
         tabIndex={0}
         title="點擊重播筆順動畫"
         aria-label="點擊重播筆順動畫"
-        onClick={() => setContainerKey((prev) => prev + 1)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setContainerKey((prev) => prev + 1);
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
