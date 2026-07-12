@@ -14,7 +14,11 @@ import {
   parseDictionaryRoute,
   type DictionaryEntryLike,
 } from "../src/utils/dictionary-route";
-import { renderHtmlShellWithFallback, serveAssetWithFallback } from "../src/api/release-fallback";
+import {
+  getVersionHeaders,
+  renderHtmlShellWithFallback,
+  serveAssetWithFallback,
+} from "../src/api/release-fallback";
 
 export interface ZoneCachePurgerEnv {
   /** Cloudflare API token with Zone Cache Purge permission. */
@@ -224,11 +228,7 @@ export async function respondWithConfigApi(
  * The default export below is a one-line wrapper that preserves the
  * `ExportedHandler<Env>` contract for the real deployment.
  */
-export async function dispatch(
-  request: Request,
-  env: Env,
-  ctx?: ExecutionContext,
-): Promise<Response> {
+async function dispatchCore(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
   console.log("🔍 [Index] 開始處理請求:", request.url);
   const url = new URL(request.url);
   console.log(url.pathname);
@@ -622,6 +622,35 @@ export async function dispatch(
   }
 
   return new Response(null, { status: 404, headers: { "Cache-Control": "no-store" } });
+}
+
+/**
+ * Decorate every Worker response with deployment metadata.
+ *
+ * Keeping this at the dispatch boundary ensures API, compatibility, and
+ * fallback routes expose the same version headers without buffering or
+ * branching each response path.
+ */
+export async function dispatch(
+  request: Request,
+  env: Env,
+  ctx?: ExecutionContext,
+): Promise<Response> {
+  const response = await dispatchCore(request, env, ctx);
+  const headers = new Headers(response.headers);
+  const versionHeaders = getVersionHeaders(env.CF_VERSION_METADATA);
+  headers.set("X-Moedict-Version", versionHeaders["X-Moedict-Version"]);
+  const release = versionHeaders["X-Moedict-Release"];
+  if (release) {
+    headers.set("X-Moedict-Release", release);
+  } else {
+    headers.delete("X-Moedict-Release");
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 /**

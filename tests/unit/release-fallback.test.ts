@@ -108,6 +108,11 @@ describe("getReleaseTag", () => {
     const meta = { id: "abc-123", tag: "", timestamp: "2026-07-12T00:00:00Z" };
     expect(getReleaseTag(meta)).toBe(null);
   });
+
+  it("returns null for an unsafe release tag", () => {
+    const meta = { id: "abc-123", tag: "../invalid", timestamp: "2026-07-12T00:00:00Z" };
+    expect(getReleaseTag(meta)).toBe(null);
+  });
 });
 
 describe("getVersionHeaders", () => {

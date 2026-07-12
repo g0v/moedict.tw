@@ -16,7 +16,12 @@
  */
 
 import { CACHE_CONTROL } from "./cache";
-import { immutableKey, isImmutableAsset, releaseKey } from "../utils/release-keys";
+import {
+  immutableKey,
+  isImmutableAsset,
+  releaseKey,
+  validateReleaseTag,
+} from "../utils/release-keys";
 
 /**
  * The `version_metadata` binding shape from the Cloudflare runtime.
@@ -68,7 +73,14 @@ export function getVersionId(meta: OptionalVersionMetadata): string {
  * `releases/unknown/...` R2 keys.
  */
 export function getReleaseTag(meta: OptionalVersionMetadata): string | null {
-  return meta?.tag || null;
+  const tag = meta?.tag;
+  if (!tag) return null;
+  try {
+    validateReleaseTag(tag);
+    return tag;
+  } catch {
+    return null;
+  }
 }
 
 /**
