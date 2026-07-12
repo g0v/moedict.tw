@@ -50,8 +50,8 @@ const PINYIN_T_OPTIONS: PrefOption[] = [
 ];
 
 const BOPOMOFO_SANDHI_T_OPTIONS: PrefOption[] = [
-	{ value: 'off', label: '本調（辭典標注）' },
-	{ value: 'sandhi', label: '自動推算連讀變調（約略）' },
+  { value: "off", label: "本調（辭典標注）" },
+  { value: "sandhi", label: "自動推算連讀變調（約略）" },
 ];
 
 const PINYIN_H_OPTIONS: PrefOption[] = [
@@ -181,7 +181,9 @@ export function UserPref() {
   const [pinyinA, setPinyinA] = useState(() => getStoredPref("pinyin_a", "HanYu"));
   const [pinyinT, setPinyinT] = useState(() => getStoredPref("pinyin_t", "TL"));
   const [pinyinH, setPinyinH] = useState(() => getStoredPref("pinyin_h", "TH"));
-  const [bopomofoSandhiT, setBopomofoSandhiT] = useState(() => getStoredPref("bopomofo_sandhi_t", "off"));
+  const [bopomofoSandhiT, setBopomofoSandhiT] = useState(() =>
+    getStoredPref("bopomofo_sandhi_t", "off"),
+  );
   const [fontSize, setFontSize] = useState<number>(() => readFontSize());
 
   useEffect(() => {
