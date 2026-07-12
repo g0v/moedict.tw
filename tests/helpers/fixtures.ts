@@ -269,6 +269,19 @@ export function collectAssetFixtures(): FixtureEntry[] {
     });
   }
 
+  // Real stroke-json for 萌 (U+840C) from tests/fixtures/stroke-json/840c.json.
+  // Serves useStrokeAvailability HEAD probe (200 → pencil stays enabled) and
+  // lets jquery.strokeWords.js render real strokes in integration/e2e.
+  const strokeJson840c = path.join(FIXTURES_DIR, "stroke-json", "840c.json");
+  if (existsSync(strokeJson840c)) {
+    entries.push({
+      bucket: "ASSETS",
+      key: "stroke-json/840c.json",
+      body: readFileSync(strokeJson840c),
+      httpMetadata: { contentType: "application/json; charset=utf-8" },
+    });
+  }
+
   return entries;
 }
 
