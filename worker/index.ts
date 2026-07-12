@@ -532,9 +532,9 @@ async function dispatchCore(request: Request, env: Env, ctx?: ExecutionContext):
       });
     }
 
-    // 筆順 JSON 代理（/api/stroke-json/{codepoint}.json）
+    // 筆順 JSON（/api/stroke-json/{codepoint}.json）— 直接從 ASSETS R2 讀取
     if (url.pathname.startsWith("/api/stroke-json/")) {
-      return handleStrokeAPI(request, url, corsHeaders);
+      return handleStrokeAPI(request, url, env, corsHeaders);
     }
 
     // 分類詞彙列表 API（=成語、'=諺語、:=諺語、~=同實異名，選配 .json）——
