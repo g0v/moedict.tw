@@ -31,7 +31,7 @@
  * .migration-state/legacy-cdn-progress.ndjson，已成功或已確認 404 的 key
  * 會被跳過；因暫時性錯誤失敗的 key 下次執行會重試。
  */
-import { readdirSync, readFileSync, mkdirSync, existsSync, appendFileSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, unlinkSync, mkdirSync, existsSync, appendFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
@@ -39,6 +39,7 @@ import { spawn } from 'node:child_process';
 const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const STATE_DIR = join(REPO_ROOT, '.migration-state');
 const PROGRESS_FILE = join(STATE_DIR, 'legacy-cdn-progress.ndjson');
+const CACHE_DIR = join(STATE_DIR, 'main-cache');
 const BUCKET = 'moedict-assets';
 const WRANGLER_BIN = join(REPO_ROOT, 'node_modules/.bin/wrangler');
 
@@ -65,6 +66,11 @@ const CATEGORY_FILTER = args.categories ? String(args.categories).split(',') : n
 const EXTENSION_FILTER = args.extensions ? new Set(String(args.extensions).split(',')) : null;
 const RATE_LIMIT = args['rate-limit'] ? Number(args['rate-limit']) : 900;
 const RATE_WINDOW_MS = args['rate-window-ms'] ? Number(args['rate-window-ms']) : 5 * 60 * 1000;
+// 下載（Rackspace fetch）跟上傳（R2 PUT）拆成兩個獨立階段：下載完全不碰
+// Cloudflare R2 API，可以跟任何 R2 writer（包含這支腳本自己的另一個 mp3/ogg
+// 分類、或 repair-audio-from-moe.mjs）安全並行。--download-only 只抓+快取到
+// 本機；正常執行會優先讀本機快取，快取沒有才現場抓。
+const DOWNLOAD_ONLY = !!args['download-only'];
 
 // ---- 複刻 src/components/StrokeAnimation.tsx 的 extractStrokeWords() ----
 function extractStrokeWords(input) {
@@ -161,24 +167,33 @@ function buildManifest() {
 
 // ---- 進度紀錄（可重複執行）----
 function loadProgress() {
-  const done = new Set();
+  const done = new Set(); // ok/404 -> 兩種模式都跳過
+  const cachedSet = new Set(); // 已下載快取到本機，尚未上傳 -> download-only 模式跳過；
+                                // 正常（上傳）模式改讀快取檔，不用重打 Rackspace
   if (existsSync(PROGRESS_FILE)) {
     const lines = readFileSync(PROGRESS_FILE, 'utf8').split('\n').filter(Boolean);
     for (const line of lines) {
       try {
         const rec = JSON.parse(line);
         if (rec.status === 'ok' || rec.status === '404') done.add(`${rec.cat}:${rec.key}`);
+        else if (rec.status === 'cached') cachedSet.add(`${rec.cat}:${rec.key}`);
       } catch {
         /* 忽略壞行 */
       }
     }
   }
-  return done;
+  return { done, cachedSet };
 }
 
 mkdirSync(STATE_DIR, { recursive: true });
+mkdirSync(CACHE_DIR, { recursive: true });
 function recordProgress(rec) {
   appendFileSync(PROGRESS_FILE, JSON.stringify(rec) + '\n');
+}
+function cachePath(task) {
+  const dir = join(CACHE_DIR, task.cat);
+  mkdirSync(dir, { recursive: true });
+  return join(dir, task.key.replace(/[^a-zA-Z0-9_.-]/g, '_'));
 }
 
 // ---- R2 寫入限流：平滑最小間隔，而非「配額用完就整批卡住」----
@@ -258,29 +273,64 @@ async function fetchWithRetry(url, attempts = 3) {
 }
 
 async function processTask(task, stats) {
-  let dl;
-  try {
-    dl = await fetchWithRetry(task.url);
-  } catch (e) {
-    recordProgress({ cat: task.cat, key: task.key, status: 'failed', error: String(e) });
-    stats.failed++;
+  const cPath = cachePath(task);
+  const isCached = existsSync(cPath);
+
+  if (DOWNLOAD_ONLY) {
+    if (isCached) return; // 理論上不會走到（main 已經濾掉），保險起見
+    let dl;
+    try {
+      dl = await fetchWithRetry(task.url);
+    } catch (e) {
+      recordProgress({ cat: task.cat, key: task.key, status: 'failed', error: String(e) });
+      stats.failed++;
+      return;
+    }
+    if (dl.status === 404) {
+      recordProgress({ cat: task.cat, key: task.key, status: '404' });
+      stats.notFound++;
+      return;
+    }
+    writeFileSync(cPath, dl.buf);
+    recordProgress({ cat: task.cat, key: task.key, status: 'cached', bytes: dl.buf.length });
+    stats.uploaded++; // 沿用同一個計數器命名（下載階段的「完成」）
+    stats.bytes += dl.buf.length;
     return;
   }
-  if (dl.status === 404) {
-    recordProgress({ cat: task.cat, key: task.key, status: '404' });
-    stats.notFound++;
-    return;
+
+  // 正常（上傳）模式：本機快取存在就直接讀，不用再打 Rackspace
+  let buf;
+  if (isCached) {
+    buf = readFileSync(cPath);
+  } else {
+    let dl;
+    try {
+      dl = await fetchWithRetry(task.url);
+    } catch (e) {
+      recordProgress({ cat: task.cat, key: task.key, status: 'failed', error: String(e) });
+      stats.failed++;
+      return;
+    }
+    if (dl.status === 404) {
+      recordProgress({ cat: task.cat, key: task.key, status: '404' });
+      stats.notFound++;
+      return;
+    }
+    buf = dl.buf;
   }
 
   for (let attempt = 0; attempt < 6; attempt++) {
     const now = Date.now();
     if (now < globalCooldownUntil) await sleep(globalCooldownUntil - now);
     await throttleR2Write();
-    const put = await putToR2(task.r2Key, dl.buf, task.contentType);
+    const put = await putToR2(task.r2Key, buf, task.contentType);
     if (put.ok) {
-      recordProgress({ cat: task.cat, key: task.key, status: 'ok', bytes: dl.buf.length });
+      recordProgress({ cat: task.cat, key: task.key, status: 'ok', bytes: buf.length });
       stats.uploaded++;
-      stats.bytes += dl.buf.length;
+      stats.bytes += buf.length;
+      if (isCached) {
+        try { unlinkSync(cPath); } catch { /* 不影響結果 */ }
+      }
       return;
     }
     if (isRateLimited(put.stderr) || isRateLimited(put.stdout)) {
@@ -305,10 +355,11 @@ async function main() {
   console.log(`Manifest: ${tasks.length} candidate objects`, byCat);
 
   if (CATEGORY_FILTER) tasks = tasks.filter((t) => CATEGORY_FILTER.includes(t.cat));
-  const done = loadProgress();
+  const { done, cachedSet } = loadProgress();
   const before = tasks.length;
   tasks = tasks.filter((t) => !done.has(`${t.cat}:${t.key}`));
-  console.log(`Skipping ${before - tasks.length} already-processed; ${tasks.length} remaining`);
+  if (DOWNLOAD_ONLY) tasks = tasks.filter((t) => !cachedSet.has(`${t.cat}:${t.key}`));
+  console.log(`Skipping ${before - tasks.length} already-processed (mode=${DOWNLOAD_ONLY ? 'download-only' : 'upload'}); ${tasks.length} remaining`);
   if (Number.isFinite(LIMIT)) tasks = tasks.slice(0, LIMIT);
 
   if (REPORT_ONLY) {
