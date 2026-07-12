@@ -40,13 +40,13 @@ test.describe("back-navigation scroll restoration", () => {
     await scrollToAndWait(page, targetY);
 
     const href = await clickFirstVisibleResultLink(page);
-    await page.waitForURL((url) => url.pathname === decodeURIComponent(href));
+    await page.waitForURL((url) => decodeURIComponent(url.pathname) === decodeURIComponent(href));
     await page.waitForLoadState("networkidle");
     // Forward (PUSH) navigation into a new entry always resets to the top.
     await expect.poll(() => page.evaluate(() => window.scrollY), { timeout: 5_000 }).toBe(0);
 
     await page.goBack();
-    await page.waitForURL((url) => url.pathname === "/=成語");
+    await page.waitForURL((url) => decodeURIComponent(url.pathname) === "/=成語");
 
     // The list needs time to re-render to its full height before the target
     // scroll position is even reachable; poll instead of a fixed sleep.
@@ -62,11 +62,11 @@ test.describe("back-navigation scroll restoration", () => {
     for (const targetY of [1500, 2700, 3900]) {
       await scrollToAndWait(page, targetY);
       const href = await clickFirstVisibleResultLink(page);
-      await page.waitForURL((url) => url.pathname === decodeURIComponent(href));
+      await page.waitForURL((url) => decodeURIComponent(url.pathname) === decodeURIComponent(href));
       await page.waitForLoadState("networkidle");
 
       await page.goBack();
-      await page.waitForURL((url) => url.pathname === "/=成語");
+      await page.waitForURL((url) => decodeURIComponent(url.pathname) === "/=成語");
       await expect
         .poll(() => page.evaluate(() => window.scrollY), { timeout: 5_000 })
         .toBe(targetY);

@@ -67,7 +67,7 @@ test.describe("navigation flows", () => {
     expect(response?.status()).toBe(200);
     await page.waitForLoadState("networkidle");
     await expect(page).toHaveTitle(/食/);
-    const pathname = new URL(page.url()).pathname;
+    const pathname = decodeURIComponent(new URL(page.url()).pathname);
     expect(pathname).toBe("/'食");
   });
 
@@ -78,7 +78,7 @@ test.describe("navigation flows", () => {
     expect(response?.status()).toBe(200);
     await page.waitForLoadState("networkidle");
     await expect(page).toHaveTitle(/木/);
-    const pathname = new URL(page.url()).pathname;
+    const pathname = decodeURIComponent(new URL(page.url()).pathname);
     expect(pathname).toBe("/@木");
   });
 });
