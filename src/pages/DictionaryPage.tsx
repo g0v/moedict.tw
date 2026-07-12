@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRadicalTooltip } from "../hooks/useRadicalTooltip";
+import { useStrokeAvailability } from "../hooks/useStrokeAvailability";
 import { cleanTextForTTS, speakText } from "../utils/tts-utils";
 import { getAudioUrl, playAudioUrl } from "../utils/audio-utils";
 import { AUDIO_CDN_MAP } from "../utils/media-cdn";
@@ -411,6 +412,14 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
     () => untag((state.entry?.title || queryWord || "").trim()),
     [state.entry?.title, queryWord],
   );
+  // issue #132：單字詞條若已知缺筆順資料（stroke-json 404），停用筆順動畫
+  // 觸發按鈕，避免使用者點下去只看到一片空白、淡到 50% 透明度的畫布。
+  const strokeCandidateChar = useMemo(
+    () => (isSingleCharTerm(storageWord) ? storageWord : null),
+    [storageWord],
+  );
+  const strokeAvailable = useStrokeAvailability(strokeCandidateChar);
+  const strokeAnimationDisabled = strokeAvailable === false;
 
   // 舊版 /word/N「指定義項」永久連結：1-based，跨該詞所有音項合併計數，
   // 不受 UI 依詞性分組顯示順序影響 — 對照的是同一份 definition 物件參照。
@@ -543,9 +552,10 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
     (event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>) => {
       event.preventDefault();
       event.stopPropagation();
+      if (strokeAnimationDisabled) return;
       setStrokesVisible((v) => !v);
     },
-    [],
+    [strokeAnimationDisabled],
   );
 
   const onContentClick = (event: MouseEvent<HTMLDivElement>): void => {
@@ -700,18 +710,25 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                   {"\u00A0"}
                 </>
               )}
-              {/* 紅底鉛筆按鈕（同原 a.iconic-circle.stroke.icon-pencil） */}
+              {/* 紅底鉛筆按鈕（同原 a.iconic-circle.stroke.icon-pencil）；
+                  issue #132：已知缺筆順資料時停用，避免點下去只看到空白畫布 */}
               <a
                 className="iconic-circle stroke"
-                title="筆順動畫"
+                title={strokeAnimationDisabled ? "此字尚無筆順動畫資料" : "筆順動畫"}
                 role="button"
-                tabIndex={0}
-                onClick={toggleStrokeAnimation}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    toggleStrokeAnimation(e);
-                  }
-                }}
+                tabIndex={strokeAnimationDisabled ? -1 : 0}
+                aria-disabled={strokeAnimationDisabled || undefined}
+                aria-label={strokeAnimationDisabled ? "筆順動畫（此字尚無資料）" : undefined}
+                onClick={strokeAnimationDisabled ? undefined : toggleStrokeAnimation}
+                onKeyDown={
+                  strokeAnimationDisabled
+                    ? undefined
+                    : (e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          toggleStrokeAnimation(e);
+                        }
+                      }
+                }
               >
                 <SvgIcon name="pencil" size="1em" aria-hidden="true" />
               </a>
@@ -767,10 +784,15 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                 <span
                   className={isSingleCharTitle ? "single-char-stroke-trigger" : undefined}
                   role={isSingleCharTitle ? "button" : undefined}
-                  tabIndex={isSingleCharTitle ? 0 : undefined}
-                  onClick={isSingleCharTitle ? toggleStrokeAnimation : undefined}
+                  tabIndex={isSingleCharTitle && !strokeAnimationDisabled ? 0 : undefined}
+                  aria-disabled={isSingleCharTitle && strokeAnimationDisabled ? true : undefined}
+                  onClick={
+                    isSingleCharTitle && !strokeAnimationDisabled
+                      ? toggleStrokeAnimation
+                      : undefined
+                  }
                   onKeyDown={
-                    isSingleCharTitle
+                    isSingleCharTitle && !strokeAnimationDisabled
                       ? (event) => {
                           if (event.key === "Enter" || event.key === " ") {
                             toggleStrokeAnimation(event);

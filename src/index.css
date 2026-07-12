@@ -472,6 +472,15 @@ a.iconic-circle:active {
   background: #888 !important;
 }
 
+/* issue #132：已知缺筆順資料時停用（見 DictionaryPage.tsx strokeAnimationDisabled） */
+.iconic-circle.stroke[aria-disabled="true"] {
+  cursor: not-allowed !important;
+  opacity: 0.45;
+}
+.iconic-circle.stroke[aria-disabled="true"]:hover {
+  background: black !important;
+}
+
 /* 語言別顏色（原 _theme.scss: body.lang-* .iconic-circle）*/
 body.lang-a .iconic-circle {
   background: #400;
@@ -537,6 +546,14 @@ body.lang-t .iconic-color {
   color: inherit;
   text-decoration: none;
   pointer-events: none;
+}
+
+.result .entry .title .single-char-stroke-trigger[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+.result .entry .title .single-char-stroke-trigger[aria-disabled="true"]:hover {
+  border-color: transparent;
+  background-color: transparent;
 }
 
 /* Right-angle ruby preferences.  The legacy hruby CSS always lays out the
@@ -764,6 +781,36 @@ body[data-ruby-pref="zhuyin"] .result .entry .title hruby.rightangle ru[zhuyin][
 #strokes canvas {
   margin-left: 5px;
   box-shadow: hsl(0, 0%, 83%) 0 3px 3px;
+}
+
+/* #265/#76: 若字元無教育部標準字體筆順資料，明確顯示「？尚無筆順資料」徽章，
+   取代原本僅將空白 canvas 淡化至 50% 透明度的「破損」外觀 */
+#strokes .word.stroke-missing canvas {
+  visibility: hidden;
+}
+#strokes .stroke-missing-badge {
+  position: absolute;
+  top: 0;
+  left: 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  background: #f7f7f7;
+  border: 1px dashed #bbb;
+  box-shadow: hsl(0, 0%, 83%) 0 3px 3px;
+  color: #888;
+  text-align: center;
+}
+#strokes .stroke-missing-mark {
+  font-size: 2.5em;
+  line-height: 1;
+  font-weight: bold;
+}
+#strokes .stroke-missing-text {
+  font-size: 0.75em;
+  margin-top: 0.4em;
 }
 
 /* 歷代書體按鈕區 */

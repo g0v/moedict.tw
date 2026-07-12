@@ -85,6 +85,18 @@ afterAll(async () => {
     await taggedServer.stop();
     taggedServer = null;
   }
+  // Issue #76: missing stroke-json data must render an explicit, accessible
+  // "not found" indicator instead of silently fading a blank canvas to 50%
+  // opacity (the old "opacity treatment" Audrey asked to replace with
+  // something clearer, e.g. a question mark).
+  it("ships the accessible stroke-missing badge (not the bare opacity fade)", async () => {
+    const res = await fetchFromServer("/assets/js/jquery.strokeWords.js");
+    const body = await res.text();
+    expect(body).toContain('class=\\"stroke-missing-badge\\"');
+    expect(body).toContain('class=\\"stroke-missing-mark\\"');
+    expect(body).toMatch(/aria-label/);
+    expect(body).toContain('role: "img"');
+  });
 });
 
 async function fetchFromTaggedServer(path: string, init?: RequestInit): Promise<Response> {
