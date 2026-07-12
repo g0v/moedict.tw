@@ -19,9 +19,14 @@
 的復原指令，不是 stub——多數情況應先用它，而不是跳過去手動操作：
 
 ```bash
-# 需要明確帶目標 version UUID（不會自動猜「上一版」）
-CLOUDFLARE_ENV=production bun run deploy:rollback -- <known-good-version-uuid>
-CLOUDFLARE_ENV=staging bun run deploy:rollback -- <known-good-version-uuid>
+# 需要明確帶目標 version UUID（不會自動猜「上一版」）。deploy:rollback 內部
+# 對每段指令前綴 `env -u CLOUDFLARE_ENV`，即使呼叫者的 shell 殘留
+# CLOUDFLARE_ENV=staging 也一定作用在 production，fail-closed，不需要（也不應該）
+# 再手動加 CLOUDFLARE_ENV=production。
+bun run deploy:rollback -- <known-good-version-uuid>
+
+# staging 明確帶 CLOUDFLARE_ENV=staging（deploy:rollback:staging 已內建）：
+bun run deploy:rollback:staging -- <known-good-version-uuid>
 ```
 
 它會：讀目前唯一 100% version → 在 `versions list` 找到目標 UUID 的

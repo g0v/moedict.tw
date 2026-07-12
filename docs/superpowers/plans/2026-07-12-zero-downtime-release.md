@@ -1261,11 +1261,11 @@ Replace:
 With:
 
 ```json
-"deploy": "vp run build && node scripts/release-publish.mjs && node scripts/release-deploy.mjs",
+"deploy": "env -u CLOUDFLARE_ENV vp run build && env -u CLOUDFLARE_ENV node scripts/release-publish.mjs && env -u CLOUDFLARE_ENV node scripts/release-deploy.mjs",
 "deploy:staging": "CLOUDFLARE_ENV=staging vp run build && CLOUDFLARE_ENV=staging node scripts/release-publish.mjs && CLOUDFLARE_ENV=staging node scripts/release-deploy.mjs",
-"deploy:rollback": "node scripts/release-rollback.mjs",
+"deploy:rollback": "env -u CLOUDFLARE_ENV node scripts/release-rollback.mjs",
 "deploy:rollback:staging": "CLOUDFLARE_ENV=staging node scripts/release-rollback.mjs",
-"deploy:publish-only": "vp run build && node scripts/release-publish.mjs",
+"deploy:publish-only": "env -u CLOUDFLARE_ENV vp run build && env -u CLOUDFLARE_ENV node scripts/release-publish.mjs",
 "deploy:publish-only:staging": "CLOUDFLARE_ENV=staging vp run build && CLOUDFLARE_ENV=staging node scripts/release-publish.mjs",
 ```
 
@@ -1279,7 +1279,16 @@ second build's manifest digest is not guaranteed to match what was actually
 published to R2. `&&`-chained commands do not share a shell-prefixed env var
 with each other (only `VAR=val cmd1 && cmd2` scopes `VAR` to `cmd1` alone),
 so staging repeats `CLOUDFLARE_ENV=staging` before every command in the
-chain, not just the first.
+chain, not just the first. Production commands (`deploy`, `deploy:rollback`,
+`deploy:publish-only`) prefix EVERY chain segment with `env -u
+CLOUDFLARE_ENV` — a portable POSIX way to unset an inherited env var for
+one command's execution — so production is immune to a `CLOUDFLARE_ENV=staging`
+left set by a parent shell/CI job; without this, production would silently
+build/publish/rollout against staging. `wrangler deploy` detection is
+shell-segment/token-based (`scripts/check-deploy-scripts-safety.mjs`), not
+an adjacent-word regex, so it also catches `wrangler --env production
+deploy` or `vp exec wrangler --config x deploy` while still allowing the
+safe positional `wrangler versions deploy <specs> -y`.
 
 No `wrangler deploy` accessible under standard commands.
 
@@ -1409,7 +1418,7 @@ already recorded.
 bun run deploy
 ```
 
-This is `vp run build && node scripts/release-publish.mjs && node scripts/release-deploy.mjs` — same one-build-through-rollout shape as staging. `release-deploy.mjs` checks the staging approval gate (same git SHA + same client manifest digest, re-verified against production's own rebuilt digest) BEFORE any mutating Wrangler call, then runs the full orchestrator for production. **Correction to an earlier draft:** do NOT build+publish as a separate manual step before this, for the same one-build reason as Step 3.
+This is `env -u CLOUDFLARE_ENV vp run build && env -u CLOUDFLARE_ENV node scripts/release-publish.mjs && env -u CLOUDFLARE_ENV node scripts/release-deploy.mjs` — same one-build-through-rollout shape as staging, with every segment fail-closed against an inherited `CLOUDFLARE_ENV=staging`. `release-deploy.mjs` checks the staging approval gate (same git SHA + same client manifest digest, re-verified against production's own rebuilt digest) BEFORE any mutating Wrangler call, then runs the full orchestrator for production. **Correction to an earlier draft:** do NOT build+publish as a separate manual step before this, for the same one-build reason as Step 3.
 
 - [ ] **Step 7: Continuous probes and final browser smoke**
 

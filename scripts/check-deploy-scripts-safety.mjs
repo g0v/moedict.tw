@@ -27,7 +27,87 @@ import { parseJsonc } from "./lib/jsonc.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..");
 
-const BARE_WRANGLER_DEPLOY_RE = /\bwrangler\s+deploy\b/;
+// Global wrangler flags that consume a separate VALUE token (as opposed to
+// boolean flags like --json/-y, or `--flag=value` single-token form, which
+// need no special handling). Only these two matter for THIS guard because
+// they're the only global flags that can plausibly precede the subcommand
+// in this project's usage (`--config`/`-c`, `--env`/`-e`). Deliberately
+// narrow rather than exhaustive: an unknown boolean-like flag is always
+// skipped as exactly one token, which can only make detection MORE
+// conservative (never silently swallows a real "deploy" subcommand token).
+const WRANGLER_VALUE_FLAGS = new Set(["--config", "-c", "--env", "-e"]);
+
+/**
+ * Split an npm-script string into shell command segments on `&&`, `||`,
+ * `;`, and `|` — the operators that separate independently-invoked
+ * commands. Token/segment logic, not a single adjacent-word regex, so a
+ * global flag (and its value) between `wrangler` and `deploy` can never
+ * hide the unsafe subcommand.
+ * @param {string} script
+ * @returns {string[]}
+ */
+function splitShellSegments(script) {
+  return script.split(/&&|\|\||;|\|/);
+}
+
+/**
+ * Tokenize a single shell segment into words, keeping quoted substrings
+ * together and stripping their surrounding quotes.
+ * @param {string} segment
+ * @returns {string[]}
+ */
+function tokenize(segment) {
+  const matches = segment.match(/"[^"]*"|'[^']*'|\S+/g) ?? [];
+  return matches.map((token) =>
+    (token.startsWith('"') && token.endsWith('"')) || (token.startsWith("'") && token.endsWith("'"))
+      ? token.slice(1, -1)
+      : token,
+  );
+}
+
+/**
+ * Does this single shell segment invoke `wrangler deploy` as the ATOMIC,
+ * unsafe subcommand (as opposed to the safe positional `wrangler versions
+ * deploy`)? Walks tokens after the `wrangler` invocation, skipping flags
+ * (and known value-flags' values) to find the ordered positional
+ * subcommand words — catches `wrangler deploy`, `wrangler --env prod
+ * deploy`, `vp exec wrangler --config x deploy`, etc., while never
+ * flagging `wrangler versions deploy <specs> -y` regardless of where its
+ * flags land.
+ * @param {string} segment
+ * @returns {boolean}
+ */
+function segmentInvokesBareWranglerDeploy(segment) {
+  const tokens = tokenize(segment);
+  const wranglerIndex = tokens.indexOf("wrangler");
+  if (wranglerIndex === -1) return false;
+
+  const positionals = [];
+  for (let i = wranglerIndex + 1; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    if (token.startsWith("-")) {
+      const flagName = token.split("=")[0];
+      if (WRANGLER_VALUE_FLAGS.has(flagName) && !token.includes("=")) {
+        i += 1; // also skip this flag's separate value token
+      }
+      continue;
+    }
+    positionals.push(token);
+  }
+
+  if (positionals[0] === "deploy") return true;
+  return false;
+}
+
+/**
+ * Does this npm-script VALUE contain a bare, atomic `wrangler deploy`
+ * invocation in any of its `&&`/`||`/`;`/`|`-separated segments?
+ * @param {string} scriptValue
+ * @returns {boolean}
+ */
+export function containsBareWranglerDeploy(scriptValue) {
+  return splitShellSegments(scriptValue).some(segmentInvokesBareWranglerDeploy);
+}
 
 /**
  * @param {Record<string, unknown>} pkg
@@ -42,7 +122,7 @@ export function checkNoBareWranglerDeploy(pkg) {
   }
   for (const [name, value] of Object.entries(scripts)) {
     if (typeof value !== "string") continue;
-    if (BARE_WRANGLER_DEPLOY_RE.test(value)) {
+    if (containsBareWranglerDeploy(value)) {
       problems.push(
         `scripts.${name} contains bare "wrangler deploy" (unsafe atomic cutover): ${JSON.stringify(value)}`,
       );

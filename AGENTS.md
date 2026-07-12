@@ -94,9 +94,12 @@ bun run deploy           # staging 通過後才部署 production；同樣 build 
 ```
 
 `deploy`/`deploy:staging` 都是「同一次 build 產物」貫穿到底的三段 `&&` 鏈：
-`vp run build && node scripts/release-publish.mjs && node scripts/release-deploy.mjs`
-（staging 是三段各自帶 `CLOUDFLARE_ENV=staging` 前綴，因為 `&&` 串接的每個
-子命令是各自獨立的行程，環境變數前綴不會跨命令繼承）。**絕不能在 publish
+`env -u CLOUDFLARE_ENV vp run build && env -u CLOUDFLARE_ENV node scripts/release-publish.mjs && env -u CLOUDFLARE_ENV node scripts/release-deploy.mjs`
+（production 每段都用 `env -u CLOUDFLARE_ENV` 明確清掉環境變數，讓 production
+絕不會被外層 shell/CI 殘留的 `CLOUDFLARE_ENV=staging` 汙染，fail-closed 而非
+沿用繼承值；staging 則是三段各自帶 `CLOUDFLARE_ENV=staging` 前綴。兩者都是
+因為 `&&` 串接的每個子命令是各自獨立的行程，環境變數前綴不會跨命令繼承）。
+**絕不能在 publish
 與 rollout 之間夾第二次 build**——那會讓 `release-deploy.mjs` 內部重新算出的
 release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完整協定見
 [`notes/零停機部署筆記.md`](./notes/零停機部署筆記.md)。

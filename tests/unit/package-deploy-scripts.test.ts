@@ -25,9 +25,11 @@ const wranglerConfig = parseJsonc(
 ) as Record<string, unknown>;
 
 describe("package.json deploy chain — exact safe ordering", () => {
-  it("deploy: builds once, then publishes to R2, then rolls out — no rebuild between publish and rollout", () => {
+  it("deploy: builds once, then publishes to R2, then rolls out — no rebuild between publish and rollout, immune to an inherited CLOUDFLARE_ENV", () => {
     expect(pkg.scripts.deploy).toBe(
-      "vp run build && node scripts/release-publish.mjs && node scripts/release-deploy.mjs",
+      "env -u CLOUDFLARE_ENV vp run build && " +
+        "env -u CLOUDFLARE_ENV node scripts/release-publish.mjs && " +
+        "env -u CLOUDFLARE_ENV node scripts/release-deploy.mjs",
     );
   });
 
@@ -39,9 +41,9 @@ describe("package.json deploy chain — exact safe ordering", () => {
     );
   });
 
-  it("deploy:publish-only: builds once then publishes, production env", () => {
+  it("deploy:publish-only: builds once then publishes, immune to an inherited CLOUDFLARE_ENV", () => {
     expect(pkg.scripts["deploy:publish-only"]).toBe(
-      "vp run build && node scripts/release-publish.mjs",
+      "env -u CLOUDFLARE_ENV vp run build && env -u CLOUDFLARE_ENV node scripts/release-publish.mjs",
     );
   });
 
@@ -51,14 +53,27 @@ describe("package.json deploy chain — exact safe ordering", () => {
     );
   });
 
-  it("deploy:rollback is a real script invoking scripts/release-rollback.mjs, not a stub", () => {
-    expect(pkg.scripts["deploy:rollback"]).toBe("node scripts/release-rollback.mjs");
+  it("deploy:rollback is a real script invoking scripts/release-rollback.mjs, immune to an inherited CLOUDFLARE_ENV", () => {
+    expect(pkg.scripts["deploy:rollback"]).toBe(
+      "env -u CLOUDFLARE_ENV node scripts/release-rollback.mjs",
+    );
   });
 
   it("deploy:rollback:staging applies CLOUDFLARE_ENV=staging", () => {
     expect(pkg.scripts["deploy:rollback:staging"]).toBe(
       "CLOUDFLARE_ENV=staging node scripts/release-rollback.mjs",
     );
+  });
+
+  it("every production deploy/publish-only/rollback chain segment is prefixed with `env -u CLOUDFLARE_ENV` — fail-closed against an inherited staging env", () => {
+    const productionScripts = ["deploy", "deploy:publish-only", "deploy:rollback"];
+    for (const name of productionScripts) {
+      const value = pkg.scripts[name] as string;
+      const segments = value.split("&&").map((s: string) => s.trim());
+      for (const segment of segments) {
+        expect(segment.startsWith("env -u CLOUDFLARE_ENV ")).toBe(true);
+      }
+    }
   });
 
   it("no standard script contains a bare `wrangler deploy` atomic-cutover call", () => {
@@ -82,12 +97,70 @@ describe("checkNoBareWranglerDeploy — direct unit coverage of the guard functi
     ).toEqual([expect.stringContaining("scripts.deploy contains bare")]);
   });
 
-  it("does not flag `wrangler versions deploy` (a different subcommand)", () => {
+  it("flags `wrangler deploy` even with a global --env flag before it (token logic, not adjacent regex)", () => {
+    expect(
+      checkNoBareWranglerDeploy({
+        scripts: { deploy: "wrangler --env production deploy" },
+      }),
+    ).toEqual([expect.stringContaining("scripts.deploy contains bare")]);
+  });
+
+  it("flags `wrangler deploy` wrapped through `vp exec` with a --config flag before it", () => {
+    expect(
+      checkNoBareWranglerDeploy({
+        scripts: { deploy: "vp exec wrangler --config x deploy" },
+      }),
+    ).toEqual([expect.stringContaining("scripts.deploy contains bare")]);
+  });
+
+  it("flags bare `wrangler deploy` inside an && chain, whichever segment it's in", () => {
+    expect(
+      checkNoBareWranglerDeploy({
+        scripts: { deploy: "vp run build && wrangler --env production deploy" },
+      }),
+    ).toEqual([expect.stringContaining("scripts.deploy contains bare")]);
+  });
+
+  it("does not flag `wrangler versions deploy` (a different, safe positional subcommand)", () => {
     expect(
       checkNoBareWranglerDeploy({
         scripts: { deploy: "node scripts/release-deploy.mjs" },
       }),
     ).toEqual([]);
+  });
+
+  it("does not flag `wrangler versions deploy` even with --config and -y flags interspersed", () => {
+    expect(
+      checkNoBareWranglerDeploy({
+        scripts: {
+          rollout: "wrangler versions deploy --config dist/wrangler.json abc123@100% -y",
+        },
+      }),
+    ).toEqual([]);
+  });
+
+  it("does not flag `wrangler versions deploy` wrapped through `vp exec` with a --config flag before the subcommand", () => {
+    expect(
+      checkNoBareWranglerDeploy({
+        scripts: { rollout: "vp exec wrangler --config x versions deploy abc123@100% -y" },
+      }),
+    ).toEqual([]);
+  });
+
+  it("does not flag unrelated wrangler subcommands (dev, types, r2 object get)", () => {
+    expect(
+      checkNoBareWranglerDeploy({
+        scripts: {
+          preview: "vp run build && wrangler dev",
+          typegen: "wrangler types",
+          fetch: "wrangler r2 object get bucket/key --remote",
+        },
+      }),
+    ).toEqual([]);
+  });
+
+  it("does not flag a script with no wrangler invocation at all", () => {
+    expect(checkNoBareWranglerDeploy({ scripts: { build: "vp run build" } })).toEqual([]);
   });
 
   it("reports a missing scripts object", () => {

@@ -678,11 +678,11 @@ environment so ONE build's output flows through publish and rollout, never
 rebuilt in between:
 
 ```json
-"deploy": "vp run build && node scripts/release-publish.mjs && node scripts/release-deploy.mjs",
+"deploy": "env -u CLOUDFLARE_ENV vp run build && env -u CLOUDFLARE_ENV node scripts/release-publish.mjs && env -u CLOUDFLARE_ENV node scripts/release-deploy.mjs",
 "deploy:staging": "CLOUDFLARE_ENV=staging vp run build && CLOUDFLARE_ENV=staging node scripts/release-publish.mjs && CLOUDFLARE_ENV=staging node scripts/release-deploy.mjs",
-"deploy:rollback": "node scripts/release-rollback.mjs",
+"deploy:rollback": "env -u CLOUDFLARE_ENV node scripts/release-rollback.mjs",
 "deploy:rollback:staging": "CLOUDFLARE_ENV=staging node scripts/release-rollback.mjs",
-"deploy:publish-only": "vp run build && node scripts/release-publish.mjs",
+"deploy:publish-only": "env -u CLOUDFLARE_ENV vp run build && env -u CLOUDFLARE_ENV node scripts/release-publish.mjs",
 "deploy:publish-only:staging": "CLOUDFLARE_ENV=staging vp run build && CLOUDFLARE_ENV=staging node scripts/release-publish.mjs",
 ```
 
@@ -702,18 +702,35 @@ invokable (`deploy:publish-only` builds and publishes without rolling out).
 `&&`-chained commands do not inherit a shell-prefixed env var from an
 earlier command in the same chain (only `VAR=val cmd1 && cmd2` scopes `VAR`
 to `cmd1`), so the staging chain repeats `CLOUDFLARE_ENV=staging` before
-every command.
+every command — and, for the same reason, every PRODUCTION segment
+(`deploy`, `deploy:rollback`, `deploy:publish-only`) is prefixed with the
+portable POSIX `env -u CLOUDFLARE_ENV` (unset for one command's execution
+only) rather than relying on the ambient environment being clean. This is
+fail-closed defense against a `CLOUDFLARE_ENV=staging` left set by a parent
+shell or CI job — without it, a production command run in a polluted shell
+would silently build/publish/roll out against staging instead of failing
+loudly or defaulting correctly to production.
 
 ### Guard Failures
 
 No runtime wrapper is needed: `wrangler deploy` is simply never referenced
 by any standard `package.json` script once the cutover above lands. This is
 enforced statically — `scripts/check-deploy-scripts-safety.mjs` (run in
-CI's static job) fails the build if any `package.json` script value matches
-`wrangler deploy`, and `tests/unit/package-deploy-scripts.test.ts` locks the
-exact chain strings so a regression is a failing test, not just a lint
-warning. The existing `deploy` / `deploy:staging` scripts MUST NOT leave an
-unsafe `wrangler deploy` path accessible under standard commands.
+CI's static job) fails the build if any `package.json` script value's
+shell segments invoke `wrangler ... deploy` as an atomic subcommand. The
+detection is shell-segment/token-based, not an adjacent-word regex: it
+splits each script value on `&&`/`||`/`;`/`|`, tokenizes each segment, and
+walks the tokens after `wrangler` skipping flags (and known value-flags'
+separate value tokens) to find the ordered positional subcommand words —
+so `wrangler --env production deploy` and `vp exec wrangler --config x
+deploy` are caught exactly like bare `wrangler deploy`, while the safe
+positional `wrangler versions deploy <specs> -y` is never flagged
+regardless of where its own flags land. `tests/unit/package-deploy-
+scripts.test.ts` locks both the exact chain strings (so an env-propagation
+or ordering regression is a failing test, not just a lint warning) and the
+guard function's token logic directly. The existing `deploy` /
+`deploy:staging` scripts MUST NOT leave an unsafe `wrangler deploy` path
+accessible under standard commands.
 
 ### Recovery Commands
 
