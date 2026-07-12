@@ -165,13 +165,14 @@ vp run deploy           # 驗證通過後才部署 production
   **順序敏感**的 AST 結構比對，規則/宣告順序或內容有任何差異就報錯（comment
   不算，不影響渲染）。這是驗證「排版沒動到語意」的工具，不是每次內容修改都要
   跑的 CI gate。
-- **CSS lint**：`vp run lint:css`（stylelint + `.stylelintrc.json`）。目前有
+- **CSS lint**：`vp run lint:css`（stylelint + `stylelint.config.mjs`）會原樣列出
   16 個已知、刻意保留的內容層級瑕疵（見檔案 header comment 的完整清單：IE
   `filter:alpha(...)`、殘留的 LESS `fadein()` 呼叫、`speak:none`、
   `background-image:#ddd`、`visibility:visibility`——十年歷史遺留，不影響
   現代瀏覽器渲染，故意不修）+ 2 個重複屬性警告（可能是刻意 fallback，不自動
-  合併）。CI 的 `lint:css` 步驟是 `continue-on-error: true`（軟性檢查，不擋
-  PR）；跑起來如果錯誤數超過檔案 header 記載的基準值才需要查。
+  合併），所以直接指令預期 exit 2。CI 改跑 `vp run check:css-lint`：只接受
+  **恰好**這 16 errors + 2 warnings 的 rule/severity 基準；任何新增、減少、
+  rule 或 severity 變動都會 fail，不再用 `continue-on-error` 製造假紅 annotation。
 - **這個檔案怎麼載入、以及既有測試為什麼看不到它**：`AssetLoader.tsx`（掛在
   `Layout.tsx`，每頁都跑）優先打 `/api/config` 拿到的絕對網址（正式站是
   `https://r2-assets.moedict.tw`），**直接對該網域發 `<link>` 請求，完全繞過

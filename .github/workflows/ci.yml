@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: voidzero-dev/setup-vp@v1
         with:
           node-version: "24"
@@ -27,12 +27,10 @@ jobs:
       - run: vp run check:data
       - run: vp run check:trs
       - run: vp run check:css-ids
-      # Legacy vendor bundle carries ~16 pre-existing content-level defects
-      # (documented in data/assets/styles.css's own header comment and the
-      # PR that reformatted it) that are deliberately preserved, not fixed —
-      # continue-on-error keeps this visible without blocking unrelated PRs.
-      - run: vp run lint:css
-        continue-on-error: true
+      # The legacy vendor bundle has 16 errors + 2 warnings that must remain
+      # byte-for-byte intact. The baseline gate accepts exactly those findings
+      # and fails on any addition, removal, severity change, or rule change.
+      - run: vp run check:css-lint
       - run: vp run build
 
   unit:
@@ -40,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: voidzero-dev/setup-vp@v1
         with:
           node-version: "24"
@@ -50,7 +48,7 @@ jobs:
       - run: vp run test:unit --coverage --reporter=default --reporter=junit --outputFile=unit-report.xml
       - name: Upload unit report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unit-report
           path: unit-report.xml
@@ -61,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: voidzero-dev/setup-vp@v1
         with:
           node-version: "24"
@@ -76,7 +74,7 @@ jobs:
     env:
       E2E_SKIP_BUILD: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: voidzero-dev/setup-vp@v1
         with:
           node-version: "24"
@@ -86,7 +84,7 @@ jobs:
         id: pw
         run: echo "version=$(vp node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         id: pw-cache
         with:
           path: ~/.cache/ms-playwright
@@ -101,7 +99,7 @@ jobs:
       - run: vp exec playwright test --project=chromium
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: |
@@ -122,7 +120,7 @@ jobs:
     env:
       E2E_SKIP_BUILD: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: voidzero-dev/setup-vp@v1
         with:
           node-version: "24"
@@ -145,7 +143,7 @@ jobs:
         if: steps.baselines.outputs.exist == 'true'
       - name: Upload visual diff report
         if: always() && steps.baselines.outputs.exist == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: visual-report
           path: |

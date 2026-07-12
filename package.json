@@ -15,6 +15,7 @@
     "build": "tsc -b && vp build",
     "lint": "vp lint .",
     "lint:css": "stylelint \"data/assets/*.css\"",
+    "check:css-lint": "node scripts/check-css-lint-baseline.mjs",
     "typecheck": "tsc -b --noEmit",
     "typecheck:tsc": "tsc -b --noEmit",
     "smoke:sub-routes": "node scripts/smoke-sub-routes.mjs",
