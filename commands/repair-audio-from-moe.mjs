@@ -295,7 +295,7 @@ async function transcodeOneFromCache(target, idx, total, stats) {
     );
   } catch (e) {
     stats.failed++;
-    console.error(`[${idx + 1}/${total}] ${target.title} (${target.id}): 轉檔失敗 ${e}`);
+    console.error(`[${idx + 1}/${total}] ${target.title} (${target.id}): 轉檔失敗`, e);
   }
 }
 
@@ -410,7 +410,7 @@ async function processOne(target, idx, total, stats) {
   } catch (e) {
     recordProgress({ id: target.id, title: target.title, status: "failed", error: String(e) });
     stats.failed++;
-    console.error(`[${idx + 1}/${total}] ${target.title} (${target.id}): 失敗 ${e}`);
+    console.error(`[${idx + 1}/${total}] ${target.title} (${target.id}): 失敗`, e);
   }
   await sleep(DELAY_MS);
 }
