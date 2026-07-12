@@ -27,15 +27,27 @@ import { parseJsonc } from "./lib/jsonc.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..");
 
-// Global wrangler flags that consume a separate VALUE token (as opposed to
-// boolean flags like --json/-y, or `--flag=value` single-token form, which
-// need no special handling). Only these two matter for THIS guard because
-// they're the only global flags that can plausibly precede the subcommand
-// in this project's usage (`--config`/`-c`, `--env`/`-e`). Deliberately
-// narrow rather than exhaustive: an unknown boolean-like flag is always
-// skipped as exactly one token, which can only make detection MORE
-// conservative (never silently swallows a real "deploy" subcommand token).
-const WRANGLER_VALUE_FLAGS = new Set(["--config", "-c", "--env", "-e"]);
+// Every VALUE-taking flag under Wrangler 4.110's `GLOBAL FLAGS` block (the
+// section shown identically by `wrangler deploy --help` and `wrangler
+// versions deploy --help` — confirmed by running both against the
+// installed 4.110.0 binary). Deliberately the COMPLETE help-derived set,
+// not a heuristic guess: `-c/--config`, `-e/--env`, `--cwd`, `--profile`,
+// `--env-file`. `-h/--help`, `-v/--version`, and `--install-skills` are
+// also global flags but are booleans (no separate value token) so need no
+// entry here. An unknown flag not in this set is always skipped as
+// exactly one token, which can only make detection MORE conservative
+// (never silently swallows a real "deploy" subcommand token) — so this
+// set only needs to be complete for KNOWN value-taking global flags, never
+// exhaustive over Wrangler's entire flag surface.
+const WRANGLER_VALUE_FLAGS = new Set([
+  "--config",
+  "-c",
+  "--env",
+  "-e",
+  "--cwd",
+  "--profile",
+  "--env-file",
+]);
 
 /**
  * Split an npm-script string into shell command segments on `&&`, `||`,

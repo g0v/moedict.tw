@@ -121,6 +121,40 @@ describe("checkNoBareWranglerDeploy — direct unit coverage of the guard functi
     ).toEqual([expect.stringContaining("scripts.deploy contains bare")]);
   });
 
+  it("flags `wrangler deploy` even with a global --cwd flag before it", () => {
+    expect(
+      checkNoBareWranglerDeploy({
+        scripts: { deploy: "wrangler --cwd /some/dir deploy" },
+      }),
+    ).toEqual([expect.stringContaining("scripts.deploy contains bare")]);
+  });
+
+  it("flags `wrangler deploy` even with a global --profile flag before it", () => {
+    expect(
+      checkNoBareWranglerDeploy({
+        scripts: { deploy: "wrangler --profile default deploy" },
+      }),
+    ).toEqual([expect.stringContaining("scripts.deploy contains bare")]);
+  });
+
+  it("flags `wrangler deploy` even with a global --env-file flag before it", () => {
+    expect(
+      checkNoBareWranglerDeploy({
+        scripts: { deploy: "wrangler --env-file .env.production deploy" },
+      }),
+    ).toEqual([expect.stringContaining("scripts.deploy contains bare")]);
+  });
+
+  it("flags `wrangler deploy` with --cwd, --profile, and --env-file all stacked before it", () => {
+    expect(
+      checkNoBareWranglerDeploy({
+        scripts: {
+          deploy: "vp exec wrangler --cwd . --profile default --env-file .env deploy",
+        },
+      }),
+    ).toEqual([expect.stringContaining("scripts.deploy contains bare")]);
+  });
+
   it("does not flag `wrangler versions deploy` (a different, safe positional subcommand)", () => {
     expect(
       checkNoBareWranglerDeploy({
@@ -143,6 +177,43 @@ describe("checkNoBareWranglerDeploy — direct unit coverage of the guard functi
     expect(
       checkNoBareWranglerDeploy({
         scripts: { rollout: "vp exec wrangler --config x versions deploy abc123@100% -y" },
+      }),
+    ).toEqual([]);
+  });
+
+  it("does not flag `wrangler versions deploy` with --cwd before the subcommand", () => {
+    expect(
+      checkNoBareWranglerDeploy({
+        scripts: { rollout: "wrangler --cwd /some/dir versions deploy abc123@100% -y" },
+      }),
+    ).toEqual([]);
+  });
+
+  it("does not flag `wrangler versions deploy` with --profile before the subcommand", () => {
+    expect(
+      checkNoBareWranglerDeploy({
+        scripts: { rollout: "wrangler --profile default versions deploy abc123@100% -y" },
+      }),
+    ).toEqual([]);
+  });
+
+  it("does not flag `wrangler versions deploy` with --env-file before the subcommand", () => {
+    expect(
+      checkNoBareWranglerDeploy({
+        scripts: {
+          rollout: "wrangler --env-file .env.production versions deploy abc123@100% -y",
+        },
+      }),
+    ).toEqual([]);
+  });
+
+  it("does not flag `wrangler versions deploy` with --cwd, --profile, and --env-file all stacked before the subcommand", () => {
+    expect(
+      checkNoBareWranglerDeploy({
+        scripts: {
+          rollout:
+            "vp exec wrangler --cwd . --profile default --env-file .env versions deploy abc123@100% -y",
+        },
       }),
     ).toEqual([]);
   });
