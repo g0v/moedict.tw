@@ -1,4 +1,16 @@
-export type RadicalLang = "a" | "c";
+export type RadicalLang = "a" | "c" | "t";
+
+/**
+ * 部首表語言前綴：`'`=t(臺灣台語)、`~`=c(兩岸)、無前綴=a(華語)。與
+ * dictionary-route.ts 的 stripLangPrefix 同一張對照表（h 目前無部首表，
+ * 見 g0v/moedict-webkit#122：phck pack 來源完全沒有 r 欄位，屬資料缺口，
+ * 非本表可修）。
+ */
+const RADICAL_LANG_PREFIXES: Record<RadicalLang, string> = { a: "", c: "~", t: "'" };
+
+export function getRadicalLangPrefix(lang: RadicalLang): string {
+  return RADICAL_LANG_PREFIXES[lang];
+}
 
 export interface DictionaryDefinition {
   type?: string;
@@ -92,7 +104,7 @@ export function normalizeTooltipId(rawId: string): string {
 }
 
 export function getTokenByLang(lang: RadicalLang, token: string): string {
-  return lang === "c" ? `~${token}` : token;
+  return `${RADICAL_LANG_PREFIXES[lang]}${token}`;
 }
 
 export async function fetchJsonByToken<T>(token: string): Promise<T | null> {

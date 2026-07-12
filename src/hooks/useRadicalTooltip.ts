@@ -77,19 +77,29 @@ async function buildRadicalTooltipHTML(rawId: string): Promise<string> {
   const id = normalizeTooltipId(rawId);
   if (!id) return EMPTY_HTML;
 
-  if (id === "@" || id === "~@") {
-    const isCrossStrait = id.startsWith("~");
+  const langPrefix = id.startsWith("~@")
+    ? "~"
+    : id.startsWith("'@")
+      ? "'"
+      : id.startsWith("@")
+        ? ""
+        : null;
+  if (langPrefix === null) return EMPTY_HTML;
+
+  const bucketPrefix = `/${langPrefix}@`;
+  const tooltipPrefix = `${langPrefix}@`;
+
+  if (id === tooltipPrefix) {
     const data = normalizeRows(await fetchJsonByToken<unknown>(id));
     if (data.length === 0) return EMPTY_HTML;
-    const prefix = isCrossStrait ? "/~@" : "/@";
 
-    let html = `${buildTitleSection("部首表", prefix)}<div class="entry"><div class="entry-item"><div style="max-height: 300px; overflow-y: auto;">`;
+    let html = `${buildTitleSection("部首表", bucketPrefix)}<div class="entry"><div class="entry-item"><div style="max-height: 300px; overflow-y: auto;">`;
     for (let stroke = 0; stroke < data.length; stroke += 1) {
       const radicals = data[stroke] || [];
       if (radicals.length === 0) continue;
       html += `<div><span class="stroke-count">${stroke}</span><span class="stroke-list">`;
       for (const radical of radicals) {
-        html += `<a href="${prefix}${encodeURIComponent(radical)}" class="stroke-char">${escapeHtml(radical)}</a>`;
+        html += `<a href="${bucketPrefix}${encodeURIComponent(radical)}" class="stroke-char">${escapeHtml(radical)}</a>`;
       }
       html += "</span></div>";
     }
@@ -97,24 +107,23 @@ async function buildRadicalTooltipHTML(rawId: string): Promise<string> {
     return html;
   }
 
-  const isCrossStrait = id.startsWith("~@");
-  const match = isCrossStrait ? id.match(/^~@(.+)$/) : id.match(/^@(.+)$/);
-  const radical = match?.[1] ? decodeURIComponent(match[1]) : "";
+  const remainder = id.startsWith(tooltipPrefix) ? id.slice(tooltipPrefix.length) : "";
+  const radical = remainder ? decodeURIComponent(remainder) : "";
   if (!radical) return EMPTY_HTML;
 
-  const token = isCrossStrait ? `~@${radical}` : `@${radical}`;
+  const token = `${tooltipPrefix}${radical}`;
   const data = normalizeRows(await fetchJsonByToken<unknown>(token));
   if (data.length === 0) return EMPTY_HTML;
 
-  const prefix = isCrossStrait ? "/~" : "/";
-  const bucketHref = `${isCrossStrait ? "/~@" : "/@"}${encodeURIComponent(radical)}`;
+  const entryPrefix = `/${langPrefix}`;
+  const bucketHref = `${bucketPrefix}${encodeURIComponent(radical)}`;
   let html = `${buildTitleSection(`${radical} 部`, bucketHref)}<div class="entry"><div class="entry-item"><div style="max-height: 300px; overflow-y: auto;">`;
   for (let stroke = 0; stroke < Math.min(data.length, 8); stroke += 1) {
     const chars = data[stroke] || [];
     if (chars.length === 0) continue;
     html += `<div><span class="stroke-count">${stroke}</span><span class="stroke-list">`;
     for (const char of chars.slice(0, 15)) {
-      html += `<a href="${prefix}${encodeURIComponent(char)}" class="stroke-char">${escapeHtml(char)}</a>`;
+      html += `<a href="${entryPrefix}${encodeURIComponent(char)}" class="stroke-char">${escapeHtml(char)}</a>`;
     }
     if (chars.length > 15) {
       html += `<span style="color:#666;">（還有 ${chars.length - 15} 個字）</span>`;
@@ -228,7 +237,7 @@ function resolveTooltipIdFromHref(rawHref: string | null): string {
 }
 
 function shouldUseRadicalTooltip(id: string): boolean {
-  return id === "@" || id === "~@" || id.startsWith("@") || id.startsWith("~@");
+  return id.startsWith("@") || id.startsWith("~@") || id.startsWith("'@");
 }
 
 interface TooltipTarget {

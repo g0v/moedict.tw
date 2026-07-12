@@ -211,6 +211,7 @@ function App() {
           {/* 部首表（唯一合法的純靜態 segment） */}
           <Route path="/@" element={<RadicalView lang="a" />} />
           <Route path="/~@" element={<RadicalView lang="c" />} />
+          <Route path="/'@" element={<RadicalView lang="t" />} />
 
           {/* 其他路由交由 MiddlePoint 分流 */}
           <Route path="*" element={<MiddlePoint />} />

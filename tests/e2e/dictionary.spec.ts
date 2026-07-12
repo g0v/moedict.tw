@@ -611,6 +611,14 @@ test.describe("special routes", () => {
     await page.waitForLoadState("networkidle");
   });
 
+  test("/'@ renders radical view for 台語 (g0v/moedict-webkit#122)", async ({ page }) => {
+    const response = await page.goto("/'@");
+    expect(response?.status()).toBe(200);
+    await page.waitForLoadState("networkidle");
+    await expect(page).toHaveTitle(/台語萌典/);
+    await expect(page.locator("body")).toContainText(/[一二人入]/, { timeout: 10_000 });
+  });
+
   test("/about shows about content", async ({ page }) => {
     const response = await page.goto("/about");
     expect(response?.status()).toBe(200);

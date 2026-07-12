@@ -3,6 +3,7 @@ import {
   escapeHtml,
   fetchJsonByToken,
   fetchRadicalRows,
+  getRadicalLangPrefix,
   normalizeRadicalVariant,
   normalizeRows,
   normalizeTooltipId,
@@ -47,9 +48,18 @@ describe("normalizeRadicalVariant", () => {
 });
 
 describe("getTokenByLang", () => {
-  it("prefixes ~ for c lang, leaves a lang as-is", () => {
+  it("prefixes ~ for c lang, ' for t lang, leaves a lang as-is", () => {
     expect(getTokenByLang("a", "@木")).toBe("@木");
     expect(getTokenByLang("c", "@木")).toBe("~@木");
+    expect(getTokenByLang("t", "@木")).toBe("'@木");
+  });
+});
+
+describe("getRadicalLangPrefix", () => {
+  it("returns the canonical prefix per lang", () => {
+    expect(getRadicalLangPrefix("a")).toBe("");
+    expect(getRadicalLangPrefix("c")).toBe("~");
+    expect(getRadicalLangPrefix("t")).toBe("'");
   });
 });
 

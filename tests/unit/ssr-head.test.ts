@@ -72,6 +72,17 @@ describe("resolveHeadByPath", () => {
       expect(head.title).toBe("水 部 - 兩岸萌典");
     });
 
+    it("returns empty-radical head for /'@ with 台語 brand", () => {
+      const head = resolveHeadByPath("/'@");
+      expect(head.title).toBe("部首表 - 台語萌典");
+      expect(head.description).toContain("臺灣台語");
+    });
+
+    it("resolves radical with 台語萌典 brand /'@木", () => {
+      const head = resolveHeadByPath("/'@木");
+      expect(head.title).toBe("木 部 - 台語萌典");
+    });
+
     it("decodes percent-encoded radical", () => {
       expect(resolveHeadByPath("/@%E6%9C%A8").title).toBe("木 部 - 萌典");
     });

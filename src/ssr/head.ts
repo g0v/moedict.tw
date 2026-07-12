@@ -148,11 +148,16 @@ function getStarredHead(lang: DictionaryLang, pathname: string): PageHead {
   return createHead(`字詞紀錄簿 - ${brand}`, getLangDescription(lang), pathname);
 }
 
-function getRadicalHead(radical: string, lang: "a" | "c", pathname: string): PageHead {
+function getRadicalHead(radical: string, lang: "a" | "c" | "t", pathname: string): PageHead {
   const clean = normalizeWord(radical);
   const brand = getLangBrand(lang);
   const title = clean ? `${clean} 部 - ${brand}` : `部首表 - ${brand}`;
-  const description = lang === "c" ? "兩岸萌典部首索引與部件檢索。" : "萌典部首索引與部件檢索。";
+  const description =
+    lang === "c"
+      ? "兩岸萌典部首索引與部件檢索。"
+      : lang === "t"
+        ? "臺灣台語萌典部首索引與部件檢索。"
+        : "萌典部首索引與部件檢索。";
   return createHead(title, description, pathname);
 }
 

@@ -192,6 +192,29 @@ describe("/a/@radical.json (radical index pages)", () => {
   });
 });
 
+describe("/t/@radical.json (g0v/moedict-webkit#122 台語部首表)", () => {
+  it("returns a populated radical bucket for 子 via the /t/@radical.json sub-route", async () => {
+    const res = await fetchFromServer("/t/%40%E5%AD%90.json");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body)).toBe(true);
+    expect(body[0]).toContain("子");
+  });
+
+  it("returns the same bucket via the top-level '@ prefixed token", async () => {
+    const res = await fetchFromServer("/%27%40%E5%AD%90.json");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body)).toBe(true);
+    expect(body[0]).toContain("子");
+  });
+
+  it("404 for unknown radical", async () => {
+    const res = await fetchFromServer("/t/%40%E4%B8%8D%E5%AD%98.json");
+    expect(res.status).toBe(404);
+  });
+});
+
 describe("/a/=<category>.json (list pages)", () => {
   it("returns a JSON array", async () => {
     const res = await fetchFromServer("/a/=%E8%BF%91%E7%BE%A9%E8%A9%9E.json");

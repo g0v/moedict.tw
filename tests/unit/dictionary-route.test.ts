@@ -50,6 +50,7 @@ describe("parseDictionaryRoute", () => {
     expect(parseDictionaryRoute("/about.html")).toBeNull();
     expect(parseDictionaryRoute("/@部首")).toBeNull();
     expect(parseDictionaryRoute("/~@部首")).toBeNull();
+    expect(parseDictionaryRoute("/'@部首")).toBeNull();
     expect(parseDictionaryRoute("/=成語")).toBeNull();
     expect(parseDictionaryRoute("/'=諺語")).toBeNull();
     expect(parseDictionaryRoute("/:=諺語")).toBeNull();
@@ -227,6 +228,12 @@ describe("classifyRoute", () => {
     it("decodes percent-encoded radical", () => {
       expect(classifyRoute("/@%E6%9C%A8")).toEqual({ kind: "radical", lang: "a", radical: "木" });
     });
+    it("classifies /'@ as empty radical (t)", () => {
+      expect(classifyRoute("/'@")).toEqual({ kind: "radical", lang: "t", radical: "" });
+    });
+    it("classifies /'@木 as radical t with 木", () => {
+      expect(classifyRoute("/'@木")).toEqual({ kind: "radical", lang: "t", radical: "木" });
+    });
   });
 
   describe("starred", () => {
@@ -308,6 +315,7 @@ describe("classifyRoute", () => {
     });
     it("strips trailing /<digits> from radical route", () => {
       expect(classifyRoute("/@木/2")).toEqual({ kind: "radical", lang: "a", radical: "木" });
+      expect(classifyRoute("/'@木/2")).toEqual({ kind: "radical", lang: "t", radical: "木" });
     });
     it("strips trailing /<digits> from group route", () => {
       expect(classifyRoute("/=成語/2")).toEqual({ kind: "group", lang: "a", category: "成語" });
@@ -345,6 +353,10 @@ describe("classifyRoute", () => {
     });
     it("~@ exact match before ~@ prefix", () => {
       expect(classifyRoute("/~@")).toEqual({ kind: "radical", lang: "c", radical: "" });
+    });
+    it("'@ (radical t) takes precedence over ' (entry t)", () => {
+      expect(classifyRoute("/'@木")).toEqual({ kind: "radical", lang: "t", radical: "木" });
+      expect(classifyRoute("/'木")).toEqual({ kind: "entry", lang: "t", text: "木" });
     });
   });
 

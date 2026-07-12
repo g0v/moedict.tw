@@ -380,7 +380,8 @@ function normalizeRadicalChar(input: string): string {
 
 function RadicalGlyph({ char, lang }: { char: string; lang: DictionaryLang }) {
   const ch = normalizeRadicalChar(char);
-  const radicalToken = `${lang === "c" ? "~@" : "@"}${ch}`;
+  const radicalPrefix = lang === "c" ? "~" : lang === "t" ? "'" : "";
+  const radicalToken = `${radicalPrefix}@${ch}`;
   return (
     <span className="glyph">
       <a

@@ -41,6 +41,14 @@ test.describe("navigation flows", () => {
     await expect(page).toHaveTitle(/木/);
   });
 
+  test("direct navigation to Taiwanese radical page /'@木 (g0v/moedict-webkit#122)", async ({
+    page,
+  }) => {
+    await page.goto("/'@%E6%9C%A8");
+    await page.waitForLoadState("networkidle");
+    await expect(page).toHaveTitle(/木.*台語萌典/);
+  });
+
   test("starred redirect variants", async ({ page }) => {
     for (const path of ["/=*", "/'=*", "/:=*", "/~=*"]) {
       const response = await page.goto(path);

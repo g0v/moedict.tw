@@ -36,7 +36,7 @@ function getLangPrefix(lang: Lang): string {
 function buildWordPath(word: string, prefix: string): string {
   if (word.startsWith("@")) {
     const radical = word.slice(1);
-    const radicalBase = prefix === "~" ? "/~@" : "/@";
+    const radicalBase = prefix === "~" || prefix === "'" ? `/${prefix}@` : "/@";
     if (!radical) return radicalBase;
     return `${radicalBase}${encodeURIComponent(radical)}`;
   }
@@ -45,7 +45,7 @@ function buildWordPath(word: string, prefix: string): string {
 
 function buildTooltipId(word: string, path: string, prefix: string): string {
   if (word.startsWith("@")) {
-    return prefix === "~" ? `~${word}` : word;
+    return prefix === "~" || prefix === "'" ? `${prefix}${word}` : word;
   }
   return `entry:${path}`;
 }
