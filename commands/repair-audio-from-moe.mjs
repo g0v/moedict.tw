@@ -52,6 +52,9 @@ const MP3_ONLY = !!args['mp3-only'];
 // 疊加帳號層級的 write 額度風險。--download-only 只做下載+快取到本機，
 // 之後不加這個 flag 的正常執行會優先讀本機快取，快取沒有才現場抓。
 const DOWNLOAD_ONLY = !!args['download-only'];
+// 轉檔（mp3 快取 -> ogg 快取）也完全不碰 R2，可以跟任何 R2 writer 安全並行，
+// 也可以跟 --download-only 一起：先下載，轉檔可以在下載完成的項目上立刻開始。
+const TRANSCODE_ONLY = !!args['transcode-only'];
 // 這支腳本跟主遷移腳本（migrate-legacy-cdn-to-r2.mjs）共用同一個 Cloudflare
 // 帳號的 R2 write 額度；MP3-only 模式避免無必要的第二次 OGG PUT。
 const R2_RATE_LIMIT = args['r2-rate-limit'] ? Number(args['r2-rate-limit']) : 300;
@@ -215,6 +218,25 @@ function transcodeToOgg(mp3Buf) {
 function cachePath(id) {
   return join(CACHE_DIR, `${id}.mp3`);
 }
+function oggCachePath(id) {
+  return join(CACHE_DIR, `${id}.ogg`);
+}
+
+/** 只轉檔（mp3 快取 -> ogg 快取），完全不碰 R2；跟任何 R2 writer 都能安全並行。 */
+async function transcodeOneFromCache(target, idx, total, stats) {
+  const mp3Path = cachePath(target.id);
+  const oggPath = oggCachePath(target.id);
+  if (!existsSync(mp3Path) || existsSync(oggPath)) return;
+  try {
+    const oggBuf = await transcodeToOgg(readFileSync(mp3Path));
+    writeFileSync(oggPath, oggBuf);
+    stats.uploaded++;
+    console.log(`[${idx + 1}/${total}] ${target.title} (${target.id}): 已轉檔 ogg，${oggBuf.length}B`);
+  } catch (e) {
+    stats.failed++;
+    console.error(`[${idx + 1}/${total}] ${target.title} (${target.id}): 轉檔失敗 ${e}`);
+  }
+}
 
 async function processOne(target, idx, total, stats) {
   try {
@@ -264,6 +286,10 @@ async function processOne(target, idx, total, stats) {
     let oggResult = { ok: true, bytes: 0 };
     if (MP3_ONLY) {
       put = await mp3Task;
+    } else if (existsSync(oggCachePath(target.id))) {
+      const oggBuf = readFileSync(oggCachePath(target.id));
+      const oggTask = putToR2(`audio/t/${target.id}.ogg`, oggBuf, 'audio/ogg').then((r) => ({ ...r, bytes: oggBuf.length }));
+      [put, oggResult] = await Promise.all([mp3Task, oggTask]);
     } else {
       const oggTask = transcodeToOgg(buf)
         .then((oggBuf) => putToR2(`audio/t/${target.id}.ogg`, oggBuf, 'audio/ogg').then((r) => ({ ...r, bytes: oggBuf.length })))
@@ -276,8 +302,14 @@ async function processOne(target, idx, total, stats) {
 
     recordProgress({ id: target.id, title: target.title, status: 'uploaded', moePath: audioPath, bytes: buf.length, oggBytes });
     stats.uploaded++;
-    if (cached) {
+    // MP3_ONLY 上傳跟 --transcode-only 常常同時跑（互不搶資源：上傳被 R2
+    // 限流，轉檔吃 CPU）；若上傳一結束就砍 mp3 快取，還沒輪到的轉檔會找
+    // 不到來源檔案，永遠生不出那筆的 ogg。MP3_ONLY 模式因此不主動清快取
+    // （容量成本可忽略，~15k 檔 x 十幾 KB）；非 MP3_ONLY 模式當下已經把
+    // ogg 一起處理完，才安全刪。
+    if (cached && !MP3_ONLY) {
       try { unlinkSync(cachePath(target.id)); } catch { /* 不影響結果 */ }
+      try { unlinkSync(oggCachePath(target.id)); } catch { /* 不影響結果 */ }
     }
     console.log(`[${idx + 1}/${total}] ${target.title} (${target.id}): 已修補，來源=${audioPath}，mp3=${buf.length}B ogg=${oggBytes}B`);
   } catch (e) {
@@ -298,6 +330,25 @@ async function main() {
 
   const { done, downloaded } = loadProgress();
   targets = targets.filter((t) => !done.has(t.id));
+
+  if (TRANSCODE_ONLY) {
+    // 轉檔目標＝已下載但還沒上傳的（本機有 mp3 快取）；不用管 R2 write 限流。
+    targets = targets.filter((t) => downloaded.has(t.id));
+    console.log(`轉檔模式：${targets.length} 筆有 mp3 快取待轉 ogg（concurrency=${CONCURRENCY}）`);
+    if (Number.isFinite(LIMIT)) targets = targets.slice(0, LIMIT);
+    const stats = { uploaded: 0, notFoundOnMoe: 0, failed: 0 };
+    let cursor = 0;
+    async function transcodeWorker() {
+      while (cursor < targets.length) {
+        const idx = cursor++;
+        await transcodeOneFromCache(targets[idx], idx, targets.length, stats);
+      }
+    }
+    await Promise.all(Array.from({ length: CONCURRENCY }, transcodeWorker));
+    console.log('=== 轉檔完成 ===', { transcoded: stats.uploaded, failed: stats.failed });
+    return;
+  }
+
   if (DOWNLOAD_ONLY) targets = targets.filter((t) => !downloaded.has(t.id));
   console.log(`跳過已處理 ${done.size} 筆、已快取 ${downloaded.size} 筆；剩餘 ${targets.length} 筆（mode=${DOWNLOAD_ONLY ? 'download-only' : 'upload'}, concurrency=${CONCURRENCY}, R2 rate=${R2_RATE_LIMIT}/${R2_RATE_WINDOW_MS}ms）`);
   if (Number.isFinite(LIMIT)) targets = targets.slice(0, LIMIT);
