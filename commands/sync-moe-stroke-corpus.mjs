@@ -337,7 +337,7 @@ export async function convertCorpus(corpus, outDir, opts = {}) {
   mkdirSync(outDir, { recursive: true });
 
   /** @type {Map<string, ManifestEntry>} */
-  const done = loadCheckpoint(checkpointPath);
+  const done = loadCheckpoint(checkpointPath, outDir);
   let work = corpus.filter((e) => !done.has(e.hex));
   if (Number.isFinite(opts.limit) && opts.limit >= 0) {
     work = work.slice(0, opts.limit);
@@ -390,33 +390,75 @@ export async function convertCorpus(corpus, outDir, opts = {}) {
 }
 
 /**
- * @param {string} path
+ * Load and revalidate a checkpoint file.
+ *
+ * For each "ok" record we:
+ *   1. Verify the local stroke-json/<hex>.json file exists.
+ *   2. Re-hash its contents and compare against the stored sha256.
+ *   3. Re-parse the JSON to confirm it is a non-empty stroke array.
+ *
+ * Records that fail any check are dropped so the entry re-converts from
+ * scratch.  A truncated final crash line is silently discarded.
+ *
+ * Note: the checkpoint does NOT store a fingerprint of the upstream MOE
+ * source.  If MOE updates a character's stroke data between runs the
+ * checkpoint will report that character as done.  Pass a fresh --out
+ * directory (or delete checkpoint.ndjson) to force re-fetch of all entries.
+ *
+ * @param {string} checkpointPath
+ * @param {string} [outDir]  — required for local file revalidation
  * @returns {Map<string, ManifestEntry>}
  */
-export function loadCheckpoint(path) {
+export function loadCheckpoint(checkpointPath, outDir) {
   /** @type {Map<string, ManifestEntry>} */
   const map = new Map();
-  if (!existsSync(path)) return map;
-  const text = readFileSync(path, "utf8");
+  if (!existsSync(checkpointPath)) return map;
+  const text = readFileSync(checkpointPath, "utf8");
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
+    let rec;
     try {
-      const rec = JSON.parse(line);
-      if (rec.status === "ok" && rec.hex && rec.sha256) {
-        map.set(rec.hex, {
-          char: rec.char,
-          hex: rec.hex,
-          decimalId: rec.decimalId,
-          strokeCount: rec.strokeCount,
-          sha256: rec.sha256,
-          bytes: rec.bytes,
-          sourceUrl: rec.sourceUrl,
-          r2Key: rec.r2Key ?? `stroke-json/${rec.hex}.json`,
-        });
-      }
+      rec = JSON.parse(line);
     } catch {
-      // skip corrupt lines
+      // Truncated final line from a hard crash — discard and continue
+      continue;
     }
+    if (rec.status !== "ok" || !rec.hex || !rec.sha256) continue;
+    if (!/^[0-9a-f]{4,6}$/.test(rec.hex)) continue;
+    if (!/^[0-9a-f]{64}$/.test(rec.sha256)) continue;
+
+    // Revalidate the local file when outDir is provided (normal convertCorpus path)
+    if (outDir) {
+      const filePath = join(outDir, "stroke-json", `${rec.hex}.json`);
+      if (!existsSync(filePath)) continue; // file deleted since checkpoint — re-convert
+      let fileBytes;
+      try {
+        fileBytes = readFileSync(filePath);
+      } catch {
+        continue; // unreadable — re-convert
+      }
+      const actualSha = createHash("sha256").update(fileBytes).digest("hex");
+      if (actualSha !== rec.sha256) continue; // file modified or corrupted — re-convert
+      // Light schema check: must be a non-empty JSON array of stroke objects
+      try {
+        const json = JSON.parse(fileBytes.toString("utf8"));
+        if (!Array.isArray(json) || json.length === 0) continue;
+        if (!json[0] || !Array.isArray(json[0].outline) || !Array.isArray(json[0].track)) continue;
+      } catch {
+        continue;
+      }
+    }
+
+    map.set(rec.hex, {
+      char: rec.char,
+      hex: rec.hex,
+      decimalId: rec.decimalId,
+      strokeCount: rec.strokeCount,
+      sha256: rec.sha256,
+      bytes: rec.bytes,
+      sourceUrl: rec.sourceUrl,
+      r2Key: rec.r2Key ?? `stroke-json/${rec.hex}.json`,
+    });
   }
   return map;
 }
@@ -506,62 +548,86 @@ export async function uploadCorpus(entries, outDir, bucketName, opts = {}) {
 /**
  * Post-upload byte/hash verification via wrangler r2 object get --remote.
  * Mirrors scripts/release-verify.mjs: hash binary bytes, never response.text().
+ *
+ * Uses bounded concurrency (≤4, matching uploadWithConcurrency) to keep
+ * verification time proportional to upload time instead of spawning 6,063
+ * sequential Wrangler processes.  Each worker retries on 429/code 971.
+ *
  * @param {ManifestEntry[]} entries
  * @param {string} bucketName
- * @param {{ runner?: Function, sleep?: (ms: number) => Promise<void> }} [opts]
+ * @param {{ runner?: Function, sleep?: (ms: number) => Promise<void>, maxConcurrent?: number }} [opts]
  */
 export async function verifyCorpusUploads(entries, bucketName, opts = {}) {
   const runner = opts.runner ?? runWrangler;
-  const sleep = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  const sleep =
+    opts.sleep ??
+    ((ms) => {
+      const { promise, resolve } = Promise.withResolvers();
+      setTimeout(() => resolve(), ms);
+      return promise;
+    });
+  const maxConcurrent = Math.min(opts.maxConcurrent ?? 4, 4);
+
+  /** @type {string[]} */
   const checked = [];
-  for (const entry of entries) {
-    const tmpDir = mkdtempSync(join(tmpdir(), "stroke-verify-"));
-    try {
-      const filePath = join(tmpDir, "object.bin");
-      const argv = [
-        "vp",
-        "exec",
-        "wrangler",
-        "r2",
-        "object",
-        "get",
-        `${bucketName}/${entry.r2Key}`,
-        "--remote",
-        `--file=${filePath}`,
-      ];
-      await retryWithBackoff(
-        async () => {
-          const result = await runner(argv);
-          if (result.exitCode !== 0) {
-            const stderr = result.stderr ?? "";
-            if (/not found|NoSuchKey|404/i.test(stderr)) {
-              throw new Error(`Missing object after upload: ${entry.r2Key}`);
+  let idx = 0;
+
+  async function verifyWorker() {
+    while (idx < entries.length) {
+      const entry = entries[idx++];
+      const tmpDir = mkdtempSync(join(tmpdir(), "stroke-verify-"));
+      try {
+        const filePath = join(tmpDir, "object.bin");
+        const argv = [
+          "vp",
+          "exec",
+          "wrangler",
+          "r2",
+          "object",
+          "get",
+          `${bucketName}/${entry.r2Key}`,
+          "--remote",
+          `--file=${filePath}`,
+        ];
+        await retryWithBackoff(
+          async () => {
+            const result = await runner(argv);
+            if (result.exitCode !== 0) {
+              const stderr = result.stderr ?? "";
+              if (/not found|NoSuchKey|404/i.test(stderr)) {
+                throw new Error(`Missing object after upload: ${entry.r2Key}`);
+              }
+              // surface 429 as retryable via message patterns recognised by is429Error
+              const err = new Error(
+                `Download failed: ${entry.r2Key} (exit ${result.exitCode}): ${stderr}`,
+              );
+              /** @type {any} */ (err).stderr = stderr;
+              throw err;
             }
-            // surface 429 as retryable via message patterns recognised by is429Error
-            const err = new Error(
-              `Download failed: ${entry.r2Key} (exit ${result.exitCode}): ${stderr}`,
-            );
-            /** @type {any} */ (err).stderr = stderr;
-            throw err;
-          }
-        },
-        { sleep },
-      );
-      const bytes = readFileSync(filePath);
-      const sha = createHash("sha256").update(bytes).digest("hex");
-      if (sha !== entry.sha256) {
-        throw new Error(`hash mismatch for ${entry.r2Key}: expected ${entry.sha256}, got ${sha}`);
-      }
-      if (bytes.length !== entry.bytes) {
-        throw new Error(
-          `size mismatch for ${entry.r2Key}: expected ${entry.bytes}, got ${bytes.length}`,
+          },
+          { sleep },
         );
+        const bytes = readFileSync(filePath);
+        const sha = createHash("sha256").update(bytes).digest("hex");
+        if (sha !== entry.sha256) {
+          throw new Error(`hash mismatch for ${entry.r2Key}: expected ${entry.sha256}, got ${sha}`);
+        }
+        if (bytes.length !== entry.bytes) {
+          throw new Error(
+            `size mismatch for ${entry.r2Key}: expected ${entry.bytes}, got ${bytes.length}`,
+          );
+        }
+        checked.push(entry.r2Key);
+      } finally {
+        rmSync(tmpDir, { recursive: true, force: true });
       }
-      checked.push(entry.r2Key);
-    } finally {
-      rmSync(tmpDir, { recursive: true, force: true });
     }
   }
+
+  const workers = Array.from({ length: Math.min(maxConcurrent, Math.max(entries.length, 1)) }, () =>
+    verifyWorker(),
+  );
+  await Promise.all(workers);
   return { verified: true, checkedKeys: checked };
 }
 
@@ -604,10 +670,32 @@ export async function runCli(argv, deps = {}) {
 
   if (args.help) {
     log(`Usage: node commands/sync-moe-stroke-corpus.mjs [options]
-  --out <dir>  --dry-run  --upload=staging|production  --limit <n>
+  --out <dir>  --dry-run  --upload=staging|production
   --concurrency <n>  --zip-url <url>  --zip-path <path>  --chars-file <path>
-  --checkpoint <path>  --skip-verify  --allow-partial  --config <path>`);
+  --checkpoint <path>  --config <path>
+  (--limit, --allow-partial, --skip-verify are dry-run only)`);
     return { ok: true, mode: "help" };
+  }
+
+  // Enforce safe defaults for upload mode.  --limit, --allow-partial, and
+  // --skip-verify are debug/dry-run-only flags; allowing them in upload mode
+  // would let partial or unverified data land in R2 without detection.
+  if (args.upload) {
+    if (Number.isFinite(args.limit)) {
+      throw new Error(
+        "--limit is not allowed with --upload; the full 6,063-character corpus is required",
+      );
+    }
+    if (args.allowPartial) {
+      throw new Error(
+        "--allow-partial is not allowed with --upload; all characters must convert successfully",
+      );
+    }
+    if (args.skipVerify) {
+      throw new Error(
+        "--skip-verify is not allowed with --upload; post-upload byte verification is mandatory",
+      );
+    }
   }
 
   const outDir = args.out ?? DEFAULT_OUT;
@@ -679,17 +767,13 @@ export async function runCli(argv, deps = {}) {
   });
   log(`[upload] complete`);
 
-  // 5. Verify
-  if (!args.skipVerify) {
-    log(`[verify] re-downloading and hashing ${results.length} objects …`);
-    const verification = await verifyCorpusUploads(results, bucketName, {
-      runner: deps.runner,
-      sleep: deps.sleep,
-    });
-    log(`[verify] ok — ${verification.checkedKeys.length} keys match sha256`);
-  } else {
-    log(`[verify] skipped (--skip-verify)`);
-  }
+  // 5. Verify — always runs in upload mode (--skip-verify rejected above)
+  log(`[verify] re-downloading and hashing ${results.length} objects …`);
+  const verification = await verifyCorpusUploads(results, bucketName, {
+    runner: deps.runner,
+    sleep: deps.sleep,
+  });
+  log(`[verify] ok — ${verification.checkedKeys.length} keys match sha256`);
 
   return {
     ok: true,

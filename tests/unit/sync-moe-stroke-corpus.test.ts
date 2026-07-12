@@ -23,6 +23,7 @@ import {
   uploadCorpus,
   verifyCorpusUploads,
   parseArgs,
+  runCli,
   loadCheckpoint,
   EXPECTED_CORPUS_SIZE,
 } from "../../commands/sync-moe-stroke-corpus.mjs";
@@ -275,7 +276,87 @@ describe("convertAndWriteEntry / convertCorpus / checkpoint", () => {
     expect(seen).toEqual(["汛"]); // 町 skipped via checkpoint
     expect(gaps).toEqual([]);
     expect(results.map((r) => r.hex).sort()).toEqual(["6c5b", "753a"]);
+    // loadCheckpoint with outDir revalidates the file that convertCorpus wrote for 6c5b
+    expect(loadCheckpoint(checkpoint, outDir).has("6c5b")).toBe(true);
+    // loadCheckpoint without outDir skips file checks (test/read-only usage)
     expect(loadCheckpoint(checkpoint).has("6c5b")).toBe(true);
+  });
+
+  it("loadCheckpoint drops entry when local file is missing", () => {
+    const outDir = tmp();
+    const checkpoint = join(outDir, "checkpoint.ndjson");
+    const body = JSON.stringify(sampleJson);
+    const sha = createHash("sha256").update(body).digest("hex");
+    // Write checkpoint record but NO local file
+    writeFileSync(
+      checkpoint,
+      JSON.stringify({
+        status: "ok",
+        char: "町",
+        hex: "753a",
+        decimalId: 30010,
+        strokeCount: 1,
+        sha256: sha,
+        bytes: Buffer.byteLength(body),
+        sourceUrl: "u",
+        r2Key: "stroke-json/753a.json",
+      }) + "\n",
+    );
+    expect(loadCheckpoint(checkpoint, outDir).has("753a")).toBe(false); // file absent → re-convert
+    expect(loadCheckpoint(checkpoint).has("753a")).toBe(true); // no-outDir → accepted
+  });
+
+  it("loadCheckpoint drops entry when local file sha256 does not match checkpoint", () => {
+    const outDir = tmp();
+    const checkpoint = join(outDir, "checkpoint.ndjson");
+    const body = JSON.stringify(sampleJson);
+    const sha = createHash("sha256").update(body).digest("hex");
+    mkdirSync(join(outDir, "stroke-json"), { recursive: true });
+    // Write a DIFFERENT body than the sha256 in the checkpoint
+    writeFileSync(join(outDir, "stroke-json", "753a.json"), body + " ");
+    writeFileSync(
+      checkpoint,
+      JSON.stringify({
+        status: "ok",
+        char: "町",
+        hex: "753a",
+        decimalId: 30010,
+        strokeCount: 1,
+        sha256: sha,
+        bytes: Buffer.byteLength(body),
+        sourceUrl: "u",
+        r2Key: "stroke-json/753a.json",
+      }) + "\n",
+    );
+    expect(loadCheckpoint(checkpoint, outDir).has("753a")).toBe(false); // sha mismatch → re-convert
+  });
+
+  it("loadCheckpoint silently discards a truncated final crash line", () => {
+    const outDir = tmp();
+    const checkpoint = join(outDir, "checkpoint.ndjson");
+    const body = JSON.stringify(sampleJson);
+    const sha = createHash("sha256").update(body).digest("hex");
+    mkdirSync(join(outDir, "stroke-json"), { recursive: true });
+    writeFileSync(join(outDir, "stroke-json", "753a.json"), body);
+    writeFileSync(
+      checkpoint,
+      JSON.stringify({
+        status: "ok",
+        char: "町",
+        hex: "753a",
+        decimalId: 30010,
+        strokeCount: 1,
+        sha256: sha,
+        bytes: Buffer.byteLength(body),
+        sourceUrl: "u",
+        r2Key: "stroke-json/753a.json",
+      }) +
+        "\n" +
+        '{"status":"ok","hex":"6c5b","sha256":"abc', // truncated crash line
+    );
+    const map = loadCheckpoint(checkpoint, outDir);
+    expect(map.has("753a")).toBe(true);
+    expect(map.has("6c5b")).toBe(false);
   });
 });
 
@@ -457,6 +538,40 @@ describe("uploadCorpus / verifyCorpusUploads", () => {
       verifyCorpusUploads(entries, "bucket", { runner, sleep: async () => {} }),
     ).rejects.toThrow(/hash mismatch/);
   });
+
+  it("verifyCorpusUploads runs entries concurrently up to maxConcurrent=2", async () => {
+    // Three entries verified with maxConcurrent=2: all three complete, runner called exactly 3 times
+    const makeEntry = (hexSuffix: string, body: string) => ({
+      char: "一",
+      hex: `4e0${hexSuffix}`,
+      decimalId: 19968 + Number(hexSuffix),
+      strokeCount: 1,
+      sha256: createHash("sha256").update(body).digest("hex"),
+      bytes: Buffer.byteLength(body),
+      sourceUrl: "u",
+      r2Key: `stroke-json/4e0${hexSuffix}.json`,
+    });
+    const bodies = ["0", "1", "2"].map((s) =>
+      JSON.stringify([{ outline: [{ type: "M", x: Number(s), y: 0 }], track: [] }]),
+    );
+    const entries = bodies.map((b, i) => makeEntry(String(i), b));
+    let callCount = 0;
+    const runner = async (argv: string[]) => {
+      callCount++;
+      const fileArg = argv.find((a) => a.startsWith("--file="))!;
+      const idx = entries.findIndex((e) => argv.some((a) => a.includes(e.r2Key)));
+      writeFileSync(fileArg.slice("--file=".length), bodies[idx] ?? bodies[0]);
+      return { exitCode: 0, stdout: "", stderr: "" };
+    };
+    const result = await verifyCorpusUploads(entries, "bucket", {
+      runner,
+      sleep: async () => {},
+      maxConcurrent: 2,
+    });
+    expect(result.verified).toBe(true);
+    expect(result.checkedKeys).toHaveLength(3);
+    expect(callCount).toBe(3);
+  });
 });
 
 describe("parseArgs", () => {
@@ -467,6 +582,25 @@ describe("parseArgs", () => {
     expect(() => parseArgs(["--upload=prod"])).toThrow(/staging or production/);
     expect(() => parseArgs(["--concurrency", "99"])).toThrow(/1\.\.8/);
     expect(parseArgs(["--concurrency", "8"]).concurrency).toBe(8);
+  });
+
+  it("runCli rejects --limit, --allow-partial, and --skip-verify in upload mode", async () => {
+    // The upload guard fires before corpus discovery — no zip/chars-file needed.
+    // A no-op log suppresses output; the throws are the only observable result.
+    const noop = () => {};
+    await expect(runCli(["--upload=staging", "--limit", "5"], { log: noop })).rejects.toThrow(
+      /--limit/,
+    );
+    await expect(runCli(["--upload=staging", "--allow-partial"], { log: noop })).rejects.toThrow(
+      /--allow-partial/,
+    );
+    await expect(runCli(["--upload=staging", "--skip-verify"], { log: noop })).rejects.toThrow(
+      /--skip-verify/,
+    );
+    // Dry-run: all three accepted by parseArgs (runCli enforcement only applies to --upload)
+    expect(
+      parseArgs(["--dry-run", "--limit", "5", "--allow-partial", "--skip-verify"]).dryRun,
+    ).toBe(true);
   });
 });
 
