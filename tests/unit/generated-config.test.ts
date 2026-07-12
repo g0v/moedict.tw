@@ -7,6 +7,7 @@
  * with NO preview_bucket_name field. The parser must select the effective
  * bucket_name, not assume preview_bucket_name survives flattening.
  */
+import { join } from "node:path";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vite-plus/test";
@@ -56,19 +57,29 @@ const STAGING_CONFIG = {
 // ── parseGeneratedConfig ─────────────────────────────────────────────
 
 describe("parseGeneratedConfig", () => {
-  it("parses the real generated config file path", () => {
-    const configPath = "dist/cf_moedict_webkit_neo/wrangler.json";
-    const config = parseGeneratedConfig(configPath);
-    expect(config.name).toBe("cf-moedict-webkit-neo");
+  it("parses a generated config file from a self-contained temp path", () => {
+    const dir = mkdtempSync(join(tmpdir(), "generated-config-"));
+    try {
+      const configPath = join(dir, "wrangler.json");
+      writeFileSync(configPath, JSON.stringify(PROD_CONFIG));
+      const config = parseGeneratedConfig(configPath);
+      expect(config.name).toBe("cf-moedict-webkit-neo");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("rejects missing and malformed config files", () => {
-    expect(() => parseGeneratedConfig("/tmp/does-not-exist-wrangler.json")).toThrow();
-    const dir = mkdtempSync(`${tmpdir()}/generated-config-`);
-    const path = `${dir}/bad.json`;
-    writeFileSync(path, "{bad");
-    expect(() => parseGeneratedConfig(path)).toThrow();
-    rmSync(dir, { recursive: true, force: true });
+    const dir = mkdtempSync(join(tmpdir(), "generated-config-"));
+    try {
+      const missingPath = join(dir, "does-not-exist-wrangler.json");
+      expect(() => parseGeneratedConfig(missingPath)).toThrow();
+      const malformedPath = join(dir, "bad.json");
+      writeFileSync(malformedPath, "{bad");
+      expect(() => parseGeneratedConfig(malformedPath)).toThrow();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("accepts an already-parsed config object", () => {
@@ -86,6 +97,19 @@ describe("getAssetsBucketName", () => {
 
   it("extracts ASSETS bucket_name for production (explicit env)", () => {
     expect(getAssetsBucketName(PROD_CONFIG, "production")).toBe("moedict-assets");
+  });
+  it("accepts custom worker and bucket names under their authoritative environment", () => {
+    const customProduction = {
+      name: "renamed-worker",
+      r2_buckets: [{ binding: "ASSETS", bucket_name: "renamed-assets", remote: true }],
+    };
+    const customStaging = {
+      name: "preview-worker-renamed",
+      targetEnvironment: "staging",
+      r2_buckets: [{ binding: "ASSETS", bucket_name: "qa-assets", remote: true }],
+    };
+    expect(getAssetsBucketName(customProduction, "production")).toBe("renamed-assets");
+    expect(getAssetsBucketName(customStaging, "staging")).toBe("qa-assets");
   });
   it("rejects stale production config when staging is requested", () => {
     expect(() => getAssetsBucketName(PROD_CONFIG, "staging")).toThrow(/targetEnvironment|shape/);

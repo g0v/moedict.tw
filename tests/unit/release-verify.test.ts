@@ -321,6 +321,42 @@ describe("verifyRelease", () => {
     const runner = makeDownloadRunner(downloadedFiles);
     await expect(verifyRelease("bucket", "rel-9", manifest, { runner })).rejects.toThrow();
   });
+  it("rejects missing or wrong-typed required fields in a remote manifest", async () => {
+    const content = Buffer.from("x");
+    const hash = createHash("sha256").update(content).digest("hex");
+    const manifest = {
+      id: "rel-schema",
+      gitSha: "abc1234",
+      clientManifestDigest: "def56789012",
+      createdAt: "2026-07-12T00:00:00.000Z",
+      files: [{ path: "f.txt", sha256: hash, size: 1 }],
+    };
+    const invalidValues = {
+      id: 42,
+      gitSha: null,
+      clientManifestDigest: false,
+      createdAt: 123,
+      files: {},
+    } as const;
+    for (const [field, wrongValue] of Object.entries(invalidValues)) {
+      for (const value of [undefined, wrongValue]) {
+        const remoteManifest: Record<string, unknown> = { ...manifest, [field]: value };
+        if (value === undefined) delete remoteManifest[field];
+        const downloadedFiles = new Map<string, Buffer>([
+          ["releases/rel-schema/f.txt", content],
+          [
+            "releases/rel-schema/release-manifest.json",
+            Buffer.from(JSON.stringify(remoteManifest)),
+          ],
+        ]);
+        await expect(
+          verifyRelease("bucket", "rel-schema", manifest, {
+            runner: makeDownloadRunner(downloadedFiles),
+          }),
+        ).rejects.toThrow(/Malformed manifest schema/);
+      }
+    }
+  });
 
   it("retries download on R2 429 / code 971 then succeeds", async () => {
     const content = Buffer.from("hello");
@@ -351,7 +387,7 @@ describe("verifyRelease", () => {
       downloadCalls++;
       // First download attempt for f.txt returns 429
       if (downloadCalls === 1 && argv.includes("bucket/releases/rel-10/f.txt")) {
-        return { exitCode: 1, stdout: "", stderr: "[code: 971] rate limited" };
+        return { exitCode: 1, stdout: "", stderr: "status: 429 Too Many Requests" };
       }
       return baseRunner(argv);
     };

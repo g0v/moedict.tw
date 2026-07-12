@@ -40,7 +40,7 @@ import { join, relative, sep } from "node:path";
 /**
  * @typedef {Object} FsAdapter
  * @property {(path: string) => Buffer} readFileSync
- * @property {(path: string, opts: { withFileTypes: true }) => Array<{ name: string; isDirectory(): boolean }>} readdirSync
+ * @property {(path: string, opts: { withFileTypes: true }) => Array<{ name: string; isDirectory(): boolean; isSymbolicLink(): boolean }>} readdirSync
  */
 
 /**
@@ -71,6 +71,9 @@ function enumerateFiles(dir, fs) {
   const results = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
+    if (entry.isSymbolicLink()) {
+      throw new Error(`Refusing symbolic link outside release directory: ${full}`);
+    }
     if (entry.isDirectory()) {
       results.push(...enumerateFiles(full, fs));
     } else {
@@ -196,7 +199,9 @@ export function buildReleaseManifest(distClientDir, opts = {}) {
 const defaultFs = {
   readFileSync: (p) => readFileSync(p),
   readdirSync: (p, opts) =>
-    /** @type {Array<{ name: string; isDirectory(): boolean }>} */ (readdirSync(p, opts)),
+    /** @type {Array<{ name: string; isDirectory(): boolean; isSymbolicLink(): boolean }>} */ (
+      readdirSync(p, opts)
+    ),
 };
 
 const defaultGit = {

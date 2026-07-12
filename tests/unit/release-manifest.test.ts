@@ -7,6 +7,9 @@
  * small in-memory fixtures via injectable fs/git adapters.
  */
 
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vite-plus/test";
@@ -77,6 +80,21 @@ describe("buildClientManifest", () => {
     const manifestA = buildClientManifest("d", { fs: makeMemFs(filesA) });
     const manifestB = buildClientManifest("d", { fs: makeMemFs(filesB) });
     expect(manifestA).toEqual(manifestB);
+  });
+  it("rejects symbolic links instead of hashing files outside the release directory", () => {
+    const dir = mkdtempSync(join(tmpdir(), "release-manifest-symlink-"));
+    try {
+      writeFileSync(join(dir, "outside.txt"), "outside");
+      try {
+        symlinkSync(join(dir, "outside.txt"), join(dir, "linked.txt"));
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "EPERM") return;
+        throw error;
+      }
+      expect(() => buildClientManifest(dir)).toThrow(/symbolic link.*linked\.txt/i);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
@@ -255,6 +273,7 @@ interface FsAdapter {
   ): Array<{
     name: string;
     isDirectory(): boolean;
+    isSymbolicLink(): boolean;
   }>;
 }
 
@@ -300,7 +319,11 @@ function makeMemFs(files: Map<string, Buffer>): FsAdapter {
         baseDir = p.replace(/\\/g, "/");
       }
       const prefix = toVirtual(p);
-      const entries: Array<{ name: string; isDirectory(): boolean }> = [];
+      const entries: Array<{
+        name: string;
+        isDirectory(): boolean;
+        isSymbolicLink(): boolean;
+      }> = [];
       const seen = new Set<string>();
       for (const key of files.keys()) {
         const rel =
@@ -310,13 +333,13 @@ function makeMemFs(files: Map<string, Buffer>): FsAdapter {
         if (slashIdx === -1) {
           if (!seen.has(rel)) {
             seen.add(rel);
-            entries.push({ name: rel, isDirectory: () => false });
+            entries.push({ name: rel, isDirectory: () => false, isSymbolicLink: () => false });
           }
         } else {
           const dirName = rel.slice(0, slashIdx);
           if (!seen.has(dirName)) {
             seen.add(dirName);
-            entries.push({ name: dirName, isDirectory: () => true });
+            entries.push({ name: dirName, isDirectory: () => true, isSymbolicLink: () => false });
           }
         }
       }

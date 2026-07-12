@@ -39,7 +39,7 @@ import { releaseKey, immutableKey, isImmutableAsset } from "../../src/utils/rele
 /**
  * @typedef {Object} FsAdapter
  * @property {(path: string) => Buffer} readFileSync
- * @property {(path: string, opts: { withFileTypes: true }) => Array<{ name: string; isDirectory(): boolean }>} readdirSync
+ * @property {(path: string, opts: { withFileTypes: true }) => Array<{ name: string; isDirectory(): boolean; isSymbolicLink(): boolean }>} readdirSync
  */
 
 // Production runner uses the project-local Wrangler through `vp exec`; argv
@@ -204,10 +204,10 @@ function is429Error(err) {
   if (e.code === 971 || e.code === 429) return true;
   const hasRateLimitText = (value) =>
     typeof value === "string" &&
-    (/\bHTTP\s+429\b/i.test(value) ||
-      /\bstatus\s+429\b/i.test(value) ||
-      /\bToo Many Requests\b/i.test(value) ||
-      /\[code:\s*971\]/i.test(value));
+    (/\b(?:error\s+)?code\s*[:=]?\s*971\b/i.test(value) ||
+      /\bstatus(?:\s+code)?\s*[:=]?\s*429\b/i.test(value) ||
+      /\bHTTP\s+429\b/i.test(value) ||
+      /\bToo Many Requests\b/i.test(value));
   return hasRateLimitText(e.stderr) || hasRateLimitText(e.message);
 }
 
@@ -257,6 +257,9 @@ function enumerateFiles(dir, fs) {
   const results = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
+    if (entry.isSymbolicLink()) {
+      throw new Error(`Refusing symbolic link outside release directory: ${full}`);
+    }
     if (entry.isDirectory()) {
       results.push(...enumerateFiles(full, fs));
     } else {
@@ -349,5 +352,7 @@ const defaultFs = {
   readFileSync: (p) => readFileSync(p),
   statSync: (p) => statSync(p),
   readdirSync: (p, opts) =>
-    /** @type {Array<{ name: string; isDirectory(): boolean }>} */ (realReaddirSync(p, opts)),
+    /** @type {Array<{ name: string; isDirectory(): boolean; isSymbolicLink(): boolean }>} */ (
+      realReaddirSync(p, opts)
+    ),
 };

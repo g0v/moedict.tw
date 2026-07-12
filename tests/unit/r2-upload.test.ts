@@ -7,8 +7,8 @@
  * correct MIME/cache-control/remote args, argv (not shell string) execution,
  * immutable promotion via shared isImmutableAsset, shared releaseKey/immutableKey.
  */
-import { existsSync } from "node:fs";
-import { dirname } from "node:path";
+import { existsSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vite-plus/test";
 import {
@@ -141,6 +141,21 @@ describe("uploadWithConcurrency", () => {
     }));
     await expect(uploadWithConcurrency(files, "bucket", { runner })).rejects.toThrow();
   });
+
+  it("retries an uploadObject rate-limit error in the bounded pool", async () => {
+    let calls = 0;
+    const runner = async () => {
+      calls++;
+      if (calls === 1) return { exitCode: 1, stdout: "", stderr: "error code 971: throttled" };
+      return { exitCode: 0, stdout: "", stderr: "" };
+    };
+    await uploadWithConcurrency(
+      [{ key: "key", filePath: "/f", contentType: "text/plain", cacheControl: "public" }],
+      "bucket",
+      { runner, sleep: () => Promise.resolve() },
+    );
+    expect(calls).toBe(2);
+  });
 });
 
 // ── retryWithBackoff ─────────────────────────────────────────────────
@@ -199,8 +214,12 @@ describe("retryWithBackoff", () => {
     for (const stderr of [
       "HTTP 429 Too Many Requests",
       "status 429",
+      "status: 429",
+      "status code: 429",
       "Too Many Requests",
       "[code: 971]",
+      "error code 971",
+      "code: 971",
     ]) {
       let calls = 0;
       const result = await retryWithBackoff(
@@ -435,6 +454,26 @@ describe("uploadReleaseToR2", () => {
     expect(manifestPath).toMatch(/release-manifest\.json$/);
     expect(existsSync(dirname(manifestPath))).toBe(false);
   });
+  it("rejects symbolic links instead of publishing files outside the release directory", async () => {
+    const dir = mkdtempSync(join("/tmp", "r2-upload-symlink-"));
+    try {
+      writeFileSync(join(dir, "outside.txt"), "outside");
+      try {
+        symlinkSync(join(dir, "outside.txt"), join(dir, "linked.txt"));
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "EPERM") return;
+        throw error;
+      }
+      await expect(
+        uploadReleaseToR2("symlink-release", dir, "bucket", {
+          runner: async () => ({ exitCode: 0, stdout: "", stderr: "" }),
+          manifestJson: "{}",
+        }),
+      ).rejects.toThrow(/symbolic link.*linked\.txt/i);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 // ── Test helpers ─────────────────────────────────────────────────────
@@ -448,6 +487,7 @@ interface FsAdapter {
   ): Array<{
     name: string;
     isDirectory(): boolean;
+    isSymbolicLink(): boolean;
   }>;
 }
 
@@ -486,7 +526,11 @@ function makeMemFs(files: Map<string, Buffer>): FsAdapter {
     readdirSync(p: string, _opts) {
       if (!baseDir) baseDir = p.replace(/\\/g, "/");
       const prefix = toVirtual(p);
-      const entries: Array<{ name: string; isDirectory(): boolean }> = [];
+      const entries: Array<{
+        name: string;
+        isDirectory(): boolean;
+        isSymbolicLink(): boolean;
+      }> = [];
       const seen = new Set<string>();
       for (const key of files.keys()) {
         const rel =
@@ -496,13 +540,13 @@ function makeMemFs(files: Map<string, Buffer>): FsAdapter {
         if (slashIdx === -1) {
           if (!seen.has(rel)) {
             seen.add(rel);
-            entries.push({ name: rel, isDirectory: () => false });
+            entries.push({ name: rel, isDirectory: () => false, isSymbolicLink: () => false });
           }
         } else {
           const dirName = rel.slice(0, slashIdx);
           if (!seen.has(dirName)) {
             seen.add(dirName);
-            entries.push({ name: dirName, isDirectory: () => true });
+            entries.push({ name: dirName, isDirectory: () => true, isSymbolicLink: () => false });
           }
         }
       }

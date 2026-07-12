@@ -75,13 +75,6 @@ export function getAssetsBucketName(config, env) {
   if (typeof name !== "string" || !name) {
     throw new Error("Worker name not found in generated config");
   }
-  const stagingShape = normalizedEnv === "staging";
-  if (
-    stagingShape !== name.endsWith("-staging") ||
-    stagingShape !== bucketName.endsWith("-preview")
-  ) {
-    throw new Error(`Generated config worker/bucket shape mismatch for ${normalizedEnv}`);
-  }
   return bucketName;
 }
 
