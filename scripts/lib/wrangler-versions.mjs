@@ -302,6 +302,40 @@ export function findVersionByTag(versions, tag) {
 }
 
 /**
+ * Resolve the release tag (`annotations["workers/tag"]`) for a version
+ * UUID that is already known to exist (e.g. a rollback target read from
+ * `versions list`). The inverse of `findVersionByTag`. Requires the UUID
+ * to match exactly one version entry AND that entry to carry a non-empty
+ * `annotations["workers/tag"]` — a version uploaded before this feature
+ * shipped (no `--tag`) has no safe rollback target tag to smoke-test
+ * against, so it is refused rather than guessed.
+ * @param {Array<Record<string, unknown>>} versions
+ * @param {string} uuid
+ * @returns {string}
+ */
+export function findTagByVersionId(versions, uuid) {
+  if (!Array.isArray(versions)) {
+    throw new Error("findTagByVersionId: versions must be an array");
+  }
+  validateVersionUuid(uuid);
+  const matches = versions.filter((v) => v?.id === uuid);
+  if (matches.length === 0) {
+    throw new Error(`No version found with UUID ${uuid}`);
+  }
+  if (matches.length > 1) {
+    throw new Error(`Ambiguous: ${matches.length} versions found with UUID ${uuid}`);
+  }
+  const annotations = /** @type {Record<string, unknown> | undefined} */ (matches[0].annotations);
+  const tag = annotations?.["workers/tag"];
+  if (typeof tag !== "string" || tag === "") {
+    throw new Error(
+      `Version ${uuid} has no annotations["workers/tag"] — it predates tagged releases and cannot be safely rolled back to (no release ID to smoke-test against)`,
+    );
+  }
+  return tag;
+}
+
+/**
  * Get the current (most recent by `created_on`) deployment via
  * `wrangler deployments list --json`.
  * @param {string} configPath

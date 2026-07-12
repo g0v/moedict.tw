@@ -168,11 +168,24 @@ vp run preview
 - 這些索引檔不會打包進 Workers assets，避免單一檔案超過 Cloudflare Workers 靜態資產 25 MiB 限制。
 - 正式部署前若字典資料有更新，請先執行 `vp run build-search-index`，再執行 `sh commands/upload_dictionary.sh` 上傳最新的 `search-index/`。
 
-部署：
+部署（零停機兩階段 rollout，先 staging 再 production；沒有裸 `wrangler deploy`）：
 
 ```bash
-vp run deploy
+bun run deploy:staging   # build → 發布 R2 → 兩階段 rollout（0% smoke → 100% + 120秒 probe）
+bun run deploy           # 需先通過 staging（同一 git SHA + manifest digest）才會放行
 ```
+
+緊急復原（需明確目標 version UUID，不會自動猜「上一版」）：
+
+```bash
+bun run deploy:rollback -- <known-good-version-uuid>
+```
+
+完整協定、`CF_VERSION_METADATA`／R2 fallback 細節、失敗矩陣見
+[`notes/零停機部署筆記.md`](./notes/零停機部署筆記.md)、
+[`AGENTS.md`](./AGENTS.md#部署零停機兩階段-rollout這是規範不是建議) 與
+[`docs/superpowers/recovery.md`](./docs/superpowers/recovery.md)（人工唯讀診斷
+與 positional 復原指令）。
 
 ## 補充：現有上傳腳本
 

@@ -1030,7 +1030,7 @@ describe("listVersions", () => {
 
 Functions:
 
-- `uploadVersion(configPath, tag)` → `wrangler versions upload --config <configPath> --tag <tag> --json`
+- `uploadVersion(configPath, tag)` → `wrangler versions upload --config <configPath> --tag <tag>` (NO `--json` — Wrangler 4.110 rejects it on `versions upload`; parse the plain-text `Worker Version ID: <uuid>` line instead, then cross-confirm via `versions list --json`'s `annotations["workers/tag"]`, which is where the tag actually surfaces — there is no top-level `tag` field)
 - `deployVersionSplit(configPath, ...specs)` → `wrangler versions deploy --config <configPath> <uuid>@<percentage> [<uuid>@<percentage>...] -y` (positional UUID@percentage specs, NOT --version-tag/--percentage)
 - `rollbackToVersion(configPath, oldUuid, newUuid)` → `wrangler versions deploy --config <configPath> <old-uuid>@100% <new-uuid>@0% -y`
 - `listVersions(configPath, workerName)` → `wrangler versions list --config <configPath> --name <workerName> --json`
@@ -1261,11 +1261,25 @@ Replace:
 With:
 
 ```json
-"deploy": "vp run build && node scripts/release-deploy.mjs",
-"deploy:staging": "CLOUDFLARE_ENV=staging vp run build && node scripts/release-deploy.mjs",
+"deploy": "vp run build && node scripts/release-publish.mjs && node scripts/release-deploy.mjs",
+"deploy:staging": "CLOUDFLARE_ENV=staging vp run build && CLOUDFLARE_ENV=staging node scripts/release-publish.mjs && CLOUDFLARE_ENV=staging node scripts/release-deploy.mjs",
 "deploy:rollback": "node scripts/release-rollback.mjs",
+"deploy:rollback:staging": "CLOUDFLARE_ENV=staging node scripts/release-rollback.mjs",
 "deploy:publish-only": "vp run build && node scripts/release-publish.mjs",
+"deploy:publish-only:staging": "CLOUDFLARE_ENV=staging vp run build && CLOUDFLARE_ENV=staging node scripts/release-publish.mjs",
 ```
+
+**Correction to an earlier draft of this plan:** the chain MUST include
+`release-publish.mjs` — a deploy that only builds then runs
+`release-deploy.mjs` never uploads the release to R2, so the version rollout
+would reference a release ID with no corresponding R2 objects (defeating
+the B design goal entirely). The chain is also a SINGLE build's output
+flowing through publish and rollout — never rebuild between them, since a
+second build's manifest digest is not guaranteed to match what was actually
+published to R2. `&&`-chained commands do not share a shell-prefixed env var
+with each other (only `VAR=val cmd1 && cmd2` scopes `VAR` to `cmd1` alone),
+so staging repeats `CLOUDFLARE_ENV=staging` before every command in the
+chain, not just the first.
 
 No `wrangler deploy` accessible under standard commands.
 
@@ -1356,22 +1370,15 @@ bun run test
 
 All must pass on actual main (not the worktree).
 
-- [ ] **Step 3: Build and publish staging**
-
-```bash
-CLOUDFLARE_ENV=staging vp run build
-node scripts/release-publish.mjs   # uploads to preview R2 bucket
-```
-
-- [ ] **Step 4: Deploy staging with new protocol**
+- [ ] **Step 3: Deploy staging with the safe orchestrator (build → publish → rollout in one chain)**
 
 ```bash
 bun run deploy:staging
 ```
 
-This runs the full orchestrator: upload version → 0% → smoke → promote → probe → soak.
+This is `CLOUDFLARE_ENV=staging vp run build && CLOUDFLARE_ENV=staging node scripts/release-publish.mjs && CLOUDFLARE_ENV=staging node scripts/release-deploy.mjs` — ONE build's output flows through publish and the full orchestrator (upload version → 0% → smoke → promote → probe → soak → finalize). **Correction to an earlier draft:** do NOT build+publish as a separate manual step before this — that would build twice (once manually, once inside `deploy:staging`), risking a release-ID/digest mismatch between what was published and what the orchestrator finalizes.
 
-- [ ] **Step 5: Exercise fallback in automated local/integration tests**
+- [ ] **Step 4: Exercise fallback in automated local/integration tests**
 
 Run integration tests that exercise the R2 fallback:
 
@@ -1381,7 +1388,7 @@ bun run test:integration
 
 Verify R2 shell fallback, asset fallback, 503 recovery all work.
 
-- [ ] **Step 6: Functional staging browser smoke**
+- [ ] **Step 5: Functional staging browser smoke**
 
 Manually browse `https://cf-moedict-webkit-neo-staging.audreyt.workers.dev`:
 
@@ -1390,34 +1397,25 @@ Manually browse `https://cf-moedict-webkit-neo-staging.audreyt.workers.dev`:
 - Static assets load
 - Version headers present
 
-- [ ] **Step 7: Save staging approval state**
+Staging approval (git SHA + client manifest digest) is saved AUTOMATICALLY
+by `deploy:staging` itself the moment its final smoke passes — there is no
+separate "save approval" step and no `--save-staging-approval` flag (it does
+not exist on `release-deploy.mjs`). If Step 3 succeeded, the approval is
+already recorded.
 
-Record staging-approved git SHA and client manifest digest:
-
-```bash
-node scripts/release-deploy.mjs --save-staging-approval
-```
-
-- [ ] **Step 8: Build and publish production**
-
-```bash
-vp run build   # CLOUDFLARE_ENV defaults to production
-node scripts/release-publish.mjs
-```
-
-- [ ] **Step 9: Deploy production with new protocol**
+- [ ] **Step 6: Deploy production with the safe orchestrator (build → publish → rollout in one chain)**
 
 ```bash
 bun run deploy
 ```
 
-This checks staging approval gate, then runs the full orchestrator for production.
+This is `vp run build && node scripts/release-publish.mjs && node scripts/release-deploy.mjs` — same one-build-through-rollout shape as staging. `release-deploy.mjs` checks the staging approval gate (same git SHA + same client manifest digest, re-verified against production's own rebuilt digest) BEFORE any mutating Wrangler call, then runs the full orchestrator for production. **Correction to an earlier draft:** do NOT build+publish as a separate manual step before this, for the same one-build reason as Step 3.
 
-- [ ] **Step 10: Continuous probes and final browser smoke**
+- [ ] **Step 7: Continuous probes and final browser smoke**
 
 Orchestrator runs continuous probes for 120s after promotion. Then final browser smoke against `https://www.moedict.tw`.
 
-- [ ] **Step 11: Never deploy from feature worktree after merge**
+- [ ] **Step 8: Never deploy from feature worktree after merge**
 
 All production deploys are from main, never from the feature worktree.
 

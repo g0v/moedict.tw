@@ -24,6 +24,7 @@ jobs:
       - run: vp check
       - run: vp run typecheck
       - run: vp node scripts/check-v8-ignore-count.mjs
+      - run: vp node scripts/check-deploy-scripts-safety.mjs
       - run: vp run check:data
       - run: vp run check:trs
       - run: vp run check:css-ids

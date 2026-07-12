@@ -13,6 +13,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   deployVersionSplit,
+  findTagByVersionId,
   findVersionByTag,
   getCurrentDeployment,
   listVersions,
@@ -316,6 +317,50 @@ describe("findVersionByTag", () => {
       { id: NEW_UUID, annotations: { "workers/tag": TAG } },
     ];
     expect(() => findVersionByTag(versions, TAG)).toThrow(/Ambiguous/);
+  });
+});
+
+describe("findTagByVersionId", () => {
+  it("resolves the release tag for a known UUID (inverse of findVersionByTag)", () => {
+    const versions = [
+      { id: OLD_UUID, annotations: { "workers/tag": "other-tag" } },
+      { id: NEW_UUID, annotations: { "workers/tag": TAG } },
+    ];
+    expect(findTagByVersionId(versions, NEW_UUID)).toBe(TAG);
+  });
+
+  it("throws when no version matches the UUID", () => {
+    expect(() => findTagByVersionId([{ id: OLD_UUID, annotations: {} }], NEW_UUID)).toThrow(
+      `No version found with UUID ${NEW_UUID}`,
+    );
+  });
+
+  it("throws when versions is not an array", () => {
+    expect(() => findTagByVersionId(null as never, NEW_UUID)).toThrow(/must be an array/);
+  });
+
+  it("throws when multiple versions share the same UUID (ambiguous)", () => {
+    const versions = [
+      { id: NEW_UUID, annotations: { "workers/tag": TAG } },
+      { id: NEW_UUID, annotations: { "workers/tag": "dup-tag" } },
+    ];
+    expect(() => findTagByVersionId(versions, NEW_UUID)).toThrow(/Ambiguous/);
+  });
+
+  it("throws when the matched version has no annotations[workers/tag] (predates tagged releases)", () => {
+    expect(() => findTagByVersionId([{ id: NEW_UUID, annotations: {} }], NEW_UUID)).toThrow(
+      /has no annotations\["workers\/tag"\]/,
+    );
+  });
+
+  it("throws when the matched version has an empty-string tag", () => {
+    expect(() =>
+      findTagByVersionId([{ id: NEW_UUID, annotations: { "workers/tag": "" } }], NEW_UUID),
+    ).toThrow(/has no annotations\["workers\/tag"\]/);
+  });
+
+  it("validates the UUID argument before searching", () => {
+    expect(() => findTagByVersionId([], "not-a-uuid")).toThrow(/Invalid version UUID/);
   });
 });
 

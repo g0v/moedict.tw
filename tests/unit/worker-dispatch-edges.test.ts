@@ -173,6 +173,22 @@ describe("dispatch — *.png image generation fallback", () => {
     expect(res.headers.get("content-type")).toBe("image/png");
   });
 
+  it("still generates a PNG when ASSETS.get is not a function (getAssetsBucket malformed-candidate branch)", async () => {
+    const pathSvg = '<svg><path d="M0 0 L10 10"/></svg>';
+    const env = makeEnv({
+      // Present but shaped wrong: has a `get` key, but it's not callable —
+      // exercises the `typeof candidate.get !== "function"` guard distinct
+      // from the `!candidate` guard covered above.
+      ASSETS: { get: "not-a-function" } as unknown as AnyEnv["ASSETS"],
+      FONTS: makeBucket({
+        "TW-Kai/U+840C.svg": { body: pathSvg, contentType: "image/svg+xml" },
+      }),
+    });
+    const res = await dispatch(req("/%E8%90%8C.png"), env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/png");
+  });
+
   it("still takes the .png branch when the ASSETS fetcher 404s on the path", async () => {
     // Confirms the `(!staticResponse || staticResponse.status === 404)`
     // disjunction covers the 404 arm.

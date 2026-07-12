@@ -673,28 +673,62 @@ gradual rollout or rollback.
 
 ### Cutover
 
-Replace with safe orchestrator commands:
+Replace with safe orchestrator commands — a single `&&` chain per
+environment so ONE build's output flows through publish and rollout, never
+rebuilt in between:
 
 ```json
-"deploy": "node scripts/release-deploy.mjs",
-"deploy:staging": "CLOUDFLARE_ENV=staging node scripts/release-deploy.mjs",
+"deploy": "vp run build && node scripts/release-publish.mjs && node scripts/release-deploy.mjs",
+"deploy:staging": "CLOUDFLARE_ENV=staging vp run build && CLOUDFLARE_ENV=staging node scripts/release-publish.mjs && CLOUDFLARE_ENV=staging node scripts/release-deploy.mjs",
+"deploy:rollback": "node scripts/release-rollback.mjs",
+"deploy:rollback:staging": "CLOUDFLARE_ENV=staging node scripts/release-rollback.mjs",
+"deploy:publish-only": "vp run build && node scripts/release-publish.mjs",
+"deploy:publish-only:staging": "CLOUDFLARE_ENV=staging vp run build && CLOUDFLARE_ENV=staging node scripts/release-publish.mjs",
 ```
 
-The orchestrator (`scripts/release-deploy.mjs`) runs the full safe
-protocol: build → publish → upload version → 0% deploy → smoke → promote →
-probe → soak → final smoke.
+**Correction to an earlier draft of this spec:** `release-deploy.mjs` does
+NOT build or publish internally — it is a pure rollout orchestrator that
+consumes `dist/client` and the generated Wrangler config that a prior
+`vp run build` + `release-publish.mjs` already produced (see its own module
+header: "Task 3 assumes Task 2's build/publish output ... already exists").
+A `deploy` script that only builds then runs `release-deploy.mjs` — omitting
+`release-publish.mjs` — would upload a Worker version tagged with a release
+ID that has no corresponding R2 objects, defeating design B (the durable R2
+release fallback) entirely: the shell/asset fallback keys
+`releases/<tag>/...` would never exist. The three composable CLIs
+(`vp run build`, `release-publish.mjs`, `release-deploy.mjs`) are chained in
+`package.json`, not merged into one script — each remains independently
+invokable (`deploy:publish-only` builds and publishes without rolling out).
+`&&`-chained commands do not inherit a shell-prefixed env var from an
+earlier command in the same chain (only `VAR=val cmd1 && cmd2` scopes `VAR`
+to `cmd1`), so the staging chain repeats `CLOUDFLARE_ENV=staging` before
+every command.
 
 ### Guard Failures
 
-If someone tries to run `wrangler deploy` directly, the orchestrator should
-detect this and fail with a clear message pointing to the safe command. This
-can be a simple wrapper or a CI check. The existing `deploy` / `deploy:staging`
-scripts MUST NOT leave an unsafe `wrangler deploy` path accessible under
-standard commands.
+No runtime wrapper is needed: `wrangler deploy` is simply never referenced
+by any standard `package.json` script once the cutover above lands. This is
+enforced statically — `scripts/check-deploy-scripts-safety.mjs` (run in
+CI's static job) fails the build if any `package.json` script value matches
+`wrangler deploy`, and `tests/unit/package-deploy-scripts.test.ts` locks the
+exact chain strings so a regression is a failing test, not just a lint
+warning. The existing `deploy` / `deploy:staging` scripts MUST NOT leave an
+unsafe `wrangler deploy` path accessible under standard commands.
 
 ### Recovery Commands
 
-Document (but don't automate) manual recovery commands:
+**Correction to an earlier draft of this spec:** rollback is NOT
+documentation-only. `scripts/release-rollback.mjs` (`deploy:rollback` /
+`deploy:rollback:staging`) is a real, dependency-injected, unit-tested CLI:
+given an explicit target version UUID, it deploys `target@100%/current@0%`,
+runs a bounded final smoke on fixed non-hashed core routes, restores
+`current@100%/target@0%` on failure (reporting both errors if the restore
+also fails), and on success finalizes `target@100%` alone with
+env-namespaced state persisted — reusing the same Wrangler-versions wrapper,
+smoke probe, and deployment-state modules as `release-deploy.mjs`. The
+manual positional commands below remain documented separately (see
+`docs/superpowers/recovery.md`) as the last-resort path for when the
+automated rollback itself cannot run:
 
 ```bash
 # List current versions
