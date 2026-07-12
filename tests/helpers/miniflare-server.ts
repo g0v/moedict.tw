@@ -20,6 +20,8 @@ export interface TestServer {
 export interface StartOptions {
   includeAssets?: boolean;
   port?: number;
+  /** When set, binds `CF_VERSION_METADATA` to this value. */
+  versionMetadata?: { id: string; tag: string; timestamp: string };
 }
 
 interface SeedableR2Bucket {
@@ -66,6 +68,7 @@ export async function startTestServer(options: StartOptions = {}): Promise<TestS
     bindings: {
       ASSET_BASE_URL: "https://r2-assets.test.local",
       DICTIONARY_BASE_URL: "https://r2-dictionary.test.local",
+      ...(options.versionMetadata ? { CF_VERSION_METADATA: options.versionMetadata } : {}),
     },
     verbose: false,
   };

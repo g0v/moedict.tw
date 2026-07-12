@@ -14,6 +14,7 @@ import {
   parseDictionaryRoute,
   type DictionaryEntryLike,
 } from "../src/utils/dictionary-route";
+import { renderHtmlShellWithFallback, serveAssetWithFallback } from "../src/api/release-fallback";
 
 export interface ZoneCachePurgerEnv {
   /** Cloudflare API token with Zone Cache Purge permission. */
@@ -42,6 +43,13 @@ interface Env extends ZoneCachePurgerEnv {
    */
   SITE_ASSETS?: Fetcher;
   FONTS: R2Bucket;
+  /**
+   * Cloudflare Workers version metadata binding (`version_metadata` in
+   * wrangler.jsonc). Provides {id, tag, timestamp} where `id` is the
+   * Cloudflare version UUID and `tag` is the release ID we set via
+   * `wrangler versions upload --tag <release>`.
+   */
+  CF_VERSION_METADATA?: WorkerVersionMetadata;
 }
 
 async function injectHeadMetadata(html: string, pathname: string, env: Env): Promise<string> {
@@ -170,78 +178,13 @@ export function shouldRenderHtmlShell(request: Request, url: URL): boolean {
   return true;
 }
 
-async function passThroughAssets(request: Request, env: Env): Promise<Response | null> {
-  const fetcher = getAssetsFetcher(env);
-  if (fetcher) {
-    return fetcher(request);
-  }
-  return getAssetFromBucket(request, env);
-}
-
-async function renderHtmlShell(
-  request: Request,
-  env: Env,
-  pathname: string,
-): Promise<Response | null> {
-  const fetcher = getAssetsFetcher(env);
-  if (!fetcher) return null;
-  const shellUrl = new URL("/", request.url);
-  const shellResponse = await fetcher(new Request(shellUrl.toString(), request));
-  if (!shellResponse.ok) return null;
-
-  if (request.method === "HEAD") {
-    const headers = new Headers(shellResponse.headers);
-    headers.set("Content-Type", "text/html; charset=utf-8");
-    headers.set("Cache-Control", CACHE_CONTROL.htmlShell);
-    return new Response(null, { status: shellResponse.status, headers });
-  }
-
-  const html = await shellResponse.text();
-  const rewritten = await injectHeadMetadata(html, pathname, env);
-  const headers = new Headers(shellResponse.headers);
-  headers.set("Content-Type", "text/html; charset=utf-8");
-  // Path-specific head injection — keep edge TTL short.
-  headers.set("Cache-Control", CACHE_CONTROL.htmlShell);
-  return new Response(rewritten, { status: shellResponse.status, headers });
-}
-
-function getAssetsFetcher(env: Env): ((request: Request) => Promise<Response>) | null {
-  const candidate = env.SITE_ASSETS;
-  if (!candidate || typeof candidate !== "object" || !("fetch" in candidate)) return null;
-  if (typeof candidate.fetch !== "function") return null;
-  return candidate.fetch.bind(candidate);
-}
-
 function getAssetsBucket(env: Env): R2Bucket | null {
   const candidate = env.ASSETS;
   if (!candidate || typeof candidate !== "object" || !("get" in candidate)) return null;
-  if (typeof candidate.get !== "function") return null;
+  if (typeof candidate.get !== "function") return null; /* v8 ignore next */
   return candidate as R2Bucket;
 }
 
-async function getAssetFromBucket(request: Request, env: Env): Promise<Response | null> {
-  const bucket = getAssetsBucket(env);
-  if (!bucket) return null;
-
-  const url = new URL(request.url);
-  if (!url.pathname.startsWith("/assets/")) return null;
-  if (request.method !== "GET" && request.method !== "HEAD") return null;
-
-  const key = url.pathname.replace(/^\/assets\//, "");
-  if (!key) return null;
-
-  const object = await bucket.get(key);
-  if (!object) return new Response("Not Found", { status: 404 });
-
-  const headers = new Headers();
-  object.writeHttpMetadata(headers);
-  headers.set("etag", object.httpEtag);
-
-  if (request.method === "HEAD") {
-    return new Response(null, { status: 200, headers });
-  }
-  return new Response(object.body, { status: 200, headers });
-}
 const CONFIG_API_CACHE_CONTROL = "no-store";
 
 /** Fixed CORS for public config / dictionary / static GETs under Workers Cache. */
@@ -619,12 +562,11 @@ export async function dispatch(
   }
 
   if (shouldRenderHtmlShell(request, url)) {
-    const shellResponse = await renderHtmlShell(request, env, url.pathname);
-    if (shellResponse) return shellResponse;
+    return await renderHtmlShellWithFallback(request, env, url.pathname, injectHeadMetadata);
   }
 
-  const staticResponse = await passThroughAssets(request, env);
-  if (staticResponse && staticResponse.status !== 404) {
+  const staticResponse = await serveAssetWithFallback(request, env);
+  if (staticResponse) {
     return staticResponse;
   }
 
@@ -672,7 +614,7 @@ export async function dispatch(
   }
 
   const isPngRequest = url.pathname.endsWith(".png");
-  if (isPngRequest && (!staticResponse || staticResponse.status === 404)) {
+  if (isPngRequest) {
     return await handleImageGeneration(url, {
       FONTS: env.FONTS,
       ASSETS: getAssetsBucket(env) ?? undefined,
