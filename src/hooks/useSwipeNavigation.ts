@@ -103,11 +103,11 @@ export function useSwipeNavigation(): (el: HTMLElement | null) => void {
       if (deltaX > 0) {
         // 往右滑 → 上一頁：必須從「左邊緣」起手
         if (start.x > EDGE_ZONE) return;
-        navigateRef.current(-1);
+        void navigateRef.current(-1);
       } else {
         // 往左滑 → 下一頁：必須從「右邊緣」起手
         if (start.x < viewportWidth - EDGE_ZONE) return;
-        navigateRef.current(1);
+        void navigateRef.current(1);
       }
     };
 

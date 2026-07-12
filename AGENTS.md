@@ -339,9 +339,13 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
   所以 `vp lint`／`vp check` 會同時檢查 `src`、`worker`、tests、scripts 與
   Playwright 設定。啟用時已修完 tests/tooling 的 TypeScript diagnostics；
   tests 雖不屬於 `tsc -b` leaf project，仍由 Vite+ 的逐檔 diagnostics 把關。
-  目前另有約 43 個建議級（warn）發現，不阻擋 CI：主要是刻意忽略的 navigation
-  promise、`HeadersInit` union spread，以及測試 monkey-patch 的 unbound-method。
-  這些必須逐條判斷後再升為 error，不能批次加 `void` 或 disable 掩蓋。
+  2026-07 已把當時約 43 個建議級（warn）發現逐條判斷修完，`vp lint` 現在乾淨：
+  navigation 的 fire-and-forget `navigate()` 補上明確 `void`、`AssetLoader`
+  補上真正的 `.catch`、兩處 `getCORSHeaders` 回傳型別收斂為
+  `Record<string, string>`、`no-base-to-string` 的來源改用明確型別窄化（有
+  對應單元測試涵蓋新分支），monkey-patch 的 unbound-method 則附理由的
+  `oxlint-disable-next-line`。往後新出現的 type-aware 發現仍須逐條判斷，
+  不能批次加 `void` 或 disable 掩蓋。
 
 ## 授權紅線
 

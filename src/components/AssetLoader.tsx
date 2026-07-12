@@ -154,7 +154,10 @@ export function AssetLoader({ r2Endpoint, onCriticalStylesReady }: AssetLoaderPr
       setAssetsLoaded(true);
     };
 
-    loadAssets();
+    loadAssets().catch((err: unknown) => {
+      console.error("資源載入初始化失敗:", err);
+      setAssetsLoaded(true);
+    });
   }, [r2Endpoint, assetsLoaded, onCriticalStylesReady, criticalStylesNotified]);
 
   return null;

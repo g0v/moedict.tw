@@ -32,7 +32,9 @@ function fixInitialURL() {
  * 攔截 history API，確保所有導航操作都使用未編碼的 URL
  */
 function setupHistoryInterceptor() {
+  // oxlint-disable-next-line typescript/unbound-method -- saved for `.call(this, …)` invocation below, never called unbound
   const originalPushState = window.history.pushState;
+  // oxlint-disable-next-line typescript/unbound-method -- saved for `.call(this, …)` invocation below, never called unbound
   const originalReplaceState = window.history.replaceState;
 
   window.history.pushState = function (state, title, url) {

@@ -158,13 +158,12 @@ async function writeHakkaLookupMaps(indexByType) {
   }
 }
 
+// Same intentional NFD combining-diacritic match as HAKKA_SYLLABLE_RE above.
+// oxlint-disable-next-line no-misleading-character-class
+const TL_RAW_TOKEN_RE = /[A-Za-z\u00C0-\u024F\u1E00-\u1EFF\u0300-\u036F\u207F]+/g;
+
 function extractTlRawTokens(romanization) {
-  // Same intentional NFD combining-diacritic match as HAKKA_SYLLABLE_RE above.
-  // oxlint-disable-next-line no-misleading-character-class
-  return (
-    String(romanization ?? "").match(/[A-Za-z\u00C0-\u024F\u1E00-\u1EFF\u0300-\u036F\u207F]+/g) ??
-    []
-  );
+  return String(romanization ?? "").match(TL_RAW_TOKEN_RE) ?? [];
 }
 
 function convertTlTokenToDt(rawToken) {

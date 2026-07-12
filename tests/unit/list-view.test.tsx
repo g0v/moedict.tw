@@ -83,6 +83,8 @@ describe("ListView cross-strait comparison table", () => {
     await renderList("c", "同實異名");
     const input = container.querySelector<HTMLInputElement>('input[type="search"]');
     expect(input).not.toBeNull();
+    // Intentional descriptor setter reference for native input event simulation.
+    // oxlint-disable-next-line typescript/unbound-method
     const setNativeValue = Object.getOwnPropertyDescriptor(
       HTMLInputElement.prototype,
       "value",

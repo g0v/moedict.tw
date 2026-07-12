@@ -36,7 +36,9 @@ function untag(input: string): string {
  */
 function normalizeToString(value: unknown): string {
   if (Array.isArray(value)) return value.join(", ");
-  return String(value ?? "");
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return "";
 }
 
 /**

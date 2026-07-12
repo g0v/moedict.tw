@@ -74,7 +74,7 @@ export function StarredPage({ lang }: StarredPageProps) {
       if (event.button !== 0) return;
       if (event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
       event.preventDefault();
-      navigate(buildPath(word));
+      void navigate(buildPath(word));
     },
     [buildPath, navigate],
   );

@@ -175,6 +175,15 @@ describe("cleanTextForTTS", () => {
     expect(cleanTextForTTS(undefined)).toBe("");
     expect(cleanTextForTTS(null)).toBe("");
   });
+
+  it("stringifies numeric and boolean input via String()", () => {
+    expect(cleanTextForTTS(42)).toBe("42");
+    expect(cleanTextForTTS(true)).toBe("true");
+  });
+
+  it("ignores non-primitive input that has no meaningful string form", () => {
+    expect(cleanTextForTTS({ not: "a string" })).toBe("");
+  });
 });
 
 describe("speakText", () => {

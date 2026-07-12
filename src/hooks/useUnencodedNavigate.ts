@@ -34,7 +34,7 @@ export function useUnencodedNavigate() {
     }
 
     // 觸發 React Router 更新
-    reactNavigate(normalizedPath, { replace: options?.replace });
+    void reactNavigate(normalizedPath, { replace: options?.replace });
   };
 
   return navigate;

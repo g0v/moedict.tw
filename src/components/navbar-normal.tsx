@@ -605,7 +605,7 @@ export function NavbarNormal({ currentLang }: NavbarNormalProps) {
       }
       e.preventDefault();
       closeDictionaryDropdown();
-      navigate(path);
+      void navigate(path);
     },
     [closeDictionaryDropdown, navigate],
   );
@@ -633,13 +633,13 @@ export function NavbarNormal({ currentLang }: NavbarNormalProps) {
         // 非字詞頁面：直接用目標語言的 LRU 或預設詞
         const lru = readLRUWords(toLang);
         const word = lru[0] ?? LANG_DEFAULTS[toLang];
-        navigate(`/${LANG_PREFIX[toLang]}${word}`);
+        void navigate(`/${LANG_PREFIX[toLang]}${word}`);
         return;
       }
 
       // 非同步查詢 xref（確保 xref.json 已載入）
       void computeLangSwitchPathAsync(fromLang, toLang, fromWord).then((targetPath) => {
-        navigate(targetPath);
+        void navigate(targetPath);
       });
     },
     [closeDictionaryDropdown, resolvedLang, location.pathname, navigate],
@@ -762,9 +762,9 @@ export function NavbarNormal({ currentLang }: NavbarNormalProps) {
                 e.preventDefault();
                 closeDictionaryDropdown();
                 if (location.pathname === starredPath) {
-                  navigate(-1);
+                  void navigate(-1);
                 } else {
-                  navigate(starredPath);
+                  void navigate(starredPath);
                 }
               }}
             >

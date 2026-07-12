@@ -108,7 +108,7 @@ export function FullTextSearch({ currentLang }: FullTextSearchProps) {
     (result: SearchResultItem | undefined) => {
       if (!result) return;
       setIsOpen(false);
-      navigate(formatSearchPath(result.title, currentLang));
+      void navigate(formatSearchPath(result.title, currentLang));
     },
     [currentLang, navigate],
   );

@@ -298,7 +298,7 @@ export function CharacterImageView({
       }
     }
 
-    loadSegments();
+    void loadSegments();
     return () => {
       cancelled = true;
     };
@@ -327,7 +327,7 @@ export function CharacterImageView({
   const handleTermClick = useCallback(
     (event: React.MouseEvent<HTMLAnchorElement>, href: string) => {
       event.preventDefault();
-      navigate(href);
+      void navigate(href);
     },
     [navigate],
   );

@@ -91,6 +91,8 @@ describe("collectLegacyMatchedTerms", () => {
   });
 
   it("covers the internal empty-priority fallback without changing public behavior", () => {
+    // Intentional monkey-patching of String.prototype.trim for unit tests.
+    // oxlint-disable-next-line typescript/unbound-method
     const originalTrim = String.prototype.trim;
     let trimmedSpacesCalls = 0;
     vi.spyOn(String.prototype, "trim").mockImplementation(function mockedTrim(this: string) {

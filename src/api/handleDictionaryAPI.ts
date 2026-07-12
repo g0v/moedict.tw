@@ -324,7 +324,7 @@ function isDictionaryLang(input: string): input is DictionaryLang {
   return input === "a" || input === "t" || input === "h" || input === "c";
 }
 
-function getCORSHeaders(): HeadersInit {
+function getCORSHeaders(): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",

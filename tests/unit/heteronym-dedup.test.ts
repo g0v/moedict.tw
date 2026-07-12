@@ -115,6 +115,33 @@ describe("dedupeHeteronyms", () => {
     });
   });
 
+  describe("normalize() primitive-type narrowing", () => {
+    it("normalizes numeric and boolean identity fields (malformed data) instead of erroring", () => {
+      const input = [
+        { audio_id: 12345, bopomofo: "ㄐㄧㄚ", pinyin: "jiā" },
+        { audio_id: 12345, bopomofo: "ㄐㄧㄚ", pinyin: "jiā" },
+      ];
+      expect(dedupeHeteronyms(input)).toHaveLength(1);
+
+      const boolInput = [
+        { audio_id: true, bopomofo: "ㄅㄨˊ", pinyin: "bú" },
+        { audio_id: true, bopomofo: "ㄅㄨˊ", pinyin: "bú" },
+      ];
+      expect(dedupeHeteronyms(boolInput)).toHaveLength(1);
+    });
+
+    it("treats non-primitive identity fields as absent rather than stringifying to '[object Object]'", () => {
+      // normalize() only handles string/number/boolean explicitly; objects/arrays fall
+      // through to "" so two malformed entries don't falsely collide on the literal
+      // string "[object Object]" and hasIdentity() correctly reports no usable identity.
+      const input = [
+        { audio_id: { weird: "shape" } as unknown, definitions: [{ def: "A" }] },
+        { audio_id: { other: "shape" } as unknown, definitions: [{ def: "B" }] },
+      ];
+      expect(dedupeHeteronyms(input)).toHaveLength(2);
+    });
+  });
+
   describe("hasIdentity() field disjunction", () => {
     it("treats a heteronym with only audio_id (no other phonetic fields) as identity-bearing", () => {
       // Tests the OR-chain in hasIdentity(): if the chain were tightened to AND

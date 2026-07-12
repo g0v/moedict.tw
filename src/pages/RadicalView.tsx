@@ -50,7 +50,7 @@ export function RadicalView({ lang }: RadicalViewProps) {
 
   const onNavigate = (event: MouseEvent<HTMLAnchorElement>, to: string): void => {
     event.preventDefault();
-    navigate(to);
+    void navigate(to);
   };
 
   const prefix = lang === "c" ? "/~@" : "/@";

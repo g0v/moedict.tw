@@ -832,7 +832,7 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
 
       const nextPath = formatSearchTerm(resolved.term, resolved.lang);
       if (nextPath === location.pathname) return;
-      navigate(nextPath, { replace });
+      void navigate(nextPath, { replace });
     },
     [location.pathname, navigate, resolvedLang],
   );
@@ -963,7 +963,7 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
       }
 
       const path = formatSearchTerm(suggestion.value, suggestion.lang);
-      navigate(path);
+      void navigate(path);
     },
     [activeSearch, isMobileViewport, navigate, rememberSearchValue, searchValue],
   );
@@ -986,7 +986,7 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
 
     const path = formatSearchTerm(resolved.term, resolved.lang);
     if (path !== location.pathname) {
-      navigate(path);
+      void navigate(path);
     }
   }, [isMobileViewport, location.pathname, navigate, resolvedLang, searchValue]);
 

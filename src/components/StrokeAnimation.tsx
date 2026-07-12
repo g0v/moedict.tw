@@ -90,7 +90,7 @@ export function StrokeAnimation({ title, visible, lang = "a" }: StrokeAnimationP
 
   // 取得 R2 endpoint
   useEffect(() => {
-    fetchR2Endpoint().then(setR2Endpoint);
+    void fetchR2Endpoint().then(setR2Endpoint);
   }, []);
 
   // 當可見且 endpoint 就緒時，載入並執行筆順動畫
@@ -164,7 +164,7 @@ export function StrokeAnimation({ title, visible, lang = "a" }: StrokeAnimationP
       }
     };
 
-    run();
+    void run();
 
     return () => {
       cancelled = true;
@@ -251,7 +251,7 @@ export function StrokeAnimation({ title, visible, lang = "a" }: StrokeAnimationP
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            handleHistoricalClick();
+            void handleHistoricalClick();
           }
         }}
         style={{

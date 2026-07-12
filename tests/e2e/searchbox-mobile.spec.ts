@@ -4,6 +4,8 @@ import { expect, test } from "./_fixtures";
 async function setInputValueWithEvent(input: Locator, value: string): Promise<void> {
   await input.evaluate((element, nextValue) => {
     const inputElement = element as HTMLInputElement;
+    // Intentional descriptor setter reference for native input event simulation.
+    // oxlint-disable-next-line typescript/unbound-method
     const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
     valueSetter?.call(inputElement, nextValue);
     inputElement.dispatchEvent(
@@ -213,6 +215,8 @@ test.describe("mobile sidebar search toggle", () => {
 
     await input.evaluate((element) => {
       const inputElement = element as HTMLInputElement;
+      // Intentional descriptor setter reference for native input event simulation.
+      // oxlint-disable-next-line typescript/unbound-method
       const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
       valueSetter?.call(inputElement, "夢");
       inputElement.dispatchEvent(

@@ -94,7 +94,9 @@ const cssIds = extractCssIds(CSS_FILE);
 const srcIds = extractSrcIds();
 
 // Compute intersection: src ids that collide with a CSS #id selector
-const collisions = [...srcIds.keys()].filter((id) => cssIds.has(id)).sort();
+const collisions = [...srcIds.keys()]
+  .filter((id) => cssIds.has(id))
+  .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
 const unallowed = collisions.filter((id) => !ALLOWLIST.has(id));
 

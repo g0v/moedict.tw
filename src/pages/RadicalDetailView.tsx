@@ -58,7 +58,7 @@ export function RadicalDetailView({ lang, radical }: RadicalDetailViewProps) {
 
   const onNavigate = (event: MouseEvent<HTMLAnchorElement>, to: string): void => {
     event.preventDefault();
-    navigate(to);
+    void navigate(to);
   };
 
   const backHref = lang === "c" ? "/~@" : "/@";

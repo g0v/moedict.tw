@@ -547,6 +547,8 @@ describe("decorateRuby — r-suffix branch without cn-specific override", () => 
 
 describe("decorateRuby — hard-to-hit rbspan ternary branches", () => {
   it("covers the hyphenated Taiwanese rbspan null branch via a temporary match shim", () => {
+    // Intentional monkey-patching of String.prototype.match for unit tests.
+    // oxlint-disable-next-line typescript/unbound-method
     const originalMatch = String.prototype.match;
     const calls: Record<string, number> = {};
 
@@ -575,6 +577,8 @@ describe("decorateRuby — hard-to-hit rbspan ternary branches", () => {
   });
 
   it("covers the vowel-count rbspan null branch via a temporary match shim", () => {
+    // Intentional monkey-patching of String.prototype.match for unit tests.
+    // oxlint-disable-next-line typescript/unbound-method
     const originalMatch = String.prototype.match;
     const calls: Record<string, number> = {};
 

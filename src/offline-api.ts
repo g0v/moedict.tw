@@ -100,6 +100,7 @@ if (shouldUseOfflineApi) {
   }
 
   // Monkey-patch XMLHttpRequest for legacy jQuery $.ajax stroke requests
+  // oxlint-disable-next-line typescript/unbound-method -- saved for `.call(this, …)` invocation below, never called unbound
   const originalXHROpen = XMLHttpRequest.prototype.open;
   XMLHttpRequest.prototype.open = function (
     this: XMLHttpRequest,

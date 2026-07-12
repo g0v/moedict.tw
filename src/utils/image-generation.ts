@@ -113,7 +113,7 @@ export function parseTextFromUrl(pathname: string): {
 /**
  * 生成 CORS 標頭
  */
-export function getCORSHeaders(): HeadersInit {
+export function getCORSHeaders(): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",

@@ -569,7 +569,7 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
     // 換頁前先收掉殘留的 tooltip：hideTooltip 為同步（直接設 display:none），
     // 派發事件當下即生效，因此可立即跳轉、不需延遲。
     document.dispatchEvent(new Event("moedict:dismiss-tooltip"));
-    navigate(normalized);
+    void navigate(normalized);
   };
 
   const onContentTouchStartCapture = (event: ReactTouchEvent<HTMLDivElement>): void => {
@@ -1031,7 +1031,7 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                                 data-radical-id={`entry:${to}`}
                                 onClick={(event) => {
                                   event.preventDefault();
-                                  navigate(to);
+                                  void navigate(to);
                                 }}
                               >
                                 {normalizedXrefWord}
@@ -1074,7 +1074,7 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                         data-radical-id={`entry:${to}`}
                         onClick={(event) => {
                           event.preventDefault();
-                          navigate(to);
+                          void navigate(to);
                         }}
                       >
                         {normalizedXrefWord}
