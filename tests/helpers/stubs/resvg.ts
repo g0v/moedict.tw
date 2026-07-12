@@ -12,7 +12,10 @@ export const resvgCalls: ResvgCall[] = [];
 export class Resvg {
   // svg input is intentionally unused for rendering: in tests we never
   // produce a real PNG, but it — and options — are recorded for assertions.
-  constructor(public svg: string, public options?: unknown) {
+  constructor(
+    public svg: string,
+    public options?: unknown,
+  ) {
     resvgCalls.push({ svg, options });
   }
   render() {

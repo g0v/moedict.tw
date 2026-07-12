@@ -7,15 +7,15 @@
  * 把目標轉成 JSX，不得自建前綴 if-chain。
  */
 
-import { Navigate, useLocation } from 'react-router-dom';
-import { DictionaryA } from './pages/Dictionary-a';
-import { DictionaryT } from './pages/Dictionary-t';
-import { DictionaryH } from './pages/Dictionary-h';
-import { DictionaryC } from './pages/Dictionary-c';
-import { StarredPage } from './pages/StarredPage';
-import { ListView } from './pages/ListView';
-import { RadicalDetailView } from './pages/RadicalDetailView';
-import { resolveMiddlePointTarget } from './utils/middle-point-target';
+import { Navigate, useLocation } from "react-router-dom";
+import { DictionaryA } from "./pages/Dictionary-a";
+import { DictionaryT } from "./pages/Dictionary-t";
+import { DictionaryH } from "./pages/Dictionary-h";
+import { DictionaryC } from "./pages/Dictionary-c";
+import { StarredPage } from "./pages/StarredPage";
+import { ListView } from "./pages/ListView";
+import { RadicalDetailView } from "./pages/RadicalDetailView";
+import { resolveMiddlePointTarget } from "./utils/middle-point-target";
 
 const DICT_PAGES = {
   a: DictionaryA,
@@ -29,17 +29,17 @@ export function MiddlePoint() {
   const target = resolveMiddlePointTarget(location.pathname);
 
   switch (target.page) {
-    case 'home':
-      return <Navigate to='/' replace />;
-    case 'about':
-      return <Navigate to='/about' replace />;
-    case 'radical':
+    case "home":
+      return <Navigate to="/" replace />;
+    case "about":
+      return <Navigate to="/about" replace />;
+    case "radical":
       return <RadicalDetailView lang={target.lang} radical={target.radical} />;
-    case 'starred':
+    case "starred":
       return <StarredPage lang={target.lang} entry={target.entry} />;
-    case 'list':
+    case "list":
       return <ListView lang={target.lang} category={target.category} />;
-    case 'dict': {
+    case "dict": {
       const Page = DICT_PAGES[target.lang];
       return <Page word={target.word} idx={target.idx} />;
     }

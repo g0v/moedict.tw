@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState, type JSX, type MouseEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useRadicalTooltip } from '../hooks/useRadicalTooltip';
-import { fetchRadicalRows, type RadicalLang } from '../utils/radical-page-utils';
-import { addToLRU } from '../utils/word-record-utils';
+import { useEffect, useMemo, useState, type JSX, type MouseEvent } from "react";
+import { useNavigate } from "react-router-dom";
+import { useRadicalTooltip } from "../hooks/useRadicalTooltip";
+import { fetchRadicalRows, type RadicalLang } from "../utils/radical-page-utils";
+import { addToLRU } from "../utils/word-record-utils";
 
 interface RadicalDetailViewProps {
   lang: RadicalLang;
@@ -17,7 +17,7 @@ interface RadicalDetailState {
 
 export function RadicalDetailView({ lang, radical }: RadicalDetailViewProps) {
   const navigate = useNavigate();
-  const cleanRadical = useMemo(() => (radical ?? '').trim(), [radical]);
+  const cleanRadical = useMemo(() => (radical ?? "").trim(), [radical]);
   const [state, setState] = useState<RadicalDetailState>({
     loading: true,
     rows: [],
@@ -33,7 +33,7 @@ export function RadicalDetailView({ lang, radical }: RadicalDetailViewProps) {
 
   useEffect(() => {
     if (!cleanRadical) {
-      setState({ loading: false, rows: [], error: '未提供部首' });
+      setState({ loading: false, rows: [], error: "未提供部首" });
       return;
     }
 
@@ -47,7 +47,7 @@ export function RadicalDetailView({ lang, radical }: RadicalDetailViewProps) {
       })
       .catch((error: unknown) => {
         if (!active) return;
-        const message = error instanceof Error ? error.message : '部首內容載入失敗';
+        const message = error instanceof Error ? error.message : "部首內容載入失敗";
         setState({ loading: false, rows: [], error: message });
       });
 
@@ -58,24 +58,26 @@ export function RadicalDetailView({ lang, radical }: RadicalDetailViewProps) {
 
   const onNavigate = (event: MouseEvent<HTMLAnchorElement>, to: string): void => {
     event.preventDefault();
-    navigate(to);
+    void navigate(to);
   };
 
-  const backHref = lang === 'c' ? '/~@' : '/@';
-  const backTooltip = lang === 'c' ? '~@' : '@';
-  const charPrefix = lang === 'c' ? '/~' : '/';
+  const backHref = lang === "c" ? "/~@" : "/@";
+  const backTooltip = lang === "c" ? "~@" : "@";
+  const charPrefix = lang === "c" ? "/~" : "/";
 
   let resultContent: JSX.Element | null = null;
   if (state.loading) {
-    resultContent = <div className="def">載入中…</div>
+    resultContent = <div className="def">載入中…</div>;
   } else if (state.error) {
-    resultContent = <div className="def">{state.error}</div>
+    resultContent = <div className="def">{state.error}</div>;
   } else {
-    resultContent = 
+    resultContent = (
       <div className="entry-item list">
         {state.rows.map((row, stroke) => (
-          <div key={stroke} style={{ margin: '8px 0' }}>
-            <span className="stroke-count" style={{ marginRight: '8px' }}>{stroke}</span>
+          <div key={stroke} style={{ margin: "8px 0" }}>
+            <span className="stroke-count" style={{ marginRight: "8px" }}>
+              {stroke}
+            </span>
             <span className="stroke-list">
               {row.map((char) => {
                 const to = `${charPrefix}${char}`;
@@ -85,7 +87,7 @@ export function RadicalDetailView({ lang, radical }: RadicalDetailViewProps) {
                     className="stroke-char"
                     href={to}
                     data-radical-id={`entry:${to}`}
-                    style={{ marginRight: '6px' }}
+                    style={{ marginRight: "6px" }}
                     onClick={(event) => onNavigate(event, to)}
                   >
                     {char}
@@ -93,15 +95,18 @@ export function RadicalDetailView({ lang, radical }: RadicalDetailViewProps) {
                 );
               })}
             </span>
-            <hr style={{ margin: '0', padding: '0', height: '0' }} />
+            <hr style={{ margin: "0", padding: "0", height: "0" }} />
           </div>
         ))}
       </div>
+    );
   }
 
   return (
     <div className="result">
-      <h1 className="title" style={{ marginTop: '0' }}>{cleanRadical} 部</h1>
+      <h1 className="title" style={{ marginTop: "0" }}>
+        {cleanRadical} 部
+      </h1>
       <p>
         <a
           className="xref"
@@ -112,9 +117,7 @@ export function RadicalDetailView({ lang, radical }: RadicalDetailViewProps) {
           回部首表
         </a>
       </p>
-      <div className="entry">
-        {resultContent}
-      </div>
+      <div className="entry">{resultContent}</div>
     </div>
   );
 }

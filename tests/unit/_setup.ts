@@ -1,7 +1,7 @@
 // Some Node versions ship an experimental localStorage that isn't a full Web Storage
 // implementation (missing `clear`, `getItem`, etc.). Install a tiny in-memory polyfill
 // before any test module imports code that reads/writes `window.localStorage`.
-import { beforeEach } from 'vitest';
+import { beforeEach } from "vite-plus/test";
 
 function createStorage(): Storage {
   const store = new Map<string, string>();
@@ -34,11 +34,28 @@ const w = globalThis as unknown as {
   sessionStorage: Storage;
   IS_REACT_ACT_ENVIRONMENT?: boolean;
 };
-Object.defineProperty(w, 'localStorage', { value: createStorage(), configurable: true, writable: false });
-Object.defineProperty(w, 'sessionStorage', { value: createStorage(), configurable: true, writable: false });
-if (typeof (w as { window?: { localStorage?: Storage; sessionStorage?: Storage } }).window === 'object') {
-  Object.defineProperty(w.window as object, 'localStorage', { value: w.localStorage, configurable: true });
-  Object.defineProperty(w.window as object, 'sessionStorage', { value: w.sessionStorage, configurable: true });
+Object.defineProperty(w, "localStorage", {
+  value: createStorage(),
+  configurable: true,
+  writable: false,
+});
+Object.defineProperty(w, "sessionStorage", {
+  value: createStorage(),
+  configurable: true,
+  writable: false,
+});
+if (
+  typeof (w as { window?: { localStorage?: Storage; sessionStorage?: Storage } }).window ===
+  "object"
+) {
+  Object.defineProperty(w.window as object, "localStorage", {
+    value: w.localStorage,
+    configurable: true,
+  });
+  Object.defineProperty(w.window as object, "sessionStorage", {
+    value: w.sessionStorage,
+    configurable: true,
+  });
 }
 // Enable React 19 act() — global flag checked by React's test renderer
 w.IS_REACT_ACT_ENVIRONMENT = true;

@@ -4,15 +4,15 @@
  * 這裡只做「分類結果 → 頁面」的政策決定，不得自建前綴 if-chain。
  */
 
-import { classifyRoute, type DictionaryLang } from './dictionary-route';
+import { classifyRoute, type DictionaryLang } from "./dictionary-route";
 
 export type MiddlePointTarget =
-  | { page: 'home' }
-  | { page: 'about' }
-  | { page: 'radical'; lang: 'a' | 'c'; radical: string }
-  | { page: 'starred'; lang: DictionaryLang; entry?: string }
-  | { page: 'list'; lang: DictionaryLang; category: string }
-  | { page: 'dict'; lang: DictionaryLang; word: string; idx?: number };
+  | { page: "home" }
+  | { page: "about" }
+  | { page: "radical"; lang: "a" | "c"; radical: string }
+  | { page: "starred"; lang: DictionaryLang; entry?: string }
+  | { page: "list"; lang: DictionaryLang; category: string }
+  | { page: "dict"; lang: DictionaryLang; word: string; idx?: number };
 
 /**
  * 保留 MiddlePoint 歷來的邊界行為：
@@ -25,34 +25,34 @@ export function resolveMiddlePointTarget(pathname: string): MiddlePointTarget {
   const route = classifyRoute(pathname);
 
   switch (route.kind) {
-    case 'default':
-    case 'invalid-encoding':
-      return { page: 'home' };
-    case 'about':
-      return { page: 'about' };
-    case 'radical': {
-      if (route.radical.includes('/')) return { page: 'home' };
+    case "default":
+    case "invalid-encoding":
+      return { page: "home" };
+    case "about":
+      return { page: "about" };
+    case "radical": {
+      if (route.radical.includes("/")) return { page: "home" };
       if (!route.radical) {
         // 舊版：裸 '@' / '~@' 落到字典頁（App.tsx 的靜態路由通常先攔走）
-        return { page: 'dict', lang: route.lang, word: '@' };
+        return { page: "dict", lang: route.lang, word: "@" };
       }
-      return { page: 'radical', lang: route.lang, radical: route.radical };
+      return { page: "radical", lang: route.lang, radical: route.radical };
     }
-    case 'starred': {
-      if (route.entry.includes('/')) return { page: 'home' };
-      return { page: 'starred', lang: route.lang, entry: route.entry || undefined };
+    case "starred": {
+      if (route.entry.includes("/")) return { page: "home" };
+      return { page: "starred", lang: route.lang, entry: route.entry || undefined };
     }
-    case 'group': {
-      if (route.category.includes('/')) return { page: 'home' };
+    case "group": {
+      if (route.category.includes("/")) return { page: "home" };
       if (!route.category) {
         // 舊版：空分類（如 "'="）落到該語言字典頁，word 為 '='
-        return { page: 'dict', lang: route.lang, word: '=' };
+        return { page: "dict", lang: route.lang, word: "=" };
       }
-      return { page: 'list', lang: route.lang, category: route.category };
+      return { page: "list", lang: route.lang, category: route.category };
     }
-    case 'entry': {
-      if (route.text.includes('/')) return { page: 'home' };
-      return { page: 'dict', lang: route.lang, word: route.text, idx: route.idx };
+    case "entry": {
+      if (route.text.includes("/")) return { page: "home" };
+      return { page: "dict", lang: route.lang, word: route.text, idx: route.idx };
     }
   }
 }

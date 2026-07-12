@@ -1,15 +1,12 @@
 {
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
-  "_comment": "Mutation testing for high-leverage utility logic. Locked-in 100% targets: the Taigi tone-sandhi range in pinyin-preference-utils.ts (lines 312-431) and the full heteronym-dedup.ts. Run with `bun run stryker`.",
+  "_comment": "Mutation testing for high-leverage utility logic. Locked-in 100% targets: the Taigi tone-sandhi range in pinyin-preference-utils.ts (lines 312-431) and the full heteronym-dedup.ts. Run with `vp run stryker`.",
   "packageManager": "npm",
   "testRunner": "vitest",
   "vitest": {
-    "configFile": "vitest.unit.config.ts"
+    "configFile": "vite.config.ts"
   },
-  "mutate": [
-    "src/utils/pinyin-preference-utils.ts:312-431",
-    "src/utils/heteronym-dedup.ts"
-  ],
+  "mutate": ["src/utils/pinyin-preference-utils.ts:312-431", "src/utils/heteronym-dedup.ts"],
   "reporters": ["progress", "clear-text", "html", "json"],
   "coverageAnalysis": "perTest",
   "concurrency": 4,

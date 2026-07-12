@@ -15,6 +15,20 @@
  */
 export const ASSET_CDN_BASE = 'https://r2-assets.moedict.tw';
 
+/**
+ * Stable cache-bust version for the legacy `data/assets/styles.css` stylesheet.
+ *
+ * `?v=<version>` is a one-time cache namespace that bypasses the pre-existing
+ * unversioned `styles.css` object (edge-cached at `max-age=86400` / 24h).
+ * Routine future data-only uploads remain R2-only and rely on the object's
+ * own `Cache-Control: public, max-age=300` metadata (set by Task 3 on re-upload)
+ * for a short 5-minute edge TTL — no Worker redeploy needed for CSS-only edits.
+ * Bump this query version only for an emergency immediate bust of any stale
+ * edge-cached stylesheet key (the original unversioned object at 24h, or a
+ * prior `?v=` version still cached at the 5-minute TTL).
+ */
+export const LEGACY_STYLESHEET_VERSION = '20260711';
+
 /** 筆畫 JSON：`${STROKE_JSON_BASE_URL}/{codepoint-hex}.json` */
 export const STROKE_JSON_BASE_URL = `${ASSET_CDN_BASE}/stroke-json`;
 

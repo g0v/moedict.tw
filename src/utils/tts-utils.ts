@@ -6,21 +6,21 @@
  * - 文字清理規則：移除 (A) 標記、非 ASCII 字元、", CL:" 片段、以及 '|' 後的非標點內容
  */
 
-export type TTSSupportedLabel = '英' | '法' | '德';
+export type TTSSupportedLabel = "英" | "法" | "德";
 
 /**
  * 語言代碼對應（英/法/德）
  */
 export function getLanguageCode(label: string): string {
   switch (label) {
-    case '英':
-      return 'en-US';
-    case '法':
-      return 'fr-FR';
-    case '德':
-      return 'de-DE';
+    case "英":
+      return "en-US";
+    case "法":
+      return "fr-FR";
+    case "德":
+      return "de-DE";
     default:
-      return 'en-US';
+      return "en-US";
   }
 }
 
@@ -28,15 +28,17 @@ export function getLanguageCode(label: string): string {
  * 去除 HTML 標籤
  */
 function untag(input: string): string {
-  return input.replace(/<[^>]*>/g, '');
+  return input.replace(/<[^>]*>/g, "");
 }
 
 /**
  * 轉為字串
  */
 function normalizeToString(value: unknown): string {
-  if (Array.isArray(value)) return value.join(', ');
-  return String(value ?? '');
+  if (Array.isArray(value)) return value.join(", ");
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return "";
 }
 
 /**
@@ -46,16 +48,16 @@ export function cleanTextForTTS(value: unknown): string {
   let text = normalizeToString(value);
   text = untag(text);
   // 移除 , CL: 開頭之後的內容
-  text = text.replace(/,\s*CL:.*/g, '');
+  text = text.replace(/,\s*CL:.*/g, "");
   // 移除 | 後的非標點內容（近似原則：直到遇到常見標點或結尾）
-  text = text.replace(/\|[^,.()[\]\s]+/g, '');
+  text = text.replace(/\|[^,.()[\]\s]+/g, "");
   // 移除如 (A) 的大寫標記
-  text = text.replace(/\([A-Z]\)/g, '');
+  text = text.replace(/\([A-Z]\)/g, "");
   // 僅保留 ASCII 字符
   // oxlint-disable-next-line no-control-regex
-  text = text.replace(/[^\x00-\x7F]/g, '');
+  text = text.replace(/[^\x00-\x7F]/g, "");
   // 收斂多餘空白
-  text = text.replace(/\s+/g, ' ').trim();
+  text = text.replace(/\s+/g, " ").trim();
   return text;
 }
 
@@ -65,12 +67,18 @@ export function cleanTextForTTS(value: unknown): string {
 function pickFrVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   try {
     voices = voices || [];
-    const fr = voices.filter((v) => v && v.lang && String(v.lang).toLowerCase().indexOf('fr') === 0);
-    const google = fr.find((v) => (v.name || '').toLowerCase().indexOf('google') >= 0 && String(v.lang).toLowerCase() === 'fr-fr');
+    const fr = voices.filter(
+      (v) => v && v.lang && String(v.lang).toLowerCase().indexOf("fr") === 0,
+    );
+    const google = fr.find(
+      (v) =>
+        (v.name || "").toLowerCase().indexOf("google") >= 0 &&
+        String(v.lang).toLowerCase() === "fr-fr",
+    );
     if (google) return google;
-    const frfr = fr.find((v) => String(v.lang).toLowerCase() === 'fr-fr');
+    const frfr = fr.find((v) => String(v.lang).toLowerCase() === "fr-fr");
     if (frfr) return frfr;
-    const frca = fr.find((v) => String(v.lang).toLowerCase() === 'fr-ca');
+    const frca = fr.find((v) => String(v.lang).toLowerCase() === "fr-ca");
     if (frca) return frca;
     return fr[0] || null;
   } catch {
@@ -85,20 +93,20 @@ function pickFrVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | nul
 function pickEnVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   try {
     voices = voices || [];
-    let en = voices.filter((v) => v && v.lang && String(v.lang).toLowerCase().indexOf('en') === 0);
+    let en = voices.filter((v) => v && v.lang && String(v.lang).toLowerCase().indexOf("en") === 0);
     en = en.filter((v) => {
-      const nm = (v.name || '').toLowerCase();
-      return nm.indexOf('compact') < 0 && nm !== 'fred';
+      const nm = (v.name || "").toLowerCase();
+      return nm.indexOf("compact") < 0 && nm !== "fred";
     });
     const prefName =
-      en.find((v) => (v.name || '').toLowerCase().indexOf('samantha') >= 0) ||
-      en.find((v) => (v.name || '').toLowerCase().indexOf('alex') >= 0);
+      en.find((v) => (v.name || "").toLowerCase().indexOf("samantha") >= 0) ||
+      en.find((v) => (v.name || "").toLowerCase().indexOf("alex") >= 0);
     if (prefName) return prefName;
-    const enus = en.find((v) => String(v.lang).toLowerCase() === 'en-us');
+    const enus = en.find((v) => String(v.lang).toLowerCase() === "en-us");
     if (enus) return enus;
-    const engb = en.find((v) => String(v.lang).toLowerCase() === 'en-gb');
+    const engb = en.find((v) => String(v.lang).toLowerCase() === "en-gb");
     if (engb) return engb;
-    const enau = en.find((v) => String(v.lang).toLowerCase() === 'en-au');
+    const enau = en.find((v) => String(v.lang).toLowerCase() === "en-au");
     if (enau) return enau;
     return en[0] || null;
   } catch {
@@ -115,9 +123,11 @@ function pickEnVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | nul
  */
 export function speakText(label: string, text: string): void {
   try {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
     const syn = (window as Window & { speechSynthesis?: SpeechSynthesis }).speechSynthesis;
-    const Utter = (window as Window & { SpeechSynthesisUtterance?: typeof SpeechSynthesisUtterance }).SpeechSynthesisUtterance;
+    const Utter = (
+      window as Window & { SpeechSynthesisUtterance?: typeof SpeechSynthesisUtterance }
+    ).SpeechSynthesisUtterance;
     if (!syn || !Utter) return;
     const cleaned = cleanTextForTTS(text);
     if (!cleaned) return;
@@ -127,8 +137,8 @@ export function speakText(label: string, text: string): void {
     u.volume = 1.0;
     u.rate = 1.0;
 
-    const ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '') || '';
-    const isFirefox = ua.indexOf('Gecko/') >= 0 && ua.indexOf('Chrome/') < 0;
+    const ua = (typeof navigator !== "undefined" ? navigator.userAgent : "") || "";
+    const isFirefox = ua.indexOf("Gecko/") >= 0 && ua.indexOf("Chrome/") < 0;
 
     let voices: SpeechSynthesisVoice[] = [];
     try {
@@ -138,7 +148,7 @@ export function speakText(label: string, text: string): void {
     }
 
     // 法語：voices 為空時等待 voiceschanged，否則選 fr-* voice
-    if (label === '法') {
+    if (label === "法") {
       if (!voices || voices.length === 0) {
         const handler = () => {
           try {
@@ -176,7 +186,7 @@ export function speakText(label: string, text: string): void {
     }
 
     // 英語：voices 為空時等待 voiceschanged，否則選 en-* voice；Firefox 微調 rate/pitch
-    if (label === '英') {
+    if (label === "英") {
       if (!voices || voices.length === 0) {
         const handler = () => {
           try {
@@ -221,7 +231,7 @@ export function speakText(label: string, text: string): void {
     syn.speak(u);
   } catch (err) {
     try {
-      console.warn('[TTS] 語音播放失敗', err);
+      console.warn("[TTS] 語音播放失敗", err);
     } catch {
       /* ignore */
     }

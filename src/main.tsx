@@ -1,11 +1,11 @@
 // Offline API handler must be imported before any fetch calls
-import './offline-api.ts'
+import "./offline-api.ts";
 
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.tsx'
-import { applyHeadByPath } from './ssr/head'
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import "./index.css";
+import App from "./App.tsx";
+import { applyHeadByPath } from "./ssr/head";
 
 /**
  * 在應用啟動前修正 URL，避免編碼字元顯示
@@ -13,17 +13,17 @@ import { applyHeadByPath } from './ssr/head'
  */
 function fixInitialURL() {
   const currentPath = window.location.pathname;
-  
+
   // 如果路徑包含編碼字元，立即解碼
-  if (currentPath.includes('%')) {
+  if (currentPath.includes("%")) {
     try {
       const decoded = decodeURIComponent(currentPath);
       if (decoded !== currentPath) {
         // 使用 replaceState 立即修正 URL，不觸發頁面重新載入
-        window.history.replaceState(null, '', decoded);
+        window.history.replaceState(null, "", decoded);
       }
     } catch (e) {
-      console.warn('初始 URL 解碼失敗:', e);
+      console.warn("初始 URL 解碼失敗:", e);
     }
   }
 }
@@ -32,11 +32,13 @@ function fixInitialURL() {
  * 攔截 history API，確保所有導航操作都使用未編碼的 URL
  */
 function setupHistoryInterceptor() {
+  // oxlint-disable-next-line typescript/unbound-method -- saved for `.call(this, …)` invocation below, never called unbound
   const originalPushState = window.history.pushState;
+  // oxlint-disable-next-line typescript/unbound-method -- saved for `.call(this, …)` invocation below, never called unbound
   const originalReplaceState = window.history.replaceState;
 
-  window.history.pushState = function(state, title, url) {
-    if (typeof url === 'string' && url.includes('%')) {
+  window.history.pushState = function (state, title, url) {
+    if (typeof url === "string" && url.includes("%")) {
       try {
         const decoded = decodeURIComponent(url);
         return originalPushState.call(this, state, title, decoded);
@@ -47,8 +49,8 @@ function setupHistoryInterceptor() {
     return originalPushState.call(this, state, title, url);
   };
 
-  window.history.replaceState = function(state, title, url) {
-    if (typeof url === 'string' && url.includes('%')) {
+  window.history.replaceState = function (state, title, url) {
+    if (typeof url === "string" && url.includes("%")) {
       try {
         const decoded = decodeURIComponent(url);
         return originalReplaceState.call(this, state, title, decoded);
@@ -62,8 +64,12 @@ function setupHistoryInterceptor() {
 
 function applyPlatformClasses() {
   const ua = navigator.userAgent;
-  document.documentElement.classList.toggle('moe-android', /\bAndroid\b/i.test(ua));
-  document.documentElement.classList.toggle('moe-ios', /\b(iPhone|iPad|iPod)\b/i.test(ua));
+  document.documentElement.classList.toggle("moe-android", /\bAndroid\b/i.test(ua));
+  document.documentElement.classList.toggle("moe-ios", /\b(iPhone|iPad|iPod)\b/i.test(ua));
+  document.documentElement.classList.toggle(
+    "moe-capacitor",
+    Boolean((window as Window & { Capacitor?: unknown }).Capacitor),
+  );
 }
 
 // 在渲染前先修正 URL 和設置攔截器
@@ -72,8 +78,8 @@ fixInitialURL();
 setupHistoryInterceptor();
 applyHeadByPath(window.location.pathname);
 
-createRoot(document.getElementById('root')!).render(
+createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <App />
   </StrictMode>,
-)
+);

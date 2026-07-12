@@ -12,7 +12,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { UserPref } from '../../src/components/user-pref';
 
 let container: HTMLDivElement;
@@ -92,7 +92,7 @@ describe('UserPref — bopomofo_sandhi_t toggle', () => {
 				'value',
 			)?.set;
 			setter!.call(select, 'sandhi');
-			select.dispatchEvent(new Event('change', { bubbles: true }));
+			select!.dispatchEvent(new Event('change', { bubbles: true }));
 		});
 
 		expect(window.localStorage.getItem('bopomofo_sandhi_t')).toBe('sandhi');

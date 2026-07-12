@@ -1,6 +1,6 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
-import path from 'node:path';
-import { test as base, expect } from '@playwright/test';
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { test as base, expect } from "@playwright/test";
 
 /**
  * Block requests to the fake `r2-assets.test.local` hostname so Playwright
@@ -13,11 +13,16 @@ import { test as base, expect } from '@playwright/test';
  * script (scripts/merge-coverage.mjs) to pick up.
  */
 
-const COVERAGE_ENABLED = process.env.E2E_COVERAGE === '1';
-const COVERAGE_DIR = path.resolve(process.cwd(), 'coverage', 'playwright');
+const COVERAGE_ENABLED = process.env.E2E_COVERAGE === "1";
+const COVERAGE_DIR = path.resolve(process.cwd(), "coverage", "playwright");
 
 function safeSlug(input: string): string {
-  return input.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 120) || 'test';
+  return (
+    input
+      .replace(/[^a-zA-Z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 120) || "test"
+  );
 }
 
 export const test = base.extend({
@@ -25,8 +30,8 @@ export const test = base.extend({
     await page.route(/^https?:\/\/r2-[a-z]+\.test\.local\//, (route) => {
       return route.fulfill({
         status: 404,
-        contentType: 'application/octet-stream',
-        body: '',
+        contentType: "application/octet-stream",
+        body: "",
       });
     });
 
@@ -44,19 +49,15 @@ export const test = base.extend({
       // Keep only our app bundle — skip about:blank, extensions, CDN scripts.
       const filtered = entries.filter((entry) => {
         if (!entry.url) return false;
-        if (!entry.url.startsWith('http://') && !entry.url.startsWith('https://')) return false;
+        if (!entry.url.startsWith("http://") && !entry.url.startsWith("https://")) return false;
         // Exclude third-party: only the /assets/ bundle (Vite output) is ours.
         const pathname = new URL(entry.url).pathname;
-        return pathname.startsWith('/assets/') && pathname.endsWith('.js');
+        return pathname.startsWith("/assets/") && pathname.endsWith(".js");
       });
       if (filtered.length > 0) {
         mkdirSync(COVERAGE_DIR, { recursive: true });
-        const slug = `${safeSlug(testInfo.titlePath.join('-'))}-${process.pid}-${Date.now()}`;
-        writeFileSync(
-          path.join(COVERAGE_DIR, `${slug}.json`),
-          JSON.stringify(filtered),
-          'utf-8',
-        );
+        const slug = `${safeSlug(testInfo.titlePath.join("-"))}-${process.pid}-${Date.now()}`;
+        writeFileSync(path.join(COVERAGE_DIR, `${slug}.json`), JSON.stringify(filtered), "utf-8");
       }
     }
   },

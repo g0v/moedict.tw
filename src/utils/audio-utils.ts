@@ -3,16 +3,16 @@
  * 複刻原專案 DictionaryViews 的 getAudioUrl 與 playAudio 行為
  */
 
-import { AUDIO_CDN_MAP } from './media-cdn';
+import { AUDIO_CDN_MAP } from "./media-cdn";
 
-export type DictionaryLang = 'a' | 't' | 'h' | 'c';
+export type DictionaryLang = "a" | "t" | "h" | "c";
 
 function normalizeAudioIdByLang(lang: DictionaryLang, audioId: string): string {
-  const normalized = String(audioId || '').trim();
-  if (!normalized) return '';
-  if (lang !== 't') return normalized;
+  const normalized = String(audioId || "").trim();
+  if (!normalized) return "";
+  if (lang !== "t") return normalized;
   // 台語音檔路徑採 5 碼數字，資料若為 4 碼需補 0（例：8778 -> 08778）
-  if (/^\d{1,4}$/.test(normalized)) return normalized.padStart(5, '0');
+  if (/^\d{1,4}$/.test(normalized)) return normalized.padStart(5, "0");
   return normalized;
 }
 
@@ -33,7 +33,7 @@ function buildAudioCandidates(url: string): string[] {
   const match = url.match(/^(.*)\.(\w+)(\?.*)?$/);
   if (!match) return [url];
   const base = match[1];
-  const query = match[3] || '';
+  const query = match[3] || "";
   // iPad Safari 對 ogg 支援不穩，先嘗試 mp3，再退回 ogg
   return [`${base}.mp3${query}`, `${base}.ogg${query}`];
 }
@@ -43,7 +43,7 @@ function buildAudioCandidates(url: string): string[] {
  * 點擊同一按鈕可停止播放
  */
 export function playAudioUrl(url: string, onStateChange?: (playing: boolean) => void): void {
-  if (typeof window === 'undefined') return;
+  if (typeof window === "undefined") return;
   const token = ++currentToken;
   const requestKey = url;
 
@@ -65,20 +65,22 @@ export function playAudioUrl(url: string, onStateChange?: (playing: boolean) => 
   stop();
   const audio = new Audio();
   // iOS Safari 友善設定
-  audio.preload = 'none';
-  audio.setAttribute('playsinline', 'true');
-  audio.setAttribute('webkit-playsinline', 'true');
+  audio.preload = "none";
+  audio.setAttribute("playsinline", "true");
+  audio.setAttribute("webkit-playsinline", "true");
   currentAudio = audio;
   currentRequestKey = requestKey;
+  let probingCandidate = false;
 
-  audio.addEventListener('ended', () => {
+  audio.addEventListener("ended", () => {
     if (currentAudio === audio) {
       currentAudio = null;
       onStateChange?.(false);
     }
   });
 
-  audio.addEventListener('error', () => {
+  audio.addEventListener("error", () => {
+    if (probingCandidate) return;
     if (currentAudio === audio) {
       currentAudio = null;
       onStateChange?.(false);
@@ -89,15 +91,24 @@ export function playAudioUrl(url: string, onStateChange?: (playing: boolean) => 
   void (async () => {
     for (const candidate of candidates) {
       if (currentToken !== token || currentAudio !== audio) return;
+      probingCandidate = true;
+      let candidateErrorHandler: (() => void) | null = null;
       try {
+        const candidateError = new Promise<never>((_, reject) => {
+          candidateErrorHandler = () => reject(new Error("audio candidate error"));
+          audio.addEventListener("error", candidateErrorHandler);
+        });
         audio.src = candidate;
         audio.load();
-        await audio.play();
+        await Promise.race([audio.play(), candidateError]);
         if (currentToken !== token || currentAudio !== audio) return;
         onStateChange?.(true);
         return;
       } catch (err) {
-        console.warn('[Audio] 播放失敗，嘗試下一種格式:', candidate, err);
+        console.warn("[Audio] 播放失敗，嘗試下一種格式:", candidate, err);
+      } finally {
+        probingCandidate = false;
+        audio.removeEventListener("error", candidateErrorHandler!);
       }
     }
     if (currentToken === token && currentAudio === audio) {

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect } from "react";
 import {
   escapeHtml,
   fetchJsonByToken,
@@ -7,17 +7,21 @@ import {
   stripTags,
   type DictionaryDefinition,
   type DictionaryEntryResponse,
-} from '../utils/radical-page-utils';
-import { rightAngle } from '../utils/ruby2hruby';
-import { decorateRuby, formatBopomofo, formatPinyin } from '../utils/bopomofo-pinyin-utils';
+} from "../utils/radical-page-utils";
+import { rightAngle } from "../utils/ruby2hruby";
+import { decorateRuby, formatBopomofo, formatPinyin } from "../utils/bopomofo-pinyin-utils";
 
-const ATTR = 'data-radical-id';
-const RESULT_LINK_SELECTOR = '.result a[href]:not(.xref)';
-const LOADING_HTML = '<div class="entry"><div class="entry-item"><div class="def">載入中…</div></div></div>';
-const EMPTY_HTML = '<div class="entry"><div class="entry-item"><div class="def">找不到內容</div></div></div>';
+const ATTR = "data-radical-id";
+const RESULT_LINK_SELECTOR = ".result a[href]:not(.xref)";
+const LOADING_HTML =
+  '<div class="entry"><div class="entry-item"><div class="def">載入中…</div></div></div>';
+const EMPTY_HTML =
+  '<div class="entry"><div class="entry-item"><div class="def">找不到內容</div></div></div>';
 
 function previewDebugText(input: string, max = 120): string {
-  const normalized = String(input || '').replace(/\s+/g, ' ').trim();
+  const normalized = String(input || "")
+    .replace(/\s+/g, " ")
+    .trim();
   return normalized.length > max ? `${normalized.slice(0, max)}...` : normalized;
 }
 
@@ -28,9 +32,9 @@ function buildTitleSection(label: string, href: string): string {
 }
 
 function normalizeEntryTitleToken(token: string): string {
-  let value = token.replace(/^\//, '').trim();
-  if (!value) return '';
-  if (value.startsWith('\\')) {
+  let value = token.replace(/^\//, "").trim();
+  if (!value) return "";
+  if (value.startsWith("\\")) {
     value = value.slice(1);
   }
   if (/^['!:~]/.test(value)) {
@@ -39,10 +43,12 @@ function normalizeEntryTitleToken(token: string): string {
   return value;
 }
 
-function groupDefinitions(definitions: DictionaryDefinition[]): Map<string, DictionaryDefinition[]> {
+function groupDefinitions(
+  definitions: DictionaryDefinition[],
+): Map<string, DictionaryDefinition[]> {
   const grouped = new Map<string, DictionaryDefinition[]>();
   for (const definition of definitions) {
-    const key = String(definition.type || '').trim();
+    const key = String(definition.type || "").trim();
     const existing = grouped.get(key) || [];
     existing.push(definition);
     grouped.set(key, existing);
@@ -51,33 +57,33 @@ function groupDefinitions(definitions: DictionaryDefinition[]): Map<string, Dict
 }
 
 function renderPartOfSpeech(typeText: string): string {
-  if (!typeText) return '';
+  if (!typeText) return "";
   return typeText
-    .split(',')
+    .split(",")
     .map((tag) => stripTags(tag).trim())
     .filter(Boolean)
     .map((tag) => `<span class="part-of-speech">${escapeHtml(tag)}</span>`)
-    .join('');
+    .join("");
 }
 
-function getLangFromToken(token: string): 'a' | 't' | 'h' | 'c' {
-  if (token.startsWith("'") || token.startsWith('!')) return 't';
-  if (token.startsWith(':')) return 'h';
-  if (token.startsWith('~')) return 'c';
-  return 'a';
+function getLangFromToken(token: string): "a" | "t" | "h" | "c" {
+  if (token.startsWith("'") || token.startsWith("!")) return "t";
+  if (token.startsWith(":")) return "h";
+  if (token.startsWith("~")) return "c";
+  return "a";
 }
 
 async function buildRadicalTooltipHTML(rawId: string): Promise<string> {
   const id = normalizeTooltipId(rawId);
   if (!id) return EMPTY_HTML;
 
-  if (id === '@' || id === '~@') {
-    const isCrossStrait = id.startsWith('~');
+  if (id === "@" || id === "~@") {
+    const isCrossStrait = id.startsWith("~");
     const data = normalizeRows(await fetchJsonByToken<unknown>(id));
     if (data.length === 0) return EMPTY_HTML;
-    const prefix = isCrossStrait ? '/~@' : '/@';
+    const prefix = isCrossStrait ? "/~@" : "/@";
 
-    let html = `${buildTitleSection('部首表', prefix)}<div class="entry"><div class="entry-item"><div style="max-height: 300px; overflow-y: auto;">`;
+    let html = `${buildTitleSection("部首表", prefix)}<div class="entry"><div class="entry-item"><div style="max-height: 300px; overflow-y: auto;">`;
     for (let stroke = 0; stroke < data.length; stroke += 1) {
       const radicals = data[stroke] || [];
       if (radicals.length === 0) continue;
@@ -85,23 +91,23 @@ async function buildRadicalTooltipHTML(rawId: string): Promise<string> {
       for (const radical of radicals) {
         html += `<a href="${prefix}${encodeURIComponent(radical)}" class="stroke-char">${escapeHtml(radical)}</a>`;
       }
-      html += '</span></div>';
+      html += "</span></div>";
     }
-    html += '</div></div></div>';
+    html += "</div></div></div>";
     return html;
   }
 
-  const isCrossStrait = id.startsWith('~@');
+  const isCrossStrait = id.startsWith("~@");
   const match = isCrossStrait ? id.match(/^~@(.+)$/) : id.match(/^@(.+)$/);
-  const radical = match?.[1] ? decodeURIComponent(match[1]) : '';
+  const radical = match?.[1] ? decodeURIComponent(match[1]) : "";
   if (!radical) return EMPTY_HTML;
 
   const token = isCrossStrait ? `~@${radical}` : `@${radical}`;
   const data = normalizeRows(await fetchJsonByToken<unknown>(token));
   if (data.length === 0) return EMPTY_HTML;
 
-  const prefix = isCrossStrait ? '/~' : '/';
-  const bucketHref = `${isCrossStrait ? '/~@' : '/@'}${encodeURIComponent(radical)}`;
+  const prefix = isCrossStrait ? "/~" : "/";
+  const bucketHref = `${isCrossStrait ? "/~@" : "/@"}${encodeURIComponent(radical)}`;
   let html = `${buildTitleSection(`${radical} 部`, bucketHref)}<div class="entry"><div class="entry-item"><div style="max-height: 300px; overflow-y: auto;">`;
   for (let stroke = 0; stroke < Math.min(data.length, 8); stroke += 1) {
     const chars = data[stroke] || [];
@@ -113,17 +119,17 @@ async function buildRadicalTooltipHTML(rawId: string): Promise<string> {
     if (chars.length > 15) {
       html += `<span style="color:#666;">（還有 ${chars.length - 15} 個字）</span>`;
     }
-    html += '</span></div>';
+    html += "</span></div>";
   }
-  html += '</div></div></div>';
+  html += "</div></div></div>";
   return html;
 }
 
 async function buildEntryTooltipHTML(rawToken: string): Promise<string> {
-  const token = normalizeTooltipId(rawToken).replace(/^\//, '');
+  const token = normalizeTooltipId(rawToken).replace(/^\//, "");
   if (!token) return EMPTY_HTML;
   const lang = getLangFromToken(token);
-  console.debug('[tooltip-entry] token resolved', {
+  console.debug("[tooltip-entry] token resolved", {
     rawToken,
     normalizedToken: token,
     lang,
@@ -153,17 +159,20 @@ async function buildEntryTooltipHTML(rawToken: string): Promise<string> {
       const partOfSpeech = renderPartOfSpeech(type);
       const listHtml = items
         .slice(0, 6)
-        .map((item) => `<li><p class="definition"><span class="def">${escapeHtml(stripTags(String(item.def || '')))}</span></p></li>`)
-        .join('');
+        .map(
+          (item) =>
+            `<li><p class="definition"><span class="def">${escapeHtml(stripTags(String(item.def || "")))}</span></p></li>`,
+        )
+        .join("");
       if (!listHtml) {
-        return '';
+        return "";
       }
       return `<div class="entry-item">${partOfSpeech}<ol>${listHtml}</ol></div>`;
     })
-    .join('');
+    .join("");
 
-  let titleHtml = '';
-  if (lang === 'h') {
+  let titleHtml = "";
+  if (lang === "h") {
     const safeTitle = escapeHtml(title);
     titleHtml = `<span class="h1"><a href="./#:${safeTitle}">${safeTitle}</a></span>`;
   } else if (rubyData.ruby) {
@@ -173,26 +182,31 @@ async function buildEntryTooltipHTML(rawToken: string): Promise<string> {
     const safeTitle = escapeHtml(title);
     titleHtml = `<span class="h1"><a href="./#${safeTitle}">${safeTitle}</a></span>`;
   }
-  const youyinHtml = rubyData.youyin ? `<small class="youyin">${escapeHtml(stripTags(rubyData.youyin))}</small>` : '';
+  const youyinHtml = rubyData.youyin
+    ? `<small class="youyin">${escapeHtml(stripTags(rubyData.youyin))}</small>`
+    : "";
 
-  const showPinyin = lang !== 'h';
-  let pronunciationHtml = '';
+  const showPinyin = lang !== "h";
+  let pronunciationHtml = "";
   if (showPinyin && (heteronym?.bopomofo || heteronym?.pinyin || rubyData.bAlt || rubyData.pAlt)) {
-    const cnClass = rubyData.cnSpecific ? ` ${rubyData.cnSpecific}` : '';
+    const cnClass = rubyData.cnSpecific ? ` ${rubyData.cnSpecific}` : "";
     const altCnBlock =
       rubyData.cnSpecific && rubyData.pinyin && rubyData.bopomofo
-        ? `<small class="alternative cn-specific">${showPinyin ? `<span class="pinyin">${formatPinyin(rubyData.pinyin)}</span>` : ''}<span class="bopomofo">${formatBopomofo(rubyData.bopomofo)}</span></small>`
-        : '';
-    const mainBpmf = heteronym?.bopomofo ? `<span class="bopomofo">${formatBopomofo(heteronym.bopomofo)}</span>` : '';
-    const mainPinyin = showPinyin && (heteronym?.pinyin || heteronym?.trs)
-      ? `<span class="pinyin">${formatPinyin(heteronym.pinyin || heteronym.trs || '')}</span>`
-      : '';
+        ? `<small class="alternative cn-specific">${showPinyin ? `<span class="pinyin">${formatPinyin(rubyData.pinyin)}</span>` : ""}<span class="bopomofo">${formatBopomofo(rubyData.bopomofo)}</span></small>`
+        : "";
+    const mainBpmf = heteronym?.bopomofo
+      ? `<span class="bopomofo">${formatBopomofo(heteronym.bopomofo)}</span>`
+      : "";
+    const mainPinyin =
+      showPinyin && (heteronym?.pinyin || heteronym?.trs)
+        ? `<span class="pinyin">${formatPinyin(heteronym.pinyin || heteronym.trs || "")}</span>`
+        : "";
     const altBlock =
       rubyData.bAlt || rubyData.pAlt
-        ? `<small class="alternative">${showPinyin && rubyData.pAlt ? `<span class="pinyin">${formatPinyin(rubyData.pAlt)}</span>` : ''}${rubyData.bAlt ? `<span class="bopomofo">${formatBopomofo(rubyData.bAlt)}</span>` : ''}</small>`
-        : '';
+        ? `<small class="alternative">${showPinyin && rubyData.pAlt ? `<span class="pinyin">${formatPinyin(rubyData.pAlt)}</span>` : ""}${rubyData.bAlt ? `<span class="bopomofo">${formatBopomofo(rubyData.bAlt)}</span>` : ""}</small>`
+        : "";
     pronunciationHtml = `<div class="bopomofo${cnClass}">${altCnBlock}<div class="main-pronunciation">${mainBpmf}${mainPinyin}</div>${altBlock}</div>`;
-    console.debug('[tooltip-entry] pronunciation decision', {
+    console.debug("[tooltip-entry] pronunciation decision", {
       token,
       lang,
       showPinyin,
@@ -207,14 +221,14 @@ async function buildEntryTooltipHTML(rawToken: string): Promise<string> {
 }
 
 function resolveTooltipIdFromHref(rawHref: string | null): string {
-  const href = String(rawHref || '').trim();
-  if (!href) return '';
-  if (/^(?:https?:|mailto:|tel:|javascript:)/i.test(href)) return '';
+  const href = String(rawHref || "").trim();
+  if (!href) return "";
+  if (/^(?:https?:|mailto:|tel:|javascript:)/i.test(href)) return "";
   return normalizeTooltipId(href);
 }
 
 function shouldUseRadicalTooltip(id: string): boolean {
-  return id === '@' || id === '~@' || id.startsWith('@') || id.startsWith('~@');
+  return id === "@" || id === "~@" || id.startsWith("@") || id.startsWith("~@");
 }
 
 interface TooltipTarget {
@@ -224,18 +238,18 @@ interface TooltipTarget {
 
 function resolveTooltipTarget(target: EventTarget | null): TooltipTarget | null {
   if (!(target instanceof Element)) return null;
-  if (target.closest('.single-char-stroke-trigger')) return null;
+  if (target.closest(".single-char-stroke-trigger")) return null;
 
   const customAnchor = target.closest(`[${ATTR}]`);
   if (customAnchor instanceof HTMLAnchorElement) {
-    const id = String(customAnchor.getAttribute(ATTR) || '').trim();
+    const id = String(customAnchor.getAttribute(ATTR) || "").trim();
     if (!id) return null;
     return { anchor: customAnchor, id };
   }
 
   const fallbackAnchor = target.closest(RESULT_LINK_SELECTOR);
   if (!(fallbackAnchor instanceof HTMLAnchorElement)) return null;
-  const id = resolveTooltipIdFromHref(fallbackAnchor.getAttribute('href'));
+  const id = resolveTooltipIdFromHref(fallbackAnchor.getAttribute("href"));
   if (!id) return null;
   return { anchor: fallbackAnchor, id };
 }
@@ -246,16 +260,16 @@ function clamp(value: number, min: number, max: number): number {
   return value;
 }
 
-type TooltipVerticalPlacement = 'above' | 'below';
+type TooltipVerticalPlacement = "above" | "below";
 
 function isTouchCapablePlatform(): boolean {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === "undefined") return false;
 
   // 任何可觸控能力都視為觸控平台，避免 tooltip 在行動/混合裝置卡住無法關閉。
-  const hasTouchEvent = 'ontouchstart' in window;
-  const maxTouchPoints = typeof navigator !== 'undefined' ? navigator.maxTouchPoints || 0 : 0;
-  const hasAnyCoarsePointer = window.matchMedia?.('(any-pointer: coarse)').matches ?? false;
-  const hasCoarsePointer = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+  const hasTouchEvent = "ontouchstart" in window;
+  const maxTouchPoints = typeof navigator !== "undefined" ? navigator.maxTouchPoints || 0 : 0;
+  const hasAnyCoarsePointer = window.matchMedia?.("(any-pointer: coarse)").matches ?? false;
+  const hasCoarsePointer = window.matchMedia?.("(pointer: coarse)").matches ?? false;
 
   return hasTouchEvent || maxTouchPoints > 0 || hasAnyCoarsePointer || hasCoarsePointer;
 }
@@ -266,30 +280,33 @@ function resolveTooltipTop(
   preferredPlacement?: TooltipVerticalPlacement,
 ): { top: number; placement: TooltipVerticalPlacement } {
   const gap = 12;
-  const viewportHeight = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+  const viewportHeight = Math.max(
+    document.documentElement.clientHeight || 0,
+    window.innerHeight || 0,
+  );
   const spaceBelow = viewportHeight - anchorRect.bottom;
   const spaceAbove = anchorRect.top;
   const canPlaceBelow = spaceBelow >= tooltipHeight + gap;
   const canPlaceAbove = spaceAbove >= tooltipHeight + gap;
 
-  if (preferredPlacement === 'below' && canPlaceBelow) {
-    return { top: anchorRect.bottom + gap, placement: 'below' };
+  if (preferredPlacement === "below" && canPlaceBelow) {
+    return { top: anchorRect.bottom + gap, placement: "below" };
   }
-  if (preferredPlacement === 'above' && canPlaceAbove) {
-    return { top: anchorRect.top - tooltipHeight - gap, placement: 'above' };
+  if (preferredPlacement === "above" && canPlaceAbove) {
+    return { top: anchorRect.top - tooltipHeight - gap, placement: "above" };
   }
 
   if (canPlaceBelow) {
-    return { top: anchorRect.bottom + gap, placement: 'below' };
+    return { top: anchorRect.bottom + gap, placement: "below" };
   }
   if (canPlaceAbove) {
-    return { top: anchorRect.top - tooltipHeight - gap, placement: 'above' };
+    return { top: anchorRect.top - tooltipHeight - gap, placement: "above" };
   }
 
   if (spaceAbove > spaceBelow) {
-    return { top: anchorRect.top - tooltipHeight - gap, placement: 'above' };
+    return { top: anchorRect.top - tooltipHeight - gap, placement: "above" };
   }
-  return { top: anchorRect.bottom + gap, placement: 'below' };
+  return { top: anchorRect.bottom + gap, placement: "below" };
 }
 
 export function useRadicalTooltip(): void {
@@ -302,7 +319,7 @@ export function useRadicalTooltip(): void {
     let tooltipEl: HTMLDivElement | null = null;
     let showTimer: number | null = null;
     let hideTimer: number | null = null;
-    let currentId = '';
+    let currentId = "";
     let currentAnchor: HTMLAnchorElement | null = null;
     const cache = new Map<string, string>();
     // 換頁剛收掉 tooltip 後，短時間內阻擋「新內容出現在游標下方時瀏覽器自動補發的
@@ -327,20 +344,20 @@ export function useRadicalTooltip(): void {
 
     const createTooltip = (): HTMLDivElement => {
       if (tooltipEl) return tooltipEl;
-      const element = document.createElement('div');
-      element.className = 'ui-tooltip prefer-pinyin-true';
-      element.style.position = 'absolute';
-      element.style.display = 'none';
-      element.style.zIndex = '9999';
+      const element = document.createElement("div");
+      element.className = "ui-tooltip prefer-pinyin-true";
+      element.style.position = "absolute";
+      element.style.display = "none";
+      element.style.zIndex = "9999";
       element.innerHTML = EMPTY_HTML;
-      element.addEventListener('mouseenter', clearHideTimer);
-      element.addEventListener('mouseleave', () => {
+      element.addEventListener("mouseenter", clearHideTimer);
+      element.addEventListener("mouseleave", () => {
         clearHideTimer();
         hideTimer = window.setTimeout(() => {
           if (tooltipEl) {
-            tooltipEl.style.display = 'none';
+            tooltipEl.style.display = "none";
           }
-          currentId = '';
+          currentId = "";
           currentAnchor = null;
         }, 50);
       });
@@ -359,8 +376,14 @@ export function useRadicalTooltip(): void {
       const rect = anchor.getBoundingClientRect();
       const scrollX = window.pageXOffset || document.documentElement.scrollLeft || 0;
       const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-      const viewportWidth = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
-      const viewportHeight = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+      const viewportWidth = Math.max(
+        document.documentElement.clientWidth || 0,
+        window.innerWidth || 0,
+      );
+      const viewportHeight = Math.max(
+        document.documentElement.clientHeight || 0,
+        window.innerHeight || 0,
+      );
       const tooltipWidth = element.offsetWidth || 240;
       const tooltipHeight = element.offsetHeight || 160;
 
@@ -382,14 +405,14 @@ export function useRadicalTooltip(): void {
     };
 
     const showTooltip = async (anchor: HTMLAnchorElement, rawId: string) => {
-      const id = String(rawId || '').trim();
+      const id = String(rawId || "").trim();
       if (!id) return;
 
       currentId = id;
       currentAnchor = anchor;
       const element = createTooltip();
       element.innerHTML = LOADING_HTML;
-      element.style.display = 'block';
+      element.style.display = "block";
       // 先以預估高度決定上/下方向，但實際位置仍用「載入中」真實高度計算。
       const loadingPlacement = resolveTooltipTop(anchor.getBoundingClientRect(), 220).placement;
       positionTooltip(anchor, { preferredPlacement: loadingPlacement });
@@ -397,12 +420,12 @@ export function useRadicalTooltip(): void {
       const cacheKey = id;
       let html = cache.get(cacheKey);
       if (!html) {
-        if (id.startsWith('entry:')) {
-          const entryTarget = id.slice(6).trim() || anchor.getAttribute('href') || '';
-          console.debug('[tooltip-entry] entry route', {
+        if (id.startsWith("entry:")) {
+          const entryTarget = id.slice(6).trim() || anchor.getAttribute("href") || "";
+          console.debug("[tooltip-entry] entry route", {
             id,
             entryTarget,
-            anchorHref: anchor.getAttribute('href') || '',
+            anchorHref: anchor.getAttribute("href") || "",
           });
           html = await buildEntryTooltipHTML(entryTarget);
         } else if (shouldUseRadicalTooltip(id)) {
@@ -415,7 +438,7 @@ export function useRadicalTooltip(): void {
 
       if (!tooltipEl || currentId !== id) return;
       tooltipEl.innerHTML = html || EMPTY_HTML;
-      tooltipEl.style.display = 'block';
+      tooltipEl.style.display = "block";
       if (currentAnchor) {
         positionTooltip(currentAnchor, { preferredPlacement: loadingPlacement });
       }
@@ -423,8 +446,8 @@ export function useRadicalTooltip(): void {
 
     const hideTooltip = () => {
       if (!tooltipEl) return;
-      tooltipEl.style.display = 'none';
-      currentId = '';
+      tooltipEl.style.display = "none";
+      currentId = "";
       currentAnchor = null;
     };
 
@@ -454,7 +477,7 @@ export function useRadicalTooltip(): void {
         showTooltip(target.anchor, target.id).catch(() => {
           if (tooltipEl) {
             tooltipEl.innerHTML = EMPTY_HTML;
-            tooltipEl.style.display = 'block';
+            tooltipEl.style.display = "block";
           }
         });
       }, 120);
@@ -465,7 +488,7 @@ export function useRadicalTooltip(): void {
       clearShowTimer();
 
       const related = event.relatedTarget;
-      if (related instanceof Element && related.closest('.ui-tooltip')) {
+      if (related instanceof Element && related.closest(".ui-tooltip")) {
         return;
       }
 
@@ -474,28 +497,28 @@ export function useRadicalTooltip(): void {
     };
 
     const refreshPosition = () => {
-      if (!tooltipEl || tooltipEl.style.display !== 'block' || !currentAnchor || !currentId) {
+      if (!tooltipEl || tooltipEl.style.display !== "block" || !currentAnchor || !currentId) {
         return;
       }
       positionTooltip(currentAnchor);
     };
 
-    document.addEventListener('mouseover', onMouseOver);
-    document.addEventListener('mouseout', onMouseOut);
+    document.addEventListener("mouseover", onMouseOver);
+    document.addEventListener("mouseout", onMouseOut);
     // 換頁（不換頁路由）時由 DictionaryPage 派發此事件，收掉殘留 tooltip 並短暫阻擋重開
-    document.addEventListener('moedict:dismiss-tooltip', dismissTooltip);
-    window.addEventListener('scroll', refreshPosition, true);
-    window.addEventListener('resize', refreshPosition);
+    document.addEventListener("moedict:dismiss-tooltip", dismissTooltip);
+    window.addEventListener("scroll", refreshPosition, true);
+    window.addEventListener("resize", refreshPosition);
 
     return () => {
       clearShowTimer();
       clearHideTimer();
-      document.removeEventListener('mouseover', onMouseOver);
-      document.removeEventListener('mouseout', onMouseOut);
-      document.removeEventListener('moedict:dismiss-tooltip', dismissTooltip);
+      document.removeEventListener("mouseover", onMouseOver);
+      document.removeEventListener("mouseout", onMouseOut);
+      document.removeEventListener("moedict:dismiss-tooltip", dismissTooltip);
       if (suppressTimer != null) window.clearTimeout(suppressTimer);
-      window.removeEventListener('scroll', refreshPosition, true);
-      window.removeEventListener('resize', refreshPosition);
+      window.removeEventListener("scroll", refreshPosition, true);
+      window.removeEventListener("resize", refreshPosition);
       if (tooltipEl) {
         tooltipEl.remove();
         tooltipEl = null;

@@ -1,10 +1,10 @@
 {
-    "folders": [
-        {
-            "path": "."
-        },
-		{
-			"path": "../../../../../Volumes/HFSDev/moedict-webkit"
-		}
-    ]
+  "folders": [
+    {
+      "path": ".",
+    },
+    {
+      "path": "../../../../../Volumes/HFSDev/moedict-webkit",
+    },
+  ],
 }

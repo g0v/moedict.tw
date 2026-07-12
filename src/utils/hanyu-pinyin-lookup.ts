@@ -1,5 +1,5 @@
-export type HanYuLookupLang = 'a' | 'c';
+export type HanYuLookupLang = "a" | "c";
 
 export function getHanYuPinyinLookupBase(lang: HanYuLookupLang): string {
-	return `/api/lookup/pinyin/${lang}/HanYu`;
+  return `/api/lookup/pinyin/${lang}/HanYu`;
 }

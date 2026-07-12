@@ -1,73 +1,73 @@
-const DEFAULT_BASE_URL = 'http://127.0.0.1:8787';
+const DEFAULT_BASE_URL = "http://127.0.0.1:8787";
 
-const baseUrl = (process.argv[2] || DEFAULT_BASE_URL).replace(/\/+$/, '');
+const baseUrl = (process.argv[2] || DEFAULT_BASE_URL).replace(/\/+$/, "");
 
 const cases = [
   {
-    name: 'a route',
-    path: '/a/%E8%90%8C.json',
+    name: "a route",
+    path: "/a/%E8%90%8C.json",
     expectStatus: 200,
-    expect: (json) => typeof json === 'object' && json !== null && !Array.isArray(json),
-    hint: '預期回傳詞條物件',
+    expect: (json) => typeof json === "object" && json !== null && !Array.isArray(json),
+    hint: "預期回傳詞條物件",
   },
   {
-    name: 't route',
-    path: '/t/%E4%86%80.json',
+    name: "t route",
+    path: "/t/%E4%86%80.json",
     expectStatus: 200,
-    expect: (json) => typeof json === 'object' && json !== null && !Array.isArray(json),
-    hint: '預期回傳詞條物件',
+    expect: (json) => typeof json === "object" && json !== null && !Array.isArray(json),
+    hint: "預期回傳詞條物件",
   },
   {
-    name: 'h route',
-    path: '/h/%E3%90%81.json',
+    name: "h route",
+    path: "/h/%E3%90%81.json",
     expectStatus: 200,
-    expect: (json) => typeof json === 'object' && json !== null && !Array.isArray(json),
-    hint: '預期回傳詞條物件',
+    expect: (json) => typeof json === "object" && json !== null && !Array.isArray(json),
+    hint: "預期回傳詞條物件",
   },
   {
-    name: 'c route',
-    path: '/c/%E4%B8%8A%E8%A8%B4.json',
+    name: "c route",
+    path: "/c/%E4%B8%8A%E8%A8%B4.json",
     expectStatus: 200,
-    expect: (json) => typeof json === 'object' && json !== null && !Array.isArray(json),
-    hint: '預期回傳詞條物件',
+    expect: (json) => typeof json === "object" && json !== null && !Array.isArray(json),
+    hint: "預期回傳詞條物件",
   },
   {
-    name: 'raw route',
-    path: '/raw/%E8%90%8C.json',
+    name: "raw route",
+    path: "/raw/%E8%90%8C.json",
     expectStatus: 200,
     expect: (json) =>
-      typeof json === 'object' &&
+      typeof json === "object" &&
       json !== null &&
-      typeof json.title === 'string' &&
+      typeof json.title === "string" &&
       Array.isArray(json.heteronyms),
-    hint: '預期含 title / heteronyms',
+    hint: "預期含 title / heteronyms",
   },
   {
-    name: 'uni route',
-    path: '/uni/%E8%90%8C.json',
+    name: "uni route",
+    path: "/uni/%E8%90%8C.json",
     expectStatus: 200,
     expect: (json) =>
-      typeof json === 'object' &&
+      typeof json === "object" &&
       json !== null &&
-      typeof json.title === 'string' &&
+      typeof json.title === "string" &&
       Array.isArray(json.heteronyms),
-    hint: '預期含 title / heteronyms',
+    hint: "預期含 title / heteronyms",
   },
   {
-    name: 'pua route',
-    path: '/pua/%E8%90%8C.json',
+    name: "pua route",
+    path: "/pua/%E8%90%8C.json",
     expectStatus: 200,
     expect: (json) =>
-      typeof json === 'object' &&
+      typeof json === "object" &&
       json !== null &&
-      typeof json.title === 'string' &&
+      typeof json.title === "string" &&
       Array.isArray(json.heteronyms),
-    hint: '預期含 title / heteronyms',
+    hint: "預期含 title / heteronyms",
   },
 ];
 
 function truncate(value, max = 120) {
-  const text = typeof value === 'string' ? value : JSON.stringify(value);
+  const text = typeof value === "string" ? value : JSON.stringify(value);
   if (text.length <= max) return text;
   return `${text.slice(0, max)}...`;
 }
@@ -75,9 +75,9 @@ function truncate(value, max = 120) {
 async function runCase(testCase) {
   const url = `${baseUrl}${testCase.path}`;
   const response = await fetch(url, {
-    headers: { Accept: 'application/json' },
+    headers: { Accept: "application/json" },
   });
-  const contentType = response.headers.get('content-type') || '';
+  const contentType = response.headers.get("content-type") || "";
   const bodyText = await response.text();
 
   let parsed = null;
@@ -96,9 +96,7 @@ async function runCase(testCase) {
   }
 
   if (!testCase.expect(parsed)) {
-    throw new Error(
-      `${testCase.name}: JSON 結構不符 (${testCase.hint}), body=${truncate(parsed)}`,
-    );
+    throw new Error(`${testCase.name}: JSON 結構不符 (${testCase.hint}), body=${truncate(parsed)}`);
   }
 
   console.log(`PASS ${testCase.name} -> ${response.status} ${testCase.path}`);
@@ -113,7 +111,7 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error('Smoke test failed.');
+  console.error("Smoke test failed.");
   console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
 });

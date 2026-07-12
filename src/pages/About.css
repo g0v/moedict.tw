@@ -1,304 +1,306 @@
 /* About 頁面樣式 - 從 page-rendering.tsx 的 generateAboutHTMLWrapper 提取 */
 
 .about-page {
-	position: relative;
-	min-height: 100vh;
-	min-height: 100dvh;
-	width: 100%;
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
 }
 
 /* 導航列樣式 */
 .navbar {
-	position: fixed;
-	top: 0;
-	left: 0;
-	right: 0;
-	z-index: 1030;
-	background-color: #222;
-	border-bottom: 1px solid #080808;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1030;
+  background-color: #222;
+  border-bottom: 1px solid #080808;
 }
 
 .navbar-inverse {
-	background-color: #222;
-	border-color: #080808;
+  background-color: #222;
+  border-color: #080808;
 }
 
 .navbar-brand {
-	float: left;
-	padding: 15px 15px;
-	font-size: 18px;
-	line-height: 20px;
-	color: #999;
-	text-decoration: none;
+  float: left;
+  padding: 15px 15px;
+  font-size: 18px;
+  line-height: 20px;
+  color: #999;
+  text-decoration: none;
 }
 
 .navbar-brand:hover,
 .navbar-brand:focus {
-	color: #fff;
-	text-decoration: none;
+  color: #fff;
+  text-decoration: none;
 }
 
 .navbar-nav {
-	margin: 0;
-	list-style: none;
+  margin: 0;
+  list-style: none;
 }
 
 .navbar-nav > li {
-	float: left;
+  float: left;
 }
 
 .navbar-nav > li > a {
-	display: block;
-	padding: 15px;
-	color: #999;
-	text-decoration: none;
+  display: block;
+  padding: 15px;
+  color: #999;
+  text-decoration: none;
 }
 
 .navbar-nav > li > a:hover,
 .navbar-nav > li > a:focus {
-	color: #fff;
-	background-color: transparent;
+  color: #fff;
+  background-color: transparent;
 }
 
 .pull-right {
-	float: right !important;
+  float: right !important;
 }
 
 /* 內容區域 */
 .about-page .content {
-	margin: 120px auto 20px;
-	padding: 20px;
-	line-height: 1.6;
+  margin: 120px auto 20px;
+  padding: 20px;
+  line-height: 1.6;
 }
 
 .about-page .content p {
-	margin-bottom: 1em;
+  margin-bottom: 1em;
 }
 
 .about-page .content ul {
-	margin-left: 2em;
-	margin-bottom: 1em;
+  margin-left: 2em;
+  margin-bottom: 1em;
 }
 
 .about-page .content li {
-	margin-bottom: 0.5em;
+  margin-bottom: 0.5em;
 }
 
 .about-page .content a {
-	color: #337ab7;
-	text-decoration: none;
+  color: #337ab7;
+  text-decoration: none;
 }
 
 .about-page .content a:hover {
-	text-decoration: underline;
+  text-decoration: underline;
 }
 
 .about-page .content h2.cc0 {
-	margin-top: 2em;
-	margin-bottom: 1em;
+  margin-top: 2em;
+  margin-bottom: 1em;
 }
 
 .about-page .content h2.cc0 a {
-	color: #337ab7;
+  color: #337ab7;
 }
 
 /* Logo 樣式 */
 .about-page .logo {
-	height: auto;
+  height: auto;
 }
 
 /* 使用說明導覽連結（#95） */
 .about-page .how-to-use-link .btn-info {
-	display: inline-flex;
-	align-items: center;
-	color: #fff;
-	text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  color: #fff;
+  text-decoration: none;
 }
 
 .about-page .how-to-use-link .btn-info:hover {
-	color: #fff;
-	text-decoration: none;
+  color: #fff;
+  text-decoration: none;
 }
 
 /* 使用說明區段（#95） */
 .about-page .how-to-use {
-	margin-top: 1em;
-	padding-top: 1.5em;
-	border-top: 1px solid #ddd;
-	/* 錨點捲動時預留固定導覽列高度，避免標題被遮住 */
-	scroll-margin-top: 80px;
+  margin-top: 1em;
+  padding-top: 1.5em;
+  border-top: 1px solid #ddd;
+  /* 錨點捲動時預留固定導覽列高度，避免標題被遮住 */
+  scroll-margin-top: 80px;
 }
 
 .about-page .how-to-use h2 {
-	margin-bottom: 0.75em;
+  margin-bottom: 0.75em;
 }
 
 .about-page .how-to-use > ul > li {
-	margin-bottom: 0.75em;
+  margin-bottom: 0.75em;
 }
 
 .about-page .how-to-use > ul > li > strong {
-	font-size: 1.05em;
+  font-size: 1.05em;
 }
 
 .about-page .how-to-use ul ul {
-	margin-top: 0.35em;
-	margin-bottom: 0;
+  margin-top: 0.35em;
+  margin-bottom: 0;
 }
 
 /* 響應式設計 */
 @media only screen and (max-width: 767px) {
-	.about-page .content {
-		margin-top: 80px;
-		padding: 15px;
-	}
+  .about-page .content {
+    margin-top: 80px;
+    padding: 15px;
+  }
 }
 
 /* 隱藏類別 */
 .app-only {
-	display: none;
+  display: none;
 }
 
 @media (max-width: 767px) {
-	.app-only {
-		display: block;
-	}
+  .app-only {
+    display: block;
+  }
 
-	.web-only {
-		display: none;
-	}
+  .web-only {
+    display: none;
+  }
 }
 
 /* 按鈕樣式 */
 .btn {
-	display: inline-block;
-	padding: 6px 12px;
-	margin-bottom: 0;
-	font-size: 14px;
-	font-weight: normal;
-	line-height: 1.42857143;
-	text-align: center;
-	white-space: nowrap;
-	vertical-align: middle;
-	cursor: pointer;
-	border: 1px solid transparent;
-	border-radius: 4px;
-	text-decoration: none;
+  display: inline-block;
+  padding: 6px 12px;
+  margin-bottom: 0;
+  font-size: 14px;
+  font-weight: normal;
+  line-height: 1.42857143;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: middle;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  text-decoration: none;
 }
 
 .btn-default {
-	color: #333;
-	background-color: #fff;
-	border-color: #ccc;
+  color: #333;
+  background-color: #fff;
+  border-color: #ccc;
 }
 
 .btn-default:hover {
-	color: #333;
-	background-color: #e6e6e6;
-	border-color: #adadad;
+  color: #333;
+  background-color: #e6e6e6;
+  border-color: #adadad;
 }
 
 .btn-info {
-	color: #fff;
-	background-color: #5bc0de;
-	border-color: #46b8da;
+  color: #fff;
+  background-color: #5bc0de;
+  border-color: #46b8da;
 }
 
 .btn-info:hover {
-	color: #fff;
-	background-color: #46b8da;
-	border-color: #269abc;
+  color: #fff;
+  background-color: #46b8da;
+  border-color: #269abc;
 }
 
 /* 使用說明截圖縮圖（#95） */
 .about-page .guide-figures {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 12px;
-	margin: 0.6em 0 0.2em;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0.6em 0 0.2em;
 }
 
 .about-page .guide-figure {
-	margin: 0;
-	max-width: 240px;
+  margin: 0;
+  max-width: 240px;
 }
 
 .about-page .guide-figure-button {
-	display: block;
-	width: 100%;
-	padding: 0;
-	border: 0;
-	background: none;
-	cursor: zoom-in;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
 }
 
 .about-page .guide-figure-button img {
-	display: block;
-	width: 100%;
-	height: auto;
-	border: 1px solid #ddd;
-	border-radius: 6px;
-	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-	transition: box-shadow 0.15s ease, transform 0.15s ease;
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  transition:
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
 }
 
 .about-page .guide-figure-button:hover img,
 .about-page .guide-figure-button:focus-visible img {
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
-	transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+  transform: translateY(-1px);
 }
 
 .about-page .guide-figure figcaption {
-	margin-top: 4px;
-	font-size: 0.8em;
-	color: #888;
-	text-align: center;
+  margin-top: 4px;
+  font-size: 0.8em;
+  color: #888;
+  text-align: center;
 }
 
 @media only screen and (max-width: 767px) {
-	.about-page .guide-figure {
-		flex: 1 1 100%;
-		max-width: 100%;
-	}
+  .about-page .guide-figure {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
 }
 
 /* 截圖放大檢視 lightbox（#95） */
 .guide-lightbox {
-	position: fixed;
-	inset: 0;
-	z-index: 2000;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	padding: 24px;
-	background: rgba(0, 0, 0, 0.8);
-	cursor: zoom-out;
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.8);
+  cursor: zoom-out;
 }
 
 .guide-lightbox-image {
-	max-width: 95vw;
-	max-height: 90vh;
-	width: auto;
-	height: auto;
-	object-fit: contain;
-	border-radius: 4px;
-	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
-	cursor: default;
+  max-width: 95vw;
+  max-height: 90vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+  cursor: default;
 }
 
 .guide-lightbox-close {
-	position: fixed;
-	top: 12px;
-	right: 18px;
-	padding: 0;
-	border: 0;
-	background: none;
-	color: #fff;
-	font-size: 2.4rem;
-	line-height: 1;
-	cursor: pointer;
+  position: fixed;
+  top: 12px;
+  right: 18px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #fff;
+  font-size: 2.4rem;
+  line-height: 1;
+  cursor: pointer;
 }
 
 .guide-lightbox-close:hover {
-	color: #ccc;
+  color: #ccc;
 }

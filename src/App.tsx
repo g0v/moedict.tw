@@ -1,33 +1,33 @@
-import { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route, useLocation, Outlet, Navigate } from 'react-router-dom'
-import { About } from './pages/About'
-import { Privacy } from './pages/Privacy'
-import { RadicalView } from './pages/RadicalView'
-import { MiddlePoint } from './MiddlePoint'
-import { DictionaryA } from './pages/Dictionary-a'
-import { Layout } from './components/Layout'
-import { readLastLookup } from './utils/word-record-utils'
-import { applyHeadByPath } from './ssr/head'
-import './App.css'
+import { useEffect, useState } from "react";
+import { BrowserRouter, Routes, Route, useLocation, Outlet, Navigate } from "react-router-dom";
+import { About } from "./pages/About";
+import { Privacy } from "./pages/Privacy";
+import { RadicalView } from "./pages/RadicalView";
+import { MiddlePoint } from "./MiddlePoint";
+import { DictionaryA } from "./pages/Dictionary-a";
+import { Layout } from "./components/Layout";
+import { readLastLookup } from "./utils/word-record-utils";
+import { applyHeadByPath } from "./ssr/head";
+import "./App.css";
 
 /**
  * Normal Layout 包裝器
  */
 function NormalLayout() {
-  const [r2Endpoint, setR2Endpoint] = useState<string>('');
+  const [r2Endpoint, setR2Endpoint] = useState<string>("");
 
   useEffect(() => {
     // wrangler vars.ASSET_BASE_URL → /api/config.assetBaseUrl
-    fetch('/api/config')
+    fetch("/api/config")
       .then((res) => res.json())
       .then((data: { assetBaseUrl?: string }) => {
         if (data.assetBaseUrl) {
-          const endpoint = data.assetBaseUrl.replace(/\/$/, '');
+          const endpoint = data.assetBaseUrl.replace(/\/$/, "");
           setR2Endpoint(endpoint);
         }
       })
       .catch((err) => {
-        console.error('取得 ASSET_BASE_URL 失敗:', err);
+        console.error("取得 ASSET_BASE_URL 失敗:", err);
       });
   }, []);
 
@@ -35,27 +35,27 @@ function NormalLayout() {
     <Layout layout="normal" r2Endpoint={r2Endpoint}>
       <Outlet />
     </Layout>
-  )
+  );
 }
 
 /**
  * About Layout 包裝器
  */
 function AboutLayout() {
-  const [r2Endpoint, setR2Endpoint] = useState<string>('');
+  const [r2Endpoint, setR2Endpoint] = useState<string>("");
 
   useEffect(() => {
     // wrangler vars.ASSET_BASE_URL → /api/config.assetBaseUrl
-    fetch('/api/config')
+    fetch("/api/config")
       .then((res) => res.json())
       .then((data: { assetBaseUrl?: string }) => {
         if (data.assetBaseUrl) {
-          const endpoint = data.assetBaseUrl.replace(/\/$/, '');
+          const endpoint = data.assetBaseUrl.replace(/\/$/, "");
           setR2Endpoint(endpoint);
         }
       })
       .catch((err) => {
-        console.error('取得 ASSET_BASE_URL 失敗:', err);
+        console.error("取得 ASSET_BASE_URL 失敗:", err);
       });
   }, []);
 
@@ -63,7 +63,7 @@ function AboutLayout() {
     <Layout layout="about" r2Endpoint={r2Endpoint}>
       <Outlet />
     </Layout>
-  )
+  );
 }
 
 /**
@@ -99,16 +99,16 @@ function URLDecoder() {
   useEffect(() => {
     // 當路由變化時，檢查並修正 URL（作為備用機制）
     const currentPath = window.location.pathname;
-    
-    if (currentPath.includes('%')) {
+
+    if (currentPath.includes("%")) {
       try {
         const decoded = decodeURIComponent(currentPath);
         if (decoded !== currentPath) {
           // 使用 replaceState 避免在歷史記錄中留下編碼的 URL
-          window.history.replaceState(null, '', decoded);
+          window.history.replaceState(null, "", decoded);
         }
       } catch (e) {
-        console.warn('URL 解碼失敗:', e);
+        console.warn("URL 解碼失敗:", e);
       }
     }
   }, [location.pathname]);
@@ -116,11 +116,11 @@ function URLDecoder() {
   return null;
 }
 
-function formatWordPath(word: string, lang: 'a' | 't' | 'h' | 'c'): string {
-  if (!word) return '/萌';
-  if (lang === 't') return `/'${word}`;
-  if (lang === 'h') return `/:${word}`;
-  if (lang === 'c') return `/~${word}`;
+function formatWordPath(word: string, lang: "a" | "t" | "h" | "c"): string {
+  if (!word) return "/萌";
+  if (lang === "t") return `/'${word}`;
+  if (lang === "h") return `/:${word}`;
+  if (lang === "c") return `/~${word}`;
   return `/${word}`;
 }
 
@@ -152,17 +152,17 @@ function App() {
         <Route element={<NormalLayout />}>
           {/* 首頁路由 */}
           <Route path="/" element={<HomeRoute />} />
-          
+
           {/* 部首表（唯一合法的純靜態 segment） */}
-          <Route path="/@" element={<RadicalView lang='a' />} />
-          <Route path="/~@" element={<RadicalView lang='c' />} />
+          <Route path="/@" element={<RadicalView lang="a" />} />
+          <Route path="/~@" element={<RadicalView lang="c" />} />
 
           {/* 其他路由交由 MiddlePoint 分流 */}
           <Route path="*" element={<MiddlePoint />} />
         </Route>
       </Routes>
     </BrowserRouter>
-  )
+  );
 }
 
-export default App
+export default App;

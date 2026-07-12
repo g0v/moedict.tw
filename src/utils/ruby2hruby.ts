@@ -20,7 +20,7 @@ const rZyD = `${UNICODE.zhuyin.tone.source}|${UNICODE.zhuyin.ruyun.source}`;
 const TYPESET = {
   zhuyin: {
     form: new RegExp(`^\u02D9?(${rZyS})?(${rZyJ})?(${rZyY})?(${rZyD})?$`),
-    diao: new RegExp(`(${rZyD})`, 'g'),
+    diao: new RegExp(`(${rZyD})`, "g"),
   },
 };
 
@@ -39,20 +39,20 @@ function toCodePointString(entity: string): string {
 
 function normalizeAnnotation(text: string): string {
   return text
-    .replace(/\u0061[\u0307\u030d\u0358]/g, '\uDB80\uDC61')
-    .replace(/\u0065[\u0307\u030d\u0358]/g, '\uDB80\uDC65')
-    .replace(/\u0069[\u0307\u030d\u0358]/g, '\uDB80\uDC69')
-    .replace(/\u006F[\u0307\u030d\u0358]/g, '\uDB80\uDC6F')
-    .replace(/\u0075[\u0307\u030d\u0358]/g, '\uDB80\uDC75');
+    .replace(/\u0061[\u0307\u030d\u0358]/g, "\uDB80\uDC61")
+    .replace(/\u0065[\u0307\u030d\u0358]/g, "\uDB80\uDC65")
+    .replace(/\u0069[\u0307\u030d\u0358]/g, "\uDB80\uDC69")
+    .replace(/\u006F[\u0307\u030d\u0358]/g, "\uDB80\uDC6F")
+    .replace(/\u0075[\u0307\u030d\u0358]/g, "\uDB80\uDC75");
 }
 
 export function ruby2hruby(html: string): string {
   try {
-    if (typeof DOMParser === 'undefined') return html;
+    if (typeof DOMParser === "undefined") return html;
 
     const parser = new DOMParser();
-    const doc = parser.parseFromString(`<ruby class="rightangle">${html}</ruby>`, 'text/html');
-    const ruby = doc.querySelector('ruby');
+    const doc = parser.parseFromString(`<ruby class="rightangle">${html}</ruby>`, "text/html");
+    const ruby = doc.querySelector("ruby");
     // Our template always prepends <ruby class="rightangle"> so happy-dom always
     // yields a ruby root; retained for defensive parser failures.
     /* v8 ignore start */
@@ -62,15 +62,15 @@ export function ruby2hruby(html: string): string {
     // We always set class="rightangle" above, so the fallback is only reached if
     // a caller ever drops that attribute from the template.
     /* v8 ignore start */
-    const originalClass = ruby.getAttribute('class') || '';
+    const originalClass = ruby.getAttribute("class") || "";
     /* v8 ignore stop */
-    const maxspan = ruby.querySelectorAll('rb').length;
+    const maxspan = ruby.querySelectorAll("rb").length;
     const rus: HTMLElement[] = [];
 
-    const zhuyinRtcs = Array.from(ruby.querySelectorAll('rtc.zhuyin'));
+    const zhuyinRtcs = Array.from(ruby.querySelectorAll("rtc.zhuyin"));
     zhuyinRtcs.forEach((rtc) => {
-      const rbs = Array.from(ruby.querySelectorAll('rb'));
-      const rts = Array.from(rtc.querySelectorAll('rt'));
+      const rbs = Array.from(ruby.querySelectorAll("rb"));
+      const rts = Array.from(rtc.querySelectorAll("rt"));
       rts.forEach((rt, idx) => {
         const rb = rbs[idx];
         if (!rb) return;
@@ -79,26 +79,26 @@ export function ruby2hruby(html: string): string {
         // Element.textContent is always a string on an rt element; the `|| ''`
         // guards against hypothetical null returns from non-DOM parsers.
         /* v8 ignore start */
-        const zhuyin = rt.textContent || '';
+        const zhuyin = rt.textContent || "";
         /* v8 ignore stop */
-        const yin = zhuyin.replace(TYPESET.zhuyin.diao, '');
+        const yin = zhuyin.replace(TYPESET.zhuyin.diao, "");
         const diao = zhuyin
-          .replace(yin, '')
-          .replace(/[\u02C5]/g, '\u02C7')
-          .replace(/[\u030D]/g, '\u0358')
-          .replace(/[\u0358]/g, '\u0307');
+          .replace(yin, "")
+          .replace(/[\u02C5]/g, "\u02C7")
+          .replace(/[\u030D]/g, "\u0358")
+          .replace(/[\u0358]/g, "\u0307");
 
         // Array#join('') already drops null/undefined, so we don't need
         // .filter(Boolean) before it; keeping it would add a never-killable
         // mutant on the redundant call.
         const form = zhuyin.replace(TYPESET.zhuyin.form, (_s, s, j, y) =>
-          [s ? 'S' : '', j ? 'J' : '', y ? 'Y' : ''].join(''),
+          [s ? "S" : "", j ? "J" : "", y ? "Y" : ""].join(""),
         );
 
-        const ru = doc.createElement('ru');
-        const zhuyinEl = doc.createElement('zhuyin');
-        const yinEl = doc.createElement('yin');
-        const diaoEl = doc.createElement('diao');
+        const ru = doc.createElement("ru");
+        const zhuyinEl = doc.createElement("zhuyin");
+        const yinEl = doc.createElement("yin");
+        const diaoEl = doc.createElement("diao");
 
         yinEl.innerHTML = yin;
         diaoEl.innerHTML = diao;
@@ -106,10 +106,10 @@ export function ruby2hruby(html: string): string {
         zhuyinEl.appendChild(diaoEl);
         ru.appendChild(rbClone);
         ru.appendChild(zhuyinEl);
-        ru.setAttribute('zhuyin', '');
-        ru.setAttribute('diao', diao);
-        ru.setAttribute('length', String(yin ? Array.from(yin).length : 0));
-        ru.setAttribute('form', form);
+        ru.setAttribute("zhuyin", "");
+        ru.setAttribute("diao", diao);
+        ru.setAttribute("length", String(yin ? Array.from(yin).length : 0));
+        ru.setAttribute("form", form);
 
         rb.replaceWith(ru);
         rus.push(ru);
@@ -118,20 +118,20 @@ export function ruby2hruby(html: string): string {
     });
 
     const spans: number[] = [];
-    const rtcs = Array.from(ruby.querySelectorAll('rtc'));
+    const rtcs = Array.from(ruby.querySelectorAll("rtc"));
     rtcs.forEach((rtc, order) => {
-      const rts = Array.from(rtc.querySelectorAll('rt'));
+      const rts = Array.from(rtc.querySelectorAll("rt"));
       rts.forEach((rt, idx) => {
         let span = 0;
         let baseNodes: Element[] = [];
 
         if (order === 0) {
-          const rbspan = Math.min(Number(rt.getAttribute('rbspan') || 1), maxspan);
+          const rbspan = Math.min(Number(rt.getAttribute("rbspan") || 1), maxspan);
           while (rbspan > span) {
             const rb = rus.shift();
             if (!rb) break;
             baseNodes.push(rb);
-            span += Number(rb.getAttribute('span') || 1);
+            span += Number(rb.getAttribute("span") || 1);
           }
 
           /* v8 ignore start -- only reachable if a pulled <ru> has span > 1, but the
@@ -141,7 +141,7 @@ export function ruby2hruby(html: string): string {
             if (baseNodes.length > 1) return;
             const single = baseNodes[0];
             if (!single) return;
-            baseNodes = Array.from(single.querySelectorAll('rb')).slice(0, rbspan);
+            baseNodes = Array.from(single.querySelectorAll("rb")).slice(0, rbspan);
             span = rbspan;
           }
           /* v8 ignore stop */
@@ -156,17 +156,17 @@ export function ruby2hruby(html: string): string {
         const firstBase = baseNodes[0];
         if (!firstBase) return;
 
-        const ru = doc.createElement('ru');
+        const ru = doc.createElement("ru");
         const rtClone = rt.cloneNode(true) as Element;
-        ru.innerHTML = baseNodes.map((node) => node.outerHTML).join('');
+        ru.innerHTML = baseNodes.map((node) => node.outerHTML).join("");
         ru.appendChild(rtClone);
-        ru.setAttribute('span', String(span));
-        ru.setAttribute('order', String(order));
-        ru.setAttribute('class', originalClass);
+        ru.setAttribute("span", String(span));
+        ru.setAttribute("order", String(order));
+        ru.setAttribute("class", originalClass);
         // Element.textContent is always a string; `|| ''` is a defensive fallback
         // that happy-dom never exercises.
         /* v8 ignore start */
-        ru.setAttribute('annotation', normalizeAnnotation(rt.textContent || ''));
+        ru.setAttribute("annotation", normalizeAnnotation(rt.textContent || ""));
         /* v8 ignore stop */
 
         firstBase.replaceWith(ru);
@@ -174,9 +174,9 @@ export function ruby2hruby(html: string): string {
       });
     });
 
-    ruby.querySelectorAll('rtc').forEach((rtc) => rtc.remove());
-    ruby.querySelectorAll('rt').forEach((rt) => {
-      rt.setAttribute('style', 'text-indent: -9999px; color: transparent');
+    ruby.querySelectorAll("rtc").forEach((rtc) => rtc.remove());
+    ruby.querySelectorAll("rt").forEach((rt) => {
+      rt.setAttribute("style", "text-indent: -9999px; color: transparent");
     });
 
     return ruby.innerHTML.replace(

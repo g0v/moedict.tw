@@ -53,7 +53,7 @@ done
 
 # 檢查全文索引資料夾是否存在
 if [ ! -d "$SEARCH_INDEX_DIR" ]; then
-    echo "❌ 錯誤: $SEARCH_INDEX_DIR 資料夾不存在，請先執行 bun run build-search-index"
+    echo "❌ 錯誤: $SEARCH_INDEX_DIR 資料夾不存在，請先執行 vp run build-search-index"
     exit 1
 fi
 
@@ -65,7 +65,7 @@ fi
 
 # 檢查台語羅馬拼音索引資料夾是否存在
 if [ ! -d "$PINYIN_LOOKUP_DIR" ]; then
-    echo "❌ 錯誤: $PINYIN_LOOKUP_DIR 資料夾不存在，請先執行 bun run build-pinyin-lookup"
+    echo "❌ 錯誤: $PINYIN_LOOKUP_DIR 資料夾不存在，請先執行 vp run build-pinyin-lookup"
     exit 1
 fi
 

@@ -3,57 +3,57 @@
  * 注入原專案 page-rendering.tsx 中的內聯樣式
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 
 interface InlineStylesProps {
-	r2Endpoint?: string;
-	onReady?: () => void;
+  r2Endpoint?: string;
+  onReady?: () => void;
 }
 
 /**
  * 內聯樣式組件
  */
 export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
-	const [endpoint, setEndpoint] = useState(r2Endpoint || '');
-	const [readyNotified, setReadyNotified] = useState(false);
+  const [endpoint, setEndpoint] = useState(r2Endpoint || "");
+  const [readyNotified, setReadyNotified] = useState(false);
 
-	useEffect(() => {
-		if (r2Endpoint) {
-			setEndpoint(r2Endpoint.replace(/\/$/, ''));
-		}
-	}, [r2Endpoint]);
+  useEffect(() => {
+    if (r2Endpoint) {
+      setEndpoint(r2Endpoint.replace(/\/$/, ""));
+    }
+  }, [r2Endpoint]);
 
-	useEffect(() => {
-		if (!endpoint) {
-			// wrangler vars.ASSET_BASE_URL → /api/config.assetBaseUrl
-			fetch('/api/config')
-				.then((res) => res.json())
-				.then((data: { assetBaseUrl?: string }) => {
-					if (data.assetBaseUrl) {
-						setEndpoint(data.assetBaseUrl.replace(/\/$/, ''));
-					} else {
-						setEndpoint('/assets');
-					}
-				})
-				.catch(() => {
-					setEndpoint('/assets');
-				});
-		}
-	}, [endpoint]);
+  useEffect(() => {
+    if (!endpoint) {
+      // wrangler vars.ASSET_BASE_URL → /api/config.assetBaseUrl
+      fetch("/api/config")
+        .then((res) => res.json())
+        .then((data: { assetBaseUrl?: string }) => {
+          if (data.assetBaseUrl) {
+            setEndpoint(data.assetBaseUrl.replace(/\/$/, ""));
+          } else {
+            setEndpoint("/assets");
+          }
+        })
+        .catch(() => {
+          setEndpoint("/assets");
+        });
+    }
+  }, [endpoint]);
 
-	useEffect(() => {
-		if (endpoint && !readyNotified) {
-			onReady?.();
-			setReadyNotified(true);
-		}
-	}, [endpoint, onReady, readyNotified]);
+  useEffect(() => {
+    if (endpoint && !readyNotified) {
+      onReady?.();
+      setReadyNotified(true);
+    }
+  }, [endpoint, onReady, readyNotified]);
 
-	if (!endpoint) return null;
+  if (!endpoint) return null;
 
-	return (
-		<style
-			dangerouslySetInnerHTML={{
-				__html: `
+  return (
+    <style
+      dangerouslySetInnerHTML={{
+        __html: `
 		:root {
 			--moe-safe-area-top: env(safe-area-inset-top, 0px);
 			--moe-safe-area-bottom: env(safe-area-inset-bottom, 0px);
@@ -314,6 +314,10 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 			height: 1.8em;
 			box-sizing: border-box;
 			padding: 4px 8px;
+			font-family: "Biaodian Pro Serif CNS", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif, MOEDICT, "TW-Kai-98_1", "標楷體", serif;
+		}
+
+		html.moe-capacitor .query-box input.query {
 			font-family: "Biaodian Pro Serif CNS", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif, "MOE EduKai Android", MOEDICT, "TW-Kai-98_1", "標楷體", serif;
 		}
 
@@ -504,6 +508,25 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 			display: inline-block !important;
 		}
 
+		/* TWBLG 文/白/俗/替讀音分類與無義項提示 */
+		.reading-type {
+			display: inline-block;
+			margin-left: 6px;
+			padding: 1px 6px;
+			font-size: 55%;
+			font-weight: 600;
+			line-height: 1.4;
+			color: #fff;
+			background: #6B0000;
+			border-radius: 4px;
+			vertical-align: middle;
+		}
+		.reading-only-note {
+			margin: .5em 0 1.5em;
+			color: #666;
+			font-size: 90%;
+		}
+
 		/* 外文翻譯 TTS 可點擊 */
 		.fw_def {
 			cursor: pointer;
@@ -613,8 +636,8 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 			-webkit-user-select: text;
 			user-select: text;
 		}
-		`
-			}}
-		/>
-	);
+		`,
+      }}
+    />
+  );
 }

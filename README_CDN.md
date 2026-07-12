@@ -31,6 +31,7 @@
 - 使用位置：`wrangler.jsonc`、`worker/index.ts`
 
 ### 3) 字典資料端點
+</antml：parameter>
 - 變數：`DICTIONARY_BASE_URL`
 - 目前設定（本機）：`https://pub-7e5ed83262e5403d85cb5a04ff841cf4.r2.dev`
 - 用途：透過 `/api/config` 回傳給前端作為字典資料來源設定

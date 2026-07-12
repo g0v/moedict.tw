@@ -1,10 +1,12 @@
-import { expect, test } from './_fixtures';
+import { expect, test } from "./_fixtures";
 
-test('desktop pointer crosses from 分類索引 to 同實異名 without closing the submenu', async ({ page }) => {
-  await page.goto('/~%E8%90%8C');
+test("desktop pointer crosses from 分類索引 to 同實異名 without closing the submenu", async ({
+  page,
+}) => {
+  await page.goto("/~%E8%90%8C");
 
-  await page.locator('nav .navbar-nav > li').first().locator('a').first().click();
-  const categoryIndex = page.locator('a.taxonomy.c', { hasText: '…分類索引' });
+  await page.locator("nav .navbar-nav > li").first().locator("a").first().click();
+  const categoryIndex = page.locator("a.taxonomy.c", { hasText: "…分類索引" });
   const target = page.locator('a.lang-option.c[href="/~=同實異名"]');
 
   await categoryIndex.hover();
@@ -18,20 +20,24 @@ test('desktop pointer crosses from 分類索引 to 同實異名 without closing 
   // Stay on the trigger row while crossing the gap, then step inside the submenu.
   await page.mouse.move(source!.x + source!.width - 2, source!.y + source!.height / 2);
   await page.mouse.move(destination!.x + 2, source!.y + source!.height / 2, { steps: 15 });
-  await page.mouse.move(destination!.x + 2, destination!.y + destination!.height / 2, { steps: 15 });
+  await page.mouse.move(destination!.x + 2, destination!.y + destination!.height / 2, {
+    steps: 15,
+  });
 
   await expect(target).toBeVisible();
   await target.click();
   await expect(page).toHaveURL(/~=%E5%90%8C%E5%AF%A6%E7%95%B0%E5%90%8D/);
 });
 
-test('desktop hover bridge does not intercept adjacent sibling category items', async ({ page }) => {
-  await page.goto('/~%E8%90%8C');
+test("desktop hover bridge does not intercept adjacent sibling category items", async ({
+  page,
+}) => {
+  await page.goto("/~%E8%90%8C");
 
-  await page.locator('nav .navbar-nav > li').first().locator('a').first().click();
-  const categoryIndex = page.locator('a.taxonomy.c', { hasText: '…分類索引' });
+  await page.locator("nav .navbar-nav > li").first().locator("a").first().click();
+  const categoryIndex = page.locator("a.taxonomy.c", { hasText: "…分類索引" });
   // Language sibling above the open Cross-Strait 分類索引 row.
-  const sibling = page.locator('a.lang-option.c[href="/~"]', { hasText: '兩岸詞典' });
+  const sibling = page.locator('a.lang-option.c[href="/~"]', { hasText: "兩岸詞典" });
   const submenuTarget = page.locator('a.lang-option.c[href="/~=同實異名"]');
 
   await categoryIndex.hover();
@@ -47,33 +53,35 @@ test('desktop hover bridge does not intercept adjacent sibling category items', 
     ({ x, y }) => {
       const el = document.elementFromPoint(x, y);
       if (!(el instanceof Element)) return null;
-      const anchor = el.closest('a');
+      const anchor = el.closest("a");
       return {
         tag: el.tagName,
-        href: anchor?.getAttribute('href') ?? null,
-        text: (anchor?.textContent ?? el.textContent ?? '').trim(),
+        href: anchor?.getAttribute("href") ?? null,
+        text: (anchor?.textContent ?? el.textContent ?? "").trim(),
       };
     },
     { x: probeX, y: probeY },
   );
 
   expect(hit).not.toBeNull();
-  expect(hit?.href).toBe('/~');
-  expect(hit?.text).toContain('兩岸詞典');
+  expect(hit?.href).toBe("/~");
+  expect(hit?.text).toContain("兩岸詞典");
 
   await page.mouse.move(probeX, probeY);
   await expect(submenuTarget).toBeHidden();
 });
 
-test('desktop nested submenu keeps ancestor hover bridge on its own trigger row', async ({ page }) => {
+test("desktop nested submenu keeps ancestor hover bridge on its own trigger row", async ({
+  page,
+}) => {
   // Lang `a` nests DropdownSubmenu 2+ levels (…分類索引 → 外來語 → leaves).
   // The relative/absolute bridge must stay row-scoped per open trigger, not
   // bleed across nesting levels.
-  await page.goto('/%E8%90%8C');
+  await page.goto("/%E8%90%8C");
 
-  await page.locator('nav .navbar-nav > li').first().locator('a').first().click();
-  const categoryIndex = page.locator('a.taxonomy.a', { hasText: '…分類索引' });
-  const nestedCategory = page.locator('a.taxonomy.a', { hasText: '外來語' });
+  await page.locator("nav .navbar-nav > li").first().locator("a").first().click();
+  const categoryIndex = page.locator("a.taxonomy.a", { hasText: "…分類索引" });
+  const nestedCategory = page.locator("a.taxonomy.a", { hasText: "外來語" });
   const nestedLeaf = page.locator('a.lang-option.a[href="/=\u97f3\u8b6f"]');
 
   await categoryIndex.hover();
@@ -84,25 +92,25 @@ test('desktop nested submenu keeps ancestor hover bridge on its own trigger row'
   // With both levels open, each open trigger's ::before bridge must cover only
   // that trigger's own row (ancestor vs nested are vertically offset).
   const geometry = await page.evaluate(() => {
-    const ancestorTrigger = Array.from(document.querySelectorAll('a.taxonomy.a')).find(
-      (el) => (el.textContent ?? '').trim() === '…分類索引',
+    const ancestorTrigger = Array.from(document.querySelectorAll("a.taxonomy.a")).find(
+      (el) => (el.textContent ?? "").trim() === "…分類索引",
     );
-    const nestedTrigger = Array.from(document.querySelectorAll('a.taxonomy.a')).find(
-      (el) => (el.textContent ?? '').trim() === '外來語',
+    const nestedTrigger = Array.from(document.querySelectorAll("a.taxonomy.a")).find(
+      (el) => (el.textContent ?? "").trim() === "外來語",
     );
     if (!(ancestorTrigger instanceof HTMLElement) || !(nestedTrigger instanceof HTMLElement)) {
       return null;
     }
 
-    const ancestorLi = ancestorTrigger.closest('li');
-    const nestedLi = nestedTrigger.closest('li');
+    const ancestorLi = ancestorTrigger.closest("li");
+    const nestedLi = nestedTrigger.closest("li");
     if (!(ancestorLi instanceof HTMLElement) || !(nestedLi instanceof HTMLElement)) {
       return null;
     }
 
     const bridgeRect = (li: HTMLElement) => {
       const box = li.getBoundingClientRect();
-      const style = getComputedStyle(li, '::before');
+      const style = getComputedStyle(li, "::before");
       const topOffset = parseFloat(style.top);
       const bottomOffset = parseFloat(style.bottom);
       const leftOffset = parseFloat(style.left);
@@ -158,10 +166,10 @@ test('desktop nested submenu keeps ancestor hover bridge on its own trigger row'
   expect(Math.abs(geometry!.nestedTop - geometry!.ancestorTop)).toBeGreaterThan(8);
 
   // Bridge is a real absolute pseudo-element on each open trigger row.
-  expect(geometry!.ancestorBridgePosition).toBe('absolute');
-  expect(geometry!.nestedBridgePosition).toBe('absolute');
-  expect(geometry!.ancestorBridgeContent).not.toBe('none');
-  expect(geometry!.nestedBridgeContent).not.toBe('none');
+  expect(geometry!.ancestorBridgePosition).toBe("absolute");
+  expect(geometry!.nestedBridgePosition).toBe("absolute");
+  expect(geometry!.ancestorBridgeContent).not.toBe("none");
+  expect(geometry!.nestedBridgeContent).not.toBe("none");
   expect(geometry!.ancestorBridgeWidth).toBeGreaterThan(0);
   expect(geometry!.nestedBridgeWidth).toBeGreaterThan(0);
 
@@ -184,36 +192,36 @@ test('desktop nested submenu keeps ancestor hover bridge on its own trigger row'
   await expect(nestedCategory).toBeVisible();
 });
 
-test('desktop root-level hover bridge reaches fixed submenu left edge', async ({ page }) => {
+test("desktop root-level hover bridge reaches fixed submenu left edge", async ({ page }) => {
   // Root `.dropdownMenuRoot` has a 1px border outside its padding-right room for
   // the row-scoped ::before bridge (bridge width === padding-right, so it stays
   // fully unclipped by overflow-y:auto but ends exactly at the padding edge).
   // enterDropdown now subtracts the live border-right-width so the fixed flyout
   // lands at that same padding-box edge instead of the border-box edge — this
   // assertion locks that alignment in.
-  await page.goto('/~%E8%90%8C');
+  await page.goto("/~%E8%90%8C");
 
-  await page.locator('nav .navbar-nav > li').first().locator('a').first().click();
-  const categoryIndex = page.locator('a.taxonomy.c', { hasText: '…分類索引' });
+  await page.locator("nav .navbar-nav > li").first().locator("a").first().click();
+  const categoryIndex = page.locator("a.taxonomy.c", { hasText: "…分類索引" });
   const submenuTarget = page.locator('a.lang-option.c[href="/~=同實異名"]');
 
   await categoryIndex.hover();
   await expect(submenuTarget).toBeVisible();
 
   const geometry = await page.evaluate(() => {
-    const trigger = Array.from(document.querySelectorAll('a.taxonomy.c')).find(
-      (el) => (el.textContent ?? '').trim() === '…分類索引',
+    const trigger = Array.from(document.querySelectorAll("a.taxonomy.c")).find(
+      (el) => (el.textContent ?? "").trim() === "…分類索引",
     );
     if (!(trigger instanceof HTMLElement)) return null;
 
-    const li = trigger.closest('li');
+    const li = trigger.closest("li");
     if (!(li instanceof HTMLElement)) return null;
 
-    const submenu = li.querySelector('ul');
+    const submenu = li.querySelector("ul");
     if (!(submenu instanceof HTMLElement)) return null;
 
     const liBox = li.getBoundingClientRect();
-    const style = getComputedStyle(li, '::before');
+    const style = getComputedStyle(li, "::before");
     const leftOffset = parseFloat(style.left);
     const width = parseFloat(style.width);
     if (![leftOffset, width].every(Number.isFinite)) return null;
@@ -237,8 +245,8 @@ test('desktop root-level hover bridge reaches fixed submenu left edge', async ({
   });
 
   expect(geometry).not.toBeNull();
-  expect(geometry!.bridgePosition).toBe('absolute');
-  expect(geometry!.bridgeContent).not.toBe('none');
+  expect(geometry!.bridgePosition).toBe("absolute");
+  expect(geometry!.bridgeContent).not.toBe("none");
   expect(geometry!.bridgeWidth).toBeGreaterThan(0);
 
   // No unfilled strip between the bridge's right edge and the live fixed submenu.

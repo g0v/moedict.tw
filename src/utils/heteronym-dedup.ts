@@ -7,8 +7,11 @@ export interface HeteronymLike {
 }
 
 function normalize(value: unknown): string {
-  if (value == null) return '';
-  return String(value).replace(/\s+/gu, ' ').trim();
+  if (typeof value === "string") return value.replace(/\s+/gu, " ").trim();
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value).replace(/\s+/gu, " ").trim();
+  }
+  return "";
 }
 
 function phoneticIdentity(heteronym: HeteronymLike): string {
@@ -24,9 +27,9 @@ function phoneticIdentity(heteronym: HeteronymLike): string {
 function hasIdentity(heteronym: HeteronymLike): boolean {
   return Boolean(
     normalize(heteronym.audio_id) ||
-      normalize(heteronym.bopomofo) ||
-      normalize(heteronym.pinyin) ||
-      normalize(heteronym.trs),
+    normalize(heteronym.bopomofo) ||
+    normalize(heteronym.pinyin) ||
+    normalize(heteronym.trs),
   );
 }
 

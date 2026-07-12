@@ -15,19 +15,19 @@
  *     100% NFD (2026-07); any non-NFD segment is a regression, typically
  *     an NFC string merged from upstream CSV without normalize('NFD').
  *
- * Run: `bun run check:data` / `node scripts/check-dictionary-data.mjs`
+ * Run: `vp run check:data` / `vp node scripts/check-dictionary-data.mjs`
  * CI:  static job.
  */
 
-import { readdirSync, readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(__dirname, '..');
-const DICT_DIR = path.join(REPO_ROOT, 'data', 'dictionary');
+const REPO_ROOT = path.resolve(__dirname, "..");
+const DICT_DIR = path.join(REPO_ROOT, "data", "dictionary");
 
-const SUBDIRS = ['pack', 'pcck', 'phck', 'ptck'];
+const SUBDIRS = ["pack", "pcck", "phck", "ptck"];
 
 let failures = 0;
 
@@ -36,12 +36,11 @@ function fail(message) {
   failures++;
 }
 
-
 function listTxtFiles(subdir) {
   const dir = path.join(DICT_DIR, subdir);
   try {
     return readdirSync(dir)
-      .filter((f) => f.endsWith('.txt'))
+      .filter((f) => f.endsWith(".txt"))
       .map((f) => path.join(dir, f));
   } catch {
     return [];
@@ -60,7 +59,7 @@ for (const subdir of SUBDIRS) {
     const rel = path.relative(REPO_ROOT, file);
     let text;
     try {
-      text = readFileSync(file, 'utf8');
+      text = readFileSync(file, "utf8");
     } catch (e) {
       fail(`${rel}: cannot read file — ${e.message}`);
       continue;
@@ -73,7 +72,7 @@ for (const subdir of SUBDIRS) {
       continue;
     }
     totalParsed++;
-    if (subdir === 'ptck') {
+    if (subdir === "ptck") {
       ptckData.push({ rel, data });
     }
   }
@@ -85,14 +84,14 @@ let dupViolations = 0;
 let nfdViolations = 0;
 
 for (const { rel, data } of ptckData) {
-  if (!data || typeof data !== 'object') continue;
+  if (!data || typeof data !== "object") continue;
   for (const [key, entry] of Object.entries(data)) {
     if (!entry || !Array.isArray(entry.h)) continue;
     for (const het of entry.h) {
-      if (!het || typeof het.T !== 'string') continue;
+      if (!het || typeof het.T !== "string") continue;
       heteronymsWithT++;
-      const segs = het.T.split('/');
-      const normed = segs.map((s) => s.normalize('NFC'));
+      const segs = het.T.split("/");
+      const normed = segs.map((s) => s.normalize("NFC"));
 
       // Check 2: canonical-duplicate readings
       const seen = new Set();
@@ -100,8 +99,7 @@ for (const { rel, data } of ptckData) {
         if (seen.has(n)) {
           dupViolations++;
           fail(
-            `${rel}: entry "${key}" has canonical-duplicate reading "${n}" ` +
-              `in T="${het.T}"`,
+            `${rel}: entry "${key}" has canonical-duplicate reading "${n}" ` + `in T="${het.T}"`,
           );
         }
         seen.add(n);
@@ -111,7 +109,7 @@ for (const { rel, data } of ptckData) {
       // (2026-07); any non-NFD segment is a regression (typically an NFC
       // string merged from upstream CSV without normalize('NFD')).
       for (const s of segs) {
-        if (s !== s.normalize('NFD')) {
+        if (s !== s.normalize("NFD")) {
           nfdViolations++;
           fail(`${rel}: entry "${key}" T segment "${s}" is not in NFD form`);
         }
@@ -119,7 +117,6 @@ for (const { rel, data } of ptckData) {
     }
   }
 }
-
 
 console.log(
   `[check-dictionary-data] ${totalParsed}/${totalFiles} files parsed, ` +
