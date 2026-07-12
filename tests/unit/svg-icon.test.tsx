@@ -15,6 +15,7 @@ const ICON_NAMES: SvgIconName[] = [
   "book",
   "bookmarkEmpty",
   "cogs",
+  "copy",
   "download",
   "info",
   "pencil",
