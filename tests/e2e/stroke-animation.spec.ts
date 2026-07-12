@@ -109,4 +109,46 @@ test.describe("stroke animation trigger", () => {
     await expect(strokes).toHaveCount(1);
     await expect(page.locator("#historical-scripts")).toBeVisible();
   });
+
+  test("issue #132: pencil button is disabled when stroke data is 404, and stays enabled when available", async ({
+    page,
+  }) => {
+    // 萌 = U+840C → hex "840c". Force the stroke-json probe to 404 regardless
+    // of what the local dev backend actually has, so this test is
+    // deterministic and environment-independent.
+    await page.route("**/api/stroke-json/840c.json", (route) =>
+      route.fulfill({ status: 404, contentType: "application/json", body: "{}" }),
+    );
+    await page.goto("/%E8%90%8C"); // /萌
+    await page.waitForLoadState("networkidle");
+
+    const strokeBtn = page.locator("a.iconic-circle.stroke").first();
+    await expect(strokeBtn).toBeVisible({ timeout: 15_000 });
+    await expect(strokeBtn).toHaveAttribute("aria-disabled", "true", { timeout: 5_000 });
+    await expect(strokeBtn).toHaveAttribute("title", "此字尚無筆順動畫資料");
+    await expect(strokeBtn).toHaveAttribute("tabindex", "-1");
+
+    // Clicking a disabled trigger must never mount the blank/faded canvas.
+    await strokeBtn.click({ force: true });
+    await page.waitForTimeout(300);
+    await expect(page.locator("#strokes")).toHaveCount(0);
+  });
+
+  test("issue #132: pencil button stays enabled once stroke data is confirmed available", async ({
+    page,
+  }) => {
+    await page.route("**/api/stroke-json/840c.json", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: '{"strokes":[]}' }),
+    );
+    await page.goto("/%E8%90%8C"); // /萌
+    await page.waitForLoadState("networkidle");
+
+    const strokeBtn = page.locator("a.iconic-circle.stroke").first();
+    await expect(strokeBtn).toBeVisible({ timeout: 15_000 });
+    await expect(strokeBtn).not.toHaveAttribute("aria-disabled", "true");
+    await expect(strokeBtn).toHaveAttribute("title", "筆順動畫");
+
+    await strokeBtn.click();
+    await expect(page.locator("#strokes")).toHaveCount(1, { timeout: 5_000 });
+  });
 });
