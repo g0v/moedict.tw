@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App.tsx";
 import { applyHeadByPath } from "./ssr/head";
+import { resolveLegacyHashRoute } from "./utils/dictionary-route";
 
 /**
  * 在應用啟動前修正 URL，避免編碼字元顯示
@@ -25,6 +26,20 @@ function fixInitialURL() {
     } catch (e) {
       console.warn("初始 URL 解碼失敗:", e);
     }
+  }
+}
+
+/**
+ * 修正 g0v/moedict-webkit#131：詞條內文連結仍以 `./#'word` 舊式 hashbang
+ * 形式產生（見 dictionary-route.ts 的 resolveLegacyHashRoute 註解），
+ * 開新分頁／複製連結／直接輸入網址都不經過 App 內的 click handler，
+ * 瀏覽器只會落在 pathname "/" + 殘留 hash。必須在 React Router 掛載前
+ * 用 replaceState 修正，否則使用者會看到首頁而非目標詞條。
+ */
+function fixLegacyHashRoute() {
+  const target = resolveLegacyHashRoute(window.location.pathname, window.location.hash);
+  if (target) {
+    window.history.replaceState(null, "", target);
   }
 }
 
@@ -74,6 +89,7 @@ function applyPlatformClasses() {
 
 // 在渲染前先修正 URL 和設置攔截器
 applyPlatformClasses();
+fixLegacyHashRoute();
 fixInitialURL();
 setupHistoryInterceptor();
 applyHeadByPath(window.location.pathname);
