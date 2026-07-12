@@ -69,12 +69,14 @@ import { basename, dirname, join } from "node:path";
  * @property {string} approvedAt
  */
 
-const DEFAULT_BASE_DIR = ".wrangler/releases";
+export const DEFAULT_BASE_DIR = ".wrangler/releases";
 
 /** Controlled vocabulary for `VersionHistoryEntry.status`. */
 export const VERSION_STATUS = Object.freeze({
   UPLOADED: "uploaded",
+  CONFIRM_FAILED: "confirm-failed",
   SMOKE_FAILED: "smoke-failed",
+  RESTORE_FAILED: "restore-failed",
   PROMOTED: "promoted",
   PROBE_FAILED: "probe-failed",
   ROLLED_BACK: "rolled-back",
@@ -246,6 +248,23 @@ export function saveVersionEntry(entry, opts = {}) {
   const next = [...history, entry];
   atomicWriteJson(filePath, next, fs);
   return next;
+}
+
+/**
+ * Read the full version history (empty array if the file does not exist).
+ * A present-but-corrupt file THROWS (fails closed).
+ * @param {{ baseDir?: string; fs?: FsAdapter }} [opts]
+ * @returns {VersionHistoryEntry[]}
+ */
+export function readVersionHistory(opts = {}) {
+  const fs = resolveFs(opts);
+  const filePath = join(resolveBaseDir(opts), "versions.json");
+  const parsed = readJsonOrNull(filePath, fs, "versions history");
+  if (parsed === null) return [];
+  if (!Array.isArray(parsed)) {
+    throw new Error(`Corrupt versions history (expected array): ${filePath}`);
+  }
+  return parsed.map((entry) => validateVersionEntry(entry));
 }
 
 /**

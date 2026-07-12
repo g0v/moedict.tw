@@ -20,6 +20,7 @@
 
 const DEFAULT_INTERVAL_MS = 5000;
 const DEFAULT_DURATION_MS = 120000;
+const DEFAULT_TIMEOUT_MS = 10000;
 const RELEASE_HEADER = "X-Moedict-Release";
 const OVERRIDE_HEADER = "Cloudflare-Workers-Version-Overrides";
 
@@ -68,16 +69,42 @@ function buildProbeUrl(baseUrl, route) {
 }
 
 /**
- * Issue a single cache-busted probe request.
+ * Issue a single cache-busted probe request, bounded by a per-request
+ * timeout (default 10s) via `AbortController`. A hang (network stall, dead
+ * Worker) aborts and throws naming the route rather than hanging the
+ * orchestrator forever. `setTimeoutFn`/`clearTimeoutFn` are injected so
+ * tests can fire the timeout deterministically without a real wait; the
+ * timer is always cleared, on both the success and failure paths.
  * @param {string} baseUrl
  * @param {string} route
- * @param {{ fetch?: FetchFn; headers?: Record<string, string> }} [opts]
+ * @param {{ fetch?: FetchFn; headers?: Record<string, string>; timeoutMs?: number; setTimeoutFn?: typeof setTimeout; clearTimeoutFn?: typeof clearTimeout }} [opts]
  * @returns {Promise<Response>}
  */
 export async function probeOnce(baseUrl, route, opts = {}) {
   const fetchImpl = opts.fetch ?? fetch;
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
+    throw new Error(`timeoutMs must be a positive integer: ${JSON.stringify(timeoutMs)}`);
+  }
+  const setTimeoutFn = opts.setTimeoutFn ?? setTimeout;
+  const clearTimeoutFn = opts.clearTimeoutFn ?? clearTimeout;
   const url = buildProbeUrl(baseUrl, route);
-  return fetchImpl(url, { headers: opts.headers ?? {}, redirect: "manual" });
+  const controller = new AbortController();
+  const timer = setTimeoutFn(() => controller.abort(), timeoutMs);
+  try {
+    return await fetchImpl(url, {
+      headers: opts.headers ?? {},
+      redirect: "manual",
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (controller.signal.aborted) {
+      throw new Error(`Probe timed out for route ${route} after ${timeoutMs}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeoutFn(timer);
+  }
 }
 
 /**
@@ -98,7 +125,13 @@ async function probeRoutes(baseUrl, routes, releaseTag, headers, opts, probeLabe
 
   const results = [];
   for (const route of routes) {
-    const response = await probeOnce(baseUrl, route, { fetch: opts.fetch, headers });
+    const response = await probeOnce(baseUrl, route, {
+      fetch: opts.fetch,
+      headers,
+      timeoutMs: opts.timeoutMs,
+      setTimeoutFn: opts.setTimeoutFn,
+      clearTimeoutFn: opts.clearTimeoutFn,
+    });
     if (response.status !== 200) {
       throw new Error(
         `${probeLabel} failed for route ${route}: expected 200, got ${response.status}`,
@@ -164,7 +197,7 @@ export async function finalSmoke(baseUrl, routes, releaseTag, opts = {}) {
  * @param {string} baseUrl
  * @param {string[]} routes
  * @param {string} releaseTag
- * @param {{ fetch?: FetchFn; sleep?: (ms: number) => Promise<void>; intervalMs?: number; durationMs?: number }} [opts]
+ * @param {{ fetch?: FetchFn; sleep?: (ms: number) => Promise<void>; intervalMs?: number; durationMs?: number; timeoutMs?: number; setTimeoutFn?: typeof setTimeout; clearTimeoutFn?: typeof clearTimeout }} [opts]
  * @returns {Promise<{ ok: true; cycles: number; elapsedMs: number }>}
  */
 export async function continuousProbe(baseUrl, routes, releaseTag, opts = {}) {
@@ -186,7 +219,12 @@ export async function continuousProbe(baseUrl, routes, releaseTag, opts = {}) {
   let cycles = 0;
   for (;;) {
     for (const route of routes) {
-      const response = await probeOnce(baseUrl, route, { fetch: opts.fetch });
+      const response = await probeOnce(baseUrl, route, {
+        fetch: opts.fetch,
+        timeoutMs: opts.timeoutMs,
+        setTimeoutFn: opts.setTimeoutFn,
+        clearTimeoutFn: opts.clearTimeoutFn,
+      });
       if (response.status !== 200) {
         throw new Error(
           `continuousProbe failed for route ${route}: expected 200, got ${response.status} (cycle ${cycles + 1})`,

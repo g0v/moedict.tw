@@ -6,7 +6,7 @@
  * atomic deployment-state read/write path). No real Wrangler CLI, network,
  * or `.wrangler/releases/` writes.
  */
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -18,11 +18,15 @@ import {
 import {
   readCurrentDeployment,
   readStagingApproval,
+  readVersionHistory,
   saveStagingApproval,
+  VERSION_STATUS,
 } from "../../scripts/lib/deployment-state.mjs";
+import { buildReleaseManifest } from "../../scripts/lib/release-manifest.mjs";
 
 const NEW_UUID = "11111111-1111-4111-8111-111111111111";
 const OLD_UUID = "22222222-2222-4222-8222-222222222222";
+const OTHER_UUID = "33333333-3333-4333-8333-333333333333";
 const RELEASE_ID = "abc1234-def012345678";
 const GIT_SHA = "abc1234";
 const DIGEST = "def012345678";
@@ -182,6 +186,11 @@ describe("deriveProbeRoutes", () => {
   it("throws when the manifest has no hashed JS or CSS asset (never falls back to a stale hardcoded path)", () => {
     expect(() => deriveProbeRoutes({ files: [{ path: "index.html" }] })).toThrow(/hashed JS asset/);
   });
+
+  it("throws when the manifest itself is missing or has no files array", () => {
+    expect(() => deriveProbeRoutes(null as never)).toThrow(/manifest.files is required/);
+    expect(() => deriveProbeRoutes({} as never)).toThrow(/manifest.files is required/);
+  });
 });
 
 describe("resolveBaseUrl", () => {
@@ -198,10 +207,69 @@ describe("resolveBaseUrl", () => {
   it("honors an explicit override", () => {
     expect(resolveBaseUrl("production", "x", "https://custom.test")).toBe("https://custom.test");
   });
+  it("throws on an unsupported env", () => {
+    expect(() => resolveBaseUrl("bogus" as never, "x", undefined)).toThrow(
+      /Unsupported CLOUDFLARE_ENV/,
+    );
+  });
 });
 
 it("is import-safe: runReleaseDeploy is exported as a plain function with no side effects on import", () => {
   expect(typeof runReleaseDeploy).toBe("function");
+});
+
+describe("runReleaseDeploy input validation and real-adapter defaults", () => {
+  it("throws on an unsupported CLOUDFLARE_ENV before touching config/manifest", async () => {
+    await expect(runReleaseDeploy({ env: "bogus" as never })).rejects.toThrow(
+      /Unsupported CLOUDFLARE_ENV/,
+    );
+  });
+
+  it("falls back to a real Date-based nowIso when none is injected", async () => {
+    const { runner } = buildRunner();
+    const { fetchImpl } = buildFetch();
+    const before = Date.now();
+    const result = await runReleaseDeploy({
+      ...baseOpts("staging", { runner, fetch: fetchImpl }),
+      nowIso: undefined,
+    });
+    const parsed = Date.parse(result.deployedAt);
+    expect(Number.isNaN(parsed)).toBe(false);
+    expect(parsed).toBeGreaterThanOrEqual(before);
+  });
+
+  it("falls back to a real buildReleaseManifest(distClientDir) call when no manifest is injected", async () => {
+    const clientDir = mkdtempSync(join(dir, "client-"));
+    mkdirSync(join(clientDir, "assets"), { recursive: true });
+    writeFileSync(join(clientDir, "index.html"), "<html></html>", "utf-8");
+    writeFileSync(join(clientDir, "assets", "index-AbCdEf12.js"), "console.log(1)", "utf-8");
+    writeFileSync(join(clientDir, "assets", "style-12345678.css"), "body{}", "utf-8");
+    // Precompute the same deterministic manifest the orchestrator will derive
+    // internally (same dir, same git HEAD, same content -> identical id), so
+    // the mocked upload/versions-list/fetch responses can be tagged to match
+    // it without the test needing to duplicate the orchestrator's own logic.
+    const realManifest = buildReleaseManifest(clientDir);
+    const { runner } = buildRunner({
+      upload: { exitCode: 0, stdout: `Worker Version ID: ${NEW_UUID}\n`, stderr: "" },
+      "versions-list": {
+        exitCode: 0,
+        stdout: JSON.stringify([{ id: NEW_UUID, annotations: { "workers/tag": realManifest.id } }]),
+        stderr: "",
+      },
+    });
+    const { fetchImpl, calls: fetchCalls } = buildFetch(
+      () => new Response("ok", { status: 200, headers: { "X-Moedict-Release": realManifest.id } }),
+    );
+    // No staging-approval needed: staging env never checks the gate.
+    const result = await runReleaseDeploy({
+      ...baseOpts("staging", { runner, fetch: fetchImpl }),
+      manifest: undefined,
+      distClientDir: clientDir,
+    });
+    expect(result.releaseId).toBe(realManifest.id);
+    expect(fetchCalls.some((c) => c.url.includes("/assets/index-AbCdEf12.js"))).toBe(true);
+    expect(fetchCalls.some((c) => c.url.includes("/assets/style-12345678.css"))).toBe(true);
+  });
 });
 
 // ── prod gate / current-state validation (no mutation) ──────────────
@@ -247,6 +315,58 @@ describe("production approval gate", () => {
   });
 });
 
+describe("environment namespacing", () => {
+  it("keeps staging and production current/version-history state under separate <root>/<env>/ dirs", async () => {
+    saveStagingApproval(
+      { gitSha: GIT_SHA, clientManifestDigest: DIGEST, approvedAt: "2026-07-12T00:00:00Z" },
+      { baseDir: dir },
+    );
+    const staging = buildRunner();
+    await runReleaseDeploy(
+      baseOpts("staging", { runner: staging.runner, fetch: buildFetch().fetchImpl }),
+    );
+    const prod = buildRunner();
+    await runReleaseDeploy(
+      baseOpts("production", { runner: prod.runner, fetch: buildFetch().fetchImpl }),
+    );
+
+    const stagingCurrent = readCurrentDeployment({ baseDir: join(dir, "staging") });
+    const prodCurrent = readCurrentDeployment({ baseDir: join(dir, "production") });
+    expect(stagingCurrent?.workerName).toBe("cf-moedict-webkit-neo-staging");
+    expect(prodCurrent?.workerName).toBe("cf-moedict-webkit-neo");
+    // Neither run clobbered the other's current.json.
+    expect(stagingCurrent).not.toBeNull();
+    expect(prodCurrent).not.toBeNull();
+
+    const stagingHistory = readVersionHistory({ baseDir: join(dir, "staging") });
+    const prodHistory = readVersionHistory({ baseDir: join(dir, "production") });
+    expect(stagingHistory.length).toBeGreaterThan(0);
+    expect(prodHistory.length).toBeGreaterThan(0);
+
+    // Staging approval itself stays shared (unnamespaced) so production can read it.
+    expect(readStagingApproval({ baseDir: dir })).not.toBeNull();
+    expect(readCurrentDeployment({ baseDir: dir })).toBeNull();
+  });
+
+  it("honors a custom stateBaseDir root for both the per-env state and the shared staging approval", async () => {
+    const customRoot = join(dir, "custom-root");
+    saveStagingApproval(
+      { gitSha: GIT_SHA, clientManifestDigest: DIGEST, approvedAt: "2026-07-12T00:00:00Z" },
+      { baseDir: customRoot },
+    );
+    const { runner } = buildRunner();
+    const { fetchImpl } = buildFetch();
+    await runReleaseDeploy(
+      baseOpts("production", { runner, fetch: fetchImpl, stateBaseDir: customRoot }),
+    );
+    expect(readCurrentDeployment({ baseDir: join(customRoot, "production") })?.versionId).toBe(
+      NEW_UUID,
+    );
+    // The default (un-namespaced) root never received anything.
+    expect(readCurrentDeployment({ baseDir: join(dir, "production") })).toBeNull();
+  });
+});
+
 describe("requires a safe old version before starting", () => {
   it("aborts with no upload call when the current deployment is a split state", async () => {
     const { runner, calls } = buildRunner({
@@ -260,6 +380,42 @@ describe("requires a safe old version before starting", () => {
       runReleaseDeploy(baseOpts("staging", { runner, fetch: fetchImpl })),
     ).rejects.toThrow(/split state/);
     expect(calls.some((c) => c.includes("upload"))).toBe(false);
+  });
+});
+describe("upload confirmation (upload UUID vs versions-list tag lookup)", () => {
+  it("aborts before any deploy call when the uploaded UUID mismatches the unique versions-list tag match", async () => {
+    const { runner, calls } = buildRunner({
+      "versions-list": {
+        exitCode: 0,
+        stdout: JSON.stringify([{ id: OTHER_UUID, annotations: { "workers/tag": RELEASE_ID } }]),
+        stderr: "",
+      },
+    });
+    const { fetchImpl } = buildFetch();
+    await expect(
+      runReleaseDeploy(baseOpts("staging", { runner, fetch: fetchImpl })),
+    ).rejects.toThrow(
+      `Version UUID mismatch: upload output reported ${NEW_UUID}, but versions list confirms ${OTHER_UUID} for tag ${RELEASE_ID}`,
+    );
+    // No traffic mutation: no mutating deploy/finalize/restore call fired (the
+    // read-only "deployments-list" query from step 4 legitimately happened).
+    const mutatingPhases: Record<string, true> = {
+      "deploy-phase1": true,
+      "deploy-promote": true,
+      "deploy-rollback": true,
+      "restore-old-alone": true,
+      finalize: true,
+    };
+    expect(calls.some((c) => mutatingPhases[phaseOf(c)])).toBe(false);
+    const history = readVersionHistory({ baseDir: join(dir, "staging") });
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({
+      versionId: NEW_UUID,
+      tag: RELEASE_ID,
+      status: VERSION_STATUS.CONFIRM_FAILED,
+    });
+    // Never claims success: no current-deployment state exists.
+    expect(readCurrentDeployment({ baseDir: join(dir, "staging") })).toBeNull();
   });
 });
 
@@ -300,6 +456,24 @@ describe("upload and phase 1", () => {
     const restoreCall = calls.find((c) => phaseOf(c) === "restore-old-alone");
     expect(restoreCall).toBeTruthy();
     expect(restoreCall).toContain(`${OLD_UUID}@100%`);
+    const history = readVersionHistory({ baseDir: join(dir, "staging") });
+    expect(history.at(-1)).toMatchObject({ status: VERSION_STATUS.SMOKE_FAILED });
+  });
+
+  it("records RESTORE_FAILED and reports both the smoke and restore errors when the old-only restore itself also fails", async () => {
+    const { runner } = buildRunner({
+      "restore-old-alone": { exitCode: 1, stdout: "", stderr: "restore network error" },
+    });
+    const { fetchImpl } = buildFetch(({ override }) =>
+      override ? new Response("err", { status: 500 }) : undefined,
+    );
+    await expect(
+      runReleaseDeploy(baseOpts("staging", { runner, fetch: fetchImpl })),
+    ).rejects.toThrow(/RESTORE ALSO FAILED/);
+    const history = readVersionHistory({ baseDir: join(dir, "staging") });
+    expect(history.at(-1)).toMatchObject({ status: VERSION_STATUS.RESTORE_FAILED });
+    // Never claims success.
+    expect(readCurrentDeployment({ baseDir: join(dir, "staging") })).toBeNull();
   });
 });
 
@@ -418,7 +592,7 @@ describe("state persistence", () => {
     const { runner } = buildRunner();
     const { fetchImpl } = buildFetch();
     const result = await runReleaseDeploy(baseOpts("staging", { runner, fetch: fetchImpl }));
-    const current = readCurrentDeployment({ baseDir: dir });
+    const current = readCurrentDeployment({ baseDir: join(dir, "staging") });
     expect(current?.versionId).toBe(NEW_UUID);
     expect(current?.percentage).toBe(100);
     const approval = readStagingApproval({ baseDir: dir });
@@ -443,7 +617,7 @@ describe("state persistence", () => {
     await expect(
       runReleaseDeploy(baseOpts("staging", { runner, fetch: fetchImpl })),
     ).rejects.toThrow();
-    expect(readCurrentDeployment({ baseDir: dir })).toBeNull();
+    expect(readCurrentDeployment({ baseDir: join(dir, "staging") })).toBeNull();
     expect(readStagingApproval({ baseDir: dir })).toBeNull();
   });
 
@@ -512,6 +686,94 @@ describe("malformed CLI output and runner failures", () => {
     await expect(
       runReleaseDeploy(baseOpts("staging", { runner, fetch: fetchImpl })),
     ).rejects.toThrow(/ENOENT/);
+  });
+});
+
+describe("probe timeout (bounded per-request, no real waiting)", () => {
+  function instantTimer() {
+    const setTimeoutFn = ((cb: () => void) => {
+      cb();
+      return 1;
+    }) as unknown as typeof setTimeout;
+    const clearTimeoutFn = (() => {}) as unknown as typeof clearTimeout;
+    return { setTimeoutFn, clearTimeoutFn };
+  }
+
+  function buildHangingFetch(shouldHang: (ctx: { override?: string }) => boolean) {
+    const calls: Array<{ url: string; override: string | undefined }> = [];
+    const fetchImpl = async (url: string, init?: RequestInit) => {
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      const override = headers["Cloudflare-Workers-Version-Overrides"];
+      calls.push({ url, override });
+      if (shouldHang({ override })) {
+        if (init?.signal?.aborted) return Promise.reject(new Error("aborted"));
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+        });
+      }
+      return new Response("ok", { status: 200, headers: { "X-Moedict-Release": RELEASE_ID } });
+    };
+    return { fetchImpl, calls };
+  }
+
+  it("a hanging phase-1 (version-override) smoke probe times out naming the route and restores old@100 alone", async () => {
+    const { runner, calls } = buildRunner();
+    const timer = instantTimer();
+    const { fetchImpl } = buildHangingFetch(({ override }) => override !== undefined);
+    await expect(
+      runReleaseDeploy(
+        baseOpts("staging", {
+          runner,
+          fetch: fetchImpl,
+          setTimeoutFn: timer.setTimeoutFn,
+          clearTimeoutFn: timer.clearTimeoutFn,
+        }),
+      ),
+    ).rejects.toThrow(/Probe timed out for route \/.*restored .* alone/s);
+    expect(calls.some((c) => phaseOf(c) === "restore-old-alone")).toBe(true);
+    expect(calls.some((c) => phaseOf(c) === "deploy-promote")).toBe(false);
+  });
+
+  it("a hanging continuous probe fetch times out naming the route and rolls back", async () => {
+    const { runner, calls } = buildRunner();
+    const timer = instantTimer();
+    const { fetchImpl } = buildHangingFetch(({ override }) => override === undefined);
+    await expect(
+      runReleaseDeploy(
+        baseOpts("staging", {
+          runner,
+          fetch: fetchImpl,
+          setTimeoutFn: timer.setTimeoutFn,
+          clearTimeoutFn: timer.clearTimeoutFn,
+        }),
+      ),
+    ).rejects.toThrow(/Probe timed out for route \/.*rolled back/s);
+    expect(calls.some((c) => phaseOf(c) === "deploy-rollback")).toBe(true);
+    expect(calls.some((c) => phaseOf(c) === "finalize")).toBe(false);
+  });
+
+  it("a hanging final smoke fetch (post-finalize, no override) times out naming the route and rolls back", async () => {
+    let finalizeCalled = false;
+    const { runner, calls } = buildRunner({
+      finalize: () => {
+        finalizeCalled = true;
+        return { exitCode: 0, stdout: "", stderr: "" };
+      },
+    });
+    const timer = instantTimer();
+    const { fetchImpl } = buildHangingFetch(({ override }) => !override && finalizeCalled);
+    await expect(
+      runReleaseDeploy(
+        baseOpts("staging", {
+          runner,
+          fetch: fetchImpl,
+          setTimeoutFn: timer.setTimeoutFn,
+          clearTimeoutFn: timer.clearTimeoutFn,
+        }),
+      ),
+    ).rejects.toThrow(/Probe timed out for route \/.*rolled back/s);
+    expect(calls.some((c) => phaseOf(c) === "finalize")).toBe(true);
+    expect(calls.some((c) => phaseOf(c) === "deploy-rollback")).toBe(true);
   });
 });
 

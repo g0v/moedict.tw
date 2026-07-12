@@ -44,6 +44,31 @@ function mockFetch(handler: (url: string, init?: RequestInit) => Response) {
   return { fetchImpl, calls };
 }
 
+/** Fetch mock that hangs until its AbortSignal fires (or is already aborted). */
+function hangingFetch() {
+  return (_url: string, init?: RequestInit) => {
+    if (init?.signal?.aborted) {
+      return Promise.reject(new Error("The operation was aborted"));
+    }
+    return new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new Error("The operation was aborted")));
+    });
+  };
+}
+
+/** Deterministic fake timer: fires the callback synchronously (simulates the timeout having already elapsed, no real wait). */
+function instantTimer() {
+  const cleared: unknown[] = [];
+  const setTimeoutFn = ((cb: () => void) => {
+    cb();
+    return 1;
+  }) as unknown as typeof setTimeout;
+  const clearTimeoutFn = ((id: unknown) => {
+    cleared.push(id);
+  }) as typeof clearTimeout;
+  return { setTimeoutFn, clearTimeoutFn, cleared };
+}
+
 // ── probeOnce ────────────────────────────────────────────────────────
 
 describe("probeOnce", () => {
@@ -63,6 +88,69 @@ describe("probeOnce", () => {
     const { fetchImpl, calls } = mockFetch(() => okResponse());
     await probeOnce(BASE_URL, "/api/%E8%90%8C.json", { fetch: fetchImpl });
     expect(new URL(calls[0].url).pathname).toBe("/api/%E8%90%8C.json");
+  });
+
+  it("rejects a non-positive-integer timeoutMs", async () => {
+    const { fetchImpl } = mockFetch(() => okResponse());
+    await expect(probeOnce(BASE_URL, "/", { fetch: fetchImpl, timeoutMs: 0 })).rejects.toThrow(
+      /timeoutMs must be a positive integer/,
+    );
+    await expect(probeOnce(BASE_URL, "/", { fetch: fetchImpl, timeoutMs: -5 })).rejects.toThrow(
+      /timeoutMs must be a positive integer/,
+    );
+  });
+
+  it("falls back to the real global fetch when no fetch is injected — proven hermetically via a pre-aborted signal (no real network I/O)", async () => {
+    const timer = instantTimer();
+    await expect(
+      probeOnce(BASE_URL, "/", {
+        setTimeoutFn: timer.setTimeoutFn,
+        clearTimeoutFn: timer.clearTimeoutFn,
+      }),
+    ).rejects.toThrow(/Probe timed out for route \//);
+  });
+});
+
+describe("probeOnce timeout", () => {
+  it("aborts and throws naming the route when the request hangs past the default 10s timeout", async () => {
+    const timer = instantTimer();
+    await expect(
+      probeOnce(BASE_URL, "/api/config", {
+        fetch: hangingFetch(),
+        setTimeoutFn: timer.setTimeoutFn,
+        clearTimeoutFn: timer.clearTimeoutFn,
+      }),
+    ).rejects.toThrow(/Probe timed out for route \/api\/config after 10000ms/);
+  });
+
+  it("honors a custom timeoutMs in the error message", async () => {
+    const timer = instantTimer();
+    await expect(
+      probeOnce(BASE_URL, "/", {
+        fetch: hangingFetch(),
+        timeoutMs: 3000,
+        setTimeoutFn: timer.setTimeoutFn,
+        clearTimeoutFn: timer.clearTimeoutFn,
+      }),
+    ).rejects.toThrow(/after 3000ms/);
+  });
+
+  it("always clears the timer, including on the timeout path", async () => {
+    const timer = instantTimer();
+    await expect(
+      probeOnce(BASE_URL, "/", {
+        fetch: hangingFetch(),
+        setTimeoutFn: timer.setTimeoutFn,
+        clearTimeoutFn: timer.clearTimeoutFn,
+      }),
+    ).rejects.toThrow();
+    expect(timer.cleared).toHaveLength(1);
+  });
+
+  it("uses the real setTimeout/clearTimeout by default and does not time out on a normal fast response", async () => {
+    const { fetchImpl } = mockFetch(() => okResponse());
+    const response = await probeOnce(BASE_URL, "/", { fetch: fetchImpl });
+    expect(response.status).toBe(200);
   });
 });
 
@@ -136,6 +224,32 @@ describe("smokeWithVersionOverride", () => {
       expect(new URL(calls[i].url).pathname).toBe(route.split("?")[0]);
     }
   });
+
+  it("rejects empty workerName/versionUuid/baseUrl/routes/releaseTag", async () => {
+    const { fetchImpl } = mockFetch(() => okResponse());
+    await expect(
+      smokeWithVersionOverride(BASE_URL, "", UUID, ROUTES, RELEASE_TAG, { fetch: fetchImpl }),
+    ).rejects.toThrow(/workerName must be a non-empty string/);
+    await expect(
+      smokeWithVersionOverride(BASE_URL, WORKER_NAME, "", ROUTES, RELEASE_TAG, {
+        fetch: fetchImpl,
+      }),
+    ).rejects.toThrow(/versionUuid must be a non-empty string/);
+    await expect(
+      smokeWithVersionOverride("", WORKER_NAME, UUID, ROUTES, RELEASE_TAG, { fetch: fetchImpl }),
+    ).rejects.toThrow(/baseUrl must be a non-empty string/);
+    await expect(
+      smokeWithVersionOverride(BASE_URL, WORKER_NAME, UUID, [], RELEASE_TAG, { fetch: fetchImpl }),
+    ).rejects.toThrow(/routes must be a non-empty array/);
+    await expect(
+      smokeWithVersionOverride(BASE_URL, WORKER_NAME, UUID, ["not-a-route"], RELEASE_TAG, {
+        fetch: fetchImpl,
+      }),
+    ).rejects.toThrow(/Invalid route/);
+    await expect(
+      smokeWithVersionOverride(BASE_URL, WORKER_NAME, UUID, ROUTES, "", { fetch: fetchImpl }),
+    ).rejects.toThrow(/releaseTag must be a non-empty string/);
+  });
 });
 
 // ── finalSmoke ───────────────────────────────────────────────────────
@@ -157,6 +271,19 @@ describe("finalSmoke", () => {
     const { fetchImpl } = mockFetch(() => okResponse({ "X-Moedict-Release": "stale" }));
     await expect(finalSmoke(BASE_URL, ["/"], RELEASE_TAG, { fetch: fetchImpl })).rejects.toThrow(
       /X-Moedict-Release/,
+    );
+  });
+
+  it("rejects empty baseUrl/routes/releaseTag (shared probeRoutes validation)", async () => {
+    const { fetchImpl } = mockFetch(() => okResponse());
+    await expect(finalSmoke("", ROUTES, RELEASE_TAG, { fetch: fetchImpl })).rejects.toThrow(
+      /baseUrl must be a non-empty string/,
+    );
+    await expect(finalSmoke(BASE_URL, [], RELEASE_TAG, { fetch: fetchImpl })).rejects.toThrow(
+      /routes must be a non-empty array/,
+    );
+    await expect(finalSmoke(BASE_URL, ROUTES, "", { fetch: fetchImpl })).rejects.toThrow(
+      /releaseTag must be a non-empty string/,
     );
   });
 });
@@ -253,5 +380,48 @@ describe("continuousProbe", () => {
       durationMs: 120000,
     });
     expect(Date.now() - start).toBeLessThan(1000);
+  });
+
+  it("rejects empty baseUrl/routes/releaseTag", async () => {
+    const { fetchImpl } = mockFetch(() => okResponse());
+    await expect(
+      continuousProbe("", ROUTES, RELEASE_TAG, { fetch: fetchImpl, sleep: async () => {} }),
+    ).rejects.toThrow(/baseUrl must be a non-empty string/);
+    await expect(
+      continuousProbe(BASE_URL, [], RELEASE_TAG, { fetch: fetchImpl, sleep: async () => {} }),
+    ).rejects.toThrow(/routes must be a non-empty array/);
+    await expect(
+      continuousProbe(BASE_URL, ROUTES, "", { fetch: fetchImpl, sleep: async () => {} }),
+    ).rejects.toThrow(/releaseTag must be a non-empty string/);
+  });
+
+  it("rejects a non-positive-integer intervalMs or durationMs", async () => {
+    const { fetchImpl } = mockFetch(() => okResponse());
+    await expect(
+      continuousProbe(BASE_URL, ROUTES, RELEASE_TAG, {
+        fetch: fetchImpl,
+        sleep: async () => {},
+        intervalMs: 0,
+      }),
+    ).rejects.toThrow(/intervalMs must be a positive integer/);
+    await expect(
+      continuousProbe(BASE_URL, ROUTES, RELEASE_TAG, {
+        fetch: fetchImpl,
+        sleep: async () => {},
+        durationMs: -1,
+      }),
+    ).rejects.toThrow(/durationMs must be a positive integer/);
+  });
+
+  it("falls back to the real setTimeout-based sleep when no sleep is injected", async () => {
+    const { fetchImpl } = mockFetch(() => okResponse());
+    // intervalMs/durationMs=1 keeps the single real wait imperceptible (<10ms)
+    // while still exercising the actual default-adapter code path.
+    const result = await continuousProbe(BASE_URL, ["/"], RELEASE_TAG, {
+      fetch: fetchImpl,
+      intervalMs: 1,
+      durationMs: 1,
+    });
+    expect(result.ok).toBe(true);
   });
 });

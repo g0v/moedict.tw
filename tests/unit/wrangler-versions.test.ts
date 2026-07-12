@@ -81,6 +81,7 @@ describe("validators", () => {
     expect(() => validateSpecs([{ uuid: NEW_UUID, percentage: 50 }])).toThrow(/sum to 100/);
     expect(() => validateSpecs([])).toThrow();
     expect(() => validateSpecs([{ uuid: "bad", percentage: 100 }])).toThrow();
+    expect(() => validateSpecs([null as never])).toThrow(/Invalid version spec/);
   });
 });
 
@@ -305,6 +306,10 @@ describe("findVersionByTag", () => {
     );
   });
 
+  it("throws when versions is not an array", () => {
+    expect(() => findVersionByTag(null as never, TAG)).toThrow(/must be an array/);
+  });
+
   it("throws when multiple versions match the tag (ambiguous)", () => {
     const versions = [
       { id: OLD_UUID, annotations: { "workers/tag": TAG } },
@@ -354,6 +359,13 @@ describe("getCurrentDeployment", () => {
     });
     await expect(getCurrentDeployment(CONFIG_PATH, WORKER_NAME, { runner })).rejects.toThrow(
       /malformed entry/,
+    );
+  });
+
+  it("throws on malformed (non-JSON) output", async () => {
+    const { runner } = mockRunner({ exitCode: 0, stdout: "not json", stderr: "" });
+    await expect(getCurrentDeployment(CONFIG_PATH, WORKER_NAME, { runner })).rejects.toThrow(
+      /malformed JSON/,
     );
   });
 

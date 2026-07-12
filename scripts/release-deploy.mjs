@@ -20,6 +20,7 @@
  */
 
 import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import {
   parseGeneratedConfig,
   getAssetsBucketName,
@@ -44,6 +45,7 @@ import {
   readStagingApproval,
   checkStagingApprovalGate,
   VERSION_STATUS,
+  DEFAULT_BASE_DIR,
 } from "./lib/deployment-state.mjs";
 
 const DEFAULT_CONFIG_PATH = "dist/cf_moedict_webkit_neo/wrangler.json";
@@ -98,7 +100,10 @@ function errMessage(err) {
  * The full dependency-injected orchestrator. No adapter defaults to a real
  * subprocess/network/fs call unless the caller omits it — every collaborator
  * can be mocked, making this fully unit-testable without touching Wrangler,
- * the network, or the real `.wrangler/releases/` state directory.
+ * the network, or the real `.wrangler/releases/` state directory. Current
+ * deployment/version-history state is namespaced under
+ * `<stateBaseDir>/<env>/`; staging approval lives at the shared
+ * `<stateBaseDir>/staging-approval.json` so production can read it.
  *
  * @param {{
  *   env?: "production" | "staging";
@@ -116,6 +121,9 @@ function errMessage(err) {
  *   soakDurationMs?: number;
  *   stateBaseDir?: string;
  *   stateFs?: import("./lib/deployment-state.mjs").FsAdapter;
+ *   probeTimeoutMs?: number;
+ *   setTimeoutFn?: typeof setTimeout;
+ *   clearTimeoutFn?: typeof clearTimeout;
  * }} [opts]
  */
 export async function runReleaseDeploy(opts = {}) {
@@ -123,12 +131,26 @@ export async function runReleaseDeploy(opts = {}) {
   if (env !== "production" && env !== "staging") {
     throw new Error(`Unsupported CLOUDFLARE_ENV: ${String(env)}`);
   }
-  const runner = opts.runner ?? runWrangler;
+  const runner =
+    opts.runner ??
+    runWrangler; /* v8 ignore next -- default spawns a real wrangler subprocess; unsafe to exercise in unit tests */
   const fetchImpl = opts.fetch ?? fetch;
   const nowIso = opts.nowIso ?? (() => new Date().toISOString());
   const soakIntervalMs = opts.soakIntervalMs ?? 5000;
   const soakDurationMs = opts.soakDurationMs ?? 120000;
-  const stateOpts = { baseDir: opts.stateBaseDir, fs: opts.stateFs };
+  const probeTimeoutOpts = {
+    timeoutMs: opts.probeTimeoutMs,
+    setTimeoutFn: opts.setTimeoutFn,
+    clearTimeoutFn: opts.clearTimeoutFn,
+  };
+  // Current-deployment/version-history state is namespaced per environment
+  // so a staging run and a production run never share or clobber each
+  // other's current.json/versions.json. Staging approval is intentionally
+  // NOT namespaced — it lives at the shared root so production can read the
+  // approval a staging run recorded.
+  const stateRootDir = opts.stateBaseDir ?? DEFAULT_BASE_DIR;
+  const stateOpts = { baseDir: join(stateRootDir, env), fs: opts.stateFs };
+  const approvalOpts = { baseDir: stateRootDir, fs: opts.stateFs };
   const configPath = opts.configPath ?? DEFAULT_CONFIG_PATH;
 
   // 1. Validate the generated Wrangler config — fail clearly if absent.
@@ -162,7 +184,7 @@ export async function runReleaseDeploy(opts = {}) {
 
   // 3. Production approval gate — before ANY mutating Wrangler call.
   if (env === "production") {
-    const stagingApproval = readStagingApproval(stateOpts);
+    const stagingApproval = readStagingApproval(approvalOpts);
     if (!checkStagingApprovalGate(gitSha, clientManifestDigest, stagingApproval)) {
       throw new Error(
         `Production deploy blocked: no staging approval matches git SHA ${gitSha} + client manifest digest ` +
@@ -180,6 +202,15 @@ export async function runReleaseDeploy(opts = {}) {
   const versions = await listVersions(configPath, workerName, { runner });
   const confirmedUuid = findVersionByTag(versions, releaseId);
   if (confirmedUuid !== uploadedUuid) {
+    saveVersionEntry(
+      {
+        versionId: uploadedUuid,
+        tag: releaseId,
+        uploadedAt: nowIso(),
+        status: VERSION_STATUS.CONFIRM_FAILED,
+      },
+      stateOpts,
+    );
     throw new Error(
       `Version UUID mismatch: upload output reported ${uploadedUuid}, but versions list confirms ` +
         `${confirmedUuid} for tag ${releaseId}`,
@@ -211,6 +242,7 @@ export async function runReleaseDeploy(opts = {}) {
   try {
     await smokeWithVersionOverride(baseUrl, workerName, newVersionUuid, routes, releaseId, {
       fetch: fetchImpl,
+      ...probeTimeoutOpts,
     });
   } catch (smokeErr) {
     let restoreErr;
@@ -224,7 +256,7 @@ export async function runReleaseDeploy(opts = {}) {
         versionId: newVersionUuid,
         tag: releaseId,
         uploadedAt: nowIso(),
-        status: VERSION_STATUS.SMOKE_FAILED,
+        status: restoreErr ? VERSION_STATUS.RESTORE_FAILED : VERSION_STATUS.SMOKE_FAILED,
       },
       stateOpts,
     );
@@ -287,6 +319,7 @@ export async function runReleaseDeploy(opts = {}) {
       sleep: opts.sleep,
       intervalMs: soakIntervalMs,
       durationMs: soakDurationMs,
+      ...probeTimeoutOpts,
     });
   } catch (probeErr) {
     await rollbackOnFailure(probeErr);
@@ -301,7 +334,7 @@ export async function runReleaseDeploy(opts = {}) {
 
   // 11. Final smoke — no override header, but still requires the release ID header.
   try {
-    await finalSmoke(baseUrl, routes, releaseId, { fetch: fetchImpl });
+    await finalSmoke(baseUrl, routes, releaseId, { fetch: fetchImpl, ...probeTimeoutOpts });
   } catch (finalSmokeErr) {
     await rollbackOnFailure(finalSmokeErr);
   }
@@ -322,12 +355,13 @@ export async function runReleaseDeploy(opts = {}) {
     stateOpts,
   );
   if (env === "staging") {
-    saveStagingApproval({ gitSha, clientManifestDigest, approvedAt: deployedAt }, stateOpts);
+    saveStagingApproval({ gitSha, clientManifestDigest, approvedAt: deployedAt }, approvalOpts);
   }
 
   return { releaseId, workerName, versionId: newVersionUuid, env, deployedAt };
 }
 
+/* v8 ignore start -- real CLI entrypoint: performs an actual two-phase deployment against the live Cloudflare account. Never safe to invoke from a unit test; exercised via manual `vp run deploy`/`deploy:staging` instead. */
 async function main() {
   const env = /** @type {"production" | "staging"} */ (process.env.CLOUDFLARE_ENV ?? "production");
   console.log(`[release-deploy] env=${env}`);
@@ -336,18 +370,22 @@ async function main() {
     `[release-deploy] OK — release ${result.releaseId} finalized on ${result.workerName} at ${result.deployedAt}`,
   );
 }
+/* v8 ignore stop */
 
 // Import-safe: run only when invoked directly, never when unit tests import.
 const invokedDirectly = (() => {
   try {
     return process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
   } catch {
+    /* v8 ignore next -- defensive: process.argv[1]/import.meta.url access does not throw in any real Node runtime */
     return false;
   }
 })();
+/* v8 ignore start -- only true when this file is the CLI entrypoint; never true when a unit test imports the module */
 if (invokedDirectly) {
   main().catch((error) => {
     console.error("[release-deploy] FAILED", error);
     process.exit(1);
   });
 }
+/* v8 ignore stop */

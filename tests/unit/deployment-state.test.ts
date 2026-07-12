@@ -25,6 +25,7 @@ import {
   checkStagingApprovalGate,
   readCurrentDeployment,
   readStagingApproval,
+  readVersionHistory,
   saveCurrentDeployment,
   saveStagingApproval,
   saveVersionEntry,
@@ -145,10 +146,114 @@ describe("saveVersionEntry", () => {
     );
   });
 
+  it("readVersionHistory returns [] when versions.json does not exist", () => {
+    expect(readVersionHistory({ baseDir: dir })).toEqual([]);
+  });
+
+  it("readVersionHistory returns the full appended history in order", () => {
+    saveVersionEntry(entry1, { baseDir: dir });
+    saveVersionEntry(entry2, { baseDir: dir });
+    expect(readVersionHistory({ baseDir: dir })).toEqual([entry1, entry2]);
+  });
+
+  it("readVersionHistory throws (fails closed) on corrupt JSON", () => {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "versions.json"), "not json", "utf-8");
+    expect(() => readVersionHistory({ baseDir: dir })).toThrow(/Corrupt/);
+  });
+
+  it("readVersionHistory throws on a schema-invalid entry", () => {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "versions.json"), JSON.stringify([{ versionId: "x" }]), "utf-8");
+    expect(() => readVersionHistory({ baseDir: dir })).toThrow();
+  });
+
   it("throws (fails closed) when versions.json is corrupt", () => {
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "versions.json"), "not json", "utf-8");
     expect(() => saveVersionEntry(entry1, { baseDir: dir })).toThrow(/Corrupt/);
+  });
+
+  it("throws when versions.json parses but is not an array", () => {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "versions.json"), JSON.stringify({ not: "array" }), "utf-8");
+    expect(() => saveVersionEntry(entry1, { baseDir: dir })).toThrow(/expected array/);
+  });
+
+  it("rejects a non-object entry, and an entry missing versionId/tag/uploadedAt individually", () => {
+    expect(() => saveVersionEntry(null as never, { baseDir: dir })).toThrow(/not an object/);
+    expect(() =>
+      saveVersionEntry({ tag: entry1.tag, status: entry1.status } as never, { baseDir: dir }),
+    ).toThrow(/versionId must be a non-empty string/);
+    expect(() =>
+      saveVersionEntry({ versionId: entry1.versionId, status: entry1.status } as never, {
+        baseDir: dir,
+      }),
+    ).toThrow(/tag must be a non-empty string/);
+    expect(() =>
+      saveVersionEntry({ ...entry1, uploadedAt: "not-a-date" }, { baseDir: dir }),
+    ).toThrow(/uploadedAt must be a valid ISO date string/);
+  });
+
+  it("cleans up the temp file and rethrows the original error when the atomic write itself fails", () => {
+    const fs = {
+      existsSync: () => false,
+      mkdirSync: () => {},
+      readFileSync: () => "",
+      renameSync: () => {},
+      rmSync: (_p: string, _o: unknown) => {},
+      writeFileSync: () => {
+        throw new Error("disk full");
+      },
+    };
+    expect(() => saveVersionEntry(entry1, { baseDir: dir, fs })).toThrow(/disk full/);
+  });
+
+  it("readVersionHistory throws when versions.json parses but is not an array", () => {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "versions.json"), JSON.stringify({ not: "array" }), "utf-8");
+    expect(() => readVersionHistory({ baseDir: dir })).toThrow(/expected array/);
+  });
+});
+
+describe("field-level schema validation (fail-closed)", () => {
+  it("saveCurrentDeployment rejects a non-object state, a state missing workerName, and an invalid deployedAt", () => {
+    expect(() => saveCurrentDeployment(null as never, { baseDir: dir })).toThrow(/not an object/);
+    expect(() => saveCurrentDeployment({} as never, { baseDir: dir })).toThrow(
+      /workerName must be a non-empty string/,
+    );
+    expect(() =>
+      saveCurrentDeployment({ ...CURRENT, deployedAt: "not-a-date" }, { baseDir: dir }),
+    ).toThrow(/deployedAt must be a valid ISO date string/);
+  });
+
+  it("saveStagingApproval rejects a non-object state, a state missing gitSha, missing clientManifestDigest, and an invalid approvedAt", () => {
+    const approval = {
+      gitSha: "abc1234",
+      clientManifestDigest: "def0123456789abc",
+      approvedAt: "2026-07-12T00:00:00.000Z",
+    };
+    expect(() => saveStagingApproval(null as never, { baseDir: dir })).toThrow(/not an object/);
+    expect(() => saveStagingApproval({} as never, { baseDir: dir })).toThrow(
+      /gitSha must be a non-empty string/,
+    );
+    expect(() =>
+      saveStagingApproval({ gitSha: approval.gitSha } as never, { baseDir: dir }),
+    ).toThrow(/clientManifestDigest must be a non-empty string/);
+    expect(() =>
+      saveStagingApproval({ ...approval, approvedAt: "not-a-date" }, { baseDir: dir }),
+    ).toThrow(/approvedAt must be a valid ISO date string/);
+  });
+
+  it("checkStagingApprovalGate requires non-empty prodGitSha and prodDigest arguments", () => {
+    expect(() => checkStagingApprovalGate("", "digest", null)).toThrow(/prodGitSha is required/);
+    expect(() => checkStagingApprovalGate("sha", "", null)).toThrow(/prodDigest is required/);
+  });
+
+  it("readCurrentDeployment / readStagingApproval / readVersionHistory default to the real .wrangler/releases/ dir (absent in this repo, so a safe read-only null/empty result)", () => {
+    expect(readCurrentDeployment()).toBeNull();
+    expect(readStagingApproval()).toBeNull();
+    expect(readVersionHistory()).toEqual([]);
   });
 });
 
