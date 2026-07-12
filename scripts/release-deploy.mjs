@@ -126,6 +126,7 @@ function errMessage(err) {
  *   runner?: Runner;
  *   fetch?: FetchFn;
  *   sleep?: (ms: number) => Promise<void>;
+ *   propagationSleepMs?: number;
  *   nowIso?: () => string;
  *   soakIntervalMs?: number;
  *   soakDurationMs?: number;
@@ -148,6 +149,12 @@ export async function runReleaseDeploy(opts = {}) {
   const nowIso = opts.nowIso ?? (() => new Date().toISOString());
   const soakIntervalMs = opts.soakIntervalMs ?? 5000;
   const soakDurationMs = opts.soakDurationMs ?? 120000;
+  // 10s default: Cloudflare documents a brief global propagation window
+  // after versions deploy before override routing is reliable everywhere.
+  const propagationSleepMs = opts.propagationSleepMs ?? 10000;
+  const sleepImpl =
+    opts.sleep /* v8 ignore next -- real sleep; not exercised in unit tests */ ??
+    ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   const probeTimeoutOpts = {
     timeoutMs: opts.probeTimeoutMs,
     setTimeoutFn: opts.setTimeoutFn,
@@ -314,6 +321,11 @@ export async function runReleaseDeploy(opts = {}) {
     { runner },
   );
 
+  // 6b. Wait for global edge propagation before probing with version override.
+  //     Cloudflare documents a brief propagation window after `versions deploy`
+  //     before the override header reliably routes to the new version on all
+  //     edges. Default 10s; injectable for tests (set to 0 to skip).
+  if (propagationSleepMs > 0) await sleepImpl(propagationSleepMs);
   // 7. Smoke the new version at 0% via version override. On failure, restore
   //    old@100 ALONE (not new@0/old@100) so the next run is not poisoned.
   try {
@@ -393,7 +405,7 @@ export async function runReleaseDeploy(opts = {}) {
   try {
     await continuousProbe(baseUrl, routes, releaseId, {
       fetch: fetchImpl,
-      sleep: opts.sleep,
+      sleep: sleepImpl,
       intervalMs: soakIntervalMs,
       durationMs: soakDurationMs,
       ...probeTimeoutOpts,
