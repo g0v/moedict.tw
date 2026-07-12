@@ -71,6 +71,23 @@ describe("handleStrokeAPI validation", () => {
     expect((await response.json()).error).toBe("Not Found");
   });
 
+  it("returns 404 (not 500) for 6c5b.json — issue #265's 「汛」 has no upstream stroke data", async () => {
+    // U+6C5B is genuinely absent from g0v/zh-stroke-data (confirmed 404 on
+    // the original rackcdn host, R2, and this proxy alike — predates the R2
+    // migration). The proxy must keep failing closed with 404, not 500/502;
+    // the friendly "尚無筆順資料" UX lives client-side in
+    // jquery.strokeWords.js (see stroke-missing-badge-265.test.ts).
+    globalThis.fetch = vi.fn(async () => new Response("", { status: 404 })) as typeof fetch;
+    const { request, url } = makeRequest("/api/stroke-json/6c5b.json");
+    const response = await handleStrokeAPI(request, url, corsHeaders);
+    expect(response.status).toBe(404);
+    expect((await response.json()).error).toBe("Not Found");
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/6c5b.json"),
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
   it("returns 502 on fetch rejection", async () => {
     globalThis.fetch = vi.fn(async () => {
       throw new Error("network down");

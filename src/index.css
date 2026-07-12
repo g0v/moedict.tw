@@ -766,6 +766,36 @@ body[data-ruby-pref="zhuyin"] .result .entry .title hruby.rightangle ru[zhuyin][
   box-shadow: hsl(0, 0%, 83%) 0 3px 3px;
 }
 
+/* #265/#76: 若字元無教育部標準字體筆順資料，明確顯示「？尚無筆順資料」徽章，
+   取代原本僅將空白 canvas 淡化至 50% 透明度的「破損」外觀 */
+#strokes .word.stroke-missing canvas {
+  visibility: hidden;
+}
+#strokes .stroke-missing-badge {
+  position: absolute;
+  top: 0;
+  left: 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  background: #f7f7f7;
+  border: 1px dashed #bbb;
+  box-shadow: hsl(0, 0%, 83%) 0 3px 3px;
+  color: #888;
+  text-align: center;
+}
+#strokes .stroke-missing-mark {
+  font-size: 2.5em;
+  line-height: 1;
+  font-weight: bold;
+}
+#strokes .stroke-missing-text {
+  font-size: 0.75em;
+  margin-top: 0.4em;
+}
+
 /* 歷代書體按鈕區 */
 #historical-scripts {
   display: inline-block;

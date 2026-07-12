@@ -869,20 +869,30 @@
             });
           }, function() {
             $loader.remove();
+            $word.addClass("stroke-missing").attr({
+              role: "img",
+              "aria-label": "「" + word.text + "」尚無筆順資料"
+            });
             return pp.resolve({
               drawBackground: function() {
                 return stroker.drawBackground();
               },
               draw: function() {
-                var p;
+                var p, $badge, style;
                 p = jQuery.Deferred();
-                $(stroker.canvas).fadeTo("fast", 0.5, function() {
-                  return p.resolve();
-                });
+                style = stroker.canvas.getAttribute("style") || "";
+                $(stroker.canvas).css("visibility", "hidden");
+                $badge = $("<div class=\"stroke-missing-badge\" aria-hidden=\"true\"><span class=\"stroke-missing-mark\">？</span><span class=\"stroke-missing-text\">尚無筆順資料</span></div>");
+                if (style) {
+                  $badge.attr("style", style);
+                }
+                $word.append($badge);
+                p.resolve();
                 return p;
               },
               remove: function() {
-                return $(stroker.canvas).remove();
+                $(stroker.canvas).remove();
+                return $word.find(".stroke-missing-badge").remove();
               }
             });
           }, function(e) {
