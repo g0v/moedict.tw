@@ -508,6 +508,25 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 			display: inline-block !important;
 		}
 
+		/* TWBLG 文/白/俗/替讀音分類與無義項提示 */
+		.reading-type {
+			display: inline-block;
+			margin-left: 6px;
+			padding: 1px 6px;
+			font-size: 55%;
+			font-weight: 600;
+			line-height: 1.4;
+			color: #fff;
+			background: #6B0000;
+			border-radius: 4px;
+			vertical-align: middle;
+		}
+		.reading-only-note {
+			margin: .5em 0 1.5em;
+			color: #666;
+			font-size: 90%;
+		}
+
 		/* 外文翻譯 TTS 可點擊 */
 		.fw_def {
 			cursor: pointer;

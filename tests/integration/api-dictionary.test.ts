@@ -6,6 +6,9 @@ interface DictEntry {
   heteronyms?: Array<{
     bopomofo?: string;
     bopomofo2?: string;
+    id?: string;
+    trs?: string;
+    reading?: string;
     definitions?: Array<{ def?: string }>;
   }>;
   xrefs?: Array<{ lang: string; words: string[] }>;
@@ -52,6 +55,16 @@ describe("/{langPrefix}{word}.json", () => {
     const { status, body } = await fetchJson<DictEntry>("/api/'%E9%A3%9F.json");
     expect(status).toBe(200);
     expect(body.title).toBeDefined();
+  });
+
+  it("preserves 蛇 siâ as a reading-only Taiwanese heteronym without an audio id", async () => {
+    const { status, body } = await fetchJson<DictEntry>("/api/'%E8%9B%87.json");
+    expect(status).toBe(200);
+    const sia = body.heteronyms?.find((heteronym) => heteronym.trs?.normalize("NFC") === "siâ");
+    expect(sia).toBeDefined();
+    expect(sia?.definitions).toEqual([]);
+    expect(sia?.reading?.replace(/<[^>]*>/g, "")).toBe("文");
+    expect(sia?.id).toBeUndefined();
   });
 
   it(":{word} → h lang", async () => {

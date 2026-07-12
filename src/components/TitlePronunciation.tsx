@@ -1,13 +1,14 @@
 import type { ReactNode } from "react";
 import { formatBopomofo, formatPinyin } from "../utils/bopomofo-pinyin-utils";
+import { READING_TYPE_LABELS } from "../utils/reading-type-labels";
 import { SvgIcon } from "./SvgIcon";
 
 /**
  * 順序不變量（order invariant）
  *
  * <h1 className="title"> 內，ruby/title 之後的 sibling 順序固定為：
- *   children（ruby/title span）→ small.youyin → span.audioBlock → small.alternative
- *
+ *   children（ruby/title span）→ small.youyin → span.audioBlock →
+ *   small.alternative → small.reading-type
  * 依 legacy `~/w/moedict-webkit/view.ls:132-158` 的 ground truth：
  *   list ++= small { className: \youyin } youyin if youyin
  *   …audioBlock（play button）…
@@ -18,6 +19,9 @@ import { SvgIcon } from "./SvgIcon";
  * .audioBlock 之前，造成視覺回歸）。本元件把順序固化在唯一可測試的地方，
  * 並由 tests/unit/title-pronunciation.test.tsx 守住。
  *
+ * `small.reading-type` 是 TWBLG 文/白/俗/替分類；legacy 沒有對應節點。
+ * 固定放在最後，避免干擾前四個節點的既有相對順序。
+ *
  * Props:
  * - children: ruby/title span（由 DictionaryPage 透傳，內容不變）
  * - lang: 字典語言代碼
@@ -27,6 +31,7 @@ import { SvgIcon } from "./SvgIcon";
  * - pronunAudioId: 音檔 id（falsy 則不渲染 span.audioBlock）
  * - isPlaying: 是否正在播放此音檔（控制 play/stop 圖示與 aria-label/title）
  * - onToggleAudio: 點擊/鍵盤啟動時呼叫（播放或停止由上層邏輯決定）
+ * - readingType: TWBLG 文/白/俗/替分類（falsy 則不渲染）
  */
 interface TitlePronunciationProps {
   children: ReactNode;
@@ -37,6 +42,7 @@ interface TitlePronunciationProps {
   pronunAudioId?: string;
   isPlaying: boolean;
   onToggleAudio: () => void;
+  readingType?: string;
 }
 
 export function TitlePronunciation({
@@ -48,7 +54,10 @@ export function TitlePronunciation({
   pronunAudioId,
   isPlaying,
   onToggleAudio,
+  readingType,
 }: TitlePronunciationProps) {
+  const readingTypeLabel = readingType ? (READING_TYPE_LABELS[readingType] ?? readingType) : "";
+
   return (
     <>
       {children}
@@ -84,6 +93,11 @@ export function TitlePronunciation({
           {bAlt && (
             <span className="bopomofo" dangerouslySetInnerHTML={{ __html: formatBopomofo(bAlt) }} />
           )}
+        </small>
+      )}
+      {lang === "t" && readingType && (
+        <small className="reading-type" title={readingTypeLabel} aria-label={readingTypeLabel}>
+          {readingType}
         </small>
       )}
     </>

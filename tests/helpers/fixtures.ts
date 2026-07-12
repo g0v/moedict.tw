@@ -1,3 +1,5 @@
+/// <reference types="node" />
+
 /**
  * Curated R2 fixture set used by integration + E2E tests.
  *
@@ -11,6 +13,7 @@
  *   - 食 (U+98DF)  — lang=t, ptck bucket 31
  *   - 字 (U+5B57)  — lang=h, phck bucket 87
  *   - 上訴         — lang=c, pcck bucket 10 (first char 上 = U+4E0A)
+ *   - 蛇 (U+86C7)  — lang=t, ptck bucket 71（文讀 siâ 無義項）
  */
 
 import { readFileSync } from "node:fs";
@@ -86,6 +89,19 @@ export function collectDictionaryFixtures(): FixtureEntry[] {
       httpMetadata: { contentType: "text/plain; charset=utf-8" },
     });
   }
+
+  const taiwaneseReadingOnlyWord = "蛇";
+  const taiwaneseReadingOnlyBucket = bucketOf(taiwaneseReadingOnlyWord, "t");
+  const taiwaneseReadingOnlyKey = `ptck/${taiwaneseReadingOnlyBucket}.txt`;
+  entries.push({
+    bucket: "DICTIONARY",
+    key: taiwaneseReadingOnlyKey,
+    body: required(
+      path.join(DATA_DICT, "ptck", `${taiwaneseReadingOnlyBucket}.txt`),
+      taiwaneseReadingOnlyKey,
+    ),
+    httpMetadata: { contentType: "text/plain; charset=utf-8" },
+  });
 
   for (const lang of ["a", "t", "h", "c"] as const) {
     for (const name of ["index.json", "xref.json", "xref-by-id.json"]) {

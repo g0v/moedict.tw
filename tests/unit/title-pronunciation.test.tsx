@@ -1,8 +1,10 @@
 /**
  * 順序不變量測試 — <h1 className="title"> 內 sibling 順序：
- *   children（ruby/title）→ small.youyin → span.audioBlock → small.alternative
+ *   children（ruby/title）→ small.youyin → span.audioBlock →
+ *   small.alternative → small.reading-type
  *
- * 依 legacy `~/w/moedict-webkit/view.ls:132-158` 的 ground truth。
+ * 前四個節點依 legacy `~/w/moedict-webkit/view.ls:132-158` 的 ground truth；
+ * 新增的 reading-type 固定放在最後。
  * 過去曾有 commit 把 .alternative 插到 .audioBlock 之前，造成播放鍵被
  * block-level 的 .alternative 擠到下方（視覺回歸）。本測試把順序固化。
  */
@@ -23,29 +25,33 @@ function render(overrides: Record<string, unknown> = {}): string {
     pronunAudioId: "12345" as string | undefined,
     isPlaying: false,
     onToggleAudio: noop,
+    readingType: "文" as string | undefined,
   };
   const props = { ...defaults, ...overrides };
   return renderToStaticMarkup(<TitlePronunciation {...props} />);
 }
 
 describe("TitlePronunciation 順序不變量", () => {
-  it("(a) t-lang 全三項齊全時，children → youyin → audioBlock → alternative 順序正確", () => {
+  it("(a) t-lang 全部項目齊全時，既有順序不變且 reading-type 固定在最後", () => {
     const html = render();
     const iChildren = html.indexOf('data-testid="ruby"');
     const iYouyin = html.indexOf('class="youyin"');
     const iAudioBlock = html.indexOf('class="audioBlock"');
     const iAlternative = html.indexOf('class="alternative"');
+    const iReadingType = html.indexOf('class="reading-type"');
 
     // 全部都應該存在
     expect(iChildren).toBeGreaterThanOrEqual(0);
     expect(iYouyin).toBeGreaterThanOrEqual(0);
     expect(iAudioBlock).toBeGreaterThanOrEqual(0);
     expect(iAlternative).toBeGreaterThanOrEqual(0);
+    expect(iReadingType).toBeGreaterThanOrEqual(0);
 
     // 順序不變量
     expect(iChildren).toBeLessThan(iYouyin);
     expect(iYouyin).toBeLessThan(iAudioBlock);
     expect(iAudioBlock).toBeLessThan(iAlternative);
+    expect(iAlternative).toBeLessThan(iReadingType);
   });
 
   it("(b) 無 bAlt/pAlt 時不渲染 small.alternative", () => {
@@ -74,6 +80,25 @@ describe("TitlePronunciation 順序不變量", () => {
     const html = render({ pronunAudioId: undefined });
     expect(html).not.toContain('class="audioBlock"');
     expect(html).not.toContain("playAudio");
+  });
+
+  it("顯示 TWBLG 讀音分類的完整可存取標籤", () => {
+    const html = render({ readingType: "文" });
+    expect(html).toContain('class="reading-type"');
+    expect(html).toContain('title="文讀音（文言音）"');
+    expect(html).toContain('aria-label="文讀音（文言音）"');
+    expect(html).toContain(">文</small>");
+  });
+
+  it("沒有分類或非台語條目時不顯示 reading-type", () => {
+    expect(render({ readingType: undefined })).not.toContain('class="reading-type"');
+    expect(render({ lang: "a", readingType: "文" })).not.toContain('class="reading-type"');
+  });
+
+  it("未知分類仍原樣顯示，不靜默丟失上游資料", () => {
+    const html = render({ readingType: "新" });
+    expect(html).toContain('title="新"');
+    expect(html).toContain(">新</small>");
   });
 
   it("audioBlock 內含 role=button, tabIndex=0, playAudio class, 播放發音 aria-label/title", () => {

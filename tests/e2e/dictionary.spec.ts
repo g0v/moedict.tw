@@ -54,6 +54,20 @@ test.describe("dictionary pages per language", () => {
     await waitForEntryHydration(page, "食");
   });
 
+  test("'蛇 (t) — reading-only siâ is labeled and has no broken audio control", async ({
+    page,
+  }) => {
+    const response = await page.goto("/'%E8%9B%87");
+    expect(response?.status()).toBe(200);
+    await waitForEntryHydration(page, "蛇");
+
+    const readingOnlyEntry = page.locator('.entry:has(.reading-type[aria-label^="文讀音"])');
+    await expect(readingOnlyEntry).toHaveCount(1);
+    await expect(readingOnlyEntry.locator(".reading-type")).toHaveText("文");
+    await expect(readingOnlyEntry.locator(".reading-only-note")).toHaveText("本音讀無義項。");
+    await expect(readingOnlyEntry.locator(".audioBlock")).toHaveCount(0);
+  });
+
   test(":字 (h) — 客語萌典", async ({ page }) => {
     const response = await page.goto("/%3A%E5%AD%97");
     expect(response?.status()).toBe(200);
