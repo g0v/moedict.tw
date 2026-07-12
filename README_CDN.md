@@ -16,12 +16,13 @@
   - 台語音檔：`audio/t/{audioId}.mp3`（1–4 碼純數字 id 會補零到 5 碼，見 `normalizeAudioIdByLang`）
   - 客語音檔：`audio/h/{variant}-{audioId}.mp3`（`variant` 為腔調序號 1–6，對應
     `四海大平安南`；客語**沒有**不帶腔調前綴的純 `{audioId}.mp3`，見下方「資料完整性」）
-- 使用位置：`src/api/handleStrokeAPI.ts`（Worker 代理，解 CORS）、
+- 使用位置：`src/api/handleStrokeAPI.ts`（Worker 直接讀 ASSETS R2 binding，
+  解 CORS；**不再**代理公開 CDN URL，以利 staging preview 桶隔離）、
   `src/utils/audio-utils.ts`、`src/pages/DictionaryPage.tsx`
   （`getHakkaVariantAudioUrl`）、`src/offline-api.ts`（Capacitor 離線 fallback）、
   `vite.config.ts`（dev-time 筆畫 JSON proxy）
-- **單一定義點**：所有上述位置都從 `src/utils/media-cdn.ts` import
-  `STROKE_JSON_BASE_URL` / `AUDIO_CDN_MAP`；調整網域只需要改這一個檔案。
+- **單一定義點**：音檔 CDN 與離線 fallback 的 `STROKE_JSON_BASE_URL` 仍從
+  `src/utils/media-cdn.ts` import；Worker 筆順路由改走 `env.ASSETS`。
 
 ### 2) 前端資產（fonts / JS / CSS）
 
@@ -59,7 +60,56 @@ node commands/migrate-legacy-cdn-to-r2.mjs --extensions=mp3
 ——`DictionaryPage.tsx` 對 `lang==='h'` 一律不顯示該按鈕，實際播放的是
 `{variant}-{audioId}.mp3`，因此遷移腳本刻意不處理這個分類。
 
-## 三、已停用：Rackspace CDN（歷史記錄，2026-07 遷移）
+筆畫 JSON 的 6,063 字全集回填見下方「教育部筆順語料管線」。
+
+## 三、教育部筆順語料管線（6,063 字）
+
+`stroke-json/` 遷移抽樣結果約 36% 命中（見下方第四節）。這不是隨機資料缺漏，
+而是遷移來源（Rackspace CDN，內容承自 g0v/zh-stroke-data）本身只涵蓋教育部
+民國 71 年公告的 4808 個常用字。教育部筆順學習網已於 2024-12-27／2025-01-02
+全面改版：舊版 `provideStrokeInfo.do?big5=` 端點完全停用，新版網站
+（`https://stroke-order.learningweb.moe.edu.tw/`）收字範圍擴充到 6,063 字，
+改用 `dictView.jsp?ID=<十進位 Unicode 碼位>`，並把完整筆順 XML 內嵌在頁面的
+`xml[<ID>]="...";` JS 字串常值中。
+
+`commands/fetch-moe-stroke.mjs` 提供單一國字的唯讀取得＋轉換工具；
+`commands/sync-moe-stroke-corpus.mjs` 是完整 6,063 字語料管線：
+
+1. **發現**：下載官方 `全字筆順提示下載` zip
+   （`/download/6063png.zip`），以 PNG 檔名為準取得恰好 6,063 個不重複
+   字元（fail-closed：數量／重複／非單一碼位一律中止；**禁止**猜 ID 範圍）。
+2. **轉換**：對每個字 `dictView.jsp?ID=<十進位碼位>` → 內嵌 XML →
+   `stroke-json/<小寫 hex>.json`，並寫 `manifest.json`（含 sha256／筆畫數）。
+3. **上傳**（可選）：重用 `scripts/lib/r2-upload.mjs` 的
+   `uploadWithConcurrency`（≤4 並發、429/code 971 退避）與
+   `scripts/lib/generated-config.mjs` 的 `getAssetsBucketName`，
+   staging → `moedict-assets-preview`、production → `moedict-assets`。
+   只 PUT `stroke-json/*`，不刪除、不覆寫其他 key。
+4. **驗證**：上傳後以 `wrangler r2 object get --remote` 逐檔下載並比對
+   sha256（二進位 hash，與 `release-verify.mjs` 同款）。
+
+```bash
+# 本機 dry-run（不碰 R2）
+node commands/sync-moe-stroke-corpus.mjs --dry-run --out .moe-stroke-corpus
+
+# 上傳到 staging preview 桶（需先有 staging build 產生的 generated config）
+CLOUDFLARE_ENV=staging node commands/sync-moe-stroke-corpus.mjs \
+  --upload=staging --out .moe-stroke-corpus
+
+# 單一國字除錯
+node commands/fetch-moe-stroke.mjs 町 汛 --out .moe-stroke-fetch
+```
+
+**Worker 讀取路徑**：`/api/stroke-json/{cp}.json` 直接讀環境的 `ASSETS` R2
+binding（`handleStrokeAPI.ts`），**不再**代理公開 `STROKE_JSON_BASE_URL`。
+因此 staging Worker 會讀到 preview 桶、production 讀正式桶——上傳到
+preview 後可透過 staging 端對端驗證，不會被 `vars.ASSET_BASE_URL` 仍指向
+正式站公開網域的設定蓋掉。
+
+本機產出目錄 `.moe-stroke-corpus/` / `.moe-stroke-fetch/` 已加入 `.gitignore`，
+不可 commit 生成的 6063 JSON／zip／manifest。
+
+## 四、已停用：Rackspace CDN（歷史記錄，2026-07 遷移）
 
 ### 筆畫 JSON 命中率偏低（~36%）的根因與新版教育部網站再抓取工具
 
