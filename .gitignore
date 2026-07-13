@@ -63,6 +63,15 @@ reports/mutation/
 .moe-stroke-fetch/
 .moe-stroke-corpus/
 
+# CNS11643 generated corpus (scripts/generate-cns-data.mjs) — never commit the
+# 77k generated per-codepoint JSON files; only the golden fixture (4D09.json)
+# and the generator script itself are tracked. Run the generator against the
+# OGDL-licensed Properties.zip + MapingTables.zip to populate data/dictionary/cns/
+# locally or in R2.
+data/dictionary/cns/by-codepoint/*
+!data/dictionary/cns/by-codepoint/4D/
+!data/dictionary/cns/by-codepoint/4D/4D09.json
+
 # Visual-regression: commit only linux baselines; local runs generate darwin/win32 variants.
 # The `visual` Playwright project uses its own name (not the browser) in the snapshot filename.
 tests/e2e/**/*-visual-darwin.png
