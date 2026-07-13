@@ -1,15 +1,16 @@
 /**
- * R2 upload library with bounded concurrency and 429/971 backoff.
+ * R2 upload library with bounded concurrency and transient-error backoff.
  *
  * Uses shared releaseKey/immutableKey from src/utils/release-keys.ts —
  * NO duplicate key construction. Upload order: all client files first
  * (release-scoped + immutable copies for hashed assets), then
  * release-manifest.json LAST only after all other uploads succeed.
  *
- * Concurrency default/max ≤4. Exponential backoff only for true 429 /
- * Cloudflare code 971, bounded attempts/delay. Injectable sleep/runner
- * for deterministic tests. No shell command strings — argv subprocess
- * execution to prevent injection.
+ * Concurrency default/max ≤4. Exponential backoff for true 429 /
+ * Cloudflare code 971, transient HTTP 5xx, and transient network
+ * failures; permanent 4xx (except 429) fail-fast. Bounded attempts/delay.
+ * Injectable sleep/runner for deterministic tests. No shell command
+ * strings — argv subprocess execution to prevent injection.
  */
 
 import { extname, join, relative, sep } from "node:path";
@@ -177,8 +178,10 @@ export async function uploadObject(bucketName, key, filePath, opts = {}) {
 }
 
 /**
- * Retry with exponential backoff. Only retries on true 429 / Cloudflare
- * code 971. Bounded attempts and delay. Injectable sleep for deterministic tests.
+ * Retry with exponential backoff for transient failures only:
+ * rate limits (429 / Cloudflare 971), HTTP 5xx, and network errors.
+ * Permanent 4xx (except 429) and other non-transient errors fail-fast.
+ * Bounded attempts and delay. Injectable sleep for deterministic tests.
  * @template T
  * @param {() => Promise<T>} fn
  * @param {{ maxRetries?: number; initialDelay?: number; maxDelay?: number; sleep?: (ms: number) => Promise<void> }} [opts]
@@ -196,9 +199,8 @@ export async function retryWithBackoff(fn, opts = {}) {
       return await fn();
     } catch (err) {
       lastError = err;
-      // Only retry on 429 / Cloudflare code 971
-      const isRateLimit = is429Error(err);
-      if (!isRateLimit || attempt === maxRetries) {
+      // Only retry transient rate-limit / 5xx / network failures
+      if (!isRetryableError(err) || attempt === maxRetries) {
         throw err;
       }
       const delay = Math.min(initialDelay * 2 ** attempt, maxDelay);
@@ -208,22 +210,86 @@ export async function retryWithBackoff(fn, opts = {}) {
   throw lastError;
 }
 
+/** Node system error codes that represent transient network failures. */
+const TRANSIENT_NETWORK_CODES = new Set([
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "ECONNREFUSED",
+  "EAI_AGAIN",
+  "ENETUNREACH",
+  "EHOSTUNREACH",
+  "EPIPE",
+  "ECONNABORTED",
+]);
+
 /**
- * Check if an error represents a 429 / Cloudflare rate limit (code 971).
+ * True when an error is a transient failure worth retrying:
+ * - rate limits (HTTP 429 / Cloudflare code 971)
+ * - HTTP 5xx / Cloudflare internal errors
+ * - transient network/socket failures
+ *
+ * Permanent 4xx (except 429) and non-transient errors return false.
+ * Patterns are anchored so bare digits in object keys / request ids
+ * (e.g. "object key 500", "request id 429971") are NOT treated as
+ * retryable.
+ *
  * @param {unknown} err
  * @returns {boolean}
  */
-function is429Error(err) {
+export function isRetryableError(err) {
   if (!err || typeof err !== "object") return false;
   const e = /** @type {Record<string, unknown>} */ (err);
+
+  // Numeric rate-limit codes (injected by tests / structured errors)
   if (e.code === 971 || e.code === 429) return true;
-  const hasRateLimitText = (value) =>
-    typeof value === "string" &&
-    (/\b(?:error\s+)?code\s*[:=]?\s*971\b/i.test(value) ||
-      /\bstatus(?:\s+code)?\s*[:=]?\s*429\b/i.test(value) ||
-      /\bHTTP\s+429\b/i.test(value) ||
-      /\bToo Many Requests\b/i.test(value));
-  return hasRateLimitText(e.stderr) || hasRateLimitText(e.message);
+
+  // Node system error codes for transient network failures
+  if (typeof e.code === "string" && TRANSIENT_NETWORK_CODES.has(e.code)) {
+    return true;
+  }
+  // Nested cause (e.g. undici/fetch wrapping a system error)
+  if (e.cause && typeof e.cause === "object") {
+    const cause = /** @type {Record<string, unknown>} */ (e.cause);
+    if (typeof cause.code === "string" && TRANSIENT_NETWORK_CODES.has(cause.code)) {
+      return true;
+    }
+  }
+
+  const text = [e.stderr, e.message, e.stdout].filter((v) => typeof v === "string").join("\n");
+  if (!text) return false;
+
+  // Rate limits — anchored status/code framing only
+  if (
+    /\b(?:error\s+)?code\s*[:=]?\s*971\b/i.test(text) ||
+    /\bstatus(?:\s+code)?\s*[:=]?\s*429\b/i.test(text) ||
+    /\bHTTP\s+429\b/i.test(text) ||
+    /\bToo Many Requests\b/i.test(text)
+  ) {
+    return true;
+  }
+
+  // Transient HTTP 5xx / Cloudflare internal errors.
+  // Wrangler R2 format observed in production:
+  //   "…/objects/stroke-json/80cc.json - 500: Internal Server Error;"
+  // plus JSON body: {"errors":[{"code":10001,"message":"We encountered an internal error…"}]}
+  if (
+    /\bstatus(?:\s+code)?\s*[:=]?\s*5\d{2}\b/i.test(text) ||
+    /\bHTTP\s+5\d{2}\b/i.test(text) ||
+    /[-:]\s*5\d{2}\s*:\s*Internal Server Error\b/i.test(text) ||
+    /\b5\d{2}\s+Internal Server Error\b/i.test(text) ||
+    /\bInternal Server Error\b/i.test(text) ||
+    /\bBad Gateway\b/i.test(text) ||
+    /\bService Unavailable\b/i.test(text) ||
+    /\bGateway Timeout\b/i.test(text) ||
+    /\bWe encountered an internal error\b/i.test(text) ||
+    /\bsocket hang up\b/i.test(text) ||
+    /\bfetch failed\b/i.test(text) ||
+    /\bnetwork\s+(?:error|failure|timeout)\b/i.test(text)
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
