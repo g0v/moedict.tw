@@ -189,7 +189,7 @@ function getAssetsBucket(env: Env): R2Bucket | null {
   return candidate as R2Bucket;
 }
 
-const CONFIG_API_CACHE_CONTROL = "no-store";
+const CONFIG_API_CACHE_CONTROL = "public, max-age=60, s-maxage=300";
 
 /** Fixed CORS for public config / dictionary / static GETs under Workers Cache. */
 const PUBLIC_CORS_HEADERS: Record<string, string> = {
@@ -203,7 +203,12 @@ export async function respondWithConfigApi(
   env: Env,
   _ctx?: Pick<ExecutionContext, "waitUntil">,
 ): Promise<Response> {
-  // Env-backed; must not be edge-pinned via Workers Cache or Cache API.
+  // Env-backed but effectively static per deploy (values only change with a
+  // release). This was `no-store` and /api/config was the single most
+  // requested path on the zone (~3.5M/week), each hit invoking the Worker.
+  // Short TTLs are safe: deploy/rollback probes always cache-bust
+  // (scripts/lib/smoke-probe.mjs `_probe` param), so rollout verification
+  // never reads a stale cached config.
   return new Response(
     JSON.stringify({
       assetBaseUrl: env.ASSET_BASE_URL || "",
@@ -625,17 +630,60 @@ async function dispatchCore(request: Request, env: Env, ctx?: ExecutionContext):
 }
 
 /**
- * Decorate every Worker response with deployment metadata.
+ * Edge-cacheability predicate for Worker-generated responses.
  *
- * Keeping this at the dispatch boundary ensures API, compatibility, and
- * fallback routes expose the same version headers without buffering or
- * branching each response path.
+ * Cloudflare does NOT edge-cache Worker responses on its own — every
+ * `s-maxage` in src/api/cache.ts was decorative until dispatch() started
+ * writing through `caches.default` (2026-07 billing audit: bots re-rendered
+ * identical PNGs and re-read identical dictionary shards on every hit).
+ * Opt-in is response-driven: any GET 200 whose Cache-Control carries a
+ * positive s-maxage, except HTML shells (release-fallback correctness
+ * depends on fresh shell rendering) and anything no-store/private or
+ * carrying Set-Cookie.
+ */
+export function isEdgeCacheable(request: Request, response: Response): boolean {
+  if (request.method !== "GET" || response.status !== 200) return false;
+  const cacheControl = response.headers.get("Cache-Control") ?? "";
+  if (/\b(?:no-store|private)\b/i.test(cacheControl)) return false;
+  if (!/\bs-maxage=[1-9]/i.test(cacheControl)) return false;
+  if (response.headers.has("Set-Cookie")) return false;
+  const contentType = response.headers.get("Content-Type") ?? "";
+  return !contentType.includes("text/html");
+}
+
+/**
+ * Dispatch boundary: edge-cache read-through, then version-header
+ * decoration on every response (API, compatibility, and fallback routes all
+ * expose the same metadata without per-route branching), then a best-effort
+ * edge-cache write for responses that opt in via `isEdgeCacheable`.
  */
 export async function dispatch(
   request: Request,
   env: Env,
   ctx?: ExecutionContext,
 ): Promise<Response> {
+  // Serve straight from the edge cache when a previous dispatch stored this
+  // exact URL. Deploy/rollback probes always carry a unique `_probe`
+  // cache-buster, so rollout verification never reads a cached entry. The
+  // `caches` global is absent in plain-Node unit tests — the layer degrades
+  // to a no-op there (and on *.workers.dev, where cache.put is a no-op).
+  const edgeCache = typeof caches !== "undefined" ? caches.default : undefined;
+  if (edgeCache && request.method === "GET") {
+    try {
+      const hit = await edgeCache.match(request);
+      if (hit) {
+        const headers = new Headers(hit.headers);
+        headers.set("X-Moedict-Edge-Cache", "hit");
+        return new Response(hit.body, {
+          status: hit.status,
+          statusText: hit.statusText,
+          headers,
+        });
+      }
+    } catch {
+      // A cache lookup failure must never take down rendering.
+    }
+  }
   const response = await dispatchCore(request, env, ctx);
   const headers = new Headers(response.headers);
   const versionHeaders = getVersionHeaders(env.CF_VERSION_METADATA);
@@ -646,11 +694,23 @@ export async function dispatch(
   } else {
     headers.delete("X-Moedict-Release");
   }
-  return new Response(response.body, {
+  const decorated = new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
     headers,
   });
+  if (edgeCache && isEdgeCacheable(request, decorated)) {
+    // Promise.resolve guards non-conformant Cache stubs (tests stub put as a plain spy).
+    const putPromise = Promise.resolve(edgeCache.put(request, decorated.clone())).catch(() => {
+      // Best-effort: a failed put only means the next request re-renders.
+    });
+    if (ctx) {
+      ctx.waitUntil(putPromise);
+    } else {
+      void putPromise;
+    }
+  }
+  return decorated;
 }
 
 /**

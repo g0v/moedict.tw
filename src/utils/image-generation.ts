@@ -280,10 +280,33 @@ export function getFontName(fontParam: string): string {
 }
 
 /**
+ * Per-isolate caches for the PNG render path, keyed on the R2 binding object
+ * (WeakMap → unit-test isolation for free; production reuses one binding per
+ * isolate). Billing audit 2026-07: this path generated ~100M R2 Class B GETs
+ * per cycle — one availability probe per render, one GET per character
+ * (misses included — those are billed too), and one fallback-font GET per
+ * fallback render. All three are immutable-ish objects; memoize them.
+ */
+const fontAvailabilityCache = new WeakMap<object, Map<string, boolean>>();
+const glyphSvgCache = new WeakMap<object, Map<string, string | null>>();
+const GLYPH_CACHE_MAX_ENTRIES = 2048;
+const fallbackFontCache = new WeakMap<object, Promise<Uint8Array | null>>();
+
+/**
  * 檢查字體是否在 R2 中可用
- * 通過檢查一個測試字符的 SVG 檔案是否存在
+ * 通過檢查一個測試字符的 SVG 檔案是否存在（結果依 FONTS binding 記憶，
+ * 每個 isolate 每種字型最多探測一次；probe 錯誤不快取，下次重試）
  */
 async function checkFontAvailability(fontName: string, env: Env): Promise<boolean> {
+  let cache = fontAvailabilityCache.get(env.FONTS);
+  if (!cache) {
+    cache = new Map();
+    fontAvailabilityCache.set(env.FONTS, cache);
+  }
+  const cached = cache.get(fontName);
+  if (cached !== undefined) {
+    return cached;
+  }
   try {
     // 使用 "萌" 字 (U+840C) 作為測試字符
     const testUnicode = 0x840c;
@@ -295,6 +318,7 @@ async function checkFontAvailability(fontName: string, env: Env): Promise<boolea
     const isAvailable = svgObject !== null;
 
     console.log(`[DEBUG] Font ${fontName} availability: ${isAvailable}`);
+    cache.set(fontName, isAvailable);
     return isAvailable;
   } catch (error) {
     console.error(`[DEBUG] Error checking font availability for ${fontName}:`, error);
@@ -303,22 +327,57 @@ async function checkFontAvailability(fontName: string, env: Env): Promise<boolea
 }
 
 /**
+ * 讀取單一字符的 SVG 內容，經 per-isolate LRU 快取（含 negative 快取——
+ * R2 miss 也是計費的 Class B 操作）。回傳 SVG 全文或 null（不存在）。
+ */
+async function fetchGlyphSvg(fonts: Env["FONTS"], svgPath: string): Promise<string | null> {
+  let cache = glyphSvgCache.get(fonts);
+  if (!cache) {
+    cache = new Map();
+    glyphSvgCache.set(fonts, cache);
+  }
+  if (cache.has(svgPath)) {
+    const cached = cache.get(svgPath) ?? null;
+    // 更新 LRU 順序（Map 保留插入順序；重插移至尾端）
+    cache.delete(svgPath);
+    cache.set(svgPath, cached);
+    return cached;
+  }
+  const svgObject = await fonts.get(svgPath);
+  const content = svgObject ? await svgObject.text() : null;
+  cache.set(svgPath, content);
+  while (cache.size > GLYPH_CACHE_MAX_ENTRIES) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
+  }
+  return content;
+}
+
+/**
  * 載入 Tauhu Oo 作為 resvg 的補完字型（fontBuffers）。只在某字元於 R2 找不到
  * 逐字 SVG、必須改用 <text> fallback 時才呼叫，避免每次產圖都多打一次 R2。
  */
 async function loadFallbackFontBuffer(env: Env): Promise<Uint8Array | null> {
-  if (!env.ASSETS) return null;
-  try {
-    const asset = await env.ASSETS.get(FALLBACK_FONT_ASSET_KEY);
-    if (!asset) {
-      console.log(`[DEBUG] Fallback font asset not found at ${FALLBACK_FONT_ASSET_KEY}`);
+  const assets = env.ASSETS; // capture: narrowing does not flow into the closure
+  if (!assets) return null;
+  const cached = fallbackFontCache.get(assets);
+  if (cached) return cached;
+  const loading = (async (): Promise<Uint8Array | null> => {
+    try {
+      const asset = await assets.get(FALLBACK_FONT_ASSET_KEY);
+      if (!asset) {
+        console.log(`[DEBUG] Fallback font asset not found at ${FALLBACK_FONT_ASSET_KEY}`);
+        return null;
+      }
+      return new Uint8Array(await asset.arrayBuffer());
+    } catch (error) {
+      console.error("[DEBUG] Failed to load fallback font buffer:", error);
       return null;
     }
-    return new Uint8Array(await asset.arrayBuffer());
-  } catch (error) {
-    console.error("[DEBUG] Failed to load fallback font buffer:", error);
-    return null;
-  }
+  })();
+  fallbackFontCache.set(assets, loading);
+  return loading;
 }
 
 /**
@@ -404,13 +463,11 @@ export async function generateTextSVGWithR2Fonts(
     );
 
     try {
-      // 從 R2 讀取 SVG 檔案
-      console.log(`[DEBUG] Attempting to fetch SVG from R2: ${svgPath}`);
-      const svgObject = await env.FONTS.get(svgPath);
+      // 從 R2 讀取 SVG 檔案（經 per-isolate LRU；重複字符與重複 miss 不再打 R2）
+      console.log(`[DEBUG] Fetching SVG (cached): ${svgPath}`);
+      const svgContent = await fetchGlyphSvg(env.FONTS, svgPath);
 
-      if (svgObject) {
-        console.log(`[DEBUG] SVG object found for ${char}, size: ${svgObject.size} bytes`);
-        const svgContent = await svgObject.text();
+      if (svgContent !== null) {
         console.log(`[DEBUG] SVG content length: ${svgContent.length} characters`);
 
         // 解析 SVG 內容，提取 path 元素

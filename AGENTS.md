@@ -190,10 +190,23 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
 | ----------------- | -------------------------- |
 | 詞條 JSON（dict） | 300s / **86400s** + SWR 7d |
 | index / lookup    | 60s / 300s                 |
+| /api/config       | 60s / 300s（原 no-store）  |
 | search-index      | 3600s / 7d                 |
 | HTML shell        | 0 / 60s                    |
 | 字圖 PNG          | 1d / 1y                    |
 
+- **edge cache 自 2026-07 起才真正生效**：Cloudflare 不會自動快取 Worker 產生的
+  回應——`dispatch()`（worker/index.ts）現在對「GET、200、s-maxage>0、非
+  text/html、非 no-store/private/Set-Cookie」的回應寫入 `caches.default`，
+  命中時帶 `X-Moedict-Edge-Cache: hit` 標頭。在此之前上表的 edge TTL 全是
+  裝飾。HTML shell 刻意不進 edge cache（release fallback 正確性依賴現渲染）。
+  deploy/rollback probe 一律帶 `_probe` cache-buster，不受影響。
+- **R2 讀取另有 per-isolate memo**（帳單稽核 2026-07 後新增）：
+  `src/api/r2-json-cache.ts` 對 pack bucket 與 xref/xref-by-id 做 10 分鐘
+  LRU memo（WeakMap 以 R2 binding 為 key，單元測試天然隔離）；
+  `src/utils/image-generation.ts` 對字型 probe、逐字 glyph SVG（含 negative
+  cache——R2 miss 也計費）與 Tauhu fallback 字型做同樣的 per-isolate 快取。
+  **資料上傳後**除了 edge TTL 還會多最長 10 分鐘的 memo 延遲。
 - 上傳新字典資料後，已被快取的詞條最長 **24 小時**才會自然更新。
 - 立即清除：`POST /api/cache/purge`，帶 `CACHE_PURGE_TOKEN`（Bearer 或
   `X-Cache-Purge-Token`），body 用 allowlist 內的 cache tags（如
