@@ -81,12 +81,17 @@ node commands/migrate-legacy-cdn-to-r2.mjs --extensions=mp3
 2. **轉換**：對每個字 `dictView.jsp?ID=<十進位碼位>` → 內嵌 XML →
    `stroke-json/<小寫 hex>.json`，並寫 `manifest.json`（含 sha256／筆畫數）。
 3. **上傳**（可選）：重用 `scripts/lib/r2-upload.mjs` 的
-   `uploadWithConcurrency`（≤4 並發、429/code 971 退避）與
-   `scripts/lib/generated-config.mjs` 的 `getAssetsBucketName`，
-   staging → `moedict-assets-preview`、production → `moedict-assets`。
-   只 PUT `stroke-json/*`，不刪除、不覆寫其他 key。
+   `uploadWithConcurrency`（≤4 並發；upload 路徑 `maxRetries` 預設 5，
+   含 429／code 971／5xx／`fetch failed` 等暫態錯誤退避——分類硬化於
+   commit `42a730f`）與 `scripts/lib/generated-config.mjs` 的
+   `getAssetsBucketName`，staging → `moedict-assets-preview`、
+   production → `moedict-assets`。只 PUT `stroke-json/*`，不刪除、
+   不覆寫其他 key。
 4. **驗證**：上傳後以 `wrangler r2 object get --remote` 逐檔下載並比對
-   sha256（二進位 hash，與 `release-verify.mjs` 同款）。
+   sha256（二進位 hash，與 `release-verify.mjs` 同款）。**上傳模式禁止
+   `--skip-verify`**。驗證路徑使用 verify-specific 預設
+   `DEFAULT_VERIFY_MAX_RETRIES=8`（commit `a8d3262` 起；高於 upload 的 5），
+   可注入 `opts.maxRetries` 覆寫。
 
 ```bash
 # 本機 dry-run（不碰 R2）
@@ -94,7 +99,14 @@ node commands/sync-moe-stroke-corpus.mjs --dry-run --out .moe-stroke-corpus
 
 # 上傳到 staging preview 桶（需先有 staging build 產生的 generated config）
 CLOUDFLARE_ENV=staging node commands/sync-moe-stroke-corpus.mjs \
-  --upload=staging --out .moe-stroke-corpus
+  --upload=staging --out .moe-stroke-corpus \
+  --config dist/cf_moedict_webkit_neo/wrangler.json
+
+# 上傳到 production 桶（需先有 production build 產生的 flattened config，
+# bucket_name 必須是 moedict-assets；禁止把 staging config 誤用到 production）
+env -u CLOUDFLARE_ENV node commands/sync-moe-stroke-corpus.mjs \
+  --upload=production --out .moe-stroke-corpus \
+  --config dist/cf_moedict_webkit_neo/wrangler.json
 
 # 單一國字除錯
 node commands/fetch-moe-stroke.mjs 町 汛 --out .moe-stroke-fetch
@@ -108,6 +120,44 @@ preview 後可透過 staging 端對端驗證，不會被 `vars.ASSET_BASE_URL` �
 
 本機產出目錄 `.moe-stroke-corpus/` / `.moe-stroke-fetch/` 已加入 `.gitignore`，
 不可 commit 生成的 6063 JSON／zip／manifest。
+
+### 出貨現況（2026-07-13）
+
+6,063 字全集已寫入 **兩個** ASSETS 桶的 `stroke-json/<hex>.json`，並以
+authenticated re-GET + sha256／byte-length 全量驗證：
+
+| 環境       | R2 bucket                | 物件數 | 驗證                                   |
+| ---------- | ------------------------ | ------ | -------------------------------------- |
+| staging    | `moedict-assets-preview` | 6,063  | sha256+bytes 全量 OK                   |
+| production | `moedict-assets`         | 6,063  | sha256+bytes 全量 OK（第二輪；見下方） |
+
+對應 runtime 出貨（**已部署 runtime source HEAD `23b7e89`**；本機 pipeline
+後續 HEAD 見 git log，含 script-only `a8d3262` 等，**不需再部署 Worker**）：
+
+| 環境       | Worker                          | release                | version UUID                           | %   | finalized                  |
+| ---------- | ------------------------------- | ---------------------- | -------------------------------------- | --- | -------------------------- |
+| staging    | `cf-moedict-webkit-neo-staging` | `23b7e89-1d1f2400cb1d` | `0f23b628-9373-45d5-8ee9-b7d20b14933b` | 100 | `2026-07-13T04:00:28.202Z` |
+| production | `cf-moedict-webkit-neo`         | `23b7e89-1d1f2400cb1d` | `2be488db-8ad7-4384-bc2a-c539b4196445` | 100 | `2026-07-13T06:45:16.967Z` |
+
+Production 部署路徑：`bun run deploy`（`env -u CLOUDFLARE_ENV vp run build &&
+release-publish.mjs && release-deploy.mjs`），通過 shared staging-approval
+gate（`gitSha=23b7e89`、`clientManifestDigest=1d1f2400cb1d`）。單次
+publish→rollout 成功，無 rollback。
+
+**驗證注意（現行行為）：** `--upload` 模式會在 PUT 完成後**從頭**跑完整
+6,063 物件 re-GET 驗證；**目前沒有** verify-only 模式，也**沒有**驗證進度
+checkpoint／resume。2026-07-13 production 第一輪驗證曾因長時間網路中斷
+（`fetch failed` 重試耗盡於當時預設 5）中止；物件本身已在桶內且抽樣 hash
+正確，第二輪以同一 `manifest.json` 對 `moedict-assets` 重跑全量後
+6,063／6,063 通過（約 53 分鐘，concurrency ≤4）。script-only follow-up
+`a8d3262` 已將 verify 預設 `maxRetries` 提高到 8（upload 維持 5）；
+**建議後續**（尚未實作，僅 operator 優化）：為 `verifyCorpusUploads` 增加
+checkpoint.ndjson 進度與 verify-only／resume 入口，避免網路 flake 時必須
+重跑全量。
+
+**不要混淆：** 已部署 runtime source 是 HEAD `23b7e89`；`42a730f`（upload
+retry 硬化）與 `a8d3262`（verify maxRetries=8）是其祖先／後續 pipeline
+script commits，不是另一個獨立 Worker release。
 
 ## 四、已停用：Rackspace CDN（歷史記錄，2026-07 遷移）
 
