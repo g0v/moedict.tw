@@ -1,12 +1,7 @@
 /**
  * 順序不變量測試 — <h1 className="title"> 內 sibling 順序：
-<<<<<<< HEAD
  *   children（ruby/title）→ small.youyin → span.audioBlock →
  *   span.copyBlock → small.alternative → small.reading-type
-=======
- *   children（ruby/title）→ small.youyin → span.audioBlock → small.alternative
- *   → small.reading-type
->>>>>>> 90ee0f6 (feat: render TWBLG 文/白/俗/替 reading-type badge (g0v/moedict-webkit#96, #233))
  *
  * 前四個節點依 legacy `~/w/moedict-webkit/view.ls:132-158` 的 ground truth；
  * copyBlock 為 g0v/moedict-webkit#256 新增的「複製羅馬拼音」按鈕，
@@ -34,12 +29,8 @@ function render(overrides: Record<string, unknown> = {}): string {
     pronunAudioId: "12345" as string | undefined,
     isPlaying: false,
     onToggleAudio: noop,
-<<<<<<< HEAD
     hasRomanization: true,
     readingType: "文" as string | undefined,
-=======
-    readingType: undefined as string | undefined,
->>>>>>> 90ee0f6 (feat: render TWBLG 文/白/俗/替 reading-type badge (g0v/moedict-webkit#96, #233))
   };
   const props = { ...defaults, ...overrides };
   return renderToStaticMarkup(<TitlePronunciation {...props} />);
