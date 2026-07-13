@@ -249,6 +249,9 @@ test.describe("Taigi title pronunciation selection/copy (g0v/moedict-webkit#186)
     // the romanization also yanks the stroke-order panel open/closed.
     expect(outcome.after).toBe(outcome.before);
     expect(outcome.selectionSurvived).toBe(true);
+  });
+});
+
 test.describe("教育部《異體字字典》連結 (g0v/moedict-webkit#3)", () => {
   test("單字條目顯示連結到教育部異體字字典查詢頁", async ({ page }) => {
     await page.goto("/%E8%90%8C");
