@@ -96,14 +96,17 @@ async function readZipMember(zipPath, memberName) {
           }
         })
         .on("finish", () => {
-          if (chunks.length === 0) reject(new Error(`Member not found: ${memberName} in ${zipPath}`));
+          if (chunks.length === 0)
+            reject(new Error(`Member not found: ${memberName} in ${zipPath}`));
         })
         .on("error", reject);
     });
   } catch {
     // fallback: shell unzip -p
     const { execSync } = await import("node:child_process");
-    return execSync(`unzip -p "${zipPath}" "${memberName}"`, { maxBuffer: 200 * 1024 * 1024 }).toString("utf-8");
+    return execSync(`unzip -p "${zipPath}" "${memberName}"`, {
+      maxBuffer: 200 * 1024 * 1024,
+    }).toString("utf-8");
   }
 }
 
@@ -250,8 +253,7 @@ async function main() {
     generator: "scripts/generate-cns-data.mjs",
     sourceFiles: ["Properties.zip", "MapingTables.zip"],
     license: "OGDL-1.0",
-    attribution:
-      "數位發展部，CNS11643中文標準交換碼全字庫網站，https://www.cns11643.gov.tw",
+    attribution: "數位發展部，CNS11643中文標準交換碼全字庫網站，https://www.cns11643.gov.tw",
   };
 
   let emitted = 0;
@@ -283,7 +285,7 @@ async function main() {
 
     // Build record
     const radicalId = radicalMap.get(cns);
-    const radicalChar = radicalId != null ? radicalWordMap.get(radicalId) ?? null : null;
+    const radicalChar = radicalId != null ? (radicalWordMap.get(radicalId) ?? null) : null;
 
     const record = {
       char,
@@ -295,9 +297,7 @@ async function main() {
       pua: false,
       attributes: {
         phonetic: phoneticMap.get(cns) ?? [],
-        ...(radicalId != null
-          ? { radical: { id: radicalId, char: radicalChar } }
-          : {}),
+        ...(radicalId != null ? { radical: { id: radicalId, char: radicalChar } } : {}),
         stroke,
         ...(cangjieMap.has(cns) ? { cangjie: cangjieMap.get(cns) } : {}),
         ...(strokeSeqMap.has(cns) ? { strokeSequence: strokeSeqMap.get(cns) } : {}),
@@ -323,9 +323,7 @@ async function main() {
   console.log(`   Skipped PUA:     ${skippedPUA}`);
   console.log(`   Skipped no-map:  ${skippedNoMapping}`);
   if (emitted + skippedPUA + skippedNoMapping < strokeMap.size) {
-    console.log(
-      `   Skipped (limit): ${strokeMap.size - emitted - skippedPUA - skippedNoMapping}`,
-    );
+    console.log(`   Skipped (limit): ${strokeMap.size - emitted - skippedPUA - skippedNoMapping}`);
   }
 }
 

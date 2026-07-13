@@ -384,9 +384,7 @@ test.describe("offline CNS fallback", () => {
 
     // cns paths are probed first in offline API get(), so we should see at least one miss.
     expect(cnsRequests.length).toBeGreaterThanOrEqual(1);
-    expect(cnsRequests.some((url) => url.includes("/cns/by-codepoint/4D/4D09.json"))).toBe(
-      true,
-    );
+    expect(cnsRequests.some((url) => url.includes("/cns/by-codepoint/4D/4D09.json"))).toBe(true);
     // Because forceCns404 is enabled, /dictionary fallback should still resolve.
     expect(dictionaryRequests.length).toBeGreaterThanOrEqual(1);
     expect(

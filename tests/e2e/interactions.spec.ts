@@ -92,7 +92,7 @@ test.describe("cross-language navigation", () => {
     await page.waitForLoadState("networkidle");
     // Manually navigate via URL rewrite to /~萌 (simulating lang-switch click)
     await page.goto("/~%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
     await expect(page).toHaveTitle(/萌/);
     const text = await page.locator("body").innerText();
     expect(text).toContain("萌");

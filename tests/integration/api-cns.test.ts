@@ -28,18 +28,14 @@ describe("GET /api/cns/{char}.json — 200 golden 䴉", () => {
   });
 
   it("phonetic ㄒㄩㄢˊ", async () => {
-    const { body } = await fetchJson<Record<string, unknown>>(
-      `/api/cns/${IBIS_ENCODED}.json`,
-    );
+    const { body } = await fetchJson<Record<string, unknown>>(`/api/cns/${IBIS_ENCODED}.json`);
     const attrs = body.attributes as Record<string, unknown>;
     expect(Array.isArray(attrs.phonetic)).toBe(true);
     expect((attrs.phonetic as string[]).includes("ㄒㄩㄢˊ")).toBe(true);
   });
 
   it("radical 196 鳥, stroke 24, cangjie WVHAF", async () => {
-    const { body } = await fetchJson<Record<string, unknown>>(
-      `/api/cns/${IBIS_ENCODED}.json`,
-    );
+    const { body } = await fetchJson<Record<string, unknown>>(`/api/cns/${IBIS_ENCODED}.json`);
     const attrs = body.attributes as Record<string, unknown>;
     const radical = attrs.radical as Record<string, unknown>;
     expect(radical.id).toBe(196);
@@ -50,9 +46,7 @@ describe("GET /api/cns/{char}.json — 200 golden 䴉", () => {
   });
 
   it("strokeSequence 252211251353432511154444", async () => {
-    const { body } = await fetchJson<Record<string, unknown>>(
-      `/api/cns/${IBIS_ENCODED}.json`,
-    );
+    const { body } = await fetchJson<Record<string, unknown>>(`/api/cns/${IBIS_ENCODED}.json`);
     const attrs = body.attributes as Record<string, unknown>;
     expect(attrs.strokeSequence).toBe("252211251353432511154444");
   });
@@ -93,19 +87,40 @@ describe("HEAD /api/cns/{char}.json", () => {
     const text = await res.text();
     expect(text).toBe("");
   });
+
+  it("returns 304 for GET with matching If-None-Match", async () => {
+    const first = await fetchFromServer(`/api/cns/${IBIS_ENCODED}.json`);
+    const etag = first.headers.get("etag")!;
+    const res = await fetchFromServer(`/api/cns/${IBIS_ENCODED}.json`, {
+      headers: { "If-None-Match": etag },
+    });
+    expect(res.status).toBe(304);
+    const text = await res.text();
+    expect(text).toBe("");
+  });
+
+  it("returns 304 for HEAD with matching If-None-Match", async () => {
+    const first = await fetchFromServer(`/api/cns/${IBIS_ENCODED}.json`);
+    const etag = first.headers.get("etag")!;
+    const res = await fetchFromServer(`/api/cns/${IBIS_ENCODED}.json`, {
+      method: "HEAD",
+      headers: { "If-None-Match": etag },
+    });
+    expect(res.status).toBe(304);
+    const text = await res.text();
+    expect(text).toBe("");
+    expect(res.headers.get("etag")).toBe(etag);
+  });
 });
 
 describe("GET /api/cns/{char}.json — invalid input 400", () => {
   it("rejects malformed percent-encoding", async () => {
     const res = await fetchFromServer("/api/cns/%E0%A4%A.json");
-    // May be 400 or 404 depending on URL parsing; must not be 200 or 500
-    expect([400, 404]).toContain(res.status);
+    expect(res.status).toBe(400);
   });
 
   it("rejects multi-scalar input", async () => {
-    const res = await fetchFromServer(
-      `/api/cns/${encodeURIComponent("䴉一")}.json`,
-    );
+    const res = await fetchFromServer(`/api/cns/${encodeURIComponent("䴉一")}.json`);
     expect(res.status).toBe(400);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.error).toBe("Bad Request");
@@ -113,8 +128,13 @@ describe("GET /api/cns/{char}.json — invalid input 400", () => {
 
   it("rejects path traversal attempts", async () => {
     const res = await fetchFromServer("/api/cns/..%2Fx.json");
-    expect([400, 404]).toContain(res.status);
+    expect(res.status).toBe(400);
     expect(res.status).not.toBe(500);
+  });
+
+  it("rejects empty segment", async () => {
+    const res = await fetchFromServer("/api/cns/.json");
+    expect(res.status).toBe(400);
   });
 });
 
@@ -152,9 +172,7 @@ describe("Dictionary-hit non-shadowing contract", () => {
   // CNS payload uses "attributes"/"provenance"/"pua" — mutually exclusive shapes.
 
   it("/c/䴉.json returns 200 with a dictionary payload (pack h field), NOT a CNS payload", async () => {
-    const { status, body } = await fetchJson<Record<string, unknown>>(
-      `/c/${IBIS_ENCODED}.json`,
-    );
+    const { status, body } = await fetchJson<Record<string, unknown>>(`/c/${IBIS_ENCODED}.json`);
     // Must be a real dictionary 200
     expect(status).toBe(200);
     // Dictionary payload: pack uses compressed key "h" for heteronyms array
@@ -195,7 +213,9 @@ describe("Dictionary-hit non-shadowing contract", () => {
     // Dict has pack key "h" (heteronyms); CNS has "attributes" — mutually exclusive shapes
     expect(Array.isArray(dictResult.body.h)).toBe(true);
     expect(dictResult.body.attributes).toBeUndefined();
-    expect((cnsResult.body.attributes as Record<string, unknown> | undefined)?.phonetic).toBeDefined();
+    expect(
+      (cnsResult.body.attributes as Record<string, unknown> | undefined)?.phonetic,
+    ).toBeDefined();
     expect(cnsResult.body.h).toBeUndefined();
   });
 

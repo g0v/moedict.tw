@@ -106,6 +106,19 @@ describe("handleCnsAPI — GET 200", () => {
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
   });
 
+  it("supports If-None-Match 304", async () => {
+    const env = makeMockEnv({ [IBIS_KEY]: IBIS_RECORD });
+    const etag = `"mock-etag-${IBIS_KEY}"`;
+    const [req, url] = makeRequest("/api/cns/%E4%B4%89.json");
+    const res = await handleCnsAPI(
+      new Request(req.url, { headers: { "If-None-Match": etag } }),
+      url,
+      env,
+    );
+    expect(res.status).toBe(304);
+    expect(await res.text()).toBe("");
+    expect(res.headers.get("etag")).toBe(etag);
+  });
   it("R2 ETag propagated when available", async () => {
     const env = makeMockEnv({ [IBIS_KEY]: IBIS_RECORD });
     const [req, url] = makeRequest("/api/cns/%E4%B4%89.json");
@@ -125,6 +138,19 @@ describe("handleCnsAPI — HEAD 200", () => {
     expect(res.headers.get("content-type") ?? "").toContain("application/json");
     expect(res.headers.get("cache-control") ?? "").toContain("s-maxage=86400");
   });
+
+  it("supports If-None-Match 304", async () => {
+    const env = makeMockEnv({ [IBIS_KEY]: IBIS_RECORD });
+    const etag = `"mock-etag-${IBIS_KEY}"`;
+    const [req, url] = makeRequest("/api/cns/%E4%B4%89.json", "HEAD");
+    const res = await handleCnsAPI(
+      new Request(req.url, { method: "HEAD", headers: { "If-None-Match": etag } }),
+      url,
+      env,
+    );
+    expect(res.status).toBe(304);
+    expect(await res.text()).toBe("");
+  });
 });
 
 describe("handleCnsAPI — 400 invalid input", () => {
@@ -142,8 +168,7 @@ describe("handleCnsAPI — 400 invalid input", () => {
     const env = makeMockEnv({});
     const [req, url] = makeRequest("/api/cns/..%2Fx.json");
     const res = await handleCnsAPI(req, url, env);
-    // dot in decoded path triggers reject
-    expect([400, 404]).toContain(res.status);
+    expect(res.status).toBe(400);
   });
 
   it("rejects slash in decoded char", async () => {
@@ -157,8 +182,7 @@ describe("handleCnsAPI — 400 invalid input", () => {
     const env = makeMockEnv({});
     const [req, url] = makeRequest("/api/cns/.json");
     const res = await handleCnsAPI(req, url, env);
-    // dot in decoded path → 400
-    expect([400, 404]).toContain(res.status);
+    expect(res.status).toBe(400);
   });
 });
 

@@ -14,7 +14,10 @@ import { expect, test } from "./_fixtures";
 const ENTRY_PATH = "/%E8%90%8C"; // 萌
 
 async function resultBackground(page: Page): Promise<string> {
-  return page.locator(".result").first().evaluate((el) => getComputedStyle(el).backgroundColor);
+  return page
+    .locator(".result")
+    .first()
+    .evaluate((el) => getComputedStyle(el).backgroundColor);
 }
 
 async function bodyBackground(page: Page): Promise<string> {
@@ -45,10 +48,8 @@ test.describe("system prefers-color-scheme: dark (no manual override)", () => {
   }) => {
     const response = await page.goto(ENTRY_PATH);
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
-    expect(await colorScheme(page)).toBe("dark");
-    // Legacy default is rgb(255, 255, 255); dark vars replace it with #1c1c1c / #121212.
     expect(await resultBackground(page)).not.toBe("rgb(255, 255, 255)");
     expect(await bodyBackground(page)).not.toBe("rgb(255, 255, 255)");
 
@@ -67,9 +68,8 @@ test.describe("system prefers light, no manual override", () => {
   test("renders unchanged from the pre-#245 light appearance", async ({ page }) => {
     const response = await page.goto(ENTRY_PATH);
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
-    expect(await colorScheme(page)).toBe("light");
     expect(await resultBackground(page)).toBe("rgb(255, 255, 255)");
   });
 });

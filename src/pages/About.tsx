@@ -368,22 +368,14 @@ export function About({ assetBaseUrl }: AboutProps) {
               中文全字庫
             </a>
             （數位發展部）字型採用{" "}
-            <a
-              target="_blank"
-              href="https://openfontlicense.org/"
-              rel="noopener noreferrer"
-            >
+            <a target="_blank" href="https://openfontlicense.org/" rel="noopener noreferrer">
               SIL Open Font License 1.1
-            </a>
-            {" "}授權；全字庫屬性資料（注音・部首・筆畫・倉頡等）採用{" "}
-            <a
-              target="_blank"
-              href="https://data.gov.tw/license"
-              rel="noopener noreferrer"
-            >
+            </a>{" "}
+            授權；全字庫屬性資料（注音・部首・筆畫・倉頡等）採用{" "}
+            <a target="_blank" href="https://data.gov.tw/license" rel="noopener noreferrer">
               政府資料開放授權條款第 1 版（OGDL-1.0）
-            </a>
-            {" "}授權。
+            </a>{" "}
+            授權。
           </li>
           <li>
             <a target="_blank" href="http://www.cl.fcu.edu.tw/" rel="noopener noreferrer">

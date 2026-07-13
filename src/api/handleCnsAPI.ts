@@ -34,7 +34,7 @@ export interface CnsEnv {
 const CNS_CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type, If-None-Match",
 };
 
 /**
@@ -168,7 +168,7 @@ export async function handleCnsAPI(request: Request, url: URL, env: CnsEnv): Pro
     return jsonErr(404, "Not Found", `找不到全字庫屬性: ${decoded}`, corsHeaders);
   }
 
-  // ── RESPOND_200 ──────────────────────────────────────────────────────────
+  // ── RESPOND_200 / conditional ────────────────────────────────────────
   const headers = new Headers({
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": CACHE_CONTROL.dict,
@@ -177,6 +177,9 @@ export async function handleCnsAPI(request: Request, url: URL, env: CnsEnv): Pro
   });
   if (obj.httpEtag) {
     headers.set("ETag", obj.httpEtag);
+    if (request.headers.get("If-None-Match") === obj.httpEtag) {
+      return new Response(null, { status: 304, headers });
+    }
   }
 
   if (request.method === "HEAD") {

@@ -245,7 +245,6 @@ export function collectDictionaryFixtures(): FixtureEntry[] {
     }
   }
 
-
   // 兩岸辭典 bucket 9 — contains 䴉 (U+4D09, 19721 % 128 = 9);
   // seeded explicitly so /c/䴉.json returns a real dictionary entry
   // and the CNS non-shadowing contract can be asserted definitively.

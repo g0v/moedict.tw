@@ -474,7 +474,11 @@ test.describe("Mandarin MOE vertical zhuyin proportions", () => {
       for (const sample of MANDARIN_VERTICAL_ZHUYIN_SAMPLES) {
         const response = await page.goto(sample.path);
         expect(response?.status()).toBe(200);
-        await page.waitForLoadState("networkidle");
+        await page.waitForLoadState("domcontentloaded");
+        await page
+          .locator(".result .entry h1.title hruby.rightangle, .charimg-result")
+          .first()
+          .waitFor({ state: "visible", timeout: 15_000 });
         await page.evaluate(() => document.fonts.ready);
         if ((await page.locator(".result .entry h1.title hruby.rightangle").count()) === 0) {
           continue;
