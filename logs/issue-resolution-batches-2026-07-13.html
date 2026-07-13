@@ -1808,20 +1808,18 @@
           </p>
           <div class="spot-grid">
             <div>
-              <h3>CNS API and no-shadow behavior</h3>
+              <h3>CNS no-shadow behavior and dispatch</h3>
               <p>
-                The implementation adds a dedicated CNS namespace and keeps precedence explicit:
-                existing a/t/h/c dictionary routes win; CNS is consulted only as an attribute
-                fallback for unmapped single CJK codepoints. This preserves <code>/a</code>,
-                <code>/t</code>, <code>/h</code>, <code>/c</code>, <code>/uni</code>,
-                <code>/raw</code>, and <code>/pua</code> semantics instead of polluting
-                <code>DictionaryLang</code>.
+                Two distinct precedence rules govern CNS integration. In the <strong>UI</strong>,
+                the existing a/t/h/c dictionary lookup completes first; the CNS fetch and fallback
+                card render only after the lookup returns no hit <em>and</em> the query is exactly
+                one Unicode scalar covered by CNS data. In the <strong>Worker</strong>, the explicit
+                <code>/api/cns/{char}.json</code> route matcher is placed intentionally
+                <em>before</em> the generic <code>.json</code> dictionary catch-all so it remains
+                reachable as its own named path. CNS does not extend <code>DictionaryLang</code> —
+                it is a separate attribute source, not a fifth dictionary.
               </p>
               <ul>
-                <li>
-                  API route precedence: dictionary routes first,
-                  <code>/api/cns/{char}.json</code> as a named fallback path.
-                </li>
                 <li>Dedicated cache tags for CNS data rather than reusing dictionary tags.</li>
                 <li>
                   Offline <code>/cns/</code> mirror so the fallback card can work with deterministic
@@ -1834,7 +1832,7 @@
               <h3>Final branch commits</h3>
               <p>
                 <span class="commit">3bdc4b0</span> implements CNS11643 attribute fallback for
-                unmapped CJK codepoints.
+                single Unicode scalars covered by CNS data.
               </p>
               <p>
                 <span class="commit">2c6ecca</span> gitignores generated CNS corpus and keeps the
@@ -1910,18 +1908,25 @@
           <article class="timeline-card">
             <h3>Brittle dark-mode assertion</h3>
             <p>
-              Dark-mode tests initially coupled to incidental default values.
-              <span class="commit">aa7f206</span> fixed the default expectation so the test protects
-              the theme contract instead of snapshotting a brittle implementation detail.
+              Dark-mode tests had a brittle exact CSSOM <code>colorScheme</code> assertion tied to
+              incidental system-mode defaults. Final hardening commit
+              <span class="commit">1dc1cc4</span> replaced this with visible-rendering checks while
+              preserving exact assertions for manual theme override paths, so the test protects the
+              theme contract rather than snapshotting an implementation detail.
             </p>
           </article>
           <article class="timeline-card">
             <h3>External PNG / networkidle e2e hangs</h3>
             <p>
-              Stroke e2e tests could hang on external legacy assets or network-idle assumptions.
-              <span class="commit">0172365</span> serves local stroke scripts plus a real
-              <code>840c.json</code> fixture; <span class="commit">3a351c3</span> and
-              <span class="commit">3dcb524</span> remove source-text and URL brittleness.
+              The aggregate e2e run exposed no-match <code>CharacterImageView</code> pages
+              (vertical-ruby and cross-language cases) waiting on canonical
+              <code>www.moedict.tw/*.png</code> fetches and <code>networkidle</code> settling.
+              <span class="commit">1dc1cc4</span> added a deterministic external glyph route stub
+              and DOM-specific readiness conditions so the suite no longer blocks on live network
+              assets; the final run used a fresh server (<code>CI=1</code>, reuse disabled).
+              Separately, <span class="commit">0172365</span> hardened the local stroke-script
+              fixture (<code>840c.json</code>) for the stroke e2e path, which is a distinct concern
+              from the PNG timeout cases.
             </p>
           </article>
           <article class="timeline-card">
