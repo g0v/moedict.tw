@@ -88,11 +88,10 @@ describe("dispatch — /api/config", () => {
     });
   });
 
-  it("sets fixed CORS and no-store so env changes are not edge-pinned", async () => {
+  it("sets fixed CORS and short edge TTLs (config is static per deploy; probes cache-bust)", async () => {
     const res = await dispatch(req("/api/config"), makeEnv());
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
-    expect(res.headers.get("cache-control")).toMatch(/no-store|max-age=0|private/i);
-    expect(res.headers.get("cache-control") ?? "").not.toMatch(/s-maxage=[1-9]/);
+    expect(res.headers.get("cache-control")).toBe("public, max-age=60, s-maxage=300");
   });
 
   it("serves empty strings when vars are absent", async () => {
@@ -119,7 +118,7 @@ describe("dispatch — global version headers", () => {
     expect(res.headers.get("X-Moedict-Version")).toBe(metadata.id);
     expect(res.headers.get("X-Moedict-Release")).toBe(metadata.tag);
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
-    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(res.headers.get("Cache-Control")).toBe("public, max-age=60, s-maxage=300");
   });
 
   it("decorates dictionary API responses without changing body, CORS, or cache policy", async () => {
@@ -261,7 +260,7 @@ describe("respondWithConfigApi — no edge pin", () => {
     expect(match).not.toHaveBeenCalled();
     expect(put).not.toHaveBeenCalled();
     expect(waitUntil).not.toHaveBeenCalled();
-    expect(res.headers.get("cache-control")).toMatch(/no-store|max-age=0|private/i);
+    expect(res.headers.get("cache-control")).toBe("public, max-age=60, s-maxage=300");
     expect(await res.json()).toEqual({
       assetBaseUrl: "live-assets",
       dictionaryBaseUrl: "live-dict",
@@ -274,7 +273,7 @@ describe("respondWithConfigApi — no edge pin", () => {
     const res = await respondWithConfigApi(req("/api/config"), makeEnv());
 
     expect(res.status).toBe(200);
-    expect(res.headers.get("cache-control")).toMatch(/no-store|max-age=0|private/i);
+    expect(res.headers.get("cache-control")).toBe("public, max-age=60, s-maxage=300");
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
     expect(await res.json()).toMatchObject({
       assetBaseUrl: "https://r2-assets.test.local",
