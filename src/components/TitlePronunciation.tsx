@@ -43,7 +43,6 @@ import { SvgIcon } from "./SvgIcon";
  * - hasRomanization: 是否有羅馬拼音可複製（falsy 則不渲染 span.copyBlock）。
  *   lang='h'（客語）一律不渲染，因為客語拼音本身就是可直接選取/複製的一般
  *   文字，不需要這個按鈕（g0v/moedict-webkit#256 只回報中文/閩南語）。
- * - readingType: TWBLG 文/白/俗/替分類（falsy 則不渲染）
  * - readingType: TWBLG 異讀分類純文字代碼（文/白/俗/替；falsy 則不渲染）
  */
 interface TitlePronunciationProps {

@@ -30,7 +30,7 @@ function render(overrides: Record<string, unknown> = {}): string {
     isPlaying: false,
     onToggleAudio: noop,
     hasRomanization: true,
-    readingType: "文" as string | undefined,
+    readingType: undefined as string | undefined,
   };
   const props = { ...defaults, ...overrides };
   return renderToStaticMarkup(<TitlePronunciation {...props} />);
