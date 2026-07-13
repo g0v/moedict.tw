@@ -1,0 +1,2229 @@
+<!doctype html>
+<html lang="en" data-report="issue-resolution-batches-2026-07-13">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>moedict.tw issue resolution batches — 2026-07-13</title>
+    <style>
+      :root {
+        --burgundy: #6b0000;
+        --burgundy-2: #8b1e1e;
+        --burgundy-3: #b94747;
+        --ink: #221915;
+        --muted: #67544c;
+        --paper: #fff8ee;
+        --paper-2: #f7ead6;
+        --paper-3: #efe0c7;
+        --card: rgba(255, 253, 247, 0.93);
+        --line: #dac8ad;
+        --gold: #b98222;
+        --green: #18633e;
+        --blue: #315f8f;
+        --violet: #6b4aa2;
+        --red: #9a2d2d;
+        --shadow: 0 18px 42px rgba(74, 38, 18, 0.14);
+        --shadow-soft: 0 8px 24px rgba(74, 38, 18, 0.1);
+        --radius: 22px;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        --sans:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue",
+          Arial, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+        --serif: ui-serif, Georgia, "Noto Serif TC", "Songti TC", serif;
+        --grid: color-mix(in srgb, var(--burgundy) 11%, transparent);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ink: #f4e9da;
+          --muted: #cbbcac;
+          --paper: #15100d;
+          --paper-2: #201713;
+          --paper-3: #2b211b;
+          --card: rgba(35, 26, 21, 0.94);
+          --line: #59483b;
+          --burgundy: #ff8f8f;
+          --burgundy-2: #f06f6f;
+          --burgundy-3: #c95b5b;
+          --gold: #e0b45f;
+          --green: #8dd7b0;
+          --blue: #9fc6f1;
+          --violet: #cab5ff;
+          --red: #ffaaaa;
+          --shadow: 0 18px 42px rgba(0, 0, 0, 0.35);
+          --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.28);
+          --grid: rgba(255, 143, 143, 0.1);
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background:
+          radial-gradient(
+            circle at 12% 8%,
+            color-mix(in srgb, var(--burgundy) 16%, transparent),
+            transparent 28rem
+          ),
+          radial-gradient(circle at 92% 2%, rgba(185, 130, 34, 0.18), transparent 25rem),
+          linear-gradient(135deg, var(--paper), var(--paper-2));
+        font-family: var(--sans);
+        line-height: 1.58;
+        overflow-x: hidden;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: -2;
+        background-image:
+          linear-gradient(var(--grid) 1px, transparent 1px),
+          linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+        background-size: 42px 42px;
+        mask-image: linear-gradient(
+          to bottom,
+          rgba(0, 0, 0, 0.55),
+          rgba(0, 0, 0, 0.12) 45%,
+          transparent 90%
+        );
+        pointer-events: none;
+      }
+
+      body::after {
+        content: "部首 · 音讀 · 筆順 · 搜尋";
+        position: fixed;
+        right: -9rem;
+        top: 6rem;
+        z-index: -1;
+        transform: rotate(90deg);
+        color: color-mix(in srgb, var(--burgundy) 12%, transparent);
+        font: 700 clamp(2rem, 7vw, 6rem)/1 var(--serif);
+        letter-spacing: 0.16em;
+        white-space: nowrap;
+        pointer-events: none;
+      }
+
+      a {
+        color: var(--burgundy);
+        text-decoration-thickness: 0.08em;
+        text-underline-offset: 0.18em;
+      }
+      a:hover {
+        color: var(--burgundy-2);
+      }
+      :focus-visible {
+        outline: 3px solid var(--gold);
+        outline-offset: 3px;
+        border-radius: 6px;
+      }
+      code,
+      .commit {
+        font-family: var(--mono);
+        font-size: 0.93em;
+      }
+      .commit {
+        white-space: nowrap;
+        color: color-mix(in srgb, var(--burgundy) 78%, var(--ink));
+        font-weight: 700;
+      }
+
+      .skip-link {
+        position: absolute;
+        left: 1rem;
+        top: 0.75rem;
+        z-index: 100;
+        transform: translateY(-170%);
+        padding: 0.65rem 1rem;
+        border-radius: 999px;
+        background: var(--ink);
+        color: var(--paper);
+        text-decoration: none;
+      }
+      .skip-link:focus {
+        transform: translateY(0);
+      }
+
+      header.hero {
+        padding: clamp(2rem, 6vw, 5rem) clamp(1rem, 4vw, 4rem) 2rem;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .hero-shell {
+        max-width: 1220px;
+        margin: 0 auto;
+        border: 1px solid var(--line);
+        border-radius: calc(var(--radius) + 8px);
+        background:
+          linear-gradient(
+            120deg,
+            color-mix(in srgb, var(--card) 88%, transparent),
+            color-mix(in srgb, var(--paper-2) 82%, transparent)
+          ),
+          radial-gradient(circle at 100% 0%, rgba(107, 0, 0, 0.12), transparent 22rem);
+        box-shadow: var(--shadow);
+        padding: clamp(1.25rem, 4vw, 3rem);
+        position: relative;
+      }
+
+      .hero-shell::before {
+        content: "萌";
+        position: absolute;
+        right: clamp(0.6rem, 4vw, 2rem);
+        bottom: -1rem;
+        color: color-mix(in srgb, var(--burgundy) 8%, transparent);
+        font: 900 clamp(8rem, 26vw, 21rem)/0.75 var(--serif);
+        pointer-events: none;
+      }
+
+      .kicker {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+        align-items: center;
+        margin-bottom: 1rem;
+      }
+      .pill,
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        border: 1px solid color-mix(in srgb, var(--burgundy) 24%, var(--line));
+        border-radius: 999px;
+        padding: 0.32rem 0.7rem;
+        background: color-mix(in srgb, var(--paper) 72%, transparent);
+        color: var(--ink);
+        font-size: 0.86rem;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+      .chip[data-tone="done"] {
+        border-color: color-mix(in srgb, var(--green) 55%, var(--line));
+        color: var(--green);
+      }
+      .chip[data-tone="verify"] {
+        border-color: color-mix(in srgb, var(--blue) 55%, var(--line));
+        color: var(--blue);
+      }
+      .chip[data-tone="partial"] {
+        border-color: color-mix(in srgb, var(--gold) 65%, var(--line));
+        color: var(--gold);
+      }
+      .chip[data-tone="caveat"] {
+        border-color: color-mix(in srgb, var(--red) 55%, var(--line));
+        color: var(--red);
+      }
+      .chip[data-tone="feature"] {
+        border-color: color-mix(in srgb, var(--violet) 55%, var(--line));
+        color: var(--violet);
+      }
+
+      h1,
+      h2,
+      h3,
+      h4 {
+        line-height: 1.15;
+        margin: 0 0 0.75rem;
+      }
+      h1 {
+        font-size: clamp(2.2rem, 6vw, 5.4rem);
+        letter-spacing: -0.045em;
+        max-width: 950px;
+      }
+      h1 .accent {
+        color: var(--burgundy);
+      }
+      .thesis {
+        max-width: 860px;
+        font-size: clamp(1.05rem, 2.3vw, 1.35rem);
+        color: var(--muted);
+        margin: 1rem 0 0;
+      }
+      .hero-meta {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.85rem;
+        margin-top: 2rem;
+        position: relative;
+        z-index: 1;
+      }
+      .metric {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: color-mix(in srgb, var(--card) 87%, transparent);
+        padding: 1rem;
+        min-width: 0;
+      }
+      .metric strong {
+        display: block;
+        font-size: clamp(1.4rem, 3.5vw, 2.35rem);
+        color: var(--burgundy);
+        line-height: 1.05;
+      }
+      .metric span {
+        display: block;
+        color: var(--muted);
+        font-size: 0.9rem;
+        overflow-wrap: anywhere;
+      }
+
+      nav.toc {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        backdrop-filter: blur(15px);
+        background: color-mix(in srgb, var(--paper) 84%, transparent);
+        border-block: 1px solid var(--line);
+        overflow-x: hidden;
+      }
+      .toc-inner {
+        width: 100%;
+        max-width: 1220px;
+        margin: 0 auto;
+        padding: 0.75rem 1rem;
+        display: flex;
+        gap: 0.6rem;
+        overflow-x: auto;
+        align-items: center;
+      }
+      .toc a,
+      .filter-button {
+        border: 1px solid var(--line);
+        background: var(--card);
+        border-radius: 999px;
+        padding: 0.48rem 0.8rem;
+        text-decoration: none;
+        color: var(--ink);
+        white-space: nowrap;
+        font-weight: 700;
+        font-size: 0.88rem;
+      }
+      .filter-button {
+        cursor: pointer;
+        font: inherit;
+      }
+      .filter-button[aria-pressed="true"],
+      .toc a:hover {
+        border-color: var(--burgundy);
+        color: var(--burgundy);
+      }
+
+      main {
+        max-width: 1220px;
+        margin: 0 auto;
+        padding: 2rem 1rem 5rem;
+      }
+      section {
+        scroll-margin-top: 5rem;
+        margin: 0 0 clamp(2rem, 5vw, 4rem);
+      }
+      .section-head {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 1rem;
+        margin: 0 0 1.2rem;
+      }
+      .section-head h2 {
+        font-size: clamp(1.65rem, 4vw, 3rem);
+        letter-spacing: -0.025em;
+      }
+      .section-head p {
+        max-width: 730px;
+        margin: 0.25rem 0 0;
+        color: var(--muted);
+      }
+
+      .panel,
+      .callout,
+      .issue-card,
+      .domain,
+      .verify-card,
+      .timeline-card {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--card);
+        box-shadow: var(--shadow-soft);
+      }
+      .panel {
+        padding: clamp(1rem, 3vw, 1.6rem);
+      }
+      .callout {
+        padding: 1rem 1.1rem;
+        border-left: 6px solid var(--burgundy);
+      }
+      .callout strong {
+        color: var(--burgundy);
+      }
+      .callout[data-tone="warning"] {
+        border-left-color: var(--gold);
+      }
+      .callout[data-tone="warning"] strong {
+        color: var(--gold);
+      }
+
+      .two-lane {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+        align-items: stretch;
+      }
+      .lane {
+        position: relative;
+        padding: 1.3rem;
+        overflow: hidden;
+      }
+      .lane h3 {
+        font-size: clamp(1.3rem, 3vw, 2.05rem);
+      }
+      .lane ul {
+        padding-left: 1.2rem;
+        margin: 0.75rem 0 0;
+      }
+      .lane::after {
+        content: attr(data-count);
+        position: absolute;
+        right: 0.75rem;
+        top: 0.4rem;
+        font: 900 clamp(4rem, 12vw, 8rem)/1 var(--serif);
+        color: color-mix(in srgb, var(--burgundy) 9%, transparent);
+      }
+
+      .method-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 1rem;
+      }
+      .method-grid .panel h3 {
+        font-size: 1.06rem;
+        color: var(--burgundy);
+      }
+      .method-grid .panel p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .filter-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+        align-items: center;
+        margin: 1rem 0 1.4rem;
+      }
+      .filter-bar .label {
+        font-weight: 800;
+        color: var(--muted);
+        margin-right: 0.25rem;
+      }
+      #result-count {
+        color: var(--muted);
+        font-weight: 700;
+        margin-left: auto;
+      }
+
+      .domain {
+        margin-bottom: 1rem;
+        overflow: clip;
+      }
+      .domain > header {
+        padding: 1rem 1.15rem;
+        background: linear-gradient(
+          90deg,
+          color-mix(in srgb, var(--burgundy) 10%, transparent),
+          transparent
+        );
+        border-bottom: 1px solid var(--line);
+      }
+      .domain > header h3 {
+        margin-bottom: 0.2rem;
+      }
+      .domain > header p {
+        color: var(--muted);
+        margin: 0;
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+        padding: 1rem;
+      }
+
+      .issue-card {
+        padding: 0;
+        overflow: hidden;
+        box-shadow: none;
+      }
+      .issue-card[hidden] {
+        display: none !important;
+      }
+      .issue-card summary {
+        cursor: pointer;
+        list-style: none;
+        padding: 1rem 1rem 0.9rem;
+        border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+      }
+      .issue-card summary::-webkit-details-marker {
+        display: none;
+      }
+      .issue-card summary::after {
+        content: "Open details";
+        float: right;
+        margin-left: 0.8rem;
+        font-size: 0.76rem;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 0.2rem 0.5rem;
+      }
+      .issue-card[open] summary::after {
+        content: "Close";
+      }
+      .issue-title {
+        display: block;
+        font-size: 1.05rem;
+        font-weight: 900;
+        padding-right: 5.5rem;
+      }
+      .issue-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin-top: 0.55rem;
+      }
+      .issue-body {
+        padding: 0.95rem 1rem 1.1rem;
+      }
+      .issue-body h4 {
+        color: var(--burgundy);
+        font-size: 0.93rem;
+        margin-top: 0.8rem;
+      }
+      .issue-body h4:first-child {
+        margin-top: 0;
+      }
+      .issue-body p {
+        margin: 0.25rem 0 0.65rem;
+      }
+      .issue-body ul {
+        margin: 0.25rem 0 0.75rem;
+        padding-left: 1.1rem;
+      }
+      .evidence-line {
+        border-top: 1px dashed var(--line);
+        padding-top: 0.7rem;
+        margin-top: 0.7rem;
+      }
+
+      .spotlight {
+        border-radius: calc(var(--radius) + 10px);
+        padding: clamp(1.1rem, 3vw, 2rem);
+        border: 1px solid color-mix(in srgb, var(--gold) 55%, var(--line));
+        background:
+          linear-gradient(145deg, color-mix(in srgb, var(--gold) 14%, var(--card)), var(--card)),
+          radial-gradient(circle at 90% 10%, rgba(107, 0, 0, 0.14), transparent 20rem);
+        box-shadow: var(--shadow);
+      }
+      .spotlight h2 {
+        font-size: clamp(1.9rem, 5vw, 3.6rem);
+        color: var(--burgundy);
+      }
+      .spot-grid {
+        display: grid;
+        grid-template-columns: 1.15fr 0.85fr;
+        gap: 1rem;
+        margin-top: 1rem;
+      }
+      .fact-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.75rem;
+        margin-top: 1rem;
+      }
+      .fact {
+        padding: 0.8rem;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: color-mix(in srgb, var(--paper) 62%, transparent);
+      }
+      .fact strong {
+        display: block;
+        color: var(--burgundy);
+      }
+
+      .quality-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+      }
+      .timeline-card {
+        padding: 1rem;
+      }
+      .timeline-card h3 {
+        color: var(--burgundy);
+        font-size: 1.05rem;
+      }
+      .timeline-card p {
+        margin: 0.35rem 0 0;
+        color: var(--muted);
+      }
+
+      .verify-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.85rem;
+      }
+      .verify-card {
+        padding: 1rem;
+      }
+      .verify-card strong {
+        display: block;
+        color: var(--burgundy);
+        font-size: 1.15rem;
+      }
+      .verify-card span {
+        display: block;
+        color: var(--muted);
+        margin-top: 0.15rem;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        text-align: left;
+        vertical-align: top;
+        padding: 0.75rem;
+        border-bottom: 1px solid var(--line);
+      }
+      th {
+        color: var(--burgundy);
+        font-size: 0.86rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      td {
+        overflow-wrap: anywhere;
+      }
+
+      .footer-note {
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      @media (max-width: 920px) {
+        .hero-meta,
+        .method-grid,
+        .verify-grid,
+        .fact-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .two-lane,
+        .cards,
+        .spot-grid,
+        .quality-grid {
+          grid-template-columns: 1fr;
+        }
+        .section-head {
+          display: block;
+        }
+        #result-count {
+          width: 100%;
+          margin-left: 0;
+        }
+      }
+
+      @media (max-width: 520px) {
+        header.hero {
+          padding-inline: 0.75rem;
+        }
+        main {
+          padding-inline: 0.75rem;
+        }
+        code,
+        .commit {
+          overflow-wrap: anywhere;
+          word-break: break-word;
+        }
+        .commit {
+          white-space: normal;
+        }
+        .pill {
+          max-width: 100%;
+          white-space: normal;
+        }
+        .hero-meta,
+        .method-grid,
+        .verify-grid,
+        .fact-grid {
+          grid-template-columns: 1fr;
+        }
+        .metric {
+          padding: 0.85rem;
+        }
+        .cards {
+          padding: 0.75rem;
+        }
+        .issue-title {
+          padding-right: 0;
+        }
+        .issue-card summary::after {
+          float: none;
+          display: inline-block;
+          margin: 0.6rem 0 0;
+        }
+        th,
+        td {
+          display: block;
+          padding: 0.6rem 0.2rem;
+        }
+        th {
+          border-bottom: 0;
+          padding-top: 0.9rem;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.001ms !important;
+          animation-iteration-count: 1 !important;
+          scroll-behavior: auto !important;
+          transition-duration: 0.001ms !important;
+        }
+      }
+
+      @media print {
+        body {
+          background: #fff;
+          color: #000;
+        }
+        body::before,
+        body::after,
+        nav.toc,
+        .filter-bar,
+        .skip-link {
+          display: none !important;
+        }
+        .hero-shell,
+        .panel,
+        .callout,
+        .issue-card,
+        .domain,
+        .verify-card,
+        .timeline-card,
+        .spotlight {
+          box-shadow: none;
+          background: #fff;
+          border-color: #999;
+        }
+        main,
+        header.hero {
+          max-width: none;
+          padding: 0;
+        }
+        a {
+          color: #000;
+          text-decoration: underline;
+        }
+        details.issue-card {
+          break-inside: avoid;
+        }
+        details.issue-card:not([open]) > .issue-body {
+          display: block;
+        }
+        details.issue-card:not([open]) summary::after {
+          content: "";
+          display: none;
+        }
+        .cards,
+        .quality-grid,
+        .verify-grid,
+        .method-grid,
+        .two-lane,
+        .spot-grid,
+        .fact-grid {
+          display: block;
+        }
+        .issue-card,
+        .panel,
+        .verify-card,
+        .timeline-card {
+          margin-bottom: 0.75rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to report content</a>
+    <header class="hero" role="banner">
+      <div class="hero-shell">
+        <div class="kicker" aria-label="report metadata">
+          <span class="pill">2026-07-13 consolidation report</span>
+          <span class="pill">Batch 1: 20 represented</span>
+          <span class="pill">Batch 2: 5 verification-only</span>
+          <span class="pill">No push · no deploy · no staging · no GitHub writes</span>
+        </div>
+        <h1>Issue resolution batches for <span class="accent">moedict.tw</span></h1>
+        <p class="thesis">
+          <strong>Thesis:</strong> consolidate code when the contract is local, observable, and
+          testable; use verification-only disposition when main/data/runtime already resolves the
+          report. The unified branch prefers semantic supersets over duplicate cherry-picks, and it
+          treats dictionary definitions as data-of-record rather than editable prose.
+        </p>
+        <div class="hero-meta" aria-label="branch facts">
+          <div class="metric"><strong>20</strong><span>represented on unified branch</span></div>
+          <div class="metric"><strong>5</strong><span>already fixed / verified only</span></div>
+          <div class="metric">
+            <strong><span class="commit">1dc1cc4</span></strong
+            ><span>final pre-report code HEAD</span>
+          </div>
+          <div class="metric">
+            <strong>40</strong
+            ><span
+              >commits ahead of <span class="commit">origin/main@0a2599b</span> before this
+              report</span
+            >
+          </div>
+        </div>
+        <p class="footer-note" style="position: relative; z-index: 1; margin-top: 1rem">
+          Branch: <code>integration/all-resolved-issues-20260713</code>. Merge-base:
+          <code>origin/main@0a2599b729049c4633f5554d03c97904972c95bd</code>. Stroke integration tip
+          <code>58ffb8e</code> is an ancestor.
+        </p>
+      </div>
+    </header>
+
+    <nav class="toc" aria-label="Report sections">
+      <div class="toc-inner">
+        <a href="#overview">Overview</a>
+        <a href="#methodology">Methodology</a>
+        <a href="#batch-1">Batch 1</a>
+        <a href="#spotlight-260">#260 spotlight</a>
+        <a href="#quality">Integration quality</a>
+        <a href="#verification">Verification</a>
+        <a href="#batch-2">Batch 2</a>
+        <a href="#boundaries">Boundaries</a>
+        <a href="#sources">Sources</a>
+      </div>
+    </nav>
+
+    <main id="main" tabindex="-1">
+      <section id="overview" aria-labelledby="overview-title">
+        <div class="section-head">
+          <div>
+            <h2 id="overview-title">Two-lane disposition overview</h2>
+            <p>
+              The two batches deliberately use different paths: Batch 1 is represented in the
+              unified branch because each item has a current, bounded code/data/UI contract. Batch 2
+              was already resolved by existing main, deployed runtime, or data behavior and
+              therefore should not introduce duplicate branch code.
+            </p>
+          </div>
+        </div>
+        <div class="two-lane">
+          <article class="panel lane" data-count="20" aria-labelledby="lane-1-title">
+            <h3 id="lane-1-title">Batch 1 — unified branch</h3>
+            <p>
+              <strong>Disposition path:</strong> integrate current-site fixes or locally bounded
+              features into <code>integration/all-resolved-issues-20260713</code>, superseding stale
+              isolated SHAs where needed.
+            </p>
+            <ul>
+              <li>Routing/search/discovery: #3, #92, #102, #122, #131, #214, #260.</li>
+              <li>Pronunciation/ruby/TWBLG: #22, #96, #100, #165, #186, #233, #256.</li>
+              <li>Stroke system: #76, #132, #227, #230, #265.</li>
+              <li>Appearance/accessibility: #245.</li>
+            </ul>
+          </article>
+          <article class="panel lane" data-count="5" aria-labelledby="lane-2-title">
+            <h3 id="lane-2-title">Batch 2 — verified complete</h3>
+            <p>
+              <strong>Disposition path:</strong> document current evidence without adding code,
+              because the live site, current data pipeline, mobile-source submodule, or deployed R2
+              assets already satisfy the report.
+            </p>
+            <ul>
+              <li>
+                #173 whole-word Taiwanese romanization and numeric-tone lookup already shipped via
+                <span class="commit">cc0ec62</span>.
+              </li>
+              <li>#179 Taigi ruby overlap eliminated by the later hruby/bopomofo architecture.</li>
+              <li>#234 placeholder “無義項” readings already excluded from shipped pack data.</li>
+              <li>#240 long-press text selection implemented by PR #118/#120 code.</li>
+              <li>#270 is <em>g0v/moedict-webkit issue #270</em>, not a missing moedict.tw PR.</li>
+            </ul>
+          </article>
+        </div>
+        <div class="callout" style="margin-top: 1rem">
+          <strong>Token resolution callout:</strong> the user’s <code>pr://270</code> token is not a
+          real <code>g0v/moedict.tw</code> pull request. The local authoritative artifact
+          <code>logs/issues/270.json</code> identifies the intended item as
+          <a
+            href="https://github.com/g0v/moedict-webkit/issues/270"
+            target="_blank"
+            rel="noopener noreferrer"
+            >g0v/moedict-webkit issue #270</a
+          >, fixed by <code>g0v/moedict.tw</code> PR #134 / commit
+          <span class="commit">9b46099</span>. This report treats it as that issue and does not
+          pretend PR 270 exists.
+        </div>
+      </section>
+
+      <section id="methodology" aria-labelledby="methodology-title">
+        <div class="section-head">
+          <div>
+            <h2 id="methodology-title">Methodology and rationale</h2>
+            <p>
+              The consolidation rules were intentionally conservative: fix only what the active
+              surface owns; verify instead of reimplementing when the report is already satisfied.
+            </p>
+          </div>
+        </div>
+        <div class="method-grid">
+          <article class="panel">
+            <h3>Active vs frozen surfaces</h3>
+            <p>
+              <code>www.moedict.tw</code> is the active React/Vite + Cloudflare Workers site.
+              <code>moedict-webkit</code> is frozen historical UI; its issues can still describe
+              real symptoms, but implementation belongs in <code>moedict.tw</code> when current code
+              owns the behavior.
+            </p>
+          </article>
+          <article class="panel">
+            <h3>Local-code boundary</h3>
+            <p>
+              Branch work was appropriate when source, R2 lookup behavior, generated indices, CSS,
+              or frontend interaction could be changed and tested locally. Upstream data/license
+              gaps were documented rather than guessed.
+            </p>
+          </article>
+          <article class="panel">
+            <h3>Semantic supersets</h3>
+            <p>
+              The unified branch did not blindly cherry-pick every isolated commit. Duplicate TWBLG
+              badge work, stroke UX overlap, and CNS generated output were reconciled into current
+              commits that preserve observable contracts.
+            </p>
+          </article>
+          <article class="panel">
+            <h3>Data integrity</h3>
+            <p>
+              No dictionary definitions were edited: CC BY-ND dictionary content remains
+              data-of-record. Generated or source-owned artifacts were changed only where pipeline
+              contracts justified them.
+            </p>
+          </article>
+        </div>
+        <div class="callout" data-tone="warning" style="margin-top: 1rem">
+          <strong>No staging rationale:</strong> consolidation did not push, deploy, create staging,
+          or touch GitHub. All Batch 1 contracts were locally verifiable through build, API,
+          unit/integration/e2e, generated data checks, browser rendering, and dry-run corpus
+          generation. Deploy and staging are operational rollout steps, not prerequisites for this
+          local integration report.
+        </div>
+      </section>
+
+      <section id="batch-1" aria-labelledby="batch-1-title">
+        <div class="section-head">
+          <div>
+            <h2 id="batch-1-title">Batch 1 — 20 represented on the unified branch</h2>
+            <p>
+              Use the filter to focus by domain; every card includes the issue title,
+              classification, why it belongs here, what changed, final branch evidence,
+              test/observable contract, and caveats where needed.
+            </p>
+          </div>
+        </div>
+        <div class="filter-bar" role="group" aria-label="Filter Batch 1 issue cards">
+          <span class="label">Domain:</span>
+          <button class="filter-button" type="button" data-filter="all" aria-pressed="true">
+            All
+          </button>
+          <button class="filter-button" type="button" data-filter="routing" aria-pressed="false">
+            Routing/search/discovery
+          </button>
+          <button
+            class="filter-button"
+            type="button"
+            data-filter="pronunciation"
+            aria-pressed="false"
+          >
+            Pronunciation/ruby
+          </button>
+          <button class="filter-button" type="button" data-filter="stroke" aria-pressed="false">
+            Stroke
+          </button>
+          <button class="filter-button" type="button" data-filter="appearance" aria-pressed="false">
+            Appearance
+          </button>
+          <span id="result-count" aria-live="polite">20 issue cards shown</span>
+        </div>
+        <noscript
+          ><p class="callout">
+            <strong>Filtering requires JavaScript.</strong> All issue cards are visible without
+            JavaScript.
+          </p></noscript
+        >
+
+        <article class="domain" id="domain-routing" data-domain-section="routing">
+          <header>
+            <h3>Routing, search, and discovery</h3>
+            <p>
+              Items where the active site can route users to the correct resource, recover legacy
+              links, add search modes, or provide attribute fallback without changing dictionary
+              definitions.
+            </p>
+          </header>
+          <div class="cards">
+            <details class="issue-card" id="issue-3" data-domain="routing" open>
+              <summary>
+                <span class="issue-title">#3 — link to MOE variants dictionary</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="feature">feature wish with local fix</span
+                  ><span class="chip" data-tone="partial">sub-ask 1 only</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>Why unified branch</h4>
+                <p>
+                  The old direct educode URL died and the mapping table has licensing risk, but
+                  MOE’s current search endpoint can resolve a single character without
+                  redistributing data. That is a bounded active-site link feature.
+                </p>
+                <h4>What changed</h4>
+                <p>
+                  <code>src/pages/DictionaryPage.tsx</code> adds a single-character external
+                  “教育部《異體字字典》” link beside stroke/radical controls;
+                  <code>tests/e2e/dictionary.spec.ts</code> covers presence and absence.
+                </p>
+                <p class="evidence-line">
+                  <strong>Final evidence:</strong> <span class="commit">fcba9ab</span>. Observable
+                  contract: `/萌` shows a link to
+                  <code>dict.variants.moe.edu.tw/search.jsp?QTP=0&amp;WORD=萌</code> with
+                  <code>target="_blank"</code> and <code>rel="noopener noreferrer"</code>;
+                  multi-character entries do not show it. Caveat: inline listing of all variants
+                  remains out of scope because that would require separately licensed variant data.
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/3"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Issue source</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-92" data-domain="routing" open>
+              <summary>
+                <span class="issue-title">#92 — 非漢字搜尋</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">completed</span
+                  ><span class="chip" data-tone="feature">search</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>Why unified branch</h4>
+                <p>
+                  Romanization search was already shipped, but pure Zhuyin input was still stripped
+                  by the current searchbox. The missing path was local and testable by converting
+                  Zhuyin to the existing HanYu lookup keys.
+                </p>
+                <h4>What changed</h4>
+                <p>
+                  Added <code>src/utils/bopomofo-query-utils.ts</code>; updated
+                  <code>src/components/searchbox.tsx</code> to route pure Zhuyin for Mandarin and
+                  cross-strait dictionaries into the existing pinyin lookup pipeline; added unit
+                  coverage.
+                </p>
+                <p class="evidence-line">
+                  <strong>Final evidence:</strong> <span class="commit">7e998d7</span>. Contract:
+                  <code>ㄅㄚ</code> yields Mandarin suggestions; <code>ㄌㄠˇ˙ㄕ</code> finds 老實;
+                  <code>ㄓㄨㄥㄍㄨㄛˊ</code> in cross-strait context finds 中國. Taigi/Hakka and
+                  mixed paste cleanup are preserved.
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/92"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Issue source</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-102" data-domain="routing" open>
+              <summary>
+                <span class="issue-title">#102 — 按 back 希望能回到之前的 scrolling position</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">completed</span
+                  ><span class="chip" data-tone="feature">navigation</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>Why unified branch</h4>
+                <p>
+                  The current SPA could reproduce the back-button scroll race: native restoration
+                  ran while a short entry DOM was mounted, then clamped the saved list offset. This
+                  is active frontend state behavior.
+                </p>
+                <h4>What changed</h4>
+                <p>
+                  <code>src/App.tsx</code> now owns manual scroll restoration keyed by React Router
+                  history entry; restoration polls until the destination DOM can contain the saved
+                  offset and prevents stale scrollY overwrites during restore.
+                </p>
+                <p class="evidence-line">
+                  <strong>Final evidence:</strong> <span class="commit">a79b041</span>. Contract:
+                  deep list → entry → browser back restores the prior scroll position; PUSH
+                  navigation into an entry starts at top.
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/102"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Issue source</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-122" data-domain="routing" open>
+              <summary>
+                <span class="issue-title">#122 — 台語及客語萌典增加部首檢索</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="partial">split</span
+                  ><span class="chip" data-tone="feature">radicals</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>Why unified branch</h4>
+                <p>
+                  Taiwanese pack data already carried radical and residual-stroke fields; Hakka pack
+                  data did not. The Taiwanese half was therefore a bounded local indexing/routing
+                  gap, while Hakka remains data-blocked.
+                </p>
+                <h4>What changed</h4>
+                <p>
+                  Added <code>scripts/regenerate-t-taxonomy.mjs</code> and generated
+                  <code>data/dictionary/t/@*.json</code>; extended radical routing, tooltips,
+                  DictionaryPage radical links, StarredPage, SSR titles, App routes, and navbar to
+                  support <code>/'@</code>.
+                </p>
+                <p class="evidence-line">
+                  <strong>Final evidence:</strong> <span class="commit">baf4f56</span>. Contract:
+                  <code>/t/@子.json</code> and <code>/'@子.json</code> round-trip through the same
+                  real generated data. Caveat: Taiwanese implemented; Hakka is blocked because
+                  <code>phck</code> has zero <code>r</code> fields.
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/122"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Issue source</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-131" data-domain="routing" open>
+              <summary>
+                <span class="issue-title">#131 — phrase links are with '#'</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">completed</span
+                  ><span class="chip" data-tone="feature">legacy route</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>Why unified branch</h4>
+                <p>
+                  The active site still emitted legacy <code>./#...</code> links. Ordinary clicks
+                  were intercepted, but new-tab/copy/direct URL cases lost the fragment at HTTP
+                  request time and resolved to the homepage.
+                </p>
+                <h4>What changed</h4>
+                <p>
+                  <code>src/utils/dictionary-route.ts</code> gained
+                  <code>resolveLegacyHashRoute</code>; <code>src/main.tsx</code> rewrites legacy
+                  hash routes with <code>replaceState</code> before React Router mounts.
+                </p>
+                <p class="evidence-line">
+                  <strong>Final evidence:</strong> <span class="commit">265b974</span>. Contract:
+                  copied/opened legacy hash links recover to real pathnames without inventing a
+                  second prefix parser.
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/131"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Issue source</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-214" data-domain="routing" open>
+              <summary>
+                <span class="issue-title"
+                  >#214 — 搜尋簡化字「广」(5e7f)時希望可以提示「⼴」(2f34)</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">completed</span
+                  ><span class="chip" data-tone="feature">Unicode fallback</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>Why unified branch</h4>
+                <p>
+                  The literal 2017 广 scenario is now satisfied by data, but the same normalization
+                  boundary still broke pasted Kangxi Radical block characters such as
+                  <code>⼴</code>. This is a local query-layer fallback issue.
+                </p>
+                <h4>What changed</h4>
+                <p>
+                  <code>src/api/handleDictionaryAPI.ts</code> adds lookup-time-only NFKC fallback
+                  that recomputes the pack bucket when the raw character misses;
+                  <code>tests/unit/api-dictionary-nfkc-fallback.test.ts</code> locks behavior.
+                </p>
+                <p class="evidence-line">
+                  <strong>Final evidence:</strong> <span class="commit">7e998d7</span>. Contract:
+                  <code>/a/⼴.json</code>, <code>/uni/⼴.json</code>, raw/source paths resolve
+                  through the normalized key without normalizing pack data globally.
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/214"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Issue source</a
+                  >
+                </p>
+              </div>
+            </details>
+            <details class="issue-card" id="issue-260" data-domain="routing" open>
+              <summary>
+                <span class="issue-title">#260 — 許願：讓「全字庫」加入萌典的搜尋資料</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">implemented model</span
+                  ><span class="chip" data-tone="feature">CNS fallback</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>Why unified branch</h4>
+                <p>
+                  The original investigation framed CNS as a reroutable product feature, but the
+                  integration branch implemented a bounded first model: attribute fallback for
+                  unmapped standard CJK codepoints without changing dictionary-of-record semantics.
+                </p>
+                <h4>What changed</h4>
+                <p>
+                  Added a dedicated CNS API/UI fallback path, cache tagging, offline mirror data,
+                  golden fixture, generator/dry-run safeguards, no-shadow route precedence, and
+                  attribution that separates OGDL-licensed CNS data from OFL font assets.
+                </p>
+                <p class="evidence-line">
+                  <strong>Final evidence:</strong> <span class="commit">3bdc4b0</span>,
+                  <span class="commit">2c6ecca</span>, <span class="commit">1dc1cc4</span>.
+                  Contract: dictionary routes win; unmapped CNS standard characters can show an
+                  “全字庫屬性・無辭典釋義” fallback; ETag/304 and corpus counts are covered. Caveat:
+                  PUA is deliberately excluded from the first-pass generated corpus.
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/260"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Issue source</a
+                  >
+                </p>
+              </div>
+            </details>
+          </div>
+        </article>
+
+        <article class="domain" id="domain-pronunciation" data-domain-section="pronunciation">
+          <header>
+            <h3>Pronunciation, ruby, and TWBLG annotations</h3>
+            <p>
+              These fixes converge on readable, selectable, correctly annotated pronunciation
+              without duplicating screen-reader text or inventing upstream dictionary content.
+            </p>
+          </header>
+          <div class="cards">
+            <details class="issue-card" id="issue-22" data-domain="pronunciation" open>
+              <summary>
+                <span class="issue-title"
+                  >#22 — TWBLG: 標註＜文＞＜白＞兩音，分別給出錄音檔播放鈕。</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">completed</span
+                  ><span class="chip" data-tone="partial">bundled issue</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>Why unified branch</h4>
+                <p>
+                  The genuinely fixable part—rendering existing TWBLG reading classifications—was
+                  the same display omission as #96/#233. Independent audio buttons were already
+                  correct; definition-less placeholder readings intentionally remain excluded.
+                </p>
+                <h4>What changed</h4>
+                <p>
+                  The shared TWBLG badge implementation reads <code>heteronym.reading</code> for
+                  Taigi entries and passes a <code>readingType</code> to
+                  <code>TitlePronunciation</code>, backed by
+                  <code>src/utils/reading-type-labels.ts</code> and CSS badge styling.
+                </p>
+                <p class="evidence-line">
+                  <strong>Final evidence:</strong> <span class="commit">3713405</span> plus
+                  reconciliation follow-ups. Contract: entries such as 肉/平 show 文/白/俗/替 tags
+                  beside the corresponding reading; each heteronym retains its own audio control.
+                  Caveat: no “empty listing” placeholders, because that would regress #234.
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/22"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Issue source</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-96" data-domain="pronunciation" open>
+              <summary>
+                <span class="issue-title">#96 — TWBLG: 增加「文」「白」「俗」</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">completed</span
+                  ><span class="chip" data-tone="feature">duplicate implementation</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>Why unified branch</h4>
+                <p>
+                  The data already existed in <code>ptck</code> and the API payload; the frontend
+                  simply never rendered it. This was a pure display-layer omission.
+                </p>
+                <h4>What changed</h4>
+                <p>
+                  <code>TitlePronunciation</code> renders a compact reading-type badge with full
+                  labels; <code>DictionaryPage.tsx</code> strips autolink HTML from
+                  <code>heteronym.reading</code>; tests preserve title-child ordering.
+                </p>
+                <p class="evidence-line">
+                  <strong>Final evidence:</strong> <span class="commit">3713405</span> plus
+                  <span class="commit">dec4481</span>, <span class="commit">25f1774</span>,
+                  <span class="commit">aa7f206</span>, <span class="commit">913fdf1</span>,
+                  <span class="commit">b6cc8cb</span>. Contract: TWBLG reading-type badges appear
+                  only for <code>lang='t'</code>. Caveat: #22/#96/#233 share one duplicate-resolving
+                  implementation.
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/96"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Issue source</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-100" data-domain="pronunciation" open>
+              <summary>
+                <span class="issue-title">#100 — &lt;ruby&gt;的後續工程</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="partial">historical bundle</span
+                  ><span class="chip" data-tone="done">a11y fix</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>Why unified branch</h4>
+                <p>
+                  The 2013 issue bundled many asks, most already shipped or superseded.
+                  Investigation found one bounded current accessibility bug: right-angle ruby was
+                  exposed twice to assistive names.
+                </p>
+                <h4>What changed</h4>
+                <p>
+                  <code>src/utils/ruby2hruby.ts</code> marks compatibility
+                  <code>&lt;rt&gt;</code> nodes so the visual CSS-generated annotation does not
+                  cause duplicate accessible speech while preserving copy behavior.
+                </p>
+                <p class="evidence-line">
+                  <strong>Final evidence:</strong> <span class="commit">2022bd3</span>. Contract:
+                  screen-reader naming no longer double-reads title/example ruby pronunciation.
+                  Caveat: #100 remains a historical multi-item bundle; this branch addresses the
+                  bounded current bug, not every 2013 wishlist variant.
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/100"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Issue source</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-165" data-domain="pronunciation" open>
+              <summary>
+                <span class="issue-title">#165 — 閩南語拼音切換和顯示</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="partial">completed with residue</span
+                  ><span class="chip" data-tone="feature">Taigi romanization</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>Why unified branch</h4>
+                <p>
+                  Live reproduction found two narrow, confirmed bugs in the current TL→POJ/DT
+                  conversion: punctuation terminators for <code>--nnh</code>/<code>--nn</code>, and
+                  DT tone mark placement.
+                </p>
+                <h4>What changed</h4>
+                <p>
+                  <code>src/utils/pinyin-preference-utils.ts</code> widens terminator classes and
+                  adds DT tone repositioning mirroring the established POJ priority; tests cover
+                  full sentence contexts and <code>tsuí → zùi</code>.
+                </p>
+                <p class="evidence-line">
+                  <strong>Final evidence:</strong> <span class="commit">5eadd12</span>. Contract:
+                  POJ light-tone nasal particles convert before sentence punctuation; DT places tone
+                  marks according to its own vowel priority. Caveat: documented residue remains for
+                  broader DT light-tone and phrase-initial sandhi questions that need corpus/norm
+                  decisions.
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/165"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Issue source</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-186" data-domain="pronunciation" open>
+              <summary>
+                <span class="issue-title">#186 — 讓台語萌典的主要拼音(注音)可選取複製</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">completed</span
+                  ><span class="chip" data-tone="feature">copy/select</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>Why unified branch</h4>
+                <p>
+                  The visible Taigi main romanization was CSS-generated content while the true
+                  <code>&lt;rt&gt;</code> text was clipped away, so selection yielded mixed
+                  Han/zhuyin/romanization and missed the visible glyphs.
+                </p>
+                <h4>What changed</h4>
+                <p>
+                  CSS and <code>ruby2hruby</code> changes overlay real Unicode
+                  <code>&lt;rt&gt;</code> text at the generated glyph geometry while keeping it
+                  visually transparent; DictionaryPage guards stroke-click behavior when selection
+                  is active.
+                </p>
+                <p class="evidence-line">
+                  <strong>Final evidence:</strong> <span class="commit">e8ffe0e</span> and
+                  <span class="commit">d447060</span>. Contract: visible main romanization can be
+                  selected/copied cleanly; selecting text does not accidentally trigger stroke
+                  animation.
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/186"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Issue source</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-233" data-domain="pronunciation" open>
+              <summary>
+                <span class="issue-title">#233 — TWBLG: 標注「文」「白」「俗」「替」屬性</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">duplicate with fix</span
+                  ><span class="chip" data-tone="partial">sorting not included</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>Why unified branch</h4>
+                <p>
+                  #233 restates #96 with UI mockups. The same data-present/frontend-missing
+                  diagnosis applies, and duplicate implementation needed consolidation to one final
+                  branch design.
+                </p>
+                <h4>What changed</h4>
+                <p>
+                  The unified TWBLG badge path covers #233’s annotation placement request through
+                  <code>TitlePronunciation</code>, while avoiding a competing local diff.
+                </p>
+                <p class="evidence-line">
+                  <strong>Final evidence:</strong> <span class="commit">3713405</span> plus
+                  reconciliation follow-ups. Contract: 文/白/俗/替 tags are visible beside Taigi
+                  readings. Caveat: #233’s automatic reading sorting and intra-reading jump links
+                  remain outside this shared fix.
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/233"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Issue source</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-256" data-domain="pronunciation" open>
+              <summary>
+                <span class="issue-title">#256 — 許願：可以直接複製羅馬拼音</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">completed</span
+                  ><span class="chip" data-tone="feature">copy button</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>Why unified branch</h4>
+                <p>
+                  The site already carried real romanization text, but native selection copied a
+                  mixed title string. A clean copy affordance and shared ruby extraction were local
+                  UI behavior.
+                </p>
+                <h4>What changed</h4>
+                <p>
+                  Added romanization collection utilities and a copy button in
+                  <code>TitlePronunciation</code>/<code>DictionaryPage</code> paths, harmonized with
+                  #186 so the final branch avoids duplicate props and copy semantics.
+                </p>
+                <p class="evidence-line">
+                  <strong>Final evidence:</strong> <span class="commit">d447060</span> with #186
+                  base <span class="commit">e8ffe0e</span>. Contract: Mandarin/Taigi titles expose a
+                  “複製羅馬拼音” control; Hakka/plain-text cases avoid inappropriate duplicate
+                  buttons.
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/256"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Issue source</a
+                  >
+                </p>
+              </div>
+            </details>
+          </div>
+        </article>
+
+        <article class="domain" id="domain-stroke" data-domain-section="stroke">
+          <header>
+            <h3>Stroke system</h3>
+            <p>
+              The stroke items were integrated as a layered model: honest missing-data UX, disabled
+              unavailable triggers, replay behavior, a refreshed MOE corpus pipeline, and R2-backed
+              runtime serving.
+            </p>
+          </header>
+          <div class="cards">
+            <details class="issue-card" id="issue-76" data-domain="stroke" open>
+              <summary>
+                <span class="issue-title">#76 — 若沒有筆順資料, 應更明確顯示 not found</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">completed</span
+                  ><span class="chip" data-tone="feature">missing-state UX</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>Why unified branch</h4>
+                <p>
+                  The legacy stroke renderer is still shipped in current assets, and its 404 path
+                  still produced a blank faded grid. The missing-state fix was local to current
+                  CSS/vendor JS behavior.
+                </p>
+                <h4>What changed</h4>
+                <p>
+                  <code>data/assets/js/jquery.strokeWords.js</code> renders a visible
+                  <code>?</code> / “尚無筆順資料” badge with ARIA labeling instead of a blank faded
+                  canvas; <code>src/index.css</code> styles the badge.
+                </p>
+                <p class="evidence-line">
+                  <strong>Final evidence:</strong> <span class="commit">463c137</span> and
+                  <span class="commit">2ef24a6</span>. Contract: a missing stroke JSON path is
+                  visually and accessibly distinct from loading or crash.
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/76"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Issue source</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-132" data-domain="stroke" open>
+              <summary>
+                <span class="issue-title"
+                  >#132 — Disable stroke animation actions when unavailable</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">completed</span
+                  ><span class="chip" data-tone="feature">disabled state</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>Why unified branch</h4>
+                <p>
+                  The UI had enough information to HEAD-check stroke JSON availability before
+                  enabling stroke triggers. This belongs in active DictionaryPage behavior.
+                </p>
+                <h4>What changed</h4>
+                <p>
+                  Added <code>src/hooks/useStrokeAvailability.ts</code>;
+                  <code>DictionaryPage.tsx</code> disables pencil/title triggers when a single
+                  character is known unavailable; e2e tests cover disabled trigger behavior.
+                </p>
+                <p class="evidence-line">
+                  <strong>Final evidence:</strong> <span class="commit">b8ddc54</span>,
+                  <span class="commit">b7af3b9</span>, <span class="commit">0172365</span>.
+                  Contract: unavailable single-character stroke controls expose disabled semantics
+                  and tooltips; multi-character fallback behavior remains unchanged.
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/132"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Issue source</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-227" data-domain="stroke" open>
+              <summary>
+                <span class="issue-title">#227 — 「町」字筆順錯誤</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">completed</span
+                  ><span class="chip" data-tone="feature">MOE corpus</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>Why unified branch</h4>
+                <p>
+                  The original “wrong glyph” screenshot no longer reproduced, but 町 still lacked
+                  stroke JSON because the mirrored corpus was a stale 4,808-character snapshot while
+                  MOE now exposes 6,063 characters.
+                </p>
+                <h4>What changed</h4>
+                <p>
+                  <code>commands/fetch-moe-stroke.mjs</code> and
+                  <code>commands/sync-moe-stroke-corpus.mjs</code> re-derive MOE XML from the
+                  redesigned learningweb site, validate schema, and support full-corpus
+                  upload/verify workflow.
+                </p>
+                <p class="evidence-line">
+                  <strong>Final evidence:</strong> <span class="commit">4692fcb</span>,
+                  <span class="commit">c2772e1</span>, <span class="commit">c23b820</span>.
+                  Contract: 町 <code>753a.json</code> is real MOE-derived stroke data; final
+                  validation included 6,063-character corpus verification in the historical
+                  deployment evidence.
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/227"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Issue source</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-230" data-domain="stroke" open>
+              <summary>
+                <span class="issue-title">#230 — 控制筆順動畫</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">completed</span
+                  ><span class="chip" data-tone="feature">replay control</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>Why unified branch</h4>
+                <p>
+                  Users had to close and reopen the stroke panel to replay. The interaction is
+                  entirely current frontend state and does not depend on retired webkit tooling.
+                </p>
+                <h4>What changed</h4>
+                <p>
+                  <code>StrokeAnimation.tsx</code> turns <code>#strokes</code> into a keyboard/mouse
+                  replay button; later follow-up stops propagation so replay does not toggle the
+                  outer panel closed.
+                </p>
+                <p class="evidence-line">
+                  <strong>Final evidence:</strong> <span class="commit">e0a3387</span> and
+                  <span class="commit">4668e44</span>. Contract: click/Enter/Space on the stroke
+                  canvas replays animation without hiding the panel.
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/230"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Issue source</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-265" data-domain="stroke" open>
+              <summary>
+                <span class="issue-title">#265 — 「汛」筆順示意圖破損</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">completed</span
+                  ><span class="chip" data-tone="verify"
+                    >production-verified then consolidated</span
+                  ></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>Why unified branch</h4>
+                <p>
+                  汛 was already production-verified after the full MOE corpus ship, but the unified
+                  branch still needed to consolidate the local rendering fallback and
+                  R2-serving/runtime pipeline that make that evidence durable.
+                </p>
+                <h4>What changed</h4>
+                <p>
+                  The missing badge superset covers broken/missing stroke UX; the corpus pipeline
+                  supplies <code>6c5b.json</code>; <code>handleStrokeAPI</code> serves
+                  <code>/api/stroke-json</code> from the Worker <code>ASSETS</code> binding with
+                  cache/ETag behavior.
+                </p>
+                <p class="evidence-line">
+                  <strong>Final evidence:</strong> <span class="commit">463c137</span>,
+                  <span class="commit">c2772e1</span>, <span class="commit">c23b820</span>.
+                  Contract: 汛 renders real stroke data when present; genuinely missing chars show
+                  the badge. Caveat: already production-verified, now represented by consolidated
+                  branch code.
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/265"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Issue source</a
+                  >
+                </p>
+              </div>
+            </details>
+          </div>
+        </article>
+
+        <article class="domain" id="domain-appearance" data-domain-section="appearance">
+          <header>
+            <h3>Appearance and accessibility</h3>
+            <p>
+              Bounded frontend preferences and CSS behavior that improve the current site without
+              disturbing the legacy stylesheet baseline.
+            </p>
+          </header>
+          <div class="cards">
+            <details class="issue-card" id="issue-245" data-domain="appearance" open>
+              <summary>
+                <span class="issue-title">#245 — CSS: 支援深色模式</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done"
+                    >completed pending deploy in source history</span
+                  ><span class="chip" data-tone="feature">theme</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>Why unified branch</h4>
+                <p>
+                  The active site had no <code>prefers-color-scheme: dark</code> behavior and no
+                  manual theme preference. This was a bounded current CSS/preference feature, not a
+                  frozen-webkit change.
+                </p>
+                <h4>What changed</h4>
+                <p>
+                  <code>index.html</code> bootstraps stored theme early;
+                  <code>src/utils/theme-utils.ts</code> validates and applies system/light/dark;
+                  user preferences expose a native select; CSS introduces semantic dark tokens and
+                  scoped legacy overrides.
+                </p>
+                <p class="evidence-line">
+                  <strong>Final evidence:</strong> <span class="commit">e2ef910</span>. Contract:
+                  system dark, manual dark/light/system, persistence, and FOUC prevention work while
+                  preserving light-mode fallbacks.
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/245"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Issue source</a
+                  >
+                </p>
+              </div>
+            </details>
+          </div>
+        </article>
+      </section>
+
+      <section id="spotlight-260" aria-labelledby="spotlight-260-title">
+        <article class="spotlight">
+          <div class="kicker">
+            <span class="pill">Batch 1 spotlight</span
+            ><span class="pill">First fully implemented model</span
+            ><span class="pill">CNS11643 fallback</span>
+          </div>
+          <h2 id="spotlight-260-title">#260 — 許願：讓「全字庫」加入萌典的搜尋資料</h2>
+          <p>
+            <strong>Why it matters:</strong> #260 began as a product reroute/spec item, but the
+            unified branch implements the first complete model: a CNS attribute fallback that never
+            pretends CNS is a fifth dictionary, never shadows real dictionary entries, and keeps
+            attribution/license boundaries visible.
+          </p>
+          <div class="spot-grid">
+            <div>
+              <h3>CNS API and no-shadow behavior</h3>
+              <p>
+                The implementation adds a dedicated CNS namespace and keeps precedence explicit:
+                existing a/t/h/c dictionary routes win; CNS is consulted only as an attribute
+                fallback for unmapped single CJK codepoints. This preserves <code>/a</code>,
+                <code>/t</code>, <code>/h</code>, <code>/c</code>, <code>/uni</code>,
+                <code>/raw</code>, and <code>/pua</code> semantics instead of polluting
+                <code>DictionaryLang</code>.
+              </p>
+              <ul>
+                <li>
+                  API route precedence: dictionary routes first,
+                  <code>/api/cns/{char}.json</code> as a named fallback path.
+                </li>
+                <li>Dedicated cache tags for CNS data rather than reusing dictionary tags.</li>
+                <li>
+                  Offline <code>/cns/</code> mirror so the fallback card can work with deterministic
+                  local fixtures.
+                </li>
+                <li>PUA exclusion in the generated first-pass corpus.</li>
+              </ul>
+            </div>
+            <div class="panel">
+              <h3>Final branch commits</h3>
+              <p>
+                <span class="commit">3bdc4b0</span> implements CNS11643 attribute fallback for
+                unmapped CJK codepoints.
+              </p>
+              <p>
+                <span class="commit">2c6ecca</span> gitignores generated CNS corpus and keeps the
+                golden fixture only.
+              </p>
+              <p><span class="commit">1dc1cc4</span> hardens integrated CNS and e2e contracts.</p>
+            </div>
+          </div>
+          <div class="fact-grid" aria-label="CNS facts">
+            <div class="fact">
+              <strong>Corpus dry-run</strong><span>77,208 standard Unicode emitted</span>
+            </div>
+            <div class="fact"><strong>PUA policy</strong><span>20,152 PUA skipped</span></div>
+            <div class="fact"><strong>Mapping integrity</strong><span>0 no-map rows</span></div>
+            <div class="fact">
+              <strong>Golden sample</strong><span>䴉 → ㄒㄩㄢˊ, 24 strokes, 鳥 radical, WVHAF</span>
+            </div>
+            <div class="fact">
+              <strong>HTTP contract</strong><span>ETag / If-None-Match → 304 behavior covered</span>
+            </div>
+            <div class="fact">
+              <strong>Attribution</strong><span>OGDL data vs OFL font terms separated</span>
+            </div>
+          </div>
+          <div class="callout" style="margin-top: 1rem">
+            <strong>Source boundary:</strong> CNS attributes have no definitions. The fallback card
+            says “全字庫屬性・無辭典釋義” and exposes attributes such as phonetic readings, radical,
+            stroke count, Cangjie, source, and character image. It does not invent definitions or
+            merge CNS into dictionary-of-record content.
+          </div>
+        </article>
+      </section>
+
+      <section id="quality" aria-labelledby="quality-title">
+        <div class="section-head">
+          <div>
+            <h2 id="quality-title">Integration quality: not blind merges</h2>
+            <p>
+              The unified branch represents review and reconciliation work, not a pile of isolated
+              branch snapshots. Aggregate tests matter because independent fixes can be locally
+              valid yet collide at shared seams.
+            </p>
+          </div>
+        </div>
+        <div class="quality-grid">
+          <article class="timeline-card">
+            <h3>Conflict markers and stale merge residue</h3>
+            <p>
+              Review found unresolved or leftover conflict structure in shared
+              reading-label/title-pronunciation tests. Follow-ups
+              <span class="commit">dec4481</span>, <span class="commit">25f1774</span>, and
+              <span class="commit">b08365e</span> restored syntactic integrity and kept the richer
+              badge/copy contracts.
+            </p>
+          </article>
+          <article class="timeline-card">
+            <h3>Duplicate JSDoc/properties</h3>
+            <p>
+              TWBLG <code>reading</code> annotations appeared in duplicate or in the wrong place
+              after reconciliation. <span class="commit">aa7f206</span> and
+              <span class="commit">b6cc8cb</span> deduplicated the interface documentation and kept
+              the property where it is read.
+            </p>
+          </article>
+          <article class="timeline-card">
+            <h3>Unrelated #281 variants leakage</h3>
+            <p>
+              Review caught stray <code>.twblg-variants</code> styling from an unrelated issue path.
+              <span class="commit">aa7f206</span> removed it, preserving clean scope for the 20
+              represented issues.
+            </p>
+          </article>
+          <article class="timeline-card">
+            <h3>Brittle dark-mode assertion</h3>
+            <p>
+              Dark-mode tests initially coupled to incidental default values.
+              <span class="commit">aa7f206</span> fixed the default expectation so the test protects
+              the theme contract instead of snapshotting a brittle implementation detail.
+            </p>
+          </article>
+          <article class="timeline-card">
+            <h3>External PNG / networkidle e2e hangs</h3>
+            <p>
+              Stroke e2e tests could hang on external legacy assets or network-idle assumptions.
+              <span class="commit">0172365</span> serves local stroke scripts plus a real
+              <code>840c.json</code> fixture; <span class="commit">3a351c3</span> and
+              <span class="commit">3dcb524</span> remove source-text and URL brittleness.
+            </p>
+          </article>
+          <article class="timeline-card">
+            <h3>Stale-server ambiguity</h3>
+            <p>
+              Final hardening in <span class="commit">1dc1cc4</span> makes integrated CNS/e2e
+              contracts deterministic and avoids passing against a stale server or stale generated
+              data.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="verification" aria-labelledby="verification-title">
+        <div class="section-head">
+          <div>
+            <h2 id="verification-title">Final verification dashboard</h2>
+            <p>
+              These are the final integration evidence points for the code head before this report
+              commit.
+            </p>
+          </div>
+        </div>
+        <div class="verify-grid">
+          <div class="verify-card">
+            <strong><code>vp check</code></strong
+            ><span>canonical formatter/lint/type-aware check passed</span>
+          </div>
+          <div class="verify-card"><strong>check:data</strong><span>1414 / 1414</span></div>
+          <div class="verify-card"><strong>check:css-ids</strong><span>0 unallowed IDs</span></div>
+          <div class="verify-card">
+            <strong>CSS lint baseline</strong><span>exact legacy baseline accepted</span>
+          </div>
+          <div class="verify-card">
+            <strong>typecheck / lint</strong><span>passed in final validation set</span>
+          </div>
+          <div class="verify-card">
+            <strong>unit tests</strong><span>64 files / 1704 tests</span>
+          </div>
+          <div class="verify-card">
+            <strong>integration tests</strong><span>9 files / 131 tests</span>
+          </div>
+          <div class="verify-card"><strong>full Chromium e2e</strong><span>117 tests</span></div>
+          <div class="verify-card">
+            <strong><code>vp build</code></strong
+            ><span>passed</span>
+          </div>
+          <div class="verify-card">
+            <strong><code>bun run build</code></strong
+            ><span>passed</span>
+          </div>
+          <div class="verify-card">
+            <strong>CNS dry-run</strong><span>77,208 emitted / 20,152 PUA skipped / 0 no-map</span>
+          </div>
+          <div class="verify-card">
+            <strong>Operational guardrail</strong
+            ><span>no push, deploy, staging, or GitHub writes during consolidation</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="batch-2" aria-labelledby="batch-2-title">
+        <div class="section-head">
+          <div>
+            <h2 id="batch-2-title">Batch 2 — already fixed / verification-only</h2>
+            <p>
+              These five items are intentionally concise: the correct action was to verify and
+              document, not to add duplicate branch code. Statements below are limited to evidence
+              present in the issue artifacts.
+            </p>
+          </div>
+        </div>
+        <div class="panel" style="overflow-x: auto">
+          <table aria-label="Batch 2 verified issues">
+            <thead>
+              <tr>
+                <th>Issue</th>
+                <th>Original symptom</th>
+                <th>Why no new branch code</th>
+                <th>Verified evidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr id="issue-173">
+                <td>
+                  <strong>#173 — 台語調號查詢功能</strong><br /><a
+                    href="https://github.com/g0v/moedict-webkit/issues/173"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >issue link</a
+                  >
+                </td>
+                <td>
+                  Numeric-tone Tai-lo/POJ queries such as <code>huat4-inn2</code>, and even
+                  tone-marked whole-word <code>li̍k-sú</code>, did not resolve.
+                </td>
+                <td>
+                  Commit <span class="commit">cc0ec62</span> had already shipped whole-word
+                  Taiwanese romanization lookup via sidecar maps and lookup unioning before this
+                  verification pass.
+                </td>
+                <td>
+                  Artifact records live curl and browser checks: <code>huat4-inn2</code>,
+                  <code>huat-inn2</code>, <code>liksu</code>, uppercase/digit variants, and a
+                  three-syllable corpus sample resolve. Focused unit checks: 56/56 pass.
+                </td>
+              </tr>
+              <tr id="issue-179">
+                <td>
+                  <strong>#179 — 閩南語 不顯示注音 拼音會偏右/重疊</strong><br /><a
+                    href="https://github.com/g0v/moedict-webkit/issues/179"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >issue link</a
+                  >
+                </td>
+                <td>
+                  Old Firefox screenshots showed Taigi entries without Zhuyin and with romanization
+                  shifted/overlapped in examples.
+                </td>
+                <td>
+                  The current frontend architecture, introduced by
+                  <span class="commit">c7da00e</span>, synthesizes Taigi Zhuyin and uses custom
+                  <code>hruby.rightangle</code> layout instead of native ruby behavior.
+                </td>
+                <td>
+                  Artifact records desktop 1440×900 and mobile 375×812 DOM coordinate checks across
+                  ruby preferences for <code>啥物</code>, <code>物</code>, and <code>食</code>; no
+                  overlap and Zhuyin is visible.
+                </td>
+              </tr>
+              <tr id="issue-234">
+                <td>
+                  <strong>#234 — 閩南語：查單字時只查到單字不成詞者</strong><br /><a
+                    href="https://github.com/g0v/moedict-webkit/issues/234"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >issue link</a
+                  >
+                </td>
+                <td>
+                  Searching a Taigi single character found placeholder “單字不成詞者，無義項”
+                  readings rather than meaningful entries.
+                </td>
+                <td>
+                  Current <code>ptck</code> pack data already excludes placeholder readings. The
+                  filtering source is upstream pack generation, not current frontend code, and no
+                  local bug remained.
+                </td>
+                <td>
+                  Artifact verifies 臆 and 蛇 through MOE source, production API, local pack files,
+                  search index, browser search, and full data grep for “不成詞”/“無義項” with zero
+                  matches.
+                </td>
+              </tr>
+              <tr id="issue-240">
+                <td>
+                  <strong>#240 — app 長按 → 選取(複製)內文</strong><br /><a
+                    href="https://github.com/g0v/moedict-webkit/issues/240"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >issue link</a
+                  >
+                </td>
+                <td>Android App long-press could not select/copy dictionary content.</td>
+                <td>
+                  moedict.tw PR #118 (<span class="commit">bb49d4d</span>) and PR #120 (<span
+                    class="commit"
+                    >421f738</span
+                  >) already implemented selectable content and selection-aware click suppression;
+                  app submodule later incorporated it. Play Store rollout remained operational, not
+                  source code.
+                </td>
+                <td>
+                  Artifact records production style checks and behavior: with an active selection,
+                  clicking a character link does not navigate; after clearing selection, the same
+                  click navigates normally.
+                </td>
+              </tr>
+              <tr id="issue-270">
+                <td>
+                  <strong>#270 — 台語萌典『花眉』、『王梨酥』、『靴管』的音檔無效</strong><br /><a
+                    href="https://github.com/g0v/moedict-webkit/issues/270"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >issue link</a
+                  >
+                </td>
+                <td>
+                  Several Taigi audio buttons failed for IDs beyond the old Rackspace audio
+                  coverage.
+                </td>
+                <td>
+                  The intended item is g0v/moedict-webkit issue #270. It was already fixed by
+                  g0v/moedict.tw PR #134 / commit <span class="commit">9b46099</span>, which
+                  migrated legacy audio/stroke CDN assets to R2.
+                </td>
+                <td>
+                  Artifact records all six reported audio IDs returning HTTP 200 from
+                  <code>r2-assets.moedict.tw/audio/t/{id}.ogg</code> and <code>.mp3</code>; the
+                  previous local fallback branch was superseded.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="boundaries" aria-labelledby="boundaries-title">
+        <div class="section-head">
+          <div>
+            <h2 id="boundaries-title">Scope boundaries and non-claims</h2>
+            <p>
+              This report is intentionally narrow: it explains the two requested batches and the
+              unified branch evidence, not the entire historical issue queue.
+            </p>
+          </div>
+        </div>
+        <div class="two-lane">
+          <div class="callout">
+            <strong>Preserved boundaries:</strong> old isolated branches and worktrees may remain as
+            historical records; this report describes the unified branch, not every stale SHA. The
+            original dirty main checkout was not edited.
+          </div>
+          <div class="callout">
+            <strong>No remote action:</strong> no push, no deploy, no staging creation, no GitHub
+            comments, and no GitHub issue/PR state changes occurred during consolidation.
+          </div>
+          <div class="callout">
+            <strong>Bounded/partial issues identified:</strong> #100 is a historical multi-item
+            bundle; #122 is Taiwanese implemented / Hakka data-blocked; #165 has documented
+            romanization residue; #22/#96/#233 share one duplicate implementation; #265 was already
+            production-verified but now consolidated.
+          </div>
+          <div class="callout">
+            <strong>Not a universal claim:</strong> this is not a claim that all 40 issue logs are
+            locally solvable, nor that every frozen <code>moedict-webkit</code> report should be
+            handled by code. Each issue still needs source/data/runtime ownership analysis.
+          </div>
+        </div>
+      </section>
+
+      <section id="sources" aria-labelledby="sources-title">
+        <div class="section-head">
+          <div>
+            <h2 id="sources-title">Sources and generation note</h2>
+            <p>
+              All evidence in this report was derived from local artifacts and the final integration
+              worktree; local paths appear as code text, not as clickable filesystem links.
+            </p>
+          </div>
+        </div>
+        <div class="panel">
+          <ul>
+            <li>
+              Issue artifacts:
+              <code
+                >logs/issues/{3,22,76,92,96,100,102,122,131,132,165,173,179,186,214,227,230,233,234,240,245,256,260,265,270}.json</code
+              >.
+            </li>
+            <li>
+              Final integration worktree: <code>moedict.tw-all-resolved</code>, branch
+              <code>integration/all-resolved-issues-20260713</code>.
+            </li>
+            <li>
+              Final pre-report code HEAD:
+              <span class="commit">1dc1cc4fa5a9b0492a934bfba1b663eeac6a44fe</span>.
+            </li>
+            <li>
+              Base / merge-base:
+              <span class="commit">0a2599b729049c4633f5554d03c97904972c95bd</span>.
+            </li>
+            <li>Source guide read before generation: <code>AGENTS.md</code>.</li>
+          </ul>
+          <p class="footer-note">
+            Generated as a standalone HTML5 document with inline CSS and a tiny optional inline
+            filter script. No remote fonts, CDN scripts, images, analytics, or network dependencies
+            are used.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      (() => {
+        const buttons = Array.from(document.querySelectorAll("[data-filter]"));
+        const cards = Array.from(document.querySelectorAll(".issue-card[data-domain]"));
+        const count = document.getElementById("result-count");
+        function apply(filter) {
+          let visible = 0;
+          for (const card of cards) {
+            const show = filter === "all" || card.dataset.domain === filter;
+            card.hidden = !show;
+            if (show) visible += 1;
+          }
+          for (const button of buttons)
+            button.setAttribute("aria-pressed", String(button.dataset.filter === filter));
+          if (count) count.textContent = `${visible} issue card${visible === 1 ? "" : "s"} shown`;
+        }
+        for (const button of buttons)
+          button.addEventListener("click", () => apply(button.dataset.filter));
+      })();
+    </script>
+  </body>
+</html>
