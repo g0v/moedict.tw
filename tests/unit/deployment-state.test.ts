@@ -250,10 +250,12 @@ describe("field-level schema validation (fail-closed)", () => {
     expect(() => checkStagingApprovalGate("sha", "", null)).toThrow(/prodDigest is required/);
   });
 
-  it("readCurrentDeployment / readStagingApproval / readVersionHistory default to the real .wrangler/releases/ dir (absent in this repo, so a safe read-only null/empty result)", () => {
-    expect(readCurrentDeployment()).toBeNull();
-    expect(readStagingApproval()).toBeNull();
-    expect(readVersionHistory()).toEqual([]);
+  it("readCurrentDeployment / readStagingApproval / readVersionHistory return null/[] from an empty injected baseDir (deterministic; never reads real .wrangler/releases/)", () => {
+    // Always pass the per-test tmpdir so we never touch the real
+    // .wrangler/releases/ tree (which may hold a legitimate staging-approval.json).
+    expect(readCurrentDeployment({ baseDir: dir })).toBeNull();
+    expect(readStagingApproval({ baseDir: dir })).toBeNull();
+    expect(readVersionHistory({ baseDir: dir })).toEqual([]);
   });
 });
 
