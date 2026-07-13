@@ -597,7 +597,7 @@ export async function verifyCorpusUploads(entries, bucketName, opts = {}) {
               if (/not found|NoSuchKey|404/i.test(stderr)) {
                 throw new Error(`Missing object after upload: ${entry.r2Key}`);
               }
-              // surface 429 as retryable via message patterns recognised by is429Error
+              // surface 429/5xx as retryable via message patterns recognised by isRetryableError
               const err = new Error(
                 `Download failed: ${entry.r2Key} (exit ${result.exitCode}): ${stderr}`,
               );

@@ -3,7 +3,7 @@
  * Unit tests for R2 upload library (scripts/lib/r2-upload.mjs).
  *
  * Tests use injectable subprocess/sleep adapters for deterministic behavior.
- * Verifies: ≤4 concurrency, 429/971 backoff, manifest-last invariant,
+ * Verifies: ≤4 concurrency, 429/971/5xx/network backoff, manifest-last invariant,
  * correct MIME/cache-control/remote args, argv (not shell string) execution,
  * immutable promotion via shared isImmutableAsset, shared releaseKey/immutableKey.
  */
@@ -17,6 +17,7 @@ import {
   uploadReleaseToR2,
   uploadWithConcurrency,
   retryWithBackoff,
+  isRetryableError,
 } from "../../scripts/lib/r2-upload.mjs";
 
 // ── uploadObject ─────────────────────────────────────────────────────
@@ -277,7 +278,7 @@ describe("retryWithBackoff", () => {
     expect(calls).toBe(6); // initial + 5 retries
   });
 
-  it("does not retry on non-429 errors", async () => {
+  it("does not retry on permanent non-transient errors", async () => {
     let calls = 0;
     const sleep = () => Promise.resolve();
     const fn = async () => {
@@ -334,6 +335,145 @@ describe("retryWithBackoff", () => {
 
       expect(calls).toBe(1);
     }
+  });
+
+  it("retries Wrangler R2 HTTP 500 Internal Server Error", async () => {
+    let calls = 0;
+    const sleepDelays: number[] = [];
+    const sleep = (ms: number) => {
+      sleepDelays.push(ms);
+      return Promise.resolve();
+    };
+    // Exact shape observed during 2026-07-13 staging corpus upload
+    const wrangler500 =
+      "Upload failed for moedict-assets-preview/stroke-json/80cc.json (exit 1): " +
+      "Failed to fetch /accounts/…/r2/buckets/moedict-assets-preview/objects/stroke-json/80cc.json - 500: Internal Server Error;\n" +
+      '  {"success":false,"errors":[{"code":10001,"message":"We encountered an internal error. Please try again."}],"messages":[],"result":null}';
+    const fn = async () => {
+      calls++;
+      if (calls < 3) throw new Error(wrangler500);
+      return "ok";
+    };
+    const result = await retryWithBackoff(fn, {
+      sleep,
+      maxRetries: 5,
+      initialDelay: 1000,
+      maxDelay: 60000,
+    });
+    expect(result).toBe("ok");
+    expect(calls).toBe(3);
+    expect(sleepDelays).toEqual([1000, 2000]);
+  });
+
+  it("retries transient network system errors", async () => {
+    for (const code of ["ECONNRESET", "ETIMEDOUT", "ECONNREFUSED", "EAI_AGAIN"]) {
+      let calls = 0;
+      const result = await retryWithBackoff(
+        async () => {
+          calls++;
+          if (calls === 1) {
+            const err = new Error(`connect ${code}`);
+            // @ts-expect-error - system error shape
+            err.code = code;
+            throw err;
+          }
+          return "ok";
+        },
+        { sleep: () => Promise.resolve() },
+      );
+      expect(result).toBe("ok");
+      expect(calls).toBe(2);
+    }
+  });
+
+  it("retries nested network cause codes", async () => {
+    let calls = 0;
+    const result = await retryWithBackoff(
+      async () => {
+        calls++;
+        if (calls === 1) {
+          const cause = new Error("socket closed");
+          // @ts-expect-error - system error shape
+          cause.code = "ECONNRESET";
+          throw new Error("fetch failed", { cause });
+        }
+        return "ok";
+      },
+      { sleep: () => Promise.resolve() },
+    );
+    expect(result).toBe("ok");
+    expect(calls).toBe(2);
+  });
+
+  it("fail-fast on permanent 4xx (except 429)", async () => {
+    for (const stderr of [
+      "HTTP 400 Bad Request",
+      "status 403 Forbidden",
+      "status code: 404",
+      "The specified key does not exist",
+      "Authentication error [code: 10000]",
+    ]) {
+      let calls = 0;
+      await expect(
+        retryWithBackoff(
+          async () => {
+            calls++;
+            throw { stderr, message: `Upload failed: ${stderr}` };
+          },
+          { sleep: () => Promise.resolve(), maxRetries: 5 },
+        ),
+      ).rejects.toBeTruthy();
+      expect(calls).toBe(1);
+    }
+  });
+
+  it("retries uploadObject pool on Wrangler 500 then succeeds", async () => {
+    let calls = 0;
+    const runner = async () => {
+      calls++;
+      if (calls === 1) {
+        return {
+          exitCode: 1,
+          stdout: "",
+          stderr:
+            "Failed to fetch /accounts/x/r2/buckets/b/objects/k - 500: Internal Server Error;\n" +
+            '{"success":false,"errors":[{"code":10001,"message":"We encountered an internal error. Please try again."}]}',
+        };
+      }
+      return { exitCode: 0, stdout: "", stderr: "" };
+    };
+    await uploadWithConcurrency(
+      [{ key: "key", filePath: "/f", contentType: "text/plain", cacheControl: "public" }],
+      "bucket",
+      { runner, sleep: () => Promise.resolve() },
+    );
+    expect(calls).toBe(2);
+  });
+
+  it("isRetryableError classifies rate-limit, 5xx, network, and permanent 4xx", () => {
+    expect(isRetryableError({ code: 971 })).toBe(true);
+    expect(isRetryableError({ code: 429 })).toBe(true);
+    expect(isRetryableError({ code: "ECONNRESET" })).toBe(true);
+    expect(
+      isRetryableError({
+        message:
+          "…/objects/stroke-json/80cc.json - 500: Internal Server Error; We encountered an internal error",
+      }),
+    ).toBe(true);
+    expect(isRetryableError({ stderr: "HTTP 502 Bad Gateway" })).toBe(true);
+    expect(isRetryableError({ stderr: "HTTP 503 Service Unavailable" })).toBe(true);
+    expect(isRetryableError({ message: "socket hang up" })).toBe(true);
+    expect(isRetryableError({ message: "fetch failed" })).toBe(true);
+
+    // permanent / non-transient
+    expect(isRetryableError({ stderr: "HTTP 400 Bad Request" })).toBe(false);
+    expect(isRetryableError({ stderr: "status 403" })).toBe(false);
+    expect(isRetryableError({ message: "The specified key does not exist" })).toBe(false);
+    expect(isRetryableError(new Error("upload key contains 500"))).toBe(false);
+    expect(isRetryableError({ stderr: "object key 500 is present" })).toBe(false);
+    expect(isRetryableError({ message: "request id 50010001" })).toBe(false);
+    expect(isRetryableError(null)).toBe(false);
+    expect(isRetryableError("string")).toBe(false);
   });
 
   it("caps delay at maxDelay", async () => {
