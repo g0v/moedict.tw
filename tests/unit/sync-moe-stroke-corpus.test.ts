@@ -26,6 +26,7 @@ import {
   runCli,
   loadCheckpoint,
   EXPECTED_CORPUS_SIZE,
+  DEFAULT_VERIFY_MAX_RETRIES,
 } from "../../commands/sync-moe-stroke-corpus.mjs";
 
 // Re-export is not available for EXPECTED — import via module namespace by reading constant through validate
@@ -571,6 +572,193 @@ describe("uploadCorpus / verifyCorpusUploads", () => {
     expect(result.verified).toBe(true);
     expect(result.checkedKeys).toHaveLength(3);
     expect(callCount).toBe(3);
+  });
+
+  it("exports DEFAULT_VERIFY_MAX_RETRIES = 8 (upload keeps shared default 5)", () => {
+    // Contract: verify is more patient than upload for long-lived re-GETs.
+    expect(DEFAULT_VERIFY_MAX_RETRIES).toBe(8);
+  });
+
+  it("verify recovers on attempt 8 after 7 transient fetch-failed errors", async () => {
+    // Production evidence: long verify runs exhaust the shared default of 5 retries
+    // on network flakes. Default verify maxRetries=8 must allow recovery on attempt 8
+    // (1 initial + 7 retries = 8 attempts total before the final success here).
+    const body = "[]";
+    const sha = createHash("sha256").update(body).digest("hex");
+    const entries = [
+      {
+        char: "町",
+        hex: "753a",
+        decimalId: 30010,
+        strokeCount: 1,
+        sha256: sha,
+        bytes: Buffer.byteLength(body),
+        sourceUrl: "u",
+        r2Key: "stroke-json/753a.json",
+      },
+    ];
+    let attempts = 0;
+    const sleeps: number[] = [];
+    const runner = async (argv: string[]) => {
+      attempts++;
+      if (attempts < 8) {
+        return {
+          exitCode: 1,
+          stdout: "",
+          stderr:
+            "✘ [ERROR] fetch failed\nA fetch request failed, likely due to a connectivity issue.",
+        };
+      }
+      const fileArg = argv.find((a) => a.startsWith("--file="))!;
+      writeFileSync(fileArg.slice("--file=".length), body);
+      return { exitCode: 0, stdout: "", stderr: "" };
+    };
+    const result = await verifyCorpusUploads(entries, "bucket", {
+      runner,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
+      // exercise default: do NOT pass maxRetries
+    });
+    expect(result.verified).toBe(true);
+    expect(result.checkedKeys).toEqual(["stroke-json/753a.json"]);
+    expect(attempts).toBe(8);
+    // 7 sleeps between the 7 failures and the success
+    expect(sleeps).toHaveLength(7);
+  });
+
+  it("verify still fails after maxRetries+1 transient attempts (default 8 → 9 total)", async () => {
+    const entries = [
+      {
+        char: "町",
+        hex: "753a",
+        decimalId: 30010,
+        strokeCount: 1,
+        sha256: "0".repeat(64),
+        bytes: 2,
+        sourceUrl: "u",
+        r2Key: "stroke-json/753a.json",
+      },
+    ];
+    let attempts = 0;
+    const runner = async () => {
+      attempts++;
+      return {
+        exitCode: 1,
+        stdout: "",
+        stderr: "✘ [ERROR] fetch failed",
+      };
+    };
+    await expect(
+      verifyCorpusUploads(entries, "bucket", {
+        runner,
+        sleep: async () => {},
+      }),
+    ).rejects.toThrow(/Download failed|fetch failed/);
+    // initial + 8 retries
+    expect(attempts).toBe(DEFAULT_VERIFY_MAX_RETRIES + 1);
+  });
+
+  it("verify fails fast on permanent 4xx (no retries beyond first attempt)", async () => {
+    const entries = [
+      {
+        char: "町",
+        hex: "753a",
+        decimalId: 30010,
+        strokeCount: 1,
+        sha256: "0".repeat(64),
+        bytes: 2,
+        sourceUrl: "u",
+        r2Key: "stroke-json/753a.json",
+      },
+    ];
+    let attempts = 0;
+    const runner = async () => {
+      attempts++;
+      return {
+        exitCode: 1,
+        stdout: "",
+        stderr: "HTTP 403 Forbidden: access denied for this object",
+      };
+    };
+    await expect(
+      verifyCorpusUploads(entries, "bucket", {
+        runner,
+        sleep: async () => {},
+      }),
+    ).rejects.toThrow(/Download failed|403/);
+    expect(attempts).toBe(1);
+  });
+
+  it("verify maxRetries option is injectable (override default 8)", async () => {
+    // Proves the option is exposed for tests/operators without changing default.
+    const body = "[]";
+    const sha = createHash("sha256").update(body).digest("hex");
+    const entries = [
+      {
+        char: "町",
+        hex: "753a",
+        decimalId: 30010,
+        strokeCount: 1,
+        sha256: sha,
+        bytes: Buffer.byteLength(body),
+        sourceUrl: "u",
+        r2Key: "stroke-json/753a.json",
+      },
+    ];
+    let attempts = 0;
+    const runner = async (argv: string[]) => {
+      attempts++;
+      if (attempts < 3) {
+        return { exitCode: 1, stdout: "", stderr: "error code: 971 Too Many Requests" };
+      }
+      const fileArg = argv.find((a) => a.startsWith("--file="))!;
+      writeFileSync(fileArg.slice("--file=".length), body);
+      return { exitCode: 0, stdout: "", stderr: "" };
+    };
+    const result = await verifyCorpusUploads(entries, "bucket", {
+      runner,
+      sleep: async () => {},
+      maxRetries: 3,
+    });
+    expect(result.verified).toBe(true);
+    expect(attempts).toBe(3);
+  });
+
+  it("upload still uses shared default maxRetries=5 (not verify's 8)", async () => {
+    // Contrasts with verify: upload path must NOT inherit the verify default.
+    const outDir = tmp();
+    mkdirSync(join(outDir, "stroke-json"), { recursive: true });
+    writeFileSync(join(outDir, "stroke-json", "753a.json"), "[]");
+    const entries = [
+      {
+        char: "町",
+        hex: "753a",
+        decimalId: 30010,
+        strokeCount: 1,
+        sha256: createHash("sha256").update("[]").digest("hex"),
+        bytes: 2,
+        sourceUrl: "u",
+        r2Key: "stroke-json/753a.json",
+      },
+    ];
+    let attempts = 0;
+    const runner = async () => {
+      attempts++;
+      return {
+        exitCode: 1,
+        stdout: "",
+        stderr: "✘ [ERROR] fetch failed",
+      };
+    };
+    await expect(
+      uploadCorpus(entries, outDir, "bucket", {
+        runner,
+        sleep: async () => {},
+      }),
+    ).rejects.toThrow(/Upload failed|fetch failed/);
+    // shared retryWithBackoff default: initial + 5 retries = 6
+    expect(attempts).toBe(6);
   });
 });
 

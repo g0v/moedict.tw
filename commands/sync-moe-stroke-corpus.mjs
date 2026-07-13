@@ -71,6 +71,14 @@ import { uploadWithConcurrency, retryWithBackoff, runWrangler } from "../scripts
 import { parseGeneratedConfig, getAssetsBucketName } from "../scripts/lib/generated-config.mjs";
 
 export const EXPECTED_CORPUS_SIZE = 6063;
+/**
+ * Default maxRetries for post-upload verify downloads.
+ * Higher than upload's shared default (5) because 6,063 sequential
+ * authenticated re-GETs are long-lived and more exposed to transient
+ * network flakes (`fetch failed`). Upload path keeps retryWithBackoff's
+ * default of 5.
+ */
+export const DEFAULT_VERIFY_MAX_RETRIES = 8;
 const DEFAULT_ZIP_URL = "https://stroke-order.learningweb.moe.edu.tw/download/6063png.zip";
 const DEFAULT_OUT = ".moe-stroke-corpus";
 const DEFAULT_CONFIG = "dist/cf_moedict_webkit_neo/wrangler.json";
@@ -551,11 +559,13 @@ export async function uploadCorpus(entries, outDir, bucketName, opts = {}) {
  *
  * Uses bounded concurrency (≤4, matching uploadWithConcurrency) to keep
  * verification time proportional to upload time instead of spawning 6,063
- * sequential Wrangler processes.  Each worker retries on 429/code 971.
+ * sequential Wrangler processes. Each download retries on 429/code 971/5xx/
+ * network flakes with a verify-specific default of {@link DEFAULT_VERIFY_MAX_RETRIES}
+ * (8) — higher than upload's shared default of 5. Inject `maxRetries` to override.
  *
  * @param {ManifestEntry[]} entries
  * @param {string} bucketName
- * @param {{ runner?: Function, sleep?: (ms: number) => Promise<void>, maxConcurrent?: number }} [opts]
+ * @param {{ runner?: Function, sleep?: (ms: number) => Promise<void>, maxConcurrent?: number, maxRetries?: number }} [opts]
  */
 export async function verifyCorpusUploads(entries, bucketName, opts = {}) {
   const runner = opts.runner ?? runWrangler;
@@ -567,6 +577,7 @@ export async function verifyCorpusUploads(entries, bucketName, opts = {}) {
       return promise;
     });
   const maxConcurrent = Math.min(opts.maxConcurrent ?? 4, 4);
+  const maxRetries = opts.maxRetries ?? DEFAULT_VERIFY_MAX_RETRIES;
 
   /** @type {string[]} */
   const checked = [];
@@ -597,7 +608,7 @@ export async function verifyCorpusUploads(entries, bucketName, opts = {}) {
               if (/not found|NoSuchKey|404/i.test(stderr)) {
                 throw new Error(`Missing object after upload: ${entry.r2Key}`);
               }
-              // surface 429/5xx as retryable via message patterns recognised by isRetryableError
+              // surface 429/5xx/network as retryable via isRetryableError patterns
               const err = new Error(
                 `Download failed: ${entry.r2Key} (exit ${result.exitCode}): ${stderr}`,
               );
@@ -605,7 +616,7 @@ export async function verifyCorpusUploads(entries, bucketName, opts = {}) {
               throw err;
             }
           },
-          { sleep },
+          { sleep, maxRetries },
         );
         const bytes = readFileSync(filePath);
         const sha = createHash("sha256").update(bytes).digest("hex");
