@@ -129,8 +129,9 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
   `CLOUDFLARE_ENV=<env> bun run deploy:rollback -- <known-good-version-uuid>`
   ——**必須明確帶目標 version UUID**，不會自動猜「上一版」。流程：讀目前
   唯一 100% version → 在 `versions list` 找到目標 UUID 的
-  `annotations["workers/tag"]` → 部署 `target@100%/current@0%` → 對固定核心
-  路由（`/`、`/api/config`、`/api/%E8%90%8C.json`，刻意不含 hashed
+  `annotations["workers/tag"]` → 部署 `target@100%/current@0%` → 等 30 秒
+  edge propagation（過早 probe 會誤判失敗、自動 restore 回壞版本）→ 對固定
+  核心路由（`/`、`/api/config`、`/api/%E8%90%8C.json`，刻意不含 hashed
   `/assets/*`，因為 rollback 不依賴任何 build manifest）做 bounded final
   smoke → 通過才 finalize `target@100%` 單獨部署並寫入 env-namespaced
   state；失敗則自動 restore 回 `current@100%/target@0%`，若 restore 也失敗，
