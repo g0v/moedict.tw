@@ -28,6 +28,8 @@ export const DICTIONARY_CACHE_TAGS: readonly string[] = [
   "png",
   "assets",
   "appcache",
+  "cns",
+  "cns-record",
 ];
 
 const ALLOWED_TAG_SET = new Set<string>(DICTIONARY_CACHE_TAGS);

@@ -245,6 +245,62 @@ export function collectDictionaryFixtures(): FixtureEntry[] {
     }
   }
 
+
+  // 兩岸辭典 bucket 9 — contains 䴉 (U+4D09, 19721 % 128 = 9);
+  // seeded explicitly so /c/䴉.json returns a real dictionary entry
+  // and the CNS non-shadowing contract can be asserted definitively.
+  const ibisKey = "pcck/9.txt";
+  entries.push({
+    bucket: "DICTIONARY",
+    key: ibisKey,
+    body: required(path.join(DATA_DICT, "pcck", "9.txt"), ibisKey),
+    httpMetadata: { contentType: "text/plain; charset=utf-8" },
+  });
+
+  // CNS11643 golden fixture: 䴉 (U+4D09, CNS 4-6C51) — shard 4D, key 4D09.json
+  const cnsGoldenKey = "cns/by-codepoint/4D/4D09.json";
+  const cnsGoldenPath = path.join(DATA_DICT, "cns", "by-codepoint", "4D", "4D09.json");
+  if (existsSync(cnsGoldenPath)) {
+    entries.push({
+      bucket: "DICTIONARY",
+      key: cnsGoldenKey,
+      body: readFileSync(cnsGoldenPath),
+      httpMetadata: { contentType: "application/json; charset=utf-8" },
+    });
+  } else {
+    // Inline minimal golden record matching neuralese evidence
+    entries.push({
+      bucket: "DICTIONARY",
+      key: cnsGoldenKey,
+      body: new TextEncoder().encode(
+        JSON.stringify({
+          char: "䴉",
+          unicode: "U+4D09",
+          codepoint: 19721,
+          cns: "4-6C51",
+          plane: 4,
+          cell: "6C51",
+          pua: false,
+          attributes: {
+            phonetic: ["ㄒㄩㄢˊ"],
+            radical: { id: 196, char: "鳥" },
+            stroke: 24,
+            cangjie: ["WVHAF"],
+            strokeSequence: "252211251353432511154444",
+            source: "罕用國字標準字體表",
+          },
+          provenance: {
+            generator: "scripts/generate-cns-data.mjs",
+            sourceFiles: ["Properties.zip", "MapingTables.zip"],
+            license: "OGDL-1.0",
+            attribution:
+              "數位發展部，CNS11643中文標準交換碼全字庫網站，https://www.cns11643.gov.tw",
+          },
+        }),
+      ),
+      httpMetadata: { contentType: "application/json; charset=utf-8" },
+    });
+  }
   return entries;
 }
 

@@ -33,6 +33,7 @@ LANG_FOLDERS=("a" "c" "h" "t")
 SEARCH_INDEX_DIR="$DICTIONARY_DIR/search-index"
 TRANSLATION_DATA_DIR="$DICTIONARY_DIR/translation-data"
 PINYIN_LOOKUP_DIR="$DICTIONARY_DIR/lookup/pinyin"
+CNS_DATA_DIR="$DICTIONARY_DIR/cns"
 
 
 # 檢查所有 pack 資料夾是否存在
@@ -84,6 +85,10 @@ translation_data_count=$(find "$TRANSLATION_DATA_DIR" -name "*.xml" | wc -l)
 echo "  - translation-data ($translation_data_count 個 .xml 檔案)"
 pinyin_lookup_count=$(find "$PINYIN_LOOKUP_DIR" -name "*.json" | wc -l)
 echo "  - lookup/pinyin ($pinyin_lookup_count 個 .json 檔案)"
+if [ -d "$CNS_DATA_DIR" ]; then
+    cns_count=$(find "$CNS_DATA_DIR" -name "*.json" | wc -l)
+    echo "  - cns/ ($cns_count 個 .json 檔案，全字庫屬性後備)"
+fi
 
 echo ""
 echo "🔄 開始同步上傳..."
@@ -163,6 +168,13 @@ echo ""
 echo "🧪 dry-run lookup/pinyin/ (台語羅馬拼音索引)..."
 rclone_upload_dry_run "$PINYIN_LOOKUP_DIR" "$R2_REMOTE:$R2_BUCKET/lookup/pinyin"
 
+# dry-run：全字庫屬性後備（可選，僅當 cns/ 目錄存在時執行）
+if [ -d "$CNS_DATA_DIR" ]; then
+    echo ""
+    echo "🧪 dry-run cns/ (全字庫屬性後備)..."
+    rclone_upload_dry_run "$CNS_DATA_DIR" "$R2_REMOTE:$R2_BUCKET/cns"
+fi
+
 echo ""
 read -r -p "⚠️ 以上 dry-run 完成，是否繼續正式上傳？(y/N): " confirm_upload
 case "$confirm_upload" in
@@ -209,6 +221,14 @@ echo "📤 正在上傳 lookup/pinyin/ (台語羅馬拼音索引)..."
 rclone_upload "$PINYIN_LOOKUP_DIR" "$R2_REMOTE:$R2_BUCKET/lookup/pinyin"
 echo "✅ lookup/pinyin/ 上傳完成"
 
+# 上傳全字庫屬性後備（可選，僅當 cns/ 目錄存在時執行）
+if [ -d "$CNS_DATA_DIR" ]; then
+    echo ""
+    echo "📤 正在上傳 cns/ (全字庫屬性後備)..."
+    rclone_upload "$CNS_DATA_DIR" "$R2_REMOTE:$R2_BUCKET/cns"
+    echo "✅ cns/ 上傳完成"
+fi
+
 echo ""
 echo "🎉 所有字典資料上傳完成！"
 echo ""
@@ -227,6 +247,10 @@ translation_data_count=$(find "$TRANSLATION_DATA_DIR" -name "*.xml" | wc -l)
 echo "  - translation-data/: $translation_data_count 個 XML 檔案"
 pinyin_lookup_count=$(find "$PINYIN_LOOKUP_DIR" -name "*.json" | wc -l)
 echo "  - lookup/pinyin/: $pinyin_lookup_count 個 JSON 檔案"
+if [ -d "$CNS_DATA_DIR" ]; then
+    cns_count=$(find "$CNS_DATA_DIR" -name "*.json" | wc -l)
+    echo "  - cns/: $cns_count 個 JSON 檔案（全字庫屬性後備）"
+fi
 
 echo ""
 echo "🔗 R2 Storage 路徑: $R2_REMOTE:$R2_BUCKET"

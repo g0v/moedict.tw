@@ -32,7 +32,6 @@ import { CharacterImageView } from "../components/CharacterImageView";
 import { SvgIcon } from "../components/SvgIcon";
 import { TitlePronunciation } from "../components/TitlePronunciation";
 import { dedupeHeteronyms } from "../utils/heteronym-dedup";
-import { stripTags } from "../utils/dictionary-route";
 
 export type DictionaryLang = "a" | "t" | "h" | "c";
 
@@ -57,8 +56,7 @@ interface Heteronym {
   reading?: string;
   definitions?: Definition[];
   /** TWBLG 文/白/俗/替讀音分類（g0v/moedict-webkit#96、#233），僅 lang='t' 有值；
-   *  API 回傳時已包成 autolink 的 `<a href="...">文</a>`，渲染前需 stripTags。 */
-  reading?: string;
+   *  API 回傳時已包成 autolink 的 `<a href="...">文</a>`，渲染前需 untag。 */
 }
 
 interface DictionaryAPIResponse {
@@ -85,6 +83,30 @@ interface DictionaryState {
   entry: DictionaryAPIResponse | null;
   terms: string[];
   error: string | null;
+}
+
+interface CnsAttributes {
+  phonetic?: string[];
+  radical?: { id: number; char: string | null };
+  stroke?: number;
+  cangjie?: string[];
+  strokeSequence?: string;
+  source?: string;
+}
+
+interface CnsRecord {
+  char: string;
+  unicode: string;
+  codepoint: number;
+  cns: string;
+  pua: boolean;
+  attributes: CnsAttributes;
+}
+
+interface CnsFallbackState {
+  loading: boolean;
+  record: CnsRecord | null;
+  error: boolean;
 }
 
 interface DictionaryPageProps {
@@ -398,6 +420,82 @@ function RadicalGlyph({ char, lang }: { char: string; lang: DictionaryLang }) {
   );
 }
 
+/** 全字庫屬性後備卡 — 四部辭典皆無時顯示於 no-match 頁 */
+function CnsAttributesPanel({ record }: { record: CnsRecord }) {
+  const { attributes } = record;
+  return (
+    <div className="entry cns-attributes" data-source="cns11643">
+      <div className="entry-item">
+        <div className="cns-badge">全字庫屬性・無辭典釋義</div>
+        <table className="cns-attr-table">
+          <tbody>
+            <tr>
+              <th>字元</th>
+              <td>
+                {record.char}{" "}
+                <span className="cns-meta">
+                  {record.unicode}・CNS {record.cns}
+                </span>
+              </td>
+            </tr>
+            {attributes.phonetic && attributes.phonetic.length > 0 && (
+              <tr>
+                <th>注音</th>
+                <td>{attributes.phonetic.join("、")}</td>
+              </tr>
+            )}
+            {attributes.radical && (
+              <tr>
+                <th>部首</th>
+                <td>
+                  {attributes.radical.id}・
+                  {attributes.radical.char ?? ""}
+                </td>
+              </tr>
+            )}
+            {attributes.stroke != null && (
+              <tr>
+                <th>筆畫</th>
+                <td>{attributes.stroke}</td>
+              </tr>
+            )}
+            {attributes.cangjie && attributes.cangjie.length > 0 && (
+              <tr>
+                <th>倉頡</th>
+                <td>{attributes.cangjie.join("、")}</td>
+              </tr>
+            )}
+            {attributes.strokeSequence && (
+              <tr>
+                <th>筆順</th>
+                <td className="cns-stroke-seq">{attributes.strokeSequence}</td>
+              </tr>
+            )}
+            {attributes.source && (
+              <tr>
+                <th>來源</th>
+                <td>{attributes.source}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+        <p className="cns-attribution">
+          資料來源：
+          <a
+            href="https://www.cns11643.gov.tw"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            數位發展部 CNS11643 全字庫
+          </a>
+          ，政府資料開放授權條款第 1 版（OGDL-1.0）。
+        </p>
+      </div>
+    </div>
+  );
+}
+
+
 export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPageProps) {
   const navigate = useNavigate();
   const touchAnchorStartAtRef = useRef<number | null>(null);
@@ -413,6 +511,11 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const [isStarred, setIsStarred] = useState(false);
   const [strokesVisible, setStrokesVisible] = useState(false);
+  const [cnsFallback, setCnsFallback] = useState<CnsFallbackState>({
+    loading: false,
+    record: null,
+    error: false,
+  });
   const storageWord = useMemo(
     () => untag((state.entry?.title || queryWord || "").trim()),
     [state.entry?.title, queryWord],
@@ -527,6 +630,39 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
     };
   }, [lang, queryWord]);
 
+  // CNS11643 屬性後備：僅在四部辭典皆無（error 或 terms 非空）且查詢為恰好一個
+  // Unicode 字元時，才發出 CNS 請求。字典命中（state.entry 有值）時絕不觸發。
+  useEffect(() => {
+    const isSingleScalar = Array.from(queryWord).length === 1;
+    const dictHit = Boolean(state.entry);
+    const dictNoMatch =
+      !state.loading && !dictHit && (state.error !== null || state.terms.length > 0);
+    if (!isSingleScalar || !dictNoMatch) {
+      setCnsFallback({ loading: false, record: null, error: false });
+      return;
+    }
+    const controller = new AbortController();
+    setCnsFallback({ loading: true, record: null, error: false });
+    fetch(`/api/cns/${encodeURIComponent(queryWord)}.json`, { signal: controller.signal })
+      .then(async (cnsRes) => {
+        if (controller.signal.aborted) return;
+        if (cnsRes.ok) {
+          const data = (await cnsRes.json()) as CnsRecord;
+          setCnsFallback({ loading: false, record: data, error: false });
+        } else {
+          setCnsFallback({ loading: false, record: null, error: false });
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setCnsFallback({ loading: false, record: null, error: true });
+        }
+      });
+    return () => {
+      controller.abort();
+    };
+  }, [queryWord, state.entry, state.error, state.terms.length, state.loading]);
+
   useEffect(() => {
     if (!state.entry) return;
     addToLRU(queryWord, lang);
@@ -627,18 +763,28 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
             <p className="def">{state.error}</p>
           </div>
         </div>
+        {cnsFallback.record && (
+          <CnsAttributesPanel record={cnsFallback.record} />
+        )}
       </div>
     );
   }
 
   if (state.terms.length > 0) {
     return (
-      <CharacterImageView
-        queryWord={queryWord}
-        terms={state.terms}
-        lang={lang}
-        langTokenPrefix={langTokenPrefix}
-      />
+      <>
+        <CharacterImageView
+          queryWord={queryWord}
+          terms={state.terms}
+          lang={lang}
+          langTokenPrefix={langTokenPrefix}
+        />
+        {cnsFallback.record && (
+          <div className="result">
+            <CnsAttributesPanel record={cnsFallback.record} />
+          </div>
+        )}
+      </>
     );
   }
 
@@ -701,8 +847,6 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
           lang === "t" || lang === "h" ? splitCommaSeparatedItems(heteronym.synonyms) : [];
         // TWBLG 文/白/俗/替讀音分類（g0v/moedict-webkit#96、#233）：資料只在
         // lang='t' 的 ptck pack 出現，其餘語言的 heteronym 沒有這個欄位。
-        const readingType = lang === "t" ? stripTags(heteronym.reading || "") : "";
-
         const definitions = Array.isArray(heteronym.definitions) ? heteronym.definitions : [];
         const groups = groupDefinitions(definitions);
         const readingType = lang === "t" ? untag(heteronym.reading ?? "").trim() : "";

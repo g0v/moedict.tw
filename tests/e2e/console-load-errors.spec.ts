@@ -5,6 +5,12 @@ import { fileURLToPath } from "node:url";
 import type { Page, Route } from "@playwright/test";
 import { expect, test } from "./_fixtures";
 
+interface RouteDictionaryDataOptions {
+  forceCns404?: boolean;
+  onCnsRequest?: (url: string) => void;
+  onDictionaryRequest?: (url: string) => void;
+}
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
 const STYLES_CSS_PATH = path.join(REPO_ROOT, "data", "assets", "styles.css");
@@ -86,13 +92,47 @@ async function blockCssSubresources(page: Page): Promise<void> {
 // dictionary data from locally bundled files via originalFetch('/dictionary/...').
 // In the test environment these paths don't exist on the server, so route them
 // to the data/dictionary/ fixtures so the Capacitor-simulated page renders.
-async function routeDictionaryData(page: Page): Promise<void> {
+async function routeDictionaryData(
+  page: Page,
+  options?: RouteDictionaryDataOptions,
+): Promise<void> {
   const DATA_DICT = path.join(REPO_ROOT, "data", "dictionary");
+  const cnsMode = options?.forceCns404 ? "force404" : "local";
+
   await page.route("**/dictionary/**", (route: Route) => {
     const reqUrl = route.request().url();
+    options?.onDictionaryRequest?.(reqUrl);
     const url = new URL(reqUrl);
     const key = url.pathname.replace(/^\/dictionary\//, "");
     const filePath = path.join(DATA_DICT, key);
+    try {
+      const body = readFileSync(filePath);
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json; charset=utf-8",
+        body: Buffer.from(body),
+      });
+    } catch {
+      return route.fulfill({ status: 404, contentType: "text/plain", body: "" });
+    }
+  });
+
+  await page.route("**/cns/**", (route: Route) => {
+    const reqUrl = route.request().url();
+    const urlPath = new URL(reqUrl).pathname;
+    // If the URL is a /dictionary/cns/... fallback path, let it fall through to
+    // the **/dictionary/** handler (registered before this one; Playwright runs
+    // handlers in reverse-registration order, so "fallback" passes control to it).
+    if (urlPath.startsWith("/dictionary/")) {
+      return route.fallback();
+    }
+    options?.onCnsRequest?.(reqUrl);
+    if (cnsMode === "force404") {
+      return route.fulfill({ status: 404, contentType: "text/plain", body: "" });
+    }
+    const url = new URL(reqUrl);
+    const key = url.pathname.replace(/^\/cns\//, "");
+    const filePath = path.join(DATA_DICT, "cns", key);
     try {
       const body = readFileSync(filePath);
       return route.fulfill({
@@ -300,6 +340,63 @@ test.describe("console load errors — EduKai 404 and BiauKai decode", () => {
       const v = new URL(url).searchParams.get("v");
       expect(v, `legacy stylesheet URL must have non-empty v param: ${url}`).toBeTruthy();
     }
+  });
+});
+
+test.describe("offline CNS fallback", () => {
+  test("Capacitor offline /api/cns: tries /cns/ first, falls back to /dictionary/", async ({
+    page,
+  }) => {
+    const cnsRequests: string[] = [];
+    const dictionaryRequests: string[] = [];
+    await routeStylesCss(page);
+    await blockCssSubresources(page);
+    await routeDictionaryData(page, {
+      forceCns404: true,
+      onCnsRequest: (url) => cnsRequests.push(url),
+      onDictionaryRequest: (url) => {
+        const pathname = new URL(url).pathname;
+        if (pathname.startsWith("/dictionary/cns/")) {
+          dictionaryRequests.push(url);
+        }
+      },
+    });
+
+    // Keep this isolated fetch test deterministic: app runtime still loads from
+    // offline mode and can be queried directly.
+    await page.addInitScript(() => {
+      // @ts-expect-error -- simulating Capacitor webview runtime
+      window.Capacitor = { isNative: true, getPlatform: () => "ios" };
+    });
+
+    await page.goto("/%E8%90%8C");
+    await page.waitForLoadState("networkidle");
+    await page.evaluate(() => document.fonts.ready);
+
+    const apiResult = await page.evaluate(async () => {
+      const res = await fetch(`/api/cns/${encodeURIComponent("䴉")}.json`);
+      return {
+        status: res.status,
+        bodyText: await res.text(),
+        contentType: res.headers.get("content-type") ?? "",
+      };
+    });
+
+    // cns paths are probed first in offline API get(), so we should see at least one miss.
+    expect(cnsRequests.length).toBeGreaterThanOrEqual(1);
+    expect(cnsRequests.some((url) => url.includes("/cns/by-codepoint/4D/4D09.json"))).toBe(
+      true,
+    );
+    // Because forceCns404 is enabled, /dictionary fallback should still resolve.
+    expect(dictionaryRequests.length).toBeGreaterThanOrEqual(1);
+    expect(
+      dictionaryRequests.some((url) => url.includes("/dictionary/cns/by-codepoint/4D/4D09.json")),
+    ).toBe(true);
+
+    expect(apiResult.status).toBe(200);
+    expect(apiResult.contentType).toContain("application/json");
+    const apiJson = JSON.parse(apiResult.bodyText) as { char?: string };
+    expect(apiJson.char).toBe("䴉");
   });
 });
 

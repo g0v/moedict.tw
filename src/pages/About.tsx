@@ -362,20 +362,28 @@ export function About({ assetBaseUrl }: AboutProps) {
           <li>
             <a
               target="_blank"
-              href="http://www.cns11643.gov.tw/AIDB/download.do?name=%E5%AD%97%E5%9E%8B%E4%B8%8B%E8%BC%89"
+              href="https://www.cns11643.gov.tw/pageView.jsp?ID=59"
               rel="noopener noreferrer"
             >
               中文全字庫
             </a>
-            採用{" "}
+            （數位發展部）字型採用{" "}
             <a
               target="_blank"
-              href="https://creativecommons.org/licenses/by-nd/3.0/tw/deed.zh_TW"
+              href="https://openfontlicense.org/"
               rel="noopener noreferrer"
             >
-              CC BY-ND 3.0 臺灣
+              SIL Open Font License 1.1
             </a>
-            授權。
+            {" "}授權；全字庫屬性資料（注音・部首・筆畫・倉頡等）採用{" "}
+            <a
+              target="_blank"
+              href="https://data.gov.tw/license"
+              rel="noopener noreferrer"
+            >
+              政府資料開放授權條款第 1 版（OGDL-1.0）
+            </a>
+            {" "}授權。
           </li>
           <li>
             <a target="_blank" href="http://www.cl.fcu.edu.tw/" rel="noopener noreferrer">

@@ -1,0 +1,23 @@
+{
+  "char": "䴉",
+  "unicode": "U+4D09",
+  "codepoint": 19721,
+  "cns": "4-6C51",
+  "plane": 4,
+  "cell": "6C51",
+  "pua": false,
+  "attributes": {
+    "phonetic": ["ㄒㄩㄢˊ"],
+    "radical": { "id": 196, "char": "鳥" },
+    "stroke": 24,
+    "cangjie": ["WVHAF"],
+    "strokeSequence": "252211251353432511154444",
+    "source": "罕用國字標準字體表"
+  },
+  "provenance": {
+    "generator": "scripts/generate-cns-data.mjs",
+    "sourceFiles": ["Properties.zip", "MapingTables.zip"],
+    "license": "OGDL-1.0",
+    "attribution": "數位發展部，CNS11643中文標準交換碼全字庫網站，https://www.cns11643.gov.tw"
+  }
+}

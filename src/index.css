@@ -1118,3 +1118,64 @@ body.lang-t .result .entry-item .example .mandarin::after {
 .moetext td {
   vertical-align: top;
 }
+
+/* CNS11643 屬性後備卡 */
+.cns-attributes {
+  border-top: 2px solid #b8860b;
+  margin-top: 12px;
+}
+
+.cns-badge {
+  display: inline-block;
+  background: #b8860b;
+  color: #fff;
+  font-size: 12px;
+  font-weight: bold;
+  padding: 2px 8px;
+  border-radius: 3px;
+  margin-bottom: 8px;
+  letter-spacing: 0.05em;
+}
+
+.cns-attr-table {
+  border-collapse: collapse;
+  width: 100%;
+  max-width: 480px;
+  margin-bottom: 8px;
+}
+
+.cns-attr-table th {
+  text-align: left;
+  padding: 3px 12px 3px 0;
+  font-weight: bold;
+  color: #555;
+  width: 4em;
+  vertical-align: top;
+}
+
+.cns-attr-table td {
+  padding: 3px 0;
+  vertical-align: top;
+}
+
+.cns-meta {
+  font-size: 12px;
+  color: #888;
+  margin-left: 6px;
+}
+
+.cns-stroke-seq {
+  font-family: monospace;
+  letter-spacing: 0.12em;
+  color: #555;
+}
+
+.cns-attribution {
+  font-size: 12px;
+  color: #888;
+  margin-top: 8px;
+}
+
+.twblg-variants {
+  margin: 4px 0;
+}
