@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-/** Full labels for TWBLG heteronym reading-class codes. */
-=======
 /**
  * TWBLG（教育部台灣閩南語常用詞辭典）單字異讀分類標記。
  *
@@ -14,7 +11,6 @@
  * 字分類代碼後再查表；查不到的代碼由呼叫端自行 fallback 回原始代碼，
  * 避免教育部未來新增分類時靜默丟失資訊。
  */
->>>>>>> 90ee0f6 (feat: render TWBLG 文/白/俗/替 reading-type badge (g0v/moedict-webkit#96, #233))
 export const READING_TYPE_LABELS: Record<string, string> = {
   文: "文讀音（文言音）",
   白: "白讀音（白話音）",
