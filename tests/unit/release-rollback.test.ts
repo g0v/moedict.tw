@@ -137,6 +137,8 @@ function baseOpts(env: "production" | "staging", overrides: Record<string, unkno
     baseUrl: "https://probe.test",
     nowIso: makeCounterNowIso(),
     stateBaseDir: dir,
+    sleep: async () => {},
+    propagationSleepMs: 0,
     ...overrides,
   };
 }
@@ -195,6 +197,7 @@ describe("input validation", () => {
       baseUrl: "https://probe.test",
       nowIso: makeCounterNowIso(),
       stateBaseDir: dir,
+      propagationSleepMs: 0,
       runner,
       fetch: fetchImpl,
     });
@@ -355,6 +358,67 @@ describe("successful rollback", () => {
       "fetch:/api/%E8%90%8C.json",
       "runner:finalize-target100",
     ]);
+  });
+});
+
+describe("edge propagation wait", () => {
+  it("waits propagationSleepMs between the traffic switch and the smoke, before any probe", async () => {
+    const timeline: string[] = [];
+    const { runner } = buildRunner({}, (phase) => timeline.push(`runner:${phase}`));
+    const { fetchImpl } = buildFetch(({ url }) => {
+      timeline.push(`fetch:${new URL(url).pathname}`);
+      return undefined;
+    });
+    await runReleaseRollback(TARGET_UUID, {
+      ...baseOpts("staging", { runner, fetch: fetchImpl }),
+      propagationSleepMs: 7000,
+      sleep: async (ms: number) => {
+        timeline.push(`sleep:${ms}`);
+      },
+    });
+    expect(timeline.filter((t) => t.startsWith("sleep:"))).toEqual(["sleep:7000"]);
+    const sleepIndex = timeline.indexOf("sleep:7000");
+    expect(timeline.indexOf("runner:deploy-target100-current0")).toBeLessThan(sleepIndex);
+    expect(sleepIndex).toBeLessThan(timeline.indexOf("fetch:/"));
+    expect(sleepIndex).toBeLessThan(timeline.indexOf("runner:finalize-target100"));
+  });
+
+  it("defaults the propagation wait to 30s (mirrors release-deploy.mjs)", async () => {
+    const { runner } = buildRunner();
+    const { fetchImpl } = buildFetch();
+    const sleepCalls: number[] = [];
+    await runReleaseRollback(TARGET_UUID, {
+      ...baseOpts("staging", { runner, fetch: fetchImpl }),
+      propagationSleepMs: undefined,
+      sleep: async (ms: number) => {
+        sleepCalls.push(ms);
+      },
+    });
+    expect(sleepCalls).toEqual([30000]);
+  });
+});
+
+describe("state directory default", () => {
+  it("defaults stateBaseDir to cwd-relative .wrangler/releases", async () => {
+    const { runner } = buildRunner();
+    const { fetchImpl } = buildFetch();
+    const scratch = mkdtempSync(join(tmpdir(), "moedict-rollback-cwd-"));
+    const prevCwd = process.cwd();
+    try {
+      process.chdir(scratch);
+      const result = await runReleaseRollback(TARGET_UUID, {
+        ...baseOpts("staging", { runner, fetch: fetchImpl }),
+        stateBaseDir: undefined,
+      });
+      expect(result.versionId).toBe(TARGET_UUID);
+    } finally {
+      process.chdir(prevCwd);
+    }
+    const current = readCurrentDeployment({
+      baseDir: join(scratch, ".wrangler", "releases", "staging"),
+    });
+    expect(current?.versionId).toBe(TARGET_UUID);
+    rmSync(scratch, { recursive: true, force: true });
   });
 });
 
