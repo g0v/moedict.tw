@@ -38,7 +38,7 @@ function render(overrides: Record<string, unknown> = {}): string {
 
 describe("TitlePronunciation 順序不變量", () => {
   it("(a) t-lang 全部項目齊全時，children → youyin → audioBlock → copyBlock → alternative → reading-type 順序正確", () => {
-    const html = render();
+    const html = render({ readingType: "文" });
     const iChildren = html.indexOf('data-testid="ruby"');
     const iYouyin = html.indexOf('class="youyin"');
     const iAudioBlock = html.indexOf('class="audioBlock"');
