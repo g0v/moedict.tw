@@ -1,4 +1,5 @@
 import { CACHE_CONTROL, dictTagsForLang } from "./cache";
+import { readR2JsonCached } from "./r2-json-cache";
 import { dedupeHeteronyms } from "../utils/heteronym-dedup";
 import {
   stripLangPrefix,
@@ -390,13 +391,15 @@ async function fillBucket(
 ): Promise<{ data: DictionaryEntry | null; err: boolean }> {
   try {
     const bucketPath = `p${lang}ck/${bucket}.txt`;
-    const bucketObject = await env.DICTIONARY.get(bucketPath);
-    if (!bucketObject) {
+    // Memoized: bucket shards are the hottest R2 objects (billing audit
+    // 2026-07) and change only on data re-upload.
+    const responseData = (await readR2JsonCached(env.DICTIONARY, bucketPath)) as Record<
+      string,
+      DictionaryEntry
+    > | null;
+    if (!responseData) {
       return { data: null, err: true };
     }
-
-    const bucketData = await bucketObject.text();
-    const responseData = JSON.parse(bucketData) as Record<string, DictionaryEntry>;
     const key = escape(id);
     const part = responseData[key];
 
@@ -827,13 +830,12 @@ async function getCrossReferences(
 ): Promise<Array<{ lang: DictionaryLang; words: string[] }>> {
   try {
     const xrefPath = `${lang}/xref.json`;
-    const xrefObject = await env.DICTIONARY.get(xrefPath);
-    if (!xrefObject) {
+    // Memoized: this sidecar is re-read on EVERY entry lookup (once here,
+    // once for xref-by-id) — formerly two R2 GETs per dictionary request.
+    const xref = (await readR2JsonCached(env.DICTIONARY, xrefPath)) as XRefData | null;
+    if (!xref) {
       return [];
     }
-
-    const xrefData = await xrefObject.text();
-    const xref = JSON.parse(xrefData) as XRefData;
     const result: Array<{ lang: DictionaryLang; words: string[] }> = [];
 
     for (const [targetLang, words] of Object.entries(xref)) {
@@ -863,13 +865,10 @@ async function getCrossReferencesById(
 ): Promise<Array<{ lang: DictionaryLang; byId: Record<string, string[]> }>> {
   try {
     const xrefPath = `${lang}/xref-by-id.json`;
-    const xrefObject = await env.DICTIONARY.get(xrefPath);
-    if (!xrefObject) {
+    const xref = (await readR2JsonCached(env.DICTIONARY, xrefPath)) as XRefByIdData | null;
+    if (!xref) {
       return [];
     }
-
-    const xrefData = await xrefObject.text();
-    const xref = JSON.parse(xrefData) as XRefByIdData;
     const result: Array<{ lang: DictionaryLang; byId: Record<string, string[]> }> = [];
 
     for (const [targetLang, byTitle] of Object.entries(xref)) {
