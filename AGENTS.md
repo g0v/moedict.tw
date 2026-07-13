@@ -54,7 +54,7 @@ data/
   dictionary/   # 字典資料（真實來源，上傳至 R2；見「字典資料格式」）
   assets/       # 舊版前端資產（styles.css、字型、JS；上傳至 R2）
 scripts/        # build-search-index、build-pinyin-lookup、merge-coverage 等
-commands/       # upload_dictionary.sh、upload_assets.sh
+commands/       # upload_dictionary.sh、upload_assets.sh、fetch-moe-stroke.mjs、sync-moe-stroke-corpus.mjs
 tests/          # unit / integration / e2e 三層
 memory/MEMORY.md  # 跨 session 的架構筆記（與本檔互補）
 ```
@@ -183,6 +183,44 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
 - `data/dictionary/lookup/pinyin/**` 與 `search-index/**` 是**衍生物**，
   由 `scripts/build-pinyin-lookup.mjs`、`build-search-index.mjs` 從 pack 檔重建
   （`predev`/`prebuild` 自動跑）。改 pack 資料後不要手改衍生檔，重建再一起上傳。
+
+## 筆順 JSON（`/api/stroke-json`）與 6,063 字語料管線
+
+- **Runtime 讀取**：`GET`/`HEAD` `/api/stroke-json/<cp>.json` 由
+  `src/api/handleStrokeAPI.ts` **直接**讀環境的 `ASSETS` R2 binding key
+  `stroke-json/<小寫 hex codepoint>.json`（4–6 碼，含 astral），**不再**代理
+  公開 CDN URL。支援 ETag／`If-None-Match` → 304。staging Worker 綁
+  `moedict-assets-preview`、production 綁 `moedict-assets`——preview 與 prod
+  資料隔離，不會被 `vars.ASSET_BASE_URL` 指到正式站公開網域的設定蓋掉。
+- **語料來源**：教育部《國字標準字體筆順學習網》2025 新版
+  （`stroke-order.learningweb.moe.edu.tw`）。權威字集是官方
+  `全字筆順提示下載` zip（`/download/6063png.zip`）——以 PNG 檔名為準得到
+  **恰好 6,063** 個不重複字元；**禁止**猜 ID／Big5 範圍。舊版
+  `provideStrokeInfo.do?big5=` 已退役。
+- **管線腳本**：
+  - `commands/fetch-moe-stroke.mjs` — 單字唯讀：`dictView.jsp?ID=<十進位碼位>`
+    → 內嵌 XML → moedict stroke-json schema。
+  - `commands/sync-moe-stroke-corpus.mjs` — 全量發現／轉換／manifest／上傳／驗證。
+    上傳前必須有對應環境的 flattened generated config
+    （`vp run build` 或 `CLOUDFLARE_ENV=staging vp run build` →
+    `dist/cf_moedict_webkit_neo/wrangler.json` 的 `ASSETS.bucket_name`）。
+- **上傳與驗證守門**：`--upload=staging|production` 時拒絕
+  `--limit`／`--allow-partial`／`--skip-verify`（full-only）；上傳後強制
+  authenticated re-GET + sha256／bytes 全量比對。並發 ≤4。
+  **upload** 暫態重試預設 `maxRetries=5`（`retryWithBackoff`）；**verify**
+  預設 `DEFAULT_VERIFY_MAX_RETRIES=8`（長時間 re-GET 較易遇網路 flake）。
+  目前**沒有** verify-only／checkpoint resume（建議後續 operator 優化）。
+- **本機產物**：`.moe-stroke-corpus/`、`.moe-stroke-fetch/` 已 gitignore，
+  **不可** commit 生成 JSON／zip／manifest。細節見 `README_CDN.md` §三。
+- **出貨順序**：先 staging 上傳 preview 桶 + `bun run deploy:staging` 驗證 →
+  再 production 上傳 `moedict-assets` + `bun run deploy`（approval gate：
+  同一 git SHA + client manifest digest）。
+- **現行已部署 runtime**（2026-07-13）：release `23b7e89-1d1f2400cb1d`，
+  source HEAD `23b7e89`；staging version `0f23b628-9373-45d5-8ee9-b7d20b14933b`
+  @100%、production version `2be488db-8ad7-4384-bc2a-c539b4196445` @100%；
+  兩桶皆有 6,063 筆 `stroke-json/*` 且全量 hash 驗證 OK。後續 **script-only**
+  pipeline 硬化（如 verify maxRetries=8）不需再佈 Worker；完整事實見
+  `notes/零停機部署筆記.md` 與 `README_CDN.md`。
 
 ## 邊緣快取（src/api/cache.ts）
 
@@ -423,5 +461,7 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
 
 - `memory/MEMORY.md` — 跨 session 架構筆記（新舊版對照、CDN 位址等）
 - `README.md` — 對外文件（公開 API 端點列表）
+- `README_CDN.md` — R2／CDN 版面、筆順 6,063 字語料管線與出貨現況
+- `notes/零停機部署筆記.md` — 零停機部署操作手冊與出貨 checklist
 - `~/w/moedict-webkit/view.ls` — 舊版 UI 行為的 ground truth
 - `台語羅馬拼音索引施工計畫.md` — pinyin lookup 索引的設計文件
