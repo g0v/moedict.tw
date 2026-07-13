@@ -453,10 +453,41 @@ describe("convertPinyinByLang — lang t (Taiwanese)", () => {
     });
 
     it("converts terminal double-n (nn) to superscript n (U+207F)", () => {
-      // The nn-replacement regex requires end-of-string or whitespace/ASCII hyphen
-      // after the nn — hence we test on bare 'ann' and a space-separated case.
+      // The nn-replacement regex requires end-of-string, whitespace, an ASCII/
+      // U+2011 hyphen, or sentence punctuation after the nn.
       expect(convertPinyinByLang("t", "ann")).toContain("\u207F");
       expect(convertPinyinByLang("t", "ann ke")).toContain("\u207F");
+    });
+
+    // Regression coverage for g0v/moedict-webkit#165: by the time this rule
+    // runs, convertPinyinByLang has already rewritten every ASCII "-" to
+    // U+2011 (non-breaking hyphen) — the old `nn($|[-\s])` pattern only
+    // matched a *literal* ASCII hyphen, so a hyphen-joined word like
+    // "ann-ke" never got its "nn" superscripted at all.
+    it("converts nn before a U+2011 word-join hyphen (not just end-of-string/space)", () => {
+      expect(convertPinyinByLang("t", "ann-ke")).toContain("\u207F");
+    });
+
+    // Regression coverage for g0v/moedict-webkit#165 item 2 ("三個拼音系統的
+    // 聲調位置規則不一樣" / 水 tsuí example): DT must reposition the tone mark
+    // to its own placement priority (o>e>a>u>i>ng>m), not merely swap the
+    // mark's identity in place. TL places the tone on the *second* vowel of
+    // a "ui" cluster (tsuí); DT's own priority puts u ahead of i, so the
+    // correct DT form is "zùi" (grave over u), not "zuí" (grave over i).
+    it("repositions the tone mark per DT's own vowel priority, not TL's (tsuí -> zùi)", () => {
+      // NFD input: t s u i+U+0301(acute, TL tone 2) — matches the dictionary's
+      // stored T-field encoding (AGENTS.md requires NFD for the T field).
+      const out = convertPinyinByLang("t", "tsu\u0069\u0301", false);
+      expect(out.normalize("NFC")).toBe("z\u00F9i"); // "zùi"
+    });
+
+    it("repositions the tone mark for a second 'ui' word, confirming it's not tsuí-specific", () => {
+      // TL places the tone on the second vowel of a "ui" cluster (per TL's
+      // own diphthong rule); DT's priority (o>e>a>u>i>ng>m) puts u ahead of
+      // i, so it must move — same mechanism as tsuí -> zùi, different word,
+      // to confirm the fix isn't overfit to one lexical item.
+      const out = convertPinyinByLang("t", "khu\u0069\u0301", false); // TL "khuí"
+      expect(out.normalize("NFC")).toBe("k\u00F9i"); // "kùi" (kh->k, acute->grave, mark moved to u)
     });
   });
 
@@ -487,6 +518,26 @@ describe("convertPinyinByLang — lang t (Taiwanese)", () => {
     it("turns nasal endings nn/nnh into superscript n", () => {
       expect(convertPinyinByLang("t", "ann")).toBe("a\u207F");
       expect(convertPinyinByLang("t", "annh")).toBe("ah\u207F");
+    });
+
+    // Regression coverage for g0v/moedict-webkit#165 item 1 (乎 "--honnh"
+    // example): the nn/nnh terminator character class used to only accept
+    // end-of-string, whitespace, or a hyphen — so the *exact* real-world
+    // shape from the issue's own example sentence ("...tshit-thô--honnh?",
+    // "...pháinn-sè--lah!") never converted, because a light-tone particle
+    // almost always sits right before sentence-final "?" or "!". The
+    // headword-only form ("--honnh" with nothing after it) already worked,
+    // masking the bug for anyone who didn't test it inside a sentence.
+    it("converts nnh before sentence-final punctuation (?, !), not just end-of-string", () => {
+      expect(convertPinyinByLang("t", "--honnh?", false)).toBe("\u2011\u2011hoh\u207F?");
+      expect(convertPinyinByLang("t", "--lah!", false)).toBe("\u2011\u2011lah!");
+    });
+
+    it("converts nnh inside a full example sentence ending in a question mark", () => {
+      // g0v/moedict-webkit#165's own example: 你今仔日欲出去𨑨迌乎？
+      const trs =
+        "L\u00ED kin\u2011\u00E1\u2011ji\u030Dt beh tshut\u2011kh\u00EC tshit\u2011th\u00F4--honnh?";
+      expect(convertPinyinByLang("t", trs, false)).toContain("hoh\u207F?");
     });
 
     it("rewrites er/ir to e+U+0358 / i+U+0358", () => {

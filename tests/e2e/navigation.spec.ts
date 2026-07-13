@@ -55,4 +55,30 @@ test.describe("navigation flows", () => {
     await page.waitForLoadState("networkidle");
     await expect(page).toHaveTitle(/近義詞|分類索引/);
   });
+
+  test("legacy hashbang link (g0v/moedict-webkit#131): direct nav to /#'word resolves to /'word, not the homepage", async ({
+    page,
+  }) => {
+    // Content links inside entries still emit `./#'word` (2014 hashbang
+    // convention); the browser resolves that to pathname "/" + hash
+    // "#'食". Opening it directly (new tab / copied link / typed URL)
+    // must land on the real entry, not silently fall back to the homepage.
+    const response = await page.goto("/#'%E9%A3%9F");
+    expect(response?.status()).toBe(200);
+    await page.waitForLoadState("networkidle");
+    await expect(page).toHaveTitle(/食/);
+    const pathname = decodeURIComponent(new URL(page.url()).pathname);
+    expect(pathname).toBe("/'食");
+  });
+
+  test("legacy hashbang radical-tag link (/#@木) resolves to /@木, not the homepage", async ({
+    page,
+  }) => {
+    const response = await page.goto("/#@%E6%9C%A8");
+    expect(response?.status()).toBe(200);
+    await page.waitForLoadState("networkidle");
+    await expect(page).toHaveTitle(/木/);
+    const pathname = decodeURIComponent(new URL(page.url()).pathname);
+    expect(pathname).toBe("/@木");
+  });
 });

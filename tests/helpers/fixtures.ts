@@ -150,6 +150,31 @@ export function collectDictionaryFixtures(): FixtureEntry[] {
     });
   }
 
+  // =成語.json is needed by tests/e2e/scroll-restoration.spec.ts which scrolls
+  // to y=4200 on the list page — requires a large real entry array.
+  // Synthesise 200 fake entries when the real file is absent so the list page
+  // renders enough rows to reach that scroll depth.
+  const chengYuFixture = "=成語.json";
+  const chengYuPath = path.join(DATA_DICT, "a", chengYuFixture);
+  if (existsSync(chengYuPath)) {
+    entries.push({
+      bucket: "DICTIONARY",
+      key: `a/${chengYuFixture}`,
+      body: readFileSync(chengYuPath),
+      httpMetadata: { contentType: "application/json; charset=utf-8" },
+    });
+  } else {
+    // Synthesise 200 entries — enough rows to push document height past
+    // the 4200 px target the scroll-restoration test scrolls to.
+    const fakeChengYu = Array.from({ length: 200 }, (_, i) => `成語${String(i).padStart(3, "0")}`);
+    entries.push({
+      bucket: "DICTIONARY",
+      key: `a/${chengYuFixture}`,
+      body: new TextEncoder().encode(JSON.stringify(fakeChengYu)),
+      httpMetadata: { contentType: "application/json; charset=utf-8" },
+    });
+  }
+
   const crossStraitListFixture = "=同實異名.json";
   const crossStraitListPath = path.join(DATA_DICT, "c", crossStraitListFixture);
   if (existsSync(crossStraitListPath)) {
@@ -266,6 +291,21 @@ export function collectAssetFixtures(): FixtureEntry[] {
       key: "manifest.appcache",
       body: new TextEncoder().encode("CACHE MANIFEST\n# moedict test fixture\n"),
       httpMetadata: { contentType: "text/cache-manifest; charset=utf-8" },
+    });
+  }
+
+  // Real stroke-json for 萌 (U+840C) from tests/fixtures/stroke-json/840c.json.
+  // Serves two purposes: (1) useStrokeAvailability HEAD probe returns 200 so the
+  // pencil button stays enabled; (2) jquery.strokeWords.js can actually render
+  // 12 strokes in #strokes, giving the container non-zero width so Playwright's
+  // actionability check passes for the replay-click test.
+  const strokeJson840c = path.join(FIXTURES_DIR, "stroke-json", "840c.json");
+  if (existsSync(strokeJson840c)) {
+    entries.push({
+      bucket: "ASSETS",
+      key: "stroke-json/840c.json",
+      body: readFileSync(strokeJson840c),
+      httpMetadata: { contentType: "application/json; charset=utf-8" },
     });
   }
 

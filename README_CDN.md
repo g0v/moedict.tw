@@ -61,6 +61,41 @@ node commands/migrate-legacy-cdn-to-r2.mjs --extensions=mp3
 
 ## 三、已停用：Rackspace CDN（歷史記錄，2026-07 遷移）
 
+### 筆畫 JSON 命中率偏低（~36%）的根因與新版教育部網站再抓取工具
+
+`stroke-json/` 遷移抽樣結果約 36% 命中（見下方第四節）。這不是隨機資料缺漏，
+而是遷移來源（`829091573dd46381a321-...rackcdn.com`，內容承自
+g0v/zh-stroke-data）本身只涵蓋教育部民國 71 年公告的 4808 個常用字：
+g0v/zh-stroke-data 的 `fetch.go` 是呼叫教育部舊版
+`provideStrokeInfo.do?big5=<hex>` 端點取得資料，而該端點已隨教育部網站於
+2024-12-27／2025-01-02 全面改版而完全停用（連 `一` 這種最基本常用字查詢
+也回 404，屬於整個端點退役，並非個別字缺漏）。新版網站
+（`https://stroke-order.learningweb.moe.edu.tw/`）收字範圍已擴充到 6,063 字
+（2020 年依《國語辭典簡編本》擴充至 6,057，2024 年再依《國語小字典》擴充至
+6,063），改用 `dictView.jsp?ID=<十進位 Unicode 碼位>` 呈現，並把完整筆順
+XML（格式與舊版逐位元組相同）內嵌在頁面的 `xml[<ID>]="...";` JS 字串常值中。
+
+換言之，這 64% 缺口裡有一部分字（例如「町」U+753A、g0v/moedict-webkit#227；
+「汛」U+6C5B、g0v/moedict-webkit#265）其實教育部新版網站**已經有**官方筆順
+資料，只是 zh-stroke-data／R2 鏡像從未針對新版擴充字集重新同步過，屬於
+資料管線落後於上游改版，而不是教育部完全沒有這些字的資料。
+
+`commands/fetch-moe-stroke.mjs` 提供從新版網站重新取得＋轉換單一國字筆順
+資料的工具（唯讀存取教育部網站，只寫本機檔案，**不會**寫入 R2／呼叫
+wrangler）：
+
+```bash
+node commands/fetch-moe-stroke.mjs 町 汛 --out .moe-stroke-fetch
+```
+
+輸出的 `{hex}.json` 與現有 R2 `stroke-json/{hex}.json` schema 完全相同，
+可直接餵給 `wrangler r2 object put`（腳本執行後會印出對應指令，但不會自動
+執行——實際上傳需要生產環境 R2 憑證，是後續部署步驟，不在此腳本範圍）。
+要大規模回填，需要先取得目前 R2 上實際缺漏的字集清單（例如比對
+`data/dictionary` 推導出的完整字集 vs. 現有 `stroke-json/` 物件），逐一重跑
+本工具，再統一上傳並更新 `.migration-state/`－風格的進度紀錄；本次只針對
+「町」「汛」兩字驗證工具本身可行，未執行大規模回填。
+
 以下 4 個 Rackspace Cloud Files 容器（2013 年由 moedict-webkit 上傳，`http-map`
 定義於原專案 `main.ls`/`view.ls`）已於 2026-07 透過
 `commands/migrate-legacy-cdn-to-r2.mjs` 一次性遷移進上方的 R2 端點，程式碼中

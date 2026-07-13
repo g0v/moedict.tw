@@ -472,6 +472,15 @@ a.iconic-circle:active {
   background: #888 !important;
 }
 
+/* issue #132：已知缺筆順資料時停用（見 DictionaryPage.tsx strokeAnimationDisabled） */
+.iconic-circle.stroke[aria-disabled="true"] {
+  cursor: not-allowed !important;
+  opacity: 0.45;
+}
+.iconic-circle.stroke[aria-disabled="true"]:hover {
+  background: black !important;
+}
+
 /* 語言別顏色（原 _theme.scss: body.lang-* .iconic-circle）*/
 body.lang-a .iconic-circle {
   background: #400;
@@ -539,6 +548,14 @@ body.lang-t .iconic-color {
   pointer-events: none;
 }
 
+.result .entry .title .single-char-stroke-trigger[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+.result .entry .title .single-char-stroke-trigger[aria-disabled="true"]:hover {
+  border-color: transparent;
+  background-color: transparent;
+}
+
 /* Right-angle ruby preferences.  The legacy hruby CSS always lays out the
    romanization rows; compact them when the user only asked for bopomofo. */
 body[data-ruby-pref="zhuyin"] .result .entry .title hruby.rightangle ru[annotation]::before,
@@ -559,6 +576,34 @@ body[data-ruby-pref="zhuyin"] .result .entry .title hruby.rightangle ru {
 
 body[data-ruby-pref="zhuyin"] .result .entry .title {
   margin-bottom: 0.35em !important;
+}
+
+/* 複製羅馬拼音按鈕（g0v/moedict-webkit#256）：外框沿用 .audioBlock 的排版，
+   內層按鈕沿用 .part-of-speech.playAudio 的紅底圓角外觀（見
+   data/assets/styles.css:10955-10988），只是換一個圖示/動作。 */
+.copyBlock {
+  display: inline-block;
+  margin-top: 10px;
+}
+
+.part-of-speech.copyRomanization {
+  background: #6b0000;
+  color: white;
+  font-size: 90%;
+  padding: 4px;
+  cursor: pointer;
+  line-height: 100%;
+  display: inline-block;
+}
+
+.copyRomanization {
+  margin-left: 5px;
+  color: #6b0000;
+  font-size: 70%;
+  padding-left: 5px;
+  display: inline-block !important;
+  cursor: pointer;
+  line-height: 100%;
 }
 
 .result .entry .title {
@@ -612,20 +657,37 @@ html.moe-ios .result .entry .title {
   --title-zhuyin-y-shift: -0.055em;
 }
 
+/* g0v/moedict-webkit#186: 主要拼音（羅馬拼音／注音）目前只靠
+   `ru[annotation]::before { content: attr(annotation) }` 畫出可見字形——
+   CSS generated content 在任何瀏覽器都不可選取、不可複製。真正可選取的
+   `<rt>` 文字節點原本被縮成 1x1px 並 clip 到看不見的角落（外加 legacy
+   inline `text-indent: -9999px`），使用者在可見拼音上拖曳選取一定選不到
+   任何字。這裡改成把 `<rt>` 疊在跟 `::before` 完全相同的視覺座標上
+   （位置/尺寸/縮放皆對齊 `ru[annotation]:before` 與 `hruby[rightangle]`
+   規則），並保留 `color: transparent` 讓它本身不可見——畫面上看到的仍是
+   `::before` 畫出的字形，但滑鼠/觸控落在同一個位置時，選取到的是這個真
+   實、正確、可複製的 Unicode 文字（而非畫出來的 PUA 連字字形）。*/
 .result .entry .title hruby.rightangle ru[annotation] > rt {
   position: absolute !important;
-  width: 1px !important;
-  height: 1px !important;
+  left: -250% !important;
+  top: -0.5em !important;
+  height: 1em !important;
+  width: 600% !important;
+  font-size: 1em !important;
+  font-family: inherit !important;
+  line-height: 1 !important;
+  text-align: center !important;
+  text-indent: 0 !important;
+  transform: scale(0.55) !important;
+  transform-origin: top !important;
   margin: 0 !important;
   padding: 0 !important;
   border: 0 !important;
-  overflow: hidden !important;
-  clip: rect(0, 0, 0, 0) !important;
-  clip-path: inset(50%) !important;
+  overflow: visible !important;
+  clip: auto !important;
+  clip-path: none !important;
   white-space: nowrap !important;
   color: transparent !important;
-  font-size: 0 !important;
-  line-height: 0 !important;
 }
 
 .result .entry .title hruby.rightangle ru[zhuyin] zhuyin,
@@ -764,6 +826,36 @@ body[data-ruby-pref="zhuyin"] .result .entry .title hruby.rightangle ru[zhuyin][
 #strokes canvas {
   margin-left: 5px;
   box-shadow: hsl(0, 0%, 83%) 0 3px 3px;
+}
+
+/* #265/#76: 若字元無教育部標準字體筆順資料，明確顯示「？尚無筆順資料」徽章，
+   取代原本僅將空白 canvas 淡化至 50% 透明度的「破損」外觀 */
+#strokes .word.stroke-missing canvas {
+  visibility: hidden;
+}
+#strokes .stroke-missing-badge {
+  position: absolute;
+  top: 0;
+  left: 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  background: #f7f7f7;
+  border: 1px dashed #bbb;
+  box-shadow: hsl(0, 0%, 83%) 0 3px 3px;
+  color: #888;
+  text-align: center;
+}
+#strokes .stroke-missing-mark {
+  font-size: 2.5em;
+  line-height: 1;
+  font-weight: bold;
+}
+#strokes .stroke-missing-text {
+  font-size: 0.75em;
+  margin-top: 0.4em;
 }
 
 /* 歷代書體按鈕區 */

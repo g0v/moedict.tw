@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { prefetchDictionaryEntry } from "../utils/dictionary-cache";
 import { removeBopomofo } from "../utils/bopomofo-pinyin-utils";
+import { convertBopomofoQueryToPinyin, isPureBopomofoQuery } from "../utils/bopomofo-query-utils";
 import { collectLegacyMatchedTerms, hasLegacyPatternOperators } from "../utils/legacy-search-utils";
 import { getHanYuPinyinLookupBase } from "../utils/hanyu-pinyin-lookup";
 
@@ -222,7 +223,13 @@ function resolveSearchInput(
   input: string,
   fallbackLang: Lang,
 ): { lang: Lang; term: string } | null {
-  const trimmed = removeBopomofo(input.trim());
+  const trimmedInput = input.trim();
+  // 純注音符號查詢（如 "ㄅㄚ"）在華語／兩岸辭典分頁要保留原字元，交給下方
+  // 的漢語拼音查詢管線轉換；其餘情況維持原本「貼上帶注音的文字時去除注音
+  // 噪音」的行為（見 removeBopomofo 導入時的 commit a2bba89）。
+  const preserveBopomofo =
+    (fallbackLang === "a" || fallbackLang === "c") && isPureBopomofoQuery(trimmedInput);
+  const trimmed = preserveBopomofo ? trimmedInput : removeBopomofo(trimmedInput);
   if (!trimmed) return null;
 
   const { lang: parsedLang, cleanTerm } = parseSearchTerm(trimmed);
@@ -670,7 +677,22 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
     return activeSearchLang === "h" && hasActiveSearch && isHakkaRomanizedInput(activeSearchTerm);
   }, [activeSearchLang, activeSearchTerm, hasActiveSearch]);
   const usesPatternSearch = hasLegacyPatternOperators(activeSearchTerm);
-  const usesHanYuRomanizationLookup = isHanYuRomanizationQuery(activeSearchTerm, activeSearchLang);
+  // 純注音符號查詢（"注音符號搜尋"，issue #92）：把注音轉成無聲調拼音字串，
+  // 交給既有的 HanYu 拼音查詢管線（下方 usesHanYuRomanizationLookup 分支）
+  // 處理，不需另建索引或 API。
+  const isBopomofoSearch = useMemo(() => {
+    return (
+      (activeSearchLang === "a" || activeSearchLang === "c") &&
+      hasActiveSearch &&
+      isPureBopomofoQuery(activeSearchTerm)
+    );
+  }, [activeSearchLang, activeSearchTerm, hasActiveSearch]);
+  const hanYuLookupTerm = useMemo(() => {
+    if (!isBopomofoSearch) return activeSearchTerm;
+    return convertBopomofoQueryToPinyin(activeSearchTerm) ?? activeSearchTerm;
+  }, [activeSearchTerm, isBopomofoSearch]);
+  const usesHanYuRomanizationLookup =
+    isBopomofoSearch || isHanYuRomanizationQuery(hanYuLookupTerm, activeSearchLang);
 
   // Search 字詞變更時，手機結果面板預設收合
   useEffect(() => {
@@ -749,7 +771,7 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
           matchedTerms = await fetchHakkaPinyinSuggestions(activeSearchTerm, activeHakkaPinyinType);
         } else if (usesHanYuRomanizationLookup) {
           const [romanizationTerms, indexTerms] = await Promise.all([
-            fetchHanYuRomanizationTerms(activeSearchTerm, activeSearchLang),
+            fetchHanYuRomanizationTerms(hanYuLookupTerm, activeSearchLang),
             indexTermsPromise,
           ]);
           const indexSet = getIndexSetForLang(activeSearchLang);
@@ -796,6 +818,7 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
     activeHakkaPinyinType,
     activeSearchLang,
     activeSearchTerm,
+    hanYuLookupTerm,
     activeTaiwanesePinyinType,
     hasActiveSearch,
     isHakkaRomanSearch,
@@ -828,6 +851,9 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
       if (hasLegacyPatternOperators(resolved.term)) return;
       if (resolved.lang === "t" && isTaiwaneseRomanizedInput(resolved.term)) return;
       if (resolved.lang === "h" && isHakkaRomanizedInput(resolved.term)) return;
+      if ((resolved.lang === "a" || resolved.lang === "c") && isPureBopomofoQuery(resolved.term)) {
+        return;
+      }
       if (isHanYuRomanizationQuery(resolved.term, resolved.lang)) return;
 
       const nextPath = formatSearchTerm(resolved.term, resolved.lang);

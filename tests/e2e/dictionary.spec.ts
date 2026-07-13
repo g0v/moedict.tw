@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Page, Route } from "@playwright/test";
 import { expect, test } from "./_fixtures";
 
 const ANDROID_WEBVIEW_UA =
@@ -78,6 +78,177 @@ test.describe("dictionary pages per language", () => {
     const response = await page.goto("/~%E4%B8%8A%E8%A8%B4");
     expect(response?.status()).toBe(200);
     await waitForEntryHydration(page, "上訴");
+  });
+});
+
+// g0v/moedict-webkit#186: 「讓台語萌典的主要拼音(注音)可選取複製」——標題主
+// 讀音（羅馬拼音）過去只用 `ru[annotation]::before { content: attr(annotation) }`
+// 畫出可見字形，CSS generated content 任何瀏覽器都無法選取/複製；真正可選取
+// 的 `<rt>` 節點被縮成 1x1px 隱藏在別處。這裡驗證修法：真實 `<rt>` 現在疊在
+// 可見字形的實際畫面座標上，使用者在那個位置能選到正確、乾淨的 Unicode 文
+// 字（而不是畫面用的 PUA 連字字形），且觸發此動作不會被單字筆順動畫的
+// click handler 打斷。
+const LEGACY_RUBY_CSS = `
+  hruby { display: inline; line-height: 2; }
+  hruby ru { position: relative; display: inline-block; text-indent: 0; }
+  hruby ru:before,
+  hruby zhuyin {
+    transform: scale(.55);
+    font-style: normal;
+    font-weight: 400;
+    line-height: normal;
+    text-indent: 0;
+    position: absolute;
+    display: inline-block;
+  }
+  hruby ru[annotation] { text-align: center; }
+  hruby ru[annotation]:before {
+    left: -265%;
+    top: -.5em;
+    height: 1em;
+    width: 600%;
+    content: attr(annotation);
+    line-height: 1;
+    text-align: center;
+    text-indent: 0;
+  }
+  hruby[rightangle] ru[annotation]:before { left: -250%; }
+  hruby ru[annotation] > rt {
+    display: inline-block;
+    height: 0;
+    width: 0;
+    font: 0/0 hidden-text;
+  }
+`;
+
+async function routeLegacyStylesCss(page: Page): Promise<void> {
+  const handler = (route: Route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "text/css; charset=utf-8",
+      headers: { "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" },
+      body: LEGACY_RUBY_CSS,
+    });
+  await page.route("https://r2-assets.test.local/styles.css", handler);
+  await page.route("https://r2-assets.test.local/styles.css?*", handler);
+}
+
+test.describe("Taigi title pronunciation selection/copy (g0v/moedict-webkit#186)", () => {
+  test("the visible romanization glyph position selects the real Unicode text, not the painted PUA ligature", async ({
+    page,
+  }) => {
+    await routeLegacyStylesCss(page);
+    const active = await gotoFirstTitleEntry(page, TAIGI_TITLE_CANDIDATES);
+    await expect(page.locator("h1.title").first()).toContainText(active.title[0], {
+      timeout: 8_000,
+    });
+    await page.evaluate(() => document.fonts.ready);
+
+    const result = await page.evaluate(() => {
+      const ru = document.querySelector("h1.title hruby.rightangle ru[annotation]");
+      if (!ru) throw new Error("annotation ru not found");
+      const rt = ru.querySelector(":scope > rt");
+      if (!rt || !rt.firstChild) throw new Error("rt text node not found");
+
+      const before = window.getComputedStyle(ru, "::before");
+      const glyphRange = document.createRange();
+      glyphRange.selectNodeContents(rt.firstChild);
+      const glyphRect = glyphRange.getClientRects()[0];
+      if (!glyphRect) throw new Error("rt has no rendered glyph rect");
+
+      // The regression this guards against: `<rt>` clipped to a 1x1px box
+      // positioned away from the visible glyph (screen-reader-only pattern)
+      // means no real mouse/touch action at the visible pinyin can ever
+      // reach it.
+      const rtBoxRect = rt.getBoundingClientRect();
+
+      const y = glyphRect.y + glyphRect.height / 2;
+      const startCaret = document.caretRangeFromPoint(glyphRect.x + 1, y);
+      const endCaret = document.caretRangeFromPoint(glyphRect.x + glyphRect.width - 1, y);
+      const caretsInRt =
+        startCaret?.startContainer.parentElement === rt &&
+        endCaret?.startContainer.parentElement === rt;
+
+      let selectedText = "";
+      if (startCaret && endCaret) {
+        const selRange = document.createRange();
+        selRange.setStart(startCaret.startContainer, startCaret.startOffset);
+        selRange.setEnd(endCaret.startContainer, endCaret.startOffset);
+        const sel = window.getSelection();
+        sel?.removeAllRanges();
+        sel?.addRange(selRange);
+        selectedText = sel?.toString() ?? "";
+      }
+
+      return {
+        annotation: ru.getAttribute("annotation"),
+        rtText: rt.textContent,
+        rtBoxWidth: rtBoxRect.width,
+        rtBoxHeight: rtBoxRect.height,
+        beforeContent: before.content,
+        caretsInRt,
+        selectedText,
+      };
+    });
+
+    // Painted glyph (generated content) still renders — visual output is
+    // unchanged; we only made the underlying text reachable.
+    expect(result.beforeContent).toBe(JSON.stringify(result.annotation));
+    // No longer clipped to a 1x1px screen-reader-only box.
+    expect(result.rtBoxWidth).toBeGreaterThan(5);
+    expect(result.rtBoxHeight).toBeGreaterThan(5);
+    // The pixel the user sees the romanization at now resolves into the
+    // real <rt> text node, and selecting it copies the plain, clean Unicode
+    // romanization — never the custom-font PUA ligature used only for
+    // diacritic rendering in the painted glyph.
+    expect(result.caretsInRt).toBe(true);
+    expect(result.selectedText).toBe(result.rtText);
+    // The custom-font ligature glyph the painted `::before` uses to fix
+    // stacked-diacritic rendering lives in the Supplementary Private Use
+    // Area (astral, codepoint > 0xFFFF, e.g. U+F0061) — plain Latin text
+    // with combining diacritics never needs a surrogate pair. Checking for
+    // "no astral codepoints" (instead of a character-class regex) confirms
+    // the copied text is the clean, portable Unicode form.
+    expect(Array.from(result.selectedText).some((ch) => ch.codePointAt(0)! > 0xffff)).toBe(false);
+  });
+
+  test("an active selection suppresses the single-character stroke-animation click", async ({
+    page,
+  }) => {
+    await routeLegacyStylesCss(page);
+    const response = await page.goto("/'%E9%A3%9F"); // 食 — single-char Taigi entry
+    expect(response?.status()).toBe(200);
+    await waitForEntryHydration(page, "食");
+
+    const outcome = await page.evaluate(() => {
+      const trigger = document.querySelector(".single-char-stroke-trigger");
+      const rt = document.querySelector("h1.title hruby.rightangle ru[annotation] > rt");
+      if (!trigger || !rt || !rt.firstChild) throw new Error("title nodes not found");
+
+      // Simulate the browser Selection state a real drag/double-click over
+      // the visible romanization would leave behind, then dispatch the
+      // click the mouseup of that same gesture also produces.
+      const range = document.createRange();
+      range.selectNodeContents(rt.firstChild);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+
+      const before = !!document.querySelector("#strokes");
+      trigger.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      const after = !!document.querySelector("#strokes");
+      return {
+        before,
+        after,
+        selectionSurvived: (window.getSelection()?.toString() ?? "") === "tsia̍h",
+      };
+    });
+
+    // The stroke-animation panel's visibility must not flip when the click
+    // arrives with a non-empty selection — otherwise every attempt to copy
+    // the romanization also yanks the stroke-order panel open/closed.
+    expect(outcome.after).toBe(outcome.before);
+    expect(outcome.selectionSurvived).toBe(true);
   });
 });
 
