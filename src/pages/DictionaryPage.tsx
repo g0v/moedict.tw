@@ -53,10 +53,10 @@ interface Heteronym {
   alt?: string;
   audio_id?: string;
   synonyms?: string[] | string;
-  reading?: string;
-  definitions?: Definition[];
   /** TWBLG 文/白/俗/替讀音分類（g0v/moedict-webkit#96、#233），僅 lang='t' 有值；
    *  API 回傳時已包成 autolink 的 `<a href="...">文</a>`，渲染前需 untag。 */
+  reading?: string;
+  definitions?: Definition[];
 }
 
 interface DictionaryAPIResponse {
@@ -448,8 +448,7 @@ function CnsAttributesPanel({ record }: { record: CnsRecord }) {
               <tr>
                 <th>部首</th>
                 <td>
-                  {attributes.radical.id}・
-                  {attributes.radical.char ?? ""}
+                  {attributes.radical.id}・{attributes.radical.char ?? ""}
                 </td>
               </tr>
             )}
@@ -481,11 +480,7 @@ function CnsAttributesPanel({ record }: { record: CnsRecord }) {
         </table>
         <p className="cns-attribution">
           資料來源：
-          <a
-            href="https://www.cns11643.gov.tw"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
+          <a href="https://www.cns11643.gov.tw" target="_blank" rel="noopener noreferrer">
             數位發展部 CNS11643 全字庫
           </a>
           ，政府資料開放授權條款第 1 版（OGDL-1.0）。
@@ -494,7 +489,6 @@ function CnsAttributesPanel({ record }: { record: CnsRecord }) {
     </div>
   );
 }
-
 
 export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPageProps) {
   const navigate = useNavigate();
@@ -763,9 +757,7 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
             <p className="def">{state.error}</p>
           </div>
         </div>
-        {cnsFallback.record && (
-          <CnsAttributesPanel record={cnsFallback.record} />
-        )}
+        {cnsFallback.record && <CnsAttributesPanel record={cnsFallback.record} />}
       </div>
     );
   }
