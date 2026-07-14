@@ -81,3 +81,10 @@
 - 新增 `tests/e2e/legacy-styles-regression.spec.ts` 作為視覺零回歸驗證：用
   `page.route()` 讓 CSS 內容可控，比對改動前後的 `getComputedStyle`（逐一
   列舉屬性，不能用 `.cssText`——Chromium 對 computed style 一律回傳空字串）。
+
+## 2026-07-14 共用 checkout / 備份 / patch-id 記錄
+
+- 共用 checkout `/Users/au/w/moedict.tw`（branch `main`，HEAD `af42ebf`）目前仍是 working tree 髒狀態：`13 modified + 5 untracked`。經 `git hash-object` + `git log --find-object` 掃 integration 全歷史做 blob-containment 檢查後，18 個路徑裡有 12 個 `NO_MATCH`；其中包含 `src/api/handleDictionaryAPI.ts`（`KEY_MAP` 新增 `B: "variants"`、direct bucket fill 重構）與 `src/pages/DictionaryPage.tsx`（heteronym `variants?: string[]`、stroke-availability 變更）等未收錄於任何 commit 的獨特內容。這是進行中工作，**不可 stash/reset/clean**。
+- 零變動 forensic backup 已放在 `/Users/au/w/backups/moedict-main-dirty-20260714/`：`tracked.patch`（`git diff --binary`）、`untracked/` 五個檔案 byte-exact 副本、`MANIFEST.json`（HEAD sha、porcelain status、每檔 sha256、12 個 `NO_MATCH` 路徑清單）、`README.md`。備份完成後再次驗證 repo `git status --porcelain`，結果 byte-identical 未變。
+- `main` 本地 ahead-1 commit `af42ebf` 與 integration 內容 patch-id 等價；`git cherry` 已確認以 `-` 前綴標示，代表 committed 歷史無風險，只有 working tree 保有獨特位元組。
+- 處置建議：integration branch 走 PR 合併 `origin/main`，不需要本地 `main` 乾淨；若確認髒工作已放棄，先 commit 到 rescue branch（例如 `wip/cns-variants`）再動 `main`。
