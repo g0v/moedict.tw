@@ -1,16 +1,18 @@
 /**
  * 順序不變量測試 — <h1 className="title"> 內 sibling 順序：
  *   children（ruby/title）→ small.youyin → span.audioBlock →
- *   span.copyBlock → small.alternative → small.reading-type
+ *   small.alternative → small.reading-type
  *
- * 前四個節點依 legacy `~/w/moedict-webkit/view.ls:132-158` 的 ground truth；
- * copyBlock 為 g0v/moedict-webkit#256 新增的「複製羅馬拼音」按鈕，
+ * 三個節點依 legacy `~/w/moedict-webkit/view.ls:132-158` 的 ground truth；
  * reading-type 固定放在最後。
  * 過去曾有 commit 把 .alternative 插到 .audioBlock 之前，造成播放鍵被
  * block-level 的 .alternative 擠到下方（視覺回歸）。本測試把順序固化。
  *
  * small.reading-type 是 g0v/moedict-webkit#96、#233 新增的 TWBLG 文/白/
- * 俗/替讀音分類標記，legacy 沒有對應節點，固定加在既有四個節點之後。
+ * 俗/替讀音分類標記，legacy 沒有對應節點，固定加在既有三個節點之後。
+ *
+ * 「複製羅馬拼音」按鈕（#256）已移除；羅馬拼音現在可透過滑鼠/觸控
+ * 拖曳直接選取（#186 CSS 疊加層），不需要獨立按鈕。
  */
 
 import { renderToStaticMarkup } from "react-dom/server";
@@ -29,7 +31,6 @@ function render(overrides: Record<string, unknown> = {}): string {
     pronunAudioId: "12345" as string | undefined,
     isPlaying: false,
     onToggleAudio: noop,
-    hasRomanization: true,
     readingType: undefined as string | undefined,
   };
   const props = { ...defaults, ...overrides };
@@ -37,12 +38,11 @@ function render(overrides: Record<string, unknown> = {}): string {
 }
 
 describe("TitlePronunciation 順序不變量", () => {
-  it("(a) t-lang 全部項目齊全時，children → youyin → audioBlock → copyBlock → alternative → reading-type 順序正確", () => {
+  it("(a) t-lang 全部項目齊全時，children → youyin → audioBlock → alternative → reading-type 順序正確", () => {
     const html = render({ readingType: "文" });
     const iChildren = html.indexOf('data-testid="ruby"');
     const iYouyin = html.indexOf('class="youyin"');
     const iAudioBlock = html.indexOf('class="audioBlock"');
-    const iCopyBlock = html.indexOf('class="copyBlock"');
     const iAlternative = html.indexOf('class="alternative"');
     const iReadingType = html.indexOf('class="reading-type"');
 
@@ -50,16 +50,20 @@ describe("TitlePronunciation 順序不變量", () => {
     expect(iChildren).toBeGreaterThanOrEqual(0);
     expect(iYouyin).toBeGreaterThanOrEqual(0);
     expect(iAudioBlock).toBeGreaterThanOrEqual(0);
-    expect(iCopyBlock).toBeGreaterThanOrEqual(0);
     expect(iAlternative).toBeGreaterThanOrEqual(0);
     expect(iReadingType).toBeGreaterThanOrEqual(0);
 
     // 順序不變量
     expect(iChildren).toBeLessThan(iYouyin);
     expect(iYouyin).toBeLessThan(iAudioBlock);
-    expect(iAudioBlock).toBeLessThan(iCopyBlock);
-    expect(iCopyBlock).toBeLessThan(iAlternative);
+    expect(iAudioBlock).toBeLessThan(iAlternative);
     expect(iAlternative).toBeLessThan(iReadingType);
+  });
+
+  it("no copyBlock rendered — romanization is selectable via #186 CSS overlay, not a button", () => {
+    const html = render();
+    expect(html).not.toContain('class="copyBlock"');
+    expect(html).not.toContain("copyRomanization");
   });
 
   it("(b) 無 bAlt/pAlt 時不渲染 small.alternative", () => {
@@ -82,12 +86,6 @@ describe("TitlePronunciation 順序不變量", () => {
   it("(c2) lang=h 且 pronunAudioId=undefined 時不渲染 audioBlock", () => {
     const html = render({ lang: "h", pronunAudioId: undefined });
     expect(html).not.toContain('class="audioBlock"');
-  });
-
-  it("(c3) lang=h 時即使 hasRomanization=true 也不渲染 copyBlock（客語拼音本身就可選取）", () => {
-    const html = render({ lang: "h", pronunAudioId: undefined });
-    expect(html).not.toContain('class="copyBlock"');
-    expect(html).not.toContain("copyRomanization");
   });
 
   it("(d) 無 pronunAudioId 時不渲染 span.audioBlock", () => {
@@ -115,17 +113,6 @@ describe("TitlePronunciation 順序不變量", () => {
     expect(html).toContain(">新</small>");
   });
 
-  it("(d2) hasRomanization=false 時不渲染 span.copyBlock", () => {
-    const html = render({ hasRomanization: false });
-    expect(html).not.toContain('class="copyBlock"');
-    expect(html).not.toContain("copyRomanization");
-  });
-
-  it("(d3) hasRomanization 省略（undefined）時預設不渲染 span.copyBlock", () => {
-    const html = render({ hasRomanization: undefined });
-    expect(html).not.toContain('class="copyBlock"');
-  });
-
   it("audioBlock 內含 role=button, tabIndex=0, playAudio class, 播放發音 aria-label/title", () => {
     const html = render({ isPlaying: false });
     expect(html).toContain('role="button"');
@@ -139,13 +126,6 @@ describe("TitlePronunciation 順序不變量", () => {
     const html = render({ isPlaying: true });
     expect(html).toContain('aria-label="停止播放"');
     expect(html).toContain('title="停止播放"');
-  });
-
-  it("copyBlock 內含 role=button, tabIndex=0, copyRomanization class, 複製羅馬拼音 aria-label/title", () => {
-    const html = render();
-    expect(html).toContain('class="copyRomanization part-of-speech"');
-    expect(html).toContain('aria-label="複製羅馬拼音"');
-    expect(html).toContain('title="複製羅馬拼音"');
   });
 
   it("youyin 不存在時不渲染 small.youyin", () => {

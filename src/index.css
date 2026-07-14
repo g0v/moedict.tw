@@ -749,34 +749,6 @@ body[data-ruby-pref="zhuyin"] .result .entry .title {
   margin-bottom: 0.35em !important;
 }
 
-/* 複製羅馬拼音按鈕（g0v/moedict-webkit#256）：外框沿用 .audioBlock 的排版，
-   內層按鈕沿用 .part-of-speech.playAudio 的紅底圓角外觀（見
-   data/assets/styles.css:10955-10988），只是換一個圖示/動作。 */
-.copyBlock {
-  display: inline-block;
-  margin-top: 10px;
-}
-
-.part-of-speech.copyRomanization {
-  background: #6b0000;
-  color: white;
-  font-size: 90%;
-  padding: 4px;
-  cursor: pointer;
-  line-height: 100%;
-  display: inline-block;
-}
-
-.copyRomanization {
-  margin-left: 5px;
-  color: #6b0000;
-  font-size: 70%;
-  padding-left: 5px;
-  display: inline-block !important;
-  cursor: pointer;
-  line-height: 100%;
-}
-
 .result .entry .title {
   --title-leading-family: Biaodian Pro Serif CNS;
   --title-zhuyin-x-shift: 0em;
@@ -860,6 +832,8 @@ html.moe-ios .result .entry .title {
   clip-path: none !important;
   white-space: nowrap !important;
   color: transparent !important;
+  -webkit-user-select: text !important;
+  user-select: text !important;
 }
 
 .result .entry .title hruby.rightangle ru[zhuyin] zhuyin,

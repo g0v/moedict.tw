@@ -253,6 +253,232 @@ test.describe("Taigi title pronunciation selection/copy (g0v/moedict-webkit#186)
   });
 });
 
+// g0v/moedict-webkit#256 (button removed): 「複製羅馬拼音」按鈕已移除。
+// 羅馬拼音現在可透過 #186 CSS 疊加層直接選取，不需要按鈕。
+// 同時驗證 Mandarin 標題的相同疊加層機制（#186 只有 Taigi e2e 測試）。
+
+/**
+ * Obtain the bounding rect of the first title <rt> text node rendered at the
+ * visible romanization glyph position.  Returns the serialisable DOMRect fields
+ * so the caller can drive page.mouse without entering page.evaluate again.
+ */
+async function getRtGlyphRect(
+  page: Page,
+): Promise<{ x: number; y: number; w: number; h: number; rtText: string } | null> {
+  return page.evaluate(() => {
+    const rt = document.querySelector("h1.title hruby.rightangle ru[annotation] > rt");
+    if (!rt?.firstChild) return null;
+    const range = document.createRange();
+    range.selectNodeContents(rt.firstChild);
+    const rect = range.getClientRects()[0];
+    if (!rect || rect.width < 2 || rect.height < 2) return null;
+    return {
+      x: rect.x,
+      y: rect.y,
+      w: rect.width,
+      h: rect.height,
+      rtText: rt.textContent ?? "",
+    };
+  });
+}
+
+/**
+ * Simulate a real pointer drag across the romanization row using
+ * page.mouse, then return window.getSelection().toString() NFC-normalised.
+ * The drag is confined to the vertical extent of the glyph rect so it
+ * cannot accidentally sweep the Han character row beneath.
+ */
+async function dragSelectRomanization(
+  page: Page,
+  glyph: { x: number; y: number; w: number; h: number },
+): Promise<string> {
+  const midY = glyph.y + glyph.h / 2;
+  // Start one pixel inside the left edge, end one pixel inside the right edge.
+  await page.mouse.move(glyph.x + 1, midY);
+  await page.mouse.down();
+  await page.mouse.move(glyph.x + glyph.w - 1, midY, { steps: 12 });
+  await page.mouse.up();
+  return page.evaluate(() => (window.getSelection()?.toString() ?? "").normalize("NFC"));
+}
+
+test.describe("Mandarin title pronunciation selection (g0v/moedict-webkit#186 + #256)", () => {
+  test("no copy button rendered — 複製羅馬拼音 button must not appear", async ({ page }) => {
+    await routeLegacyStylesCss(page);
+    await page.goto("/%E9%BB%83"); // 黃
+    await waitForEntryHydration(page, "黃");
+    // The button must not exist at all — selecting romanization works natively
+    await expect(page.locator(".copyBlock")).toHaveCount(0);
+    await expect(page.locator(".copyRomanization")).toHaveCount(0);
+  });
+
+  test("hit-testing: caretRangeFromPoint at visible romanization resolves to real <rt> text node (Mandarin)", async ({
+    page,
+  }) => {
+    await routeLegacyStylesCss(page);
+    await page.goto("/%E9%BB%83"); // 黃 huáng
+    await waitForEntryHydration(page, "黃");
+    await page.evaluate(() => document.fonts.ready);
+
+    const result = await page.evaluate(() => {
+      const ru = document.querySelector("h1.title hruby.rightangle ru[annotation]");
+      if (!ru) throw new Error("annotation ru not found");
+      const rt = ru.querySelector(":scope > rt");
+      if (!rt || !rt.firstChild) throw new Error("rt text node not found");
+
+      const before = window.getComputedStyle(ru, "::before");
+      const glyphRange = document.createRange();
+      glyphRange.selectNodeContents(rt.firstChild);
+      const glyphRect = glyphRange.getClientRects()[0];
+      if (!glyphRect) throw new Error("rt has no rendered glyph rect");
+
+      const rtBoxRect = rt.getBoundingClientRect();
+
+      const y = glyphRect.y + glyphRect.height / 2;
+      const startCaret = document.caretRangeFromPoint(glyphRect.x + 1, y);
+      const endCaret = document.caretRangeFromPoint(glyphRect.x + glyphRect.width - 1, y);
+      const caretsInRt =
+        startCaret?.startContainer.parentElement === rt &&
+        endCaret?.startContainer.parentElement === rt;
+
+      const rtUserSelect = window.getComputedStyle(rt).userSelect;
+
+      return {
+        annotation: ru.getAttribute("annotation"),
+        rtText: rt.textContent,
+        rtBoxWidth: rtBoxRect.width,
+        rtBoxHeight: rtBoxRect.height,
+        beforeContent: before.content,
+        caretsInRt,
+        rtUserSelect,
+      };
+    });
+
+    // Painted glyph (generated content) still renders — visual output unchanged.
+    expect(result.beforeContent).toBe(JSON.stringify(result.annotation));
+    // No longer clipped to a 1×1px box.
+    expect(result.rtBoxWidth).toBeGreaterThan(5);
+    expect(result.rtBoxHeight).toBeGreaterThan(5);
+    // Caret resolution at visible glyph position hits the real <rt> text node.
+    expect(result.caretsInRt).toBe(true);
+    // user-select must not be none (would silently block browser drag-selection)
+    expect(result.rtUserSelect).not.toBe("none");
+  });
+
+  test("real pointer drag across visible romanization row selects huáng only — Mandarin (page.mouse)", async ({
+    page,
+  }) => {
+    await routeLegacyStylesCss(page);
+    await page.goto("/%E9%BB%83"); // 黃 huáng
+    await waitForEntryHydration(page, "黃");
+    await page.evaluate(() => document.fonts.ready);
+
+    const glyph = await getRtGlyphRect(page);
+    if (!glyph) throw new Error("could not get rt glyph rect for 黃");
+
+    const selected = await dragSelectRomanization(page, glyph);
+
+    // Must be exactly the romanization, NFC-normalised.
+    expect(selected).toBe("huáng");
+    // No surrogates — confirms plain Unicode, not the PUA font ligature.
+    expect(Array.from(selected).some((ch) => ch.codePointAt(0)! > 0xffff)).toBe(false);
+    // No CJK or Zhuyin — the Han character and bopomofo sit below and must
+    // not be swept up by a horizontal drag confined to the romanization row.
+    expect(/[\u4e00-\u9fff\u3100-\u312f\u31a0-\u31bf]/.test(selected)).toBe(false);
+  });
+
+  test("real pointer drag across visible romanization row selects tsia̍h only — Taigi (page.mouse)", async ({
+    page,
+  }) => {
+    await routeLegacyStylesCss(page);
+    const response = await page.goto("/'%E9%A3%9F"); // 食 tsia̍h
+    expect(response?.status()).toBe(200);
+    await waitForEntryHydration(page, "食");
+    await page.evaluate(() => document.fonts.ready);
+
+    const glyph = await getRtGlyphRect(page);
+    if (!glyph) throw new Error("could not get rt glyph rect for 食");
+
+    const selected = await dragSelectRomanization(page, glyph);
+
+    // Must be exactly the clean POJ romanization, NFC-normalised.
+    expect(selected.normalize("NFC")).toBe("tsia\u030dh".normalize("NFC"));
+    // No surrogates.
+    expect(Array.from(selected).some((ch) => ch.codePointAt(0)! > 0xffff)).toBe(false);
+    // No CJK or Zhuyin.
+    expect(/[\u4e00-\u9fff\u3100-\u312f\u31a0-\u31bf]/.test(selected)).toBe(false);
+    // Vertical layout confirmation: romanization row sits above the Han character.
+    const gap = await page.evaluate(() => {
+      const rt = document.querySelector("h1.title hruby.rightangle ru[annotation] > rt");
+      const rb = document.querySelector("h1.title hruby.rightangle ru rb");
+      if (!rt?.firstChild || !rb) return null;
+      const range = document.createRange();
+      range.selectNodeContents(rt.firstChild);
+      const glyphRect = range.getClientRects()[0];
+      if (!glyphRect) return null;
+      return Math.round(rb.getBoundingClientRect().top - (glyphRect.y + glyphRect.height));
+    });
+    if (gap !== null) expect(gap).toBeGreaterThan(0);
+  });
+
+  test("ARIA: title announces romanization exactly once — aria-hidden on <rt> suppresses duplicate", async ({
+    page,
+  }) => {
+    await routeLegacyStylesCss(page);
+    await page.goto("/%E9%BB%83"); // 黃 huáng
+    await waitForEntryHydration(page, "黃");
+    await page.evaluate(() => document.fonts.ready);
+
+    // Secondary invariant: the implementation attribute is present.
+    const ariaHidden = await page.evaluate(
+      () =>
+        document
+          .querySelector("h1.title hruby.rightangle ru[annotation] > rt")
+          ?.getAttribute("aria-hidden") ?? null,
+    );
+    expect(ariaHidden).toBe("true");
+
+    // Primary observable contract: the Playwright accessibility snapshot of
+    // the heading must contain the romanization text in exactly one leaf text
+    // node.  Chromium surfaces ::before generated content as a leaf text entry
+    // in the accessibility tree.  With aria-hidden on <rt>, the real text
+    // node is excluded from the a11y tree, so "huáng" must appear as exactly
+    // one "- text: huáng" line — not two.  (Computed accessible names roll up
+    // children, so the heading name and button name also contain "huáng"; we
+    // count only the bare leaf `- text:` lines, which represent the actual
+    // node-level announcements a screen reader would traverse.)
+    const snap = await page.locator("h1.title").ariaSnapshot();
+    // Extract lines of the form "- text: <value>" to count leaf text nodes.
+    const leafLines = snap
+      .normalize("NFC")
+      .split("\n")
+      .filter((l) => l.trimStart().startsWith("- text:"));
+    const huangLeaves = leafLines.filter((l) => l.normalize("NFC").includes("hu\u00e1ng")).length;
+    // Must appear exactly once: the ::before generated content leaf.
+    // aria-hidden on <rt> prevents a second "- text: huáng" leaf.
+    expect(huangLeaves).toBe(1);
+  });
+
+  test("computed -webkit-touch-callout is not none on title hruby (iOS long-press must not be blocked)", async ({
+    page,
+  }) => {
+    await routeLegacyStylesCss(page);
+    await page.goto("/%E9%BB%83");
+    await waitForEntryHydration(page, "黃");
+
+    const callout = await page.evaluate(() => {
+      const hruby = document.querySelector("h1.title hruby.rightangle");
+      if (!hruby) return null;
+      // webkit-touch-callout is only meaningful on WebKit; on Chromium it may
+      // return "" or "auto" — either is acceptable (not "none").
+      return window.getComputedStyle(hruby).getPropertyValue("-webkit-touch-callout");
+    });
+
+    // Must not be "none" — that would silently suppress the iOS long-press
+    // text selection callout that lets users copy the romanization.
+    expect(callout).not.toBe("none");
+  });
+});
+
 test.describe("教育部《異體字字典》連結 (g0v/moedict-webkit#3)", () => {
   test("單字條目顯示連結到教育部異體字字典查詢頁", async ({ page }) => {
     await page.goto("/%E8%90%8C");

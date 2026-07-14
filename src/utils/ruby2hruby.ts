@@ -206,29 +206,3 @@ export function rightAngle(html: string): string {
   const inner = ruby2hruby(html);
   return `<hruby class="rightangle" rightangle="rightangle">${inner}</hruby>`;
 }
-
-/**
- * 從 rightAngle() 產生的 <hruby> 逆向取出羅馬拼音純文字，供「複製羅馬拼音」
- * 按鈕使用。
- *
- * 每個音節在 <hruby> 底下是一個直接子元素 <ru annotation="…">，其顯示用的
- * 拼音字串同時存在於兩處：`annotation` 屬性（給 `content: attr(annotation)`
- * 上色顯示，但注音符號/調號等組合字元已被 normalizeAnnotation() 映射到私人
- * 使用區字碼，貼到別處會變成看不懂的方塊字）與其唯一的直接子節點 `<rt>`
- * （真實文字，供螢幕閱讀器/複製使用，目前僅以 `text-indent:-9999px` 隱藏）。
- * 一律讀取 `<rt>` 而非 `annotation` 屬性，確保複製結果是可貼上的真正文字。
- *
- * 若該 hruby 因剖析失敗而維持原始（非 rightangle）結構，直接子元素查詢會
- * 落空；此時退回掃描全樹的 <rt>，寧可順序略有偏差，也不要整段回傳空字串。
- */
-export function collectRubyRomanization(hruby: Element): string {
-  const direct = Array.from(hruby.children)
-    .map((ru) => ru.querySelector(":scope > rt")?.textContent?.trim() || "")
-    .filter(Boolean);
-  if (direct.length > 0) return direct.join(" ");
-
-  return Array.from(hruby.querySelectorAll("rt"))
-    .map((rt) => rt.textContent?.trim() || "")
-    .filter(Boolean)
-    .join(" ");
-}

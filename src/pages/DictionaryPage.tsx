@@ -934,7 +934,6 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                 pAlt={rubyData.pAlt}
                 pronunAudioId={lang !== "h" ? pronunAudioId : undefined}
                 readingType={readingType}
-                hasRomanization={lang !== "h" && Boolean(heteronym.pinyin || heteronym.trs)}
                 isPlaying={playingAudioId === pronunAudioId}
                 onToggleAudio={() => {
                   if (!pronunAudioId) return;
