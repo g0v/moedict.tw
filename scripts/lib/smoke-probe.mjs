@@ -23,6 +23,8 @@ const DEFAULT_DURATION_MS = 120000;
 const DEFAULT_TIMEOUT_MS = 10000;
 const DEFAULT_VERSION_OVERRIDE_RETRY_ATTEMPTS = 7;
 const DEFAULT_VERSION_OVERRIDE_RETRY_INTERVAL_MS = 10000;
+const DEFAULT_PROPAGATION_GRACE_MS = 60000;
+const DEFAULT_PROPAGATION_RETRY_INTERVAL_MS = 10000;
 const RELEASE_HEADER = "X-Moedict-Release";
 const OVERRIDE_HEADER = "Cloudflare-Workers-Version-Overrides";
 
@@ -56,6 +58,12 @@ function validateRoutes(routes) {
 function validatePositiveInteger(name, value) {
   if (!Number.isInteger(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer: ${JSON.stringify(value)}`);
+  }
+}
+
+function validateNonNegativeInteger(name, value) {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error(`${name} must be a non-negative integer: ${JSON.stringify(value)}`);
   }
 }
 
@@ -269,7 +277,7 @@ export async function smokeWithVersionOverride(
   if (!nonEmptyString(workerName)) throw new Error("workerName must be a non-empty string");
   if (!nonEmptyString(versionUuid)) throw new Error("versionUuid must be a non-empty string");
   const headers = { [OVERRIDE_HEADER]: `${workerName}="${versionUuid}"` };
-  if (opts.priorReleaseTag) {
+  if (opts.priorReleaseTag !== undefined) {
     return probeRoutesWithVersionOverridePropagationRetry(
       baseUrl,
       routes,
@@ -298,14 +306,16 @@ export async function finalSmoke(baseUrl, routes, releaseTag, opts = {}) {
 /**
  * Probe every route every `intervalMs` (default 5s) for at least
  * `durationMs` (default 120s), requiring 200 + matching release header each
- * cycle. Aborts (throws) on the first failing route. `sleep` is injected and
- * drives the module's own elapsed-time bookkeeping — no wall-clock `Date.now`
- * is read for timing, so tests are fully deterministic with a fake sleep
- * that resolves immediately.
+ * healthy cycle. If `priorReleaseTag` is provided, the exact known prior
+ * release may appear only during one bounded settling grace window; every
+ * sighting resets the healthy soak so the final success still represents an
+ * uninterrupted `durationMs` on the new release after the last old response.
+ * `sleep` is injected and drives elapsed-time bookkeeping — no wall-clock
+ * `Date.now` is read, so tests are fully deterministic.
  * @param {string} baseUrl
  * @param {string[]} routes
  * @param {string} releaseTag
- * @param {{ fetch?: FetchFn; sleep?: (ms: number) => Promise<void>; intervalMs?: number; durationMs?: number; timeoutMs?: number; setTimeoutFn?: typeof setTimeout; clearTimeoutFn?: typeof clearTimeout }} [opts]
+ * @param {{ fetch?: FetchFn; sleep?: (ms: number) => Promise<void>; intervalMs?: number; durationMs?: number; timeoutMs?: number; setTimeoutFn?: typeof setTimeout; clearTimeoutFn?: typeof clearTimeout; priorReleaseTag?: string; propagationGraceMs?: number; propagationRetryIntervalMs?: number; log?: (message: string) => void }} [opts]
  * @returns {Promise<{ ok: true; cycles: number; elapsedMs: number }>}
  */
 export async function continuousProbe(baseUrl, routes, releaseTag, opts = {}) {
@@ -317,35 +327,89 @@ export async function continuousProbe(baseUrl, routes, releaseTag, opts = {}) {
   const durationMs = opts.durationMs ?? DEFAULT_DURATION_MS;
   validatePositiveInteger("intervalMs", intervalMs);
   validatePositiveInteger("durationMs", durationMs);
+  const hasPriorRelease = opts.priorReleaseTag !== undefined;
+  if (hasPriorRelease) {
+    if (!nonEmptyString(opts.priorReleaseTag)) {
+      throw new Error("priorReleaseTag must be a non-empty string");
+    }
+    if (opts.priorReleaseTag === releaseTag) {
+      throw new Error("priorReleaseTag must differ from releaseTag");
+    }
+  }
+  const priorReleaseTag = opts.priorReleaseTag;
+  const propagationGraceMs = hasPriorRelease
+    ? (opts.propagationGraceMs ?? DEFAULT_PROPAGATION_GRACE_MS)
+    : 0;
+  validateNonNegativeInteger("propagationGraceMs", propagationGraceMs);
+  const propagationRetryIntervalMs =
+    opts.propagationRetryIntervalMs ?? DEFAULT_PROPAGATION_RETRY_INTERVAL_MS;
+  validatePositiveInteger("propagationRetryIntervalMs", propagationRetryIntervalMs);
   const sleep = opts.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+  const log = opts.log ?? ((message) => console.warn(message));
   let elapsedMs = 0;
   let cycles = 0;
-  for (;;) {
-    for (const route of routes) {
-      const response = await probeOnce(baseUrl, route, {
-        fetch: opts.fetch,
-        timeoutMs: opts.timeoutMs,
-        setTimeoutFn: opts.setTimeoutFn,
-        clearTimeoutFn: opts.clearTimeoutFn,
-      });
-      if (response.status !== 200) {
-        throw new Error(
-          `continuousProbe failed for route ${route}: expected 200, got ${response.status} (cycle ${cycles + 1})`,
-        );
-      }
-      const releaseHeader = response.headers.get(RELEASE_HEADER);
-      if (releaseHeader !== releaseTag) {
-        throw new Error(
-          `continuousProbe failed for route ${route}: ${RELEASE_HEADER} mismatch ` +
-            `(expected ${JSON.stringify(releaseTag)}, got ${JSON.stringify(releaseHeader)}) (cycle ${cycles + 1})`,
-        );
-      }
+  let settlingElapsedMs = 0;
+
+  const recordSleep = async (ms) => {
+    const settlingRemainingMs = propagationGraceMs - settlingElapsedMs;
+    const sleepMs =
+      hasPriorRelease && settlingRemainingMs > 0 ? Math.min(ms, settlingRemainingMs) : ms;
+    await sleep(sleepMs);
+    if (hasPriorRelease) {
+      settlingElapsedMs = Math.min(propagationGraceMs, settlingElapsedMs + sleepMs);
     }
+    return sleepMs;
+  };
+
+  const oldReleaseFailure = (route, observed) =>
+    new Error(
+      `continuousProbe failed for route ${route}: ${RELEASE_HEADER} still served prior release ` +
+        `(expected ${JSON.stringify(releaseTag)}, got ${JSON.stringify(observed)}, ` +
+        `settling grace ${settlingElapsedMs}/${propagationGraceMs}ms)`,
+    );
+
+  for (;;) {
+    let sawPriorReleaseThisCycle = false;
+    for (const route of routes) {
+      for (;;) {
+        const response = await probeOnce(baseUrl, route, {
+          fetch: opts.fetch,
+          timeoutMs: opts.timeoutMs,
+          setTimeoutFn: opts.setTimeoutFn,
+          clearTimeoutFn: opts.clearTimeoutFn,
+        });
+        if (response.status !== 200) {
+          throw new Error(
+            `continuousProbe failed for route ${route}: expected 200, got ${response.status} (cycle ${cycles + 1})`,
+          );
+        }
+        const releaseHeader = response.headers.get(RELEASE_HEADER);
+        if (releaseHeader === releaseTag) break;
+        if (!hasPriorRelease || releaseHeader !== priorReleaseTag) {
+          throw new Error(
+            `continuousProbe failed for route ${route}: ${RELEASE_HEADER} mismatch ` +
+              `(expected ${JSON.stringify(releaseTag)}, got ${JSON.stringify(releaseHeader)}) (cycle ${cycles + 1})`,
+          );
+        }
+        elapsedMs = 0;
+        cycles = 0;
+        sawPriorReleaseThisCycle = true;
+        log(
+          `continuousProbe route ${route} saw prior release ${JSON.stringify(releaseHeader)} ` +
+            `after ${settlingElapsedMs}/${propagationGraceMs}ms settling grace; resetting healthy soak`,
+        );
+        if (settlingElapsedMs >= propagationGraceMs) {
+          throw oldReleaseFailure(route, releaseHeader);
+        }
+        await recordSleep(propagationRetryIntervalMs);
+      }
+      if (sawPriorReleaseThisCycle) break;
+    }
+    if (sawPriorReleaseThisCycle) continue;
     cycles += 1;
     if (elapsedMs >= durationMs) {
       return { ok: true, cycles, elapsedMs };
     }
-    await sleep(intervalMs);
-    elapsedMs += intervalMs;
+    elapsedMs += await recordSleep(intervalMs);
   }
 }

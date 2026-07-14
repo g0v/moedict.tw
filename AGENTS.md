@@ -106,10 +106,14 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
 
 - **兩階段 rollout**：`release-deploy.mjs` 用 `wrangler versions upload/deploy`
   做 new0%/old100% → 30 秒初始 propagation sleep → override smoke（若只看見
-  已知舊版 release，逐路由最多再 poll 6 次、每次 10 秒，總計最長約 90 秒；非 200、
-  缺/異常標頭或第三個 release 立即 fail-closed）→ new100%/old0% → ≥120 秒 probe →
-  finalize new100%。任一階段失敗自動 rollback 回舊版本 100%，絕不留下
-  未 smoke 的新版一次切到 100%。
+  已知舊版 release，逐路由最多再 poll 6 次、每次 10 秒；非 200、缺/異常標頭或
+  第三個 release 立即 fail-closed）→ new100%/old0% → 30 秒初始 propagation
+  sleep → ≥120 秒 continuous probe。continuous probe 只允許「已知舊版 release」在
+  單一 60 秒 settling grace 內短暫出現；任何舊版 sighting 都會把健康 soak 歸零，
+  之後仍必須重新累積完整 ≥120 秒新版健康結果。60 秒 grace 到期後仍看見舊版、或
+  遇到非 200、缺/空標頭、第三個 release、網路/timeout，皆立即 fail-closed 並自動
+  rollback 回舊版本 100%；通過後 finalize new100%。任一階段失敗絕不留下未 smoke
+  的新版一次切到 100%。
 - **`CF_VERSION_METADATA` binding**（`wrangler.jsonc` top-level 與
   `env.staging` 都要有、且都不可加 `"type"`）：`.id` 是 Cloudflare 產生的
   version UUID；`.tag` 才是我們自訂的 release ID（`<git-short-sha>-<manifest-digest 前12碼>`），

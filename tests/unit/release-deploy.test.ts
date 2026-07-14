@@ -262,6 +262,19 @@ describe("runReleaseDeploy input validation and real-adapter defaults", () => {
     expect(parsed).toBeGreaterThanOrEqual(before);
   });
 
+  it("falls back to the real setTimeout-based sleep when no sleep is injected", async () => {
+    const { runner } = buildRunner();
+    const { fetchImpl } = buildFetch();
+    const result = await runReleaseDeploy({
+      ...baseOpts("staging", { runner, fetch: fetchImpl }),
+      sleep: undefined,
+      propagationSleepMs: 0,
+      soakIntervalMs: 1,
+      soakDurationMs: 1,
+    });
+    expect(result.releaseId).toBe(RELEASE_ID);
+  });
+
   it("falls back to a real buildReleaseManifest(distClientDir) call when no manifest is injected", async () => {
     const clientDir = mkdtempSync(join(dir, "client-"));
     mkdirSync(join(clientDir, "assets"), { recursive: true });
@@ -812,6 +825,41 @@ describe("promote, probe, rollback, finalize", () => {
     await expect(
       runReleaseDeploy(baseOpts("staging", { runner, fetch: fetchImpl })),
     ).rejects.toThrow(/rolled back/);
+    const rollback = calls.find((c) => phaseOf(c) === "deploy-rollback");
+    expect(rollback).toContain(`${OLD_UUID}@100%`);
+    expect(rollback).toContain(`${NEW_UUID}@0%`);
+  });
+
+  it("passes old release settling options into continuous probe and rolls back when old responses exhaust grace", async () => {
+    let promoted = false;
+    const { runner, calls } = buildRunner({
+      "deploy-promote": () => {
+        promoted = true;
+        return { exitCode: 0, stdout: "", stderr: "" };
+      },
+    });
+    const { fetchImpl } = buildFetch(({ override }) => {
+      if (override || !promoted) return undefined;
+      return new Response("ok", { status: 200, headers: { "X-Moedict-Release": OLD_RELEASE_ID } });
+    });
+    const sleepCalls: number[] = [];
+
+    await expect(
+      runReleaseDeploy(
+        baseOpts("staging", {
+          runner,
+          fetch: fetchImpl,
+          sleep: async (ms: number) => {
+            sleepCalls.push(ms);
+          },
+          propagationGraceMs: 10,
+          propagationRetryIntervalMs: 5,
+          log: () => {},
+        }),
+      ),
+    ).rejects.toThrow(/still served prior release.*rolled back/s);
+
+    expect(sleepCalls).toEqual([5, 5]);
     const rollback = calls.find((c) => phaseOf(c) === "deploy-rollback");
     expect(rollback).toContain(`${OLD_UUID}@100%`);
     expect(rollback).toContain(`${NEW_UUID}@0%`);

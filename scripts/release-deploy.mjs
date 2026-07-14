@@ -131,6 +131,9 @@ function errMessage(err) {
  *   nowIso?: () => string;
  *   soakIntervalMs?: number;
  *   soakDurationMs?: number;
+ *   propagationGraceMs?: number;
+ *   propagationRetryIntervalMs?: number;
+ *   log?: (message: string) => void;
  *   stateBaseDir?: string;
  *   stateFs?: import("./lib/deployment-state.mjs").FsAdapter;
  *   probeTimeoutMs?: number;
@@ -417,12 +420,18 @@ export async function runReleaseDeploy(opts = {}) {
   };
 
   // 9. Continuous probe for >=120s against live traffic (now serving new@100).
+  //    The known prior release may appear only during one global settling
+  //    grace inside continuousProbe; each sighting resets the healthy soak.
   try {
     await continuousProbe(baseUrl, routes, releaseId, {
       fetch: fetchImpl,
       sleep: sleepImpl,
       intervalMs: soakIntervalMs,
       durationMs: soakDurationMs,
+      priorReleaseTag: oldReleaseTag,
+      propagationGraceMs: opts.propagationGraceMs,
+      propagationRetryIntervalMs: opts.propagationRetryIntervalMs,
+      log: opts.log,
       ...probeTimeoutOpts,
     });
   } catch (probeErr) {
