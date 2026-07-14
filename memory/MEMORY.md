@@ -82,9 +82,17 @@
   `page.route()` 讓 CSS 內容可控，比對改動前後的 `getComputedStyle`（逐一
   列舉屬性，不能用 `.cssText`——Chromium 對 computed style 一律回傳空字串）。
 
-## 2026-07-14 共用 checkout / 備份 / patch-id 記錄
+## 2026-07-14–15 共用 checkout 髒狀態、備份、patch-id 與解除記錄
 
-- 共用 checkout `/Users/au/w/moedict.tw`（branch `main`，HEAD `af42ebf`）目前仍是 working tree 髒狀態：`13 modified + 5 untracked`。經 `git hash-object` + `git log --find-object` 掃 integration 全歷史做 blob-containment 檢查後，18 個路徑裡有 12 個 `NO_MATCH`；其中包含 `src/api/handleDictionaryAPI.ts`（`KEY_MAP` 新增 `B: "variants"`、direct bucket fill 重構）與 `src/pages/DictionaryPage.tsx`（heteronym `variants?: string[]`、stroke-availability 變更）等未收錄於任何 commit 的獨特內容。這是進行中工作，**不可 stash/reset/clean**。
-- 零變動 forensic backup 已放在 `/Users/au/w/backups/moedict-main-dirty-20260714/`：`tracked.patch`（`git diff --binary`）、`untracked/` 五個檔案 byte-exact 副本、`MANIFEST.json`（HEAD sha、porcelain status、每檔 sha256、12 個 `NO_MATCH` 路徑清單）、`README.md`。備份完成後再次驗證 repo `git status --porcelain`，結果 byte-identical 未變。
-- `main` 本地 ahead-1 commit `af42ebf` 與 integration 內容 patch-id 等價；`git cherry` 已確認以 `-` 前綴標示，代表 committed 歷史無風險，只有 working tree 保有獨特位元組。
-- 處置建議：integration branch 走 PR 合併 `origin/main`，不需要本地 `main` 乾淨；若確認髒工作已放棄，先 commit 到 rescue branch（例如 `wip/cns-variants`）再動 `main`。
+**歷史紀錄（2026-07-14，髒狀態期間）：** 共用 checkout `/Users/au/w/moedict.tw`（branch `main`，HEAD `af42ebf`）曾為 `13 modified + 5 untracked`。blob-containment 掃描後 18 個路徑裡有 12 個 `NO_MATCH`，獨特內容包含 `src/api/handleDictionaryAPI.ts`（`KEY_MAP` 新增 `B: "variants"`）與 `src/pages/DictionaryPage.tsx`（`variants?: string[]`）。
+
+- 零變動 forensic backup 放在 `/Users/au/w/backups/moedict-main-dirty-20260714/`：`tracked.patch`（`git diff --binary`）、`untracked/` 五個檔案 byte-exact 副本、`MANIFEST.json`（HEAD sha、porcelain status、每檔 sha256、12 個 `NO_MATCH` 路徑清單）、`README.md`。
+- `main` 本地 ahead-1 commit `af42ebf` 與 integration 內容 patch-id 等價（`git cherry` 以 `-` 前綴確認）。
+- `#281` 獨特有價值的兩個 hunk（`B: "variants"` KEY_MAP entry + regex，及 api-dictionary-parsers.test.ts 四個 B-field unit tests）已手術式 rescue 到 `wip/281-variants-forward-compat` commit `356b652`，並**刻意排除於本次 release**，因為 issue not_planned、ptck 目前無 B field 資料。
+
+**2026-07-15 owner 授權放棄並清理完畢：**
+
+- Owner 授權放棄 13 tracked 修改（整批 CNS11643 dirty WD）。RC audit 時 tracked tree 已是乾淨狀態，但此次清理作業開始時發現兩個 e2e 檔案為 ` M`（working-tree modified），兩者皆在 audit **之後**才出現：`tests/e2e/console-load-errors.spec.ts`（MANIFEST.json 的 `status_porcelain` 顯示此檔屬於原始 13 個之一，但 RC audit 時 tracked tree 已乾淨，故為重現）；`tests/e2e/legacy-styles-regression.spec.ts`（**不在**原始 13 個內，為 audit 後新增修改）。兩者內容均與進行中的 e2e fix（commit `0de2bcf`）吻合，可能為並發 writer 意外寫入 main worktree。詢問 ship-e2e-fix 確認後以 `git restore` 還原至 HEAD（內容已 commit 於 integration `0de2bcf`，無資料損失），tracked tree 乾淨。
+- 5 個殘餘 untracked CNS 路徑在刪除前完成雙向驗證：`diff -r --brief`（directory）+ `shasum -a 256`（4 單檔）全部比對吻合 backup，無方向性差異或額外檔案。
+- 已刪除：`data/dictionary/cns/`、`scripts/generate-cns-data.mjs`、`src/api/handleCnsAPI.ts`、`tests/integration/api-cns.test.ts`、`tests/unit/api-cns.test.ts`。
+- `git status --porcelain` 輸出為空，main 現為 porcelain-clean，HEAD 仍為 `af42ebf`（未 reset/checkout/merge）。main behind origin/main 狀態不變（`af42ebf` 比 `d887339` 落後），待 integration PR merge 後一併更新。
