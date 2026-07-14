@@ -33,6 +33,20 @@
   來源為 `data/assets/`，經 `commands/upload_assets.sh`（rclone）同步
 - 使用位置：`wrangler.jsonc`、`worker/index.ts`
 
+### 2.1) R2 公開 bucket CORS（moedict-assets）
+
+- 命令：
+  - 讀取：`bun run wrangler r2 bucket cors list moedict-assets`
+  - 寫入：`bun run wrangler r2 bucket cors set moedict-assets --file <path>`
+- 目前來源檔：`commands/r2-assets-cors.json`
+
+- 要讓 staging（`ASSET_BASE_URL=https://r2-assets.moedict.tw`）與 production 共用同一套公開 CDN，
+  且維持同源字型驗證能力，`staging` origin（`https://cf-moedict-webkit-neo-staging.audreyt.workers.dev`）
+  必須被 `moedict-assets` 的 CORS 白名單允許。
+- R2 CORS 變更不會即刻清掉既有 CDN HIT；既有 `styles.css`/字型仍可能先命中舊快取。
+  關鍵字型已改走同源備援路徑：`src/index.css` 的 `/assets/fonts/MOEDICT.*?v=20260713-cors`，
+  較舊的跨來源快取仍由現行 edge TTL 與 `/api/cache/purge` 清理流程管理。
+
 ### 3) 字典資料端點
 
 - 變數：`DICTIONARY_BASE_URL`
