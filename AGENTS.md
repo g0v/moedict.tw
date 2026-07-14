@@ -402,6 +402,12 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
   src 內新增的 id 若撞上 legacy `#id` 選擇器且不在 allowlist 內會 fail；
   要沿用 legacy 樣式就有意識地把 id 加進 allowlist（附註解）。該檔案的完整
   背景（格式化、載入路徑、測試涵蓋範圍）見前面「舊版樣式」一節。
+- **標題羅馬拼音選取架構**：可見字形由 `ru[annotation]::before { content: attr(annotation) }`
+  以自訂字型繪製（CSS 生成內容，瀏覽器不納入文字選取）；正確 Unicode 文字放在
+  `<rt aria-hidden="true">` 疊在同一位置，**必須維持 `user-select: text` 且不能縮成 0×0**，
+  讓使用者拖曳即可複製乾淨的 `huáng`/`tsia̍h`。`複製羅馬拼音` 按鈕已故意移除（#256）；
+  `aria-hidden` 防止螢幕閱讀器重複播報。守護測試：
+  `tests/e2e/dictionary.spec.ts` 的兩個 selection describe blocks（#186 + #256）。
 - 詞條頁資料流：client 打 `/api/{前綴}{詞}.json` → Worker `fillBucket` 讀
   R2 `p{lang}ck/{bucket}.txt` → 取單一 key 回傳。`/{a,t,h,c,raw,uni,pua}/<詞>.json`
   是對外公開 API（README 有文件），改格式要顧慮外部消費者。

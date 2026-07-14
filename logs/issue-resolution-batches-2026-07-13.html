@@ -1504,27 +1504,35 @@
                 <span class="issue-title">#256 — 許願：可以直接複製羅馬拼音</span
                 ><span class="issue-meta"
                   ><span class="chip" data-tone="done">completed</span
-                  ><span class="chip" data-tone="feature">copy button</span></span
+                  ><span class="chip" data-tone="feature">native selection</span></span
                 >
               </summary>
               <div class="issue-body">
                 <h4>Why unified branch</h4>
                 <p>
-                  The site already carried real romanization text, but native selection copied a
-                  mixed title string. A clean copy affordance and shared ruby extraction were local
-                  UI behavior.
+                  The site already carried real romanization text in a hidden
+                  <code>&lt;rt&gt;</code>
+                  element, but native selection copied a garbled mixed string (Han + zhuyin +
+                  romanization). The #186 overlay that makes the glyph selectable already solved the
+                  problem; a dedicated button was unnecessary complexity.
                 </p>
                 <h4>What changed</h4>
                 <p>
-                  Added romanization collection utilities and a copy button in
-                  <code>TitlePronunciation</code>/<code>DictionaryPage</code> paths, harmonized with
-                  #186 so the final branch avoids duplicate props and copy semantics.
+                  Removed the dedicated <code>複製羅馬拼音</code> button and all associated
+                  clipboard wiring (<code>hasRomanization</code> prop,
+                  <code>collectRubyRomanization</code>, copy icon, button markup,
+                  <code>.copyBlock</code>/<code>.copyRomanization</code> CSS). The existing #186
+                  mechanism — <code>ru[annotation]::before</code> paints the custom-font glyph; the
+                  real <code>&lt;rt aria-hidden="true"&gt;</code> overlays it at the same position
+                  and is directly selectable — is the sole copy path. A pointer drag across the
+                  romanization row copies clean Unicode (<code>huáng</code>, <code>tsia̍h</code>)
+                  with no button and no duplicate AT reading.
                 </p>
                 <p class="evidence-line">
-                  <strong>Final evidence:</strong> <span class="commit">d447060</span> with #186
-                  base <span class="commit">e8ffe0e</span>. Contract: Mandarin/Taigi titles expose a
-                  “複製羅馬拼音” control; Hakka/plain-text cases avoid inappropriate duplicate
-                  buttons.
+                  <strong>Final evidence:</strong> <span class="commit">523c7f9</span> with #186
+                  base <span class="commit">e8ffe0e</span>. Contract: real pointer drag copies clean
+                  Unicode romanization; no <code>.copyBlock</code> rendered;
+                  <code>&lt;rt aria-hidden="true"&gt;</code> prevents screen-reader duplication.
                 </p>
                 <p>
                   <a
