@@ -71,8 +71,8 @@ vp run typecheck              # canonical tsc -b --noEmit project build
 vp test                       # unit + integration 兩個 Vitest project
 vp run test:unit              # happy-dom unit tests
 vp run test:integration       # Miniflare 實體 Worker API 測試
-vp run test:e2e               # Playwright（chromium project）
-vp run test:e2e:visual        # 視覺回歸（baseline 僅 commit linux 版）
+vp run test:e2e               # Playwright：chromium project（全部）+ webkit-romanization project（@romanization 聚焦測試）
+vp run test:e2e:visual        # 視覺回歸（chromium only；baseline 僅 commit linux 版）
 vp run test                   # unit + integration + e2e 三層全跑
 vp run test:coverage          # 三層 coverage 合併至 coverage/combined/
 ```
@@ -410,10 +410,20 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
   背景（格式化、載入路徑、測試涵蓋範圍）見前面「舊版樣式」一節。
 - **標題羅馬拼音選取架構**：可見字形由 `ru[annotation]::before { content: attr(annotation) }`
   以自訂字型繪製（CSS 生成內容，瀏覽器不納入文字選取）；正確 Unicode 文字放在
-  `<rt aria-hidden="true">` 疊在同一位置，**必須維持 `user-select: text` 且不能縮成 0×0**，
-  讓使用者拖曳即可複製乾淨的 `huáng`/`tsia̍h`。`複製羅馬拼音` 按鈕已故意移除（#256）；
-  `aria-hidden` 防止螢幕閱讀器重複播報。守護測試：
-  `tests/e2e/dictionary.spec.ts` 的兩個 selection describe blocks（#186 + #256）。
+  `<span class="romanization-selectable" aria-hidden="true">` 疊在同一位置，
+  `position: absolute; color: transparent; user-select: text`，讓使用者拖曳即可複製乾淨的
+  `huáng`/`tsia̍h`。**`<rt>` 絕對不能在這裡復原**：WebKit 的排版引擎在 ruby-text box
+  生成時強制將 `<rt>` 設為 `position: static`，即使作者標記 `!important` 也被覆蓋，
+  使 `<rt>` 留在正常 ruby 排版流中，導致 `h1` 高度撐至約 164px，音訊按鈕與羅馬拼音向下
+  位移，`huáng` 出現在音訊按鈕之後（Safari #186 regression）。
+  普通 `<span>` 則正確繼承 `position: absolute`。`複製羅馬拼音` 按鈕已故意移除（#256）；
+  `aria-hidden` 防止螢幕閱讀器重複播報（`ru[annotation]::before` 已被 AT 納入 accessible name 計算）。
+  zhuyin/none phonetics 偏好設定下以 CSS `display: none` 隱藏 span，防止不可見字形被意外選取。
+  守護測試：`tests/e2e/dictionary.spec.ts` 的三個 `@romanization` describe blocks
+  （Taigi selection/copy、Mandarin selection、overlay geometry regression）同時跑
+  Chromium（chromium project）與 WebKit（webkit-romanization project，
+  `playwright test --project=webkit-romanization`）；
+  包含真實指標拖曳、caretRangeFromPoint、ARIA 播報、幾何不變量與 phonetics 偏好測試。
 - 詞條頁資料流：client 打 `/api/{前綴}{詞}.json` → Worker `fillBucket` 讀
   R2 `p{lang}ck/{bucket}.txt` → 取單一 key 回傳。`/{a,t,h,c,raw,uni,pua}/<詞>.json`
   是對外公開 API（README 有文件），改格式要顧慮外部消費者。

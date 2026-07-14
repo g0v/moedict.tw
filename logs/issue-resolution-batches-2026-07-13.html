@@ -1510,10 +1510,11 @@
               <div class="issue-body">
                 <h4>Why unified branch</h4>
                 <p>
-                  The site already carried real romanization text in a hidden
+                  The site originally carried real romanization text in a hidden
                   <code>&lt;rt&gt;</code>
-                  element, but native selection copied a garbled mixed string (Han + zhuyin +
-                  romanization). The #186 overlay that makes the glyph selectable already solved the
+                  element (commit <span class="commit">e8ffe0e</span> base), but native selection
+                  copied a garbled mixed string (Han + zhuyin + romanization). The #186 overlay that
+                  places the selectable span at the visible glyph position already solved the
                   problem; a dedicated button was unnecessary complexity.
                 </p>
                 <h4>What changed</h4>
@@ -1521,18 +1522,40 @@
                   Removed the dedicated <code>複製羅馬拼音</code> button and all associated
                   clipboard wiring (<code>hasRomanization</code> prop,
                   <code>collectRubyRomanization</code>, copy icon, button markup,
-                  <code>.copyBlock</code>/<code>.copyRomanization</code> CSS). The existing #186
-                  mechanism — <code>ru[annotation]::before</code> paints the custom-font glyph; the
-                  real <code>&lt;rt aria-hidden="true"&gt;</code> overlays it at the same position
-                  and is directly selectable — is the sole copy path. A pointer drag across the
-                  romanization row copies clean Unicode (<code>huáng</code>, <code>tsia̍h</code>)
-                  with no button and no duplicate AT reading.
+                  <code>.copyBlock</code>/<code>.copyRomanization</code> CSS). Commit
+                  <span class="commit">523c7f9</span>.
+                </p>
+                <h4>Safari fix (commit <span class="commit">81d444b</span>)</h4>
+                <p>
+                  After the button removal, Safari/WebKit showed a broken layout: the
+                  <code>h1.title</code> expanded to ~164 px, the play button was displaced far below
+                  the headword, and <code>huáng</code> appeared below the audio button. Root cause:
+                  WebKit's layout engine forces <code>&lt;rt&gt;</code> to
+                  <code>position: static</code> inside its ruby-text box generation, overriding even
+                  <code>position: absolute !important</code> set by both CSS and JS
+                  <code>setProperty</code>. The static position keeps <code>&lt;rt&gt;</code> in
+                  normal ruby flow, expanding the h1 and displacing the audio block and romanization
+                  downward — <code>huáng</code> appears after the audio button.
+                </p>
+                <p>
+                  Fix: <code>ruby2hruby.ts</code> now builds a
+                  <code>&lt;span class="romanization-selectable" aria-hidden="true"&gt;</code>
+                  directly from <code>rt.textContent</code> in the non-zhuyin rtc conversion loop,
+                  with
+                  <code>position: absolute; color: transparent; user-select: text</code> applied by
+                  <code>src/index.css</code>. A plain <code>&lt;span&gt;</code> in the same
+                  <code>&lt;ru&gt;</code> parent correctly receives
+                  <code>position: absolute</code> on all engines. The native
+                  <code>&lt;rt&gt;</code> must <strong>not</strong> be restored to this role:
+                  WebKit's constraint is engine-level and cannot be overridden by author CSS.
                 </p>
                 <p class="evidence-line">
-                  <strong>Final evidence:</strong> <span class="commit">523c7f9</span> with #186
-                  base <span class="commit">e8ffe0e</span>. Contract: real pointer drag copies clean
-                  Unicode romanization; no <code>.copyBlock</code> rendered;
-                  <code>&lt;rt aria-hidden="true"&gt;</code> prevents screen-reader duplication.
+                  <strong>Final evidence:</strong> <span class="commit">523c7f9</span> (button
+                  removal) + <span class="commit">81d444b</span> (Safari-safe span architecture).
+                  WebKit and Chromium each 15/15 <code>@romanization</code> tests passing, including
+                  real pointer drag (<code>huáng</code>, <code>tsia̍h</code>), geometry invariants
+                  (overlay above rb row, h1 height/font-size ratio &lt; 4, audioBlock within h1
+                  bounds), phonetics preference suppression, and no duplicate AT reading.
                 </p>
                 <p>
                   <a
