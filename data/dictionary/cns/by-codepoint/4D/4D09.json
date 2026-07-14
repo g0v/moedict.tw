@@ -12,7 +12,7 @@
     "stroke": 24,
     "cangjie": ["WVHAF"],
     "strokeSequence": "252211251353432511154444",
-    "source": "罕用國字標準字體表"
+    "source": "罕用國字標準字體表(《CNS 11643》96年公布)"
   },
   "provenance": {
     "generator": "scripts/generate-cns-data.mjs",
