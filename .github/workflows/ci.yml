@@ -69,9 +69,9 @@ jobs:
       - run: vp run test:integration
 
   e2e:
-    name: E2E (playwright chromium)
+    name: E2E (Chromium + focused WebKit)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       E2E_SKIP_BUILD: "1"
     steps:
@@ -89,15 +89,18 @@ jobs:
         id: pw-cache
         with:
           path: ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ steps.pw.outputs.version }}
+          # Cache key explicitly includes both browsers so a cache that only
+          # has chromium does not false-hit and skip the webkit install.
+          key: pw-chromium-webkit-${{ runner.os }}-${{ steps.pw.outputs.version }}
       - name: Install Playwright browsers
         if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: vp exec playwright install --with-deps chromium
+        run: vp exec playwright install --with-deps chromium webkit
       - name: Install Playwright OS deps (for cached browsers)
         if: steps.pw-cache.outputs.cache-hit == 'true'
-        run: vp exec playwright install-deps chromium
+        run: vp exec playwright install-deps chromium webkit
       - run: vp run build
       - run: vp exec playwright test --project=chromium
+      - run: vp exec playwright test --project=webkit-romanization
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v7

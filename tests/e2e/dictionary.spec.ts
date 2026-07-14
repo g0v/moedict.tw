@@ -85,10 +85,11 @@ test.describe("dictionary pages per language", () => {
 // g0v/moedict-webkit#186: 「讓台語萌典的主要拼音(注音)可選取複製」——標題主
 // 讀音（羅馬拼音）過去只用 `ru[annotation]::before { content: attr(annotation) }`
 // 畫出可見字形，CSS generated content 任何瀏覽器都無法選取/複製；真正可選取
-// 的 `<rt>` 節點被縮成 1x1px 隱藏在別處。這裡驗證修法：真實 `<rt>` 現在疊在
-// 可見字形的實際畫面座標上，使用者在那個位置能選到正確、乾淨的 Unicode 文
-// 字（而不是畫面用的 PUA 連字字形），且觸發此動作不會被單字筆順動畫的
-// click handler 打斷。
+// 的 `<span class="romanization-selectable">` 節點疊在可見字形的實際畫面座標
+// 上，使用者在那個位置能選到正確、乾淨的 Unicode 文字（而不是畫面用的 PUA
+// 連字字形），且觸發此動作不會被單字筆順動畫的 click handler 打斷。
+// 改用 <span> 而非 <rt> 的原因：WebKit 的 layout engine 會把 <rt> 強制設為
+// position:static，使 position:absolute !important 失效；<span> 則正確接受。
 const LEGACY_RUBY_CSS = `
   hruby { display: inline; line-height: 2; }
   hruby ru { position: relative; display: inline-block; text-indent: 0; }
@@ -114,7 +115,7 @@ const LEGACY_RUBY_CSS = `
     text-indent: 0;
   }
   hruby[rightangle] ru[annotation]:before { left: -250%; }
-  hruby ru[annotation] > rt {
+  hruby ru[annotation] > .romanization-selectable {
     display: inline-block;
     height: 0;
     width: 0;
@@ -134,7 +135,7 @@ async function routeLegacyStylesCss(page: Page): Promise<void> {
   await page.route("https://r2-assets.test.local/styles.css?*", handler);
 }
 
-test.describe("Taigi title pronunciation selection/copy (g0v/moedict-webkit#186)", () => {
+test.describe("@romanization Taigi title pronunciation selection/copy (g0v/moedict-webkit#186)", () => {
   test("the visible romanization glyph position selects the real Unicode text, not the painted PUA ligature", async ({
     page,
   }) => {
@@ -148,27 +149,27 @@ test.describe("Taigi title pronunciation selection/copy (g0v/moedict-webkit#186)
     const result = await page.evaluate(() => {
       const ru = document.querySelector("h1.title hruby.rightangle ru[annotation]");
       if (!ru) throw new Error("annotation ru not found");
-      const rt = ru.querySelector(":scope > rt");
-      if (!rt || !rt.firstChild) throw new Error("rt text node not found");
+      const span = ru.querySelector(":scope > .romanization-selectable");
+      if (!span || !span.firstChild) throw new Error(".romanization-selectable span not found");
 
       const before = window.getComputedStyle(ru, "::before");
       const glyphRange = document.createRange();
-      glyphRange.selectNodeContents(rt.firstChild);
+      glyphRange.selectNodeContents(span.firstChild);
       const glyphRect = glyphRange.getClientRects()[0];
-      if (!glyphRect) throw new Error("rt has no rendered glyph rect");
+      if (!glyphRect) throw new Error("span has no rendered glyph rect");
 
-      // The regression this guards against: `<rt>` clipped to a 1x1px box
+      // The regression this guards against: overlay clipped to a 1x1px box
       // positioned away from the visible glyph (screen-reader-only pattern)
       // means no real mouse/touch action at the visible pinyin can ever
       // reach it.
-      const rtBoxRect = rt.getBoundingClientRect();
+      const spanBoxRect = span.getBoundingClientRect();
 
       const y = glyphRect.y + glyphRect.height / 2;
       const startCaret = document.caretRangeFromPoint(glyphRect.x + 1, y);
       const endCaret = document.caretRangeFromPoint(glyphRect.x + glyphRect.width - 1, y);
-      const caretsInRt =
-        startCaret?.startContainer.parentElement === rt &&
-        endCaret?.startContainer.parentElement === rt;
+      const caretsInSpan =
+        startCaret?.startContainer.parentElement === span &&
+        endCaret?.startContainer.parentElement === span;
 
       let selectedText = "";
       if (startCaret && endCaret) {
@@ -183,11 +184,11 @@ test.describe("Taigi title pronunciation selection/copy (g0v/moedict-webkit#186)
 
       return {
         annotation: ru.getAttribute("annotation"),
-        rtText: rt.textContent,
-        rtBoxWidth: rtBoxRect.width,
-        rtBoxHeight: rtBoxRect.height,
+        spanText: span.textContent,
+        spanBoxWidth: spanBoxRect.width,
+        spanBoxHeight: spanBoxRect.height,
         beforeContent: before.content,
-        caretsInRt,
+        caretsInSpan,
         selectedText,
       };
     });
@@ -196,14 +197,14 @@ test.describe("Taigi title pronunciation selection/copy (g0v/moedict-webkit#186)
     // unchanged; we only made the underlying text reachable.
     expect(result.beforeContent).toBe(JSON.stringify(result.annotation));
     // No longer clipped to a 1x1px screen-reader-only box.
-    expect(result.rtBoxWidth).toBeGreaterThan(5);
-    expect(result.rtBoxHeight).toBeGreaterThan(5);
+    expect(result.spanBoxWidth).toBeGreaterThan(5);
+    expect(result.spanBoxHeight).toBeGreaterThan(5);
     // The pixel the user sees the romanization at now resolves into the
-    // real <rt> text node, and selecting it copies the plain, clean Unicode
-    // romanization — never the custom-font PUA ligature used only for
-    // diacritic rendering in the painted glyph.
-    expect(result.caretsInRt).toBe(true);
-    expect(result.selectedText).toBe(result.rtText);
+    // .romanization-selectable text node, and selecting it copies the plain,
+    // clean Unicode romanization — never the custom-font PUA ligature used only
+    // for diacritic rendering in the painted glyph.
+    expect(result.caretsInSpan).toBe(true);
+    expect(result.selectedText).toBe(result.spanText);
     // The custom-font ligature glyph the painted `::before` uses to fix
     // stacked-diacritic rendering lives in the Supplementary Private Use
     // Area (astral, codepoint > 0xFFFF, e.g. U+F0061) — plain Latin text
@@ -223,14 +224,16 @@ test.describe("Taigi title pronunciation selection/copy (g0v/moedict-webkit#186)
 
     const outcome = await page.evaluate(() => {
       const trigger = document.querySelector(".single-char-stroke-trigger");
-      const rt = document.querySelector("h1.title hruby.rightangle ru[annotation] > rt");
-      if (!trigger || !rt || !rt.firstChild) throw new Error("title nodes not found");
+      const span = document.querySelector(
+        "h1.title hruby.rightangle ru[annotation] > .romanization-selectable",
+      );
+      if (!trigger || !span || !span.firstChild) throw new Error("title nodes not found");
 
       // Simulate the browser Selection state a real drag/double-click over
       // the visible romanization would leave behind, then dispatch the
       // click the mouseup of that same gesture also produces.
       const range = document.createRange();
-      range.selectNodeContents(rt.firstChild);
+      range.selectNodeContents(span.firstChild);
       const sel = window.getSelection();
       sel?.removeAllRanges();
       sel?.addRange(range);
@@ -258,18 +261,21 @@ test.describe("Taigi title pronunciation selection/copy (g0v/moedict-webkit#186)
 // 同時驗證 Mandarin 標題的相同疊加層機制（#186 只有 Taigi e2e 測試）。
 
 /**
- * Obtain the bounding rect of the first title <rt> text node rendered at the
- * visible romanization glyph position.  Returns the serialisable DOMRect fields
- * so the caller can drive page.mouse without entering page.evaluate again.
+ * Obtain the bounding rect of the first title `.romanization-selectable` span
+ * rendered at the visible romanization glyph position.  Returns the serialisable
+ * DOMRect fields so the caller can drive page.mouse without entering
+ * page.evaluate again.
  */
 async function getRtGlyphRect(
   page: Page,
 ): Promise<{ x: number; y: number; w: number; h: number; rtText: string } | null> {
   return page.evaluate(() => {
-    const rt = document.querySelector("h1.title hruby.rightangle ru[annotation] > rt");
-    if (!rt?.firstChild) return null;
+    const span = document.querySelector(
+      "h1.title hruby.rightangle ru[annotation] > .romanization-selectable",
+    );
+    if (!span?.firstChild) return null;
     const range = document.createRange();
-    range.selectNodeContents(rt.firstChild);
+    range.selectNodeContents(span.firstChild);
     const rect = range.getClientRects()[0];
     if (!rect || rect.width < 2 || rect.height < 2) return null;
     return {
@@ -277,7 +283,7 @@ async function getRtGlyphRect(
       y: rect.y,
       w: rect.width,
       h: rect.height,
-      rtText: rt.textContent ?? "",
+      rtText: span.textContent ?? "",
     };
   });
 }
@@ -301,7 +307,7 @@ async function dragSelectRomanization(
   return page.evaluate(() => (window.getSelection()?.toString() ?? "").normalize("NFC"));
 }
 
-test.describe("Mandarin title pronunciation selection (g0v/moedict-webkit#186 + #256)", () => {
+test.describe("@romanization Mandarin title pronunciation selection (g0v/moedict-webkit#186 + #256)", () => {
   test("no copy button rendered — 複製羅馬拼音 button must not appear", async ({ page }) => {
     await routeLegacyStylesCss(page);
     await page.goto("/%E9%BB%83"); // 黃
@@ -311,7 +317,7 @@ test.describe("Mandarin title pronunciation selection (g0v/moedict-webkit#186 + 
     await expect(page.locator(".copyRomanization")).toHaveCount(0);
   });
 
-  test("hit-testing: caretRangeFromPoint at visible romanization resolves to real <rt> text node (Mandarin)", async ({
+  test("hit-testing: caretRangeFromPoint at visible romanization resolves to .romanization-selectable span text node (Mandarin)", async ({
     page,
   }) => {
     await routeLegacyStylesCss(page);
@@ -322,46 +328,46 @@ test.describe("Mandarin title pronunciation selection (g0v/moedict-webkit#186 + 
     const result = await page.evaluate(() => {
       const ru = document.querySelector("h1.title hruby.rightangle ru[annotation]");
       if (!ru) throw new Error("annotation ru not found");
-      const rt = ru.querySelector(":scope > rt");
-      if (!rt || !rt.firstChild) throw new Error("rt text node not found");
+      const span = ru.querySelector(":scope > .romanization-selectable");
+      if (!span || !span.firstChild) throw new Error(".romanization-selectable span not found");
 
       const before = window.getComputedStyle(ru, "::before");
       const glyphRange = document.createRange();
-      glyphRange.selectNodeContents(rt.firstChild);
+      glyphRange.selectNodeContents(span.firstChild);
       const glyphRect = glyphRange.getClientRects()[0];
-      if (!glyphRect) throw new Error("rt has no rendered glyph rect");
+      if (!glyphRect) throw new Error("span has no rendered glyph rect");
 
-      const rtBoxRect = rt.getBoundingClientRect();
+      const spanBoxRect = span.getBoundingClientRect();
 
       const y = glyphRect.y + glyphRect.height / 2;
       const startCaret = document.caretRangeFromPoint(glyphRect.x + 1, y);
       const endCaret = document.caretRangeFromPoint(glyphRect.x + glyphRect.width - 1, y);
-      const caretsInRt =
-        startCaret?.startContainer.parentElement === rt &&
-        endCaret?.startContainer.parentElement === rt;
+      const caretsInSpan =
+        startCaret?.startContainer.parentElement === span &&
+        endCaret?.startContainer.parentElement === span;
 
-      const rtUserSelect = window.getComputedStyle(rt).userSelect;
+      const spanUserSelect = window.getComputedStyle(span).userSelect;
 
       return {
         annotation: ru.getAttribute("annotation"),
-        rtText: rt.textContent,
-        rtBoxWidth: rtBoxRect.width,
-        rtBoxHeight: rtBoxRect.height,
+        spanText: span.textContent,
+        spanBoxWidth: spanBoxRect.width,
+        spanBoxHeight: spanBoxRect.height,
         beforeContent: before.content,
-        caretsInRt,
-        rtUserSelect,
+        caretsInSpan,
+        spanUserSelect,
       };
     });
 
     // Painted glyph (generated content) still renders — visual output unchanged.
     expect(result.beforeContent).toBe(JSON.stringify(result.annotation));
-    // No longer clipped to a 1×1px box.
-    expect(result.rtBoxWidth).toBeGreaterThan(5);
-    expect(result.rtBoxHeight).toBeGreaterThan(5);
-    // Caret resolution at visible glyph position hits the real <rt> text node.
-    expect(result.caretsInRt).toBe(true);
+    // No longer clipped to a 1×1px box — span is positioned at glyph coordinates.
+    expect(result.spanBoxWidth).toBeGreaterThan(5);
+    expect(result.spanBoxHeight).toBeGreaterThan(5);
+    // Caret resolution at visible glyph position hits the .romanization-selectable text node.
+    expect(result.caretsInSpan).toBe(true);
     // user-select must not be none (would silently block browser drag-selection)
-    expect(result.rtUserSelect).not.toBe("none");
+    expect(result.spanUserSelect).not.toBe("none");
   });
 
   test("real pointer drag across visible romanization row selects huáng only — Mandarin (page.mouse)", async ({
@@ -408,11 +414,13 @@ test.describe("Mandarin title pronunciation selection (g0v/moedict-webkit#186 + 
     expect(/[\u4e00-\u9fff\u3100-\u312f\u31a0-\u31bf]/.test(selected)).toBe(false);
     // Vertical layout confirmation: romanization row sits above the Han character.
     const gap = await page.evaluate(() => {
-      const rt = document.querySelector("h1.title hruby.rightangle ru[annotation] > rt");
+      const span = document.querySelector(
+        "h1.title hruby.rightangle ru[annotation] > .romanization-selectable",
+      );
       const rb = document.querySelector("h1.title hruby.rightangle ru rb");
-      if (!rt?.firstChild || !rb) return null;
+      if (!span?.firstChild || !rb) return null;
       const range = document.createRange();
-      range.selectNodeContents(rt.firstChild);
+      range.selectNodeContents(span.firstChild);
       const glyphRect = range.getClientRects()[0];
       if (!glyphRect) return null;
       return Math.round(rb.getBoundingClientRect().top - (glyphRect.y + glyphRect.height));
@@ -420,7 +428,7 @@ test.describe("Mandarin title pronunciation selection (g0v/moedict-webkit#186 + 
     if (gap !== null) expect(gap).toBeGreaterThan(0);
   });
 
-  test("ARIA: title announces romanization exactly once — aria-hidden on <rt> suppresses duplicate", async ({
+  test("ARIA: title announces romanization exactly once — aria-hidden on .romanization-selectable suppresses duplicate", async ({
     page,
   }) => {
     await routeLegacyStylesCss(page);
@@ -432,7 +440,7 @@ test.describe("Mandarin title pronunciation selection (g0v/moedict-webkit#186 + 
     const ariaHidden = await page.evaluate(
       () =>
         document
-          .querySelector("h1.title hruby.rightangle ru[annotation] > rt")
+          .querySelector("h1.title hruby.rightangle ru[annotation] > .romanization-selectable")
           ?.getAttribute("aria-hidden") ?? null,
     );
     expect(ariaHidden).toBe("true");
@@ -440,9 +448,9 @@ test.describe("Mandarin title pronunciation selection (g0v/moedict-webkit#186 + 
     // Primary observable contract: the Playwright accessibility snapshot of
     // the heading must contain the romanization text in exactly one leaf text
     // node.  Chromium surfaces ::before generated content as a leaf text entry
-    // in the accessibility tree.  With aria-hidden on <rt>, the real text
-    // node is excluded from the a11y tree, so "huáng" must appear as exactly
-    // one "- text: huáng" line — not two.  (Computed accessible names roll up
+    // in the accessibility tree.  With aria-hidden on .romanization-selectable,
+    // the selectable span is excluded from the a11y tree, so "huáng" must appear
+    // as exactly one "- text: huáng" line — not two.  (Computed accessible names
     // children, so the heading name and button name also contain "huáng"; we
     // count only the bare leaf `- text:` lines, which represent the actual
     // node-level announcements a screen reader would traverse.)
@@ -454,7 +462,7 @@ test.describe("Mandarin title pronunciation selection (g0v/moedict-webkit#186 + 
       .filter((l) => l.trimStart().startsWith("- text:"));
     const huangLeaves = leafLines.filter((l) => l.normalize("NFC").includes("hu\u00e1ng")).length;
     // Must appear exactly once: the ::before generated content leaf.
-    // aria-hidden on <rt> prevents a second "- text: huáng" leaf.
+    // aria-hidden on .romanization-selectable prevents a second "- text: huáng" leaf.
     expect(huangLeaves).toBe(1);
   });
 
@@ -476,6 +484,206 @@ test.describe("Mandarin title pronunciation selection (g0v/moedict-webkit#186 + 
     // Must not be "none" — that would silently suppress the iOS long-press
     // text selection callout that lets users copy the romanization.
     expect(callout).not.toBe("none");
+  });
+});
+
+/**
+ * Romanization overlay layout regression suite (g0v/moedict-webkit#186 Safari fix).
+ *
+ * Root cause: WebKit's layout engine hard-forces <rt> elements to
+ * position:static regardless of author !important CSS rules.  Replacing <rt>
+ * with a <span class="romanization-selectable"> allows position:absolute to
+ * take effect cross-engine, keeping the overlay compact and adjacent to the
+ * Han character row.
+ *
+ * Tag prefix "@romanization" in every describe title enables:
+ *   --project=chromium    (chromium project, no grep filter — runs all tests)
+ *   --project=webkit-romanization  (grep: /@romanization/, WebKit engine)
+ * Invariants are relative geometry checks, not fixed pixel values, so they
+ * detect the broken-WebKit layout (large vertical gap, displaced audio) and
+ * confirm the fix on both engines.
+ */
+test.describe("@romanization romanization overlay geometry regression (g0v/moedict-webkit#186)", () => {
+  /**
+   * Helper: collect overlay + rb + h1 + audio geometry.  Used by several tests below.
+   * Returns relative invariants so results are viewport/font-size agnostic.
+   */
+  async function collectOverlayMetrics(page: Page) {
+    return page.evaluate(() => {
+      const ru = document.querySelector("h1.title hruby.rightangle ru[annotation]");
+      if (!ru) throw new Error("annotation ru not found");
+      const span = ru.querySelector(":scope > .romanization-selectable");
+      if (!span) throw new Error(".romanization-selectable span not found");
+      const rb = document.querySelector("h1.title hruby.rightangle ru rb");
+      if (!rb) throw new Error("rb not found");
+      const h1 = document.querySelector("h1.title");
+      if (!h1) throw new Error("h1.title not found");
+      const audioBlock = document.querySelector(".audioBlock");
+      if (!audioBlock) throw new Error(".audioBlock not found");
+
+      const cs = window.getComputedStyle(span);
+      const fontSize = parseFloat(window.getComputedStyle(h1).fontSize) || 1;
+      const spanRect = span.getBoundingClientRect();
+      const rbRect = rb.getBoundingClientRect();
+      const h1Rect = h1.getBoundingClientRect();
+      const audioY = audioBlock.getBoundingClientRect().top;
+
+      return {
+        spanPosition: cs.position,
+        spanY: spanRect.top,
+        rbY: rbRect.top,
+        h1Y: h1Rect.top,
+        h1Height: h1Rect.height,
+        audioY,
+        // Relative: h1 height expressed in line-height multiples (font-size proxy).
+        // Compact layout: romanization + Han char = ~2–3 line heights.
+        // Broken WebKit: h1 alone was ~164px with a typical 24px font ≈ 6.8 lines.
+        h1HeightToFontRatio: h1Rect.height / fontSize,
+      };
+    });
+  }
+
+  test("overlay span is geometrically above rb row and display is not static", async ({ page }) => {
+    await routeLegacyStylesCss(page);
+    await page.goto("/%E9%BB%83"); // 黃 huáng
+    await waitForEntryHydration(page, "黃");
+    await page.evaluate(() => document.fonts.ready);
+
+    const metrics = await collectOverlayMetrics(page);
+
+    // 1. Overlay is NOT static — position:absolute must survive on the span.
+    expect(metrics.spanPosition).not.toBe("static");
+
+    // 2. Overlay top is ABOVE rb top (romanization sits above the Han character).
+    expect(metrics.spanY).toBeLessThan(metrics.rbY);
+
+    // 3. h1 height is compact relative to the font size.
+    //    Compact layout ≈ 2–3 line-heights; broken WebKit was ~6–7 line-heights.
+    //    Threshold of 4× catches the regression with generous margin for zoom/DPI.
+    expect(metrics.h1HeightToFontRatio).toBeLessThan(4);
+
+    // 4. audioBlock sits within or immediately after h1 (not displaced far below).
+    //    Required: .audioBlock must be present — collectOverlayMetrics throws if absent.
+    expect(metrics.audioY).toBeGreaterThanOrEqual(metrics.h1Y);
+    expect(metrics.audioY).toBeLessThan(metrics.h1Y + metrics.h1Height * 1.5);
+  });
+
+  test("computed position on overlay is absolute on all engines (CSS regression guard)", async ({
+    page,
+  }) => {
+    await routeLegacyStylesCss(page);
+    await page.goto("/%E9%BB%83");
+    await waitForEntryHydration(page, "黃");
+
+    const cs = await page.evaluate(() => {
+      const span = document.querySelector(
+        "h1.title hruby.rightangle ru[annotation] > .romanization-selectable",
+      );
+      if (!span) throw new Error(".romanization-selectable span not found");
+      // getComputedStyle returns the ACTUALLY applied position value after layout.
+      // If WebKit forces 'static', this fails even when the CSS rule says 'absolute'.
+      return window.getComputedStyle(span).position;
+    });
+
+    // Must be "absolute" — not "static" (WebKit bug) nor anything else.
+    expect(cs).toBe("absolute");
+  });
+
+  test("Taigi entry: overlay span geometry matches Mandarin invariants", async ({ page }) => {
+    await routeLegacyStylesCss(page);
+    const response = await page.goto("/'%E9%A3%9F"); // 食 tsia̍h
+    expect(response?.status()).toBe(200);
+    await waitForEntryHydration(page, "食");
+    await page.evaluate(() => document.fonts.ready);
+
+    const metrics = await collectOverlayMetrics(page);
+    expect(metrics.spanPosition).not.toBe("static");
+    expect(metrics.spanY).toBeLessThan(metrics.rbY);
+    expect(metrics.h1HeightToFontRatio).toBeLessThan(4);
+  });
+
+  test("dark theme: overlay geometry remains compact (regression guard for colour-scheme reflow)", async ({
+    page,
+  }) => {
+    // Dark mode sets background/colour but must not trigger a layout reflow that
+    // re-introduces the position:static gap.
+    await page.emulateMedia({ colorScheme: "dark" });
+    await routeLegacyStylesCss(page);
+    await page.goto("/%E9%BB%83"); // 黃 huáng
+    await waitForEntryHydration(page, "黃");
+    await page.evaluate(() => document.fonts.ready);
+
+    const metrics = await collectOverlayMetrics(page);
+    expect(metrics.spanPosition).not.toBe("static");
+    expect(metrics.spanY).toBeLessThan(metrics.rbY);
+    expect(metrics.h1HeightToFontRatio).toBeLessThan(4);
+  });
+
+  test("mobile viewport (393×852): overlay stays compact and span remains above rb", async ({
+    page,
+  }) => {
+    // iPhone 15 / typical narrow viewport — verifies no viewport-triggered reflow.
+    await page.setViewportSize({ width: 393, height: 852 });
+    await routeLegacyStylesCss(page);
+    await page.goto("/%E9%BB%83"); // 黃 huáng
+    await waitForEntryHydration(page, "黃");
+    await page.evaluate(() => document.fonts.ready);
+
+    const metrics = await collectOverlayMetrics(page);
+    expect(metrics.spanPosition).not.toBe("static");
+    expect(metrics.spanY).toBeLessThan(metrics.rbY);
+    expect(metrics.h1HeightToFontRatio).toBeLessThan(4);
+  });
+
+  test("phonetics=bopomofo: .romanization-selectable has computed display none (no hit target)", async ({
+    page,
+  }) => {
+    // When the user preference is bopomofo-only, the romanization overlay is
+    // suppressed via `body[data-ruby-pref="zhuyin"] … > .romanization-selectable
+    // { display: none !important }` in index.css.  The span must not be a
+    // hit target or accidentally selectable when no visible glyph is present.
+    await page.addInitScript(() => {
+      localStorage.setItem("phonetics", "bopomofo");
+    });
+    await routeLegacyStylesCss(page);
+    await page.goto("/%E9%BB%83"); // 黃 huáng
+    await waitForEntryHydration(page, "黃");
+
+    const display = await page.evaluate(() => {
+      const span = document.querySelector(
+        "h1.title hruby.rightangle ru[annotation] > .romanization-selectable",
+      );
+      // The span must be present in the DOM (ruby2hruby always creates it) and
+      // its computed display must be "none" — null would mean the span is absent
+      // entirely, which would make this test vacuous.
+      if (!span) throw new Error(".romanization-selectable span not found");
+      return window.getComputedStyle(span).display;
+    });
+    expect(display).toBe("none");
+  });
+
+  test("phonetics=none: .romanization-selectable has computed display none (no hit target)", async ({
+    page,
+  }) => {
+    // Same as bopomofo test but for the 'none' preference (no phonetics at all).
+    await page.addInitScript(() => {
+      localStorage.setItem("phonetics", "none");
+    });
+    await routeLegacyStylesCss(page);
+    await page.goto("/%E9%BB%83"); // 黃 huáng
+    await waitForEntryHydration(page, "黃");
+
+    const display = await page.evaluate(() => {
+      const span = document.querySelector(
+        "h1.title hruby.rightangle ru[annotation] > .romanization-selectable",
+      );
+      // The span must be present in the DOM (ruby2hruby always creates it) and
+      // its computed display must be "none" — null would mean the span is absent
+      // entirely, which would make this test vacuous.
+      if (!span) throw new Error(".romanization-selectable span not found");
+      return window.getComputedStyle(span).display;
+    });
+    expect(display).toBe("none");
   });
 });
 

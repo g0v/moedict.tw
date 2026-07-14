@@ -804,14 +804,16 @@ html.moe-ios .result .entry .title {
 /* g0v/moedict-webkit#186: 主要拼音（羅馬拼音／注音）目前只靠
    `ru[annotation]::before { content: attr(annotation) }` 畫出可見字形——
    CSS generated content 在任何瀏覽器都不可選取、不可複製。真正可選取的
-   `<rt>` 文字節點原本被縮成 1x1px 並 clip 到看不見的角落（外加 legacy
-   inline `text-indent: -9999px`），使用者在可見拼音上拖曳選取一定選不到
-   任何字。這裡改成把 `<rt>` 疊在跟 `::before` 完全相同的視覺座標上
+   `.romanization-selectable` span 疊在跟 `::before` 完全相同的視覺座標上
    （位置/尺寸/縮放皆對齊 `ru[annotation]:before` 與 `hruby[rightangle]`
    規則），並保留 `color: transparent` 讓它本身不可見——畫面上看到的仍是
    `::before` 畫出的字形，但滑鼠/觸控落在同一個位置時，選取到的是這個真
-   實、正確、可複製的 Unicode 文字（而非畫出來的 PUA 連字字形）。*/
-.result .entry .title hruby.rightangle ru[annotation] > rt {
+   實、正確、可複製的 Unicode 文字（而非畫出來的 PUA 連字字形）。
+   注意：此處改用 `<span>` 而非原先的 `<rt>`——WebKit 的 layout engine 會把
+   所有 `<rt>` 強制設為 position:static（不論作者樣式或 !important 均無效），
+   導致 h1 高度暴增（164px）、播放按鈕被推離標題外。`<span>` 在同一個
+   `<ru>` 父元素下正確接受 position:absolute，與 Chromium 行為一致。*/
+.result .entry .title hruby.rightangle ru[annotation] > .romanization-selectable {
   position: absolute !important;
   left: -250% !important;
   top: -0.5em !important;
@@ -834,6 +836,28 @@ html.moe-ios .result .entry .title {
   color: transparent !important;
   -webkit-user-select: text !important;
   user-select: text !important;
+}
+
+/* When romanization is hidden (zhuyin-only or no-phonetics preference) the
+   ::before generated content is already suppressed by the ruby-pref rules
+   above. The zhuyin and none ruby-pref selectors below also hide the
+   transparent selection hit target so it cannot be accidentally selected or
+   announced when no visible glyph is present. */
+body[data-ruby-pref="zhuyin"]
+  .result
+  .entry
+  .title
+  hruby.rightangle
+  ru[annotation]
+  > .romanization-selectable,
+body[data-ruby-pref="none"]
+  .result
+  .entry
+  .title
+  hruby.rightangle
+  ru[annotation]
+  > .romanization-selectable {
+  display: none !important;
 }
 
 .result .entry .title hruby.rightangle ru[zhuyin] zhuyin,
