@@ -105,7 +105,9 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
 [`notes/零停機部署筆記.md`](./notes/零停機部署筆記.md)。
 
 - **兩階段 rollout**：`release-deploy.mjs` 用 `wrangler versions upload/deploy`
-  做 new0%/old100% → override smoke → new100%/old0% → ≥120 秒 probe →
+  做 new0%/old100% → 30 秒初始 propagation sleep → override smoke（若只看見
+  已知舊版 release，逐路由最多再 poll 6 次、每次 10 秒，總計最長約 90 秒；非 200、
+  缺/異常標頭或第三個 release 立即 fail-closed）→ new100%/old0% → ≥120 秒 probe →
   finalize new100%。任一階段失敗自動 rollback 回舊版本 100%，絕不留下
   未 smoke 的新版一次切到 100%。
 - **`CF_VERSION_METADATA` binding**（`wrangler.jsonc` top-level 與

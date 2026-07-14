@@ -20,6 +20,7 @@ const BASE_URL = "https://cf-moedict-webkit-neo-staging.audreyt.workers.dev";
 const WORKER_NAME = "cf-moedict-webkit-neo-staging";
 const UUID = "11111111-1111-4111-8111-111111111111";
 const RELEASE_TAG = "abc1234-def012345678";
+const OLD_RELEASE_TAG = "old5678-abcdef123456";
 const ROUTES = [
   "/",
   "/api/config",
@@ -223,6 +224,150 @@ describe("smokeWithVersionOverride", () => {
     for (const [i, route] of ROUTES.entries()) {
       expect(new URL(calls[i].url).pathname).toBe(route.split("?")[0]);
     }
+  });
+
+  it("retries a known prior release and succeeds on the second attempt", async () => {
+    let call = 0;
+    const { fetchImpl, calls } = mockFetch(() => {
+      call += 1;
+      return call === 1 ? okResponse({ "X-Moedict-Release": OLD_RELEASE_TAG }) : okResponse();
+    });
+    const sleepCalls: number[] = [];
+    const logCalls: string[] = [];
+    const result = await smokeWithVersionOverride(BASE_URL, WORKER_NAME, UUID, ["/"], RELEASE_TAG, {
+      fetch: fetchImpl,
+      priorReleaseTag: OLD_RELEASE_TAG,
+      sleep: async (ms) => {
+        sleepCalls.push(ms);
+      },
+      log: (message) => logCalls.push(message),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.results).toEqual([{ route: "/", status: 200, attempts: 2 }]);
+    expect(calls).toHaveLength(2);
+    expect(sleepCalls).toEqual([10000]);
+    expect(logCalls).toHaveLength(1);
+    expect(logCalls[0]).toContain("route / attempt 1/7");
+    expect(logCalls[0]).toContain(OLD_RELEASE_TAG);
+    const firstProbe = new URL(calls[0].url).searchParams.get("_probe");
+    const secondProbe = new URL(calls[1].url).searchParams.get("_probe");
+    expect(firstProbe).toBeTruthy();
+    expect(secondProbe).toBeTruthy();
+    expect(firstProbe).not.toBe(secondProbe);
+  });
+
+  it("does not retry when the expected release is returned immediately", async () => {
+    const { fetchImpl, calls } = mockFetch(() => okResponse());
+    const sleepCalls: number[] = [];
+    const result = await smokeWithVersionOverride(BASE_URL, WORKER_NAME, UUID, ["/"], RELEASE_TAG, {
+      fetch: fetchImpl,
+      priorReleaseTag: OLD_RELEASE_TAG,
+      sleep: async (ms) => {
+        sleepCalls.push(ms);
+      },
+      log: () => {},
+    });
+
+    expect(result.ok).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(sleepCalls).toHaveLength(0);
+  });
+
+  it("exhausts persistent prior-release responses with exact route, expected, and observed values", async () => {
+    const { fetchImpl, calls } = mockFetch(() =>
+      okResponse({ "X-Moedict-Release": OLD_RELEASE_TAG }),
+    );
+    const sleepCalls: number[] = [];
+    await expect(
+      smokeWithVersionOverride(BASE_URL, WORKER_NAME, UUID, ["/api/config"], RELEASE_TAG, {
+        fetch: fetchImpl,
+        priorReleaseTag: OLD_RELEASE_TAG,
+        overrideRetryAttempts: 3,
+        overrideRetryIntervalMs: 25,
+        sleep: async (ms) => {
+          sleepCalls.push(ms);
+        },
+        log: () => {},
+      }),
+    ).rejects.toThrow(
+      `Version-override smoke probe failed for route /api/config: X-Moedict-Release mismatch (expected ${JSON.stringify(RELEASE_TAG)}, got ${JSON.stringify(OLD_RELEASE_TAG)})`,
+    );
+    expect(calls).toHaveLength(3);
+    expect(sleepCalls).toEqual([25, 25]);
+  });
+
+  it("does not retry a non-200 response", async () => {
+    const { fetchImpl, calls } = mockFetch(() => new Response("missing", { status: 404 }));
+    const sleepCalls: number[] = [];
+    await expect(
+      smokeWithVersionOverride(BASE_URL, WORKER_NAME, UUID, ["/api/config"], RELEASE_TAG, {
+        fetch: fetchImpl,
+        priorReleaseTag: OLD_RELEASE_TAG,
+        sleep: async (ms) => {
+          sleepCalls.push(ms);
+        },
+        log: () => {},
+      }),
+    ).rejects.toThrow(/expected 200, got 404/);
+    expect(calls).toHaveLength(1);
+    expect(sleepCalls).toHaveLength(0);
+  });
+
+  it("does not retry missing, malformed, or unexpected third release headers", async () => {
+    const cases: Array<{ name: string; response: Response; observed: string }> = [
+      { name: "missing", response: new Response("ok", { status: 200 }), observed: "null" },
+      {
+        name: "malformed",
+        response: okResponse({ "X-Moedict-Release": "" }),
+        observed: JSON.stringify(""),
+      },
+      {
+        name: "third release",
+        response: okResponse({ "X-Moedict-Release": "third999-unexpected" }),
+        observed: JSON.stringify("third999-unexpected"),
+      },
+    ];
+
+    for (const testCase of cases) {
+      const { fetchImpl, calls } = mockFetch(() => testCase.response);
+      const sleepCalls: number[] = [];
+      await expect(
+        smokeWithVersionOverride(BASE_URL, WORKER_NAME, UUID, ["/"], RELEASE_TAG, {
+          fetch: fetchImpl,
+          priorReleaseTag: OLD_RELEASE_TAG,
+          sleep: async (ms) => {
+            sleepCalls.push(ms);
+          },
+          log: () => {},
+        }),
+      ).rejects.toThrow(
+        `Version-override smoke probe failed for route /: X-Moedict-Release mismatch (expected ${JSON.stringify(RELEASE_TAG)}, got ${testCase.observed})`,
+      );
+      expect(calls).toHaveLength(1);
+      expect(sleepCalls).toHaveLength(0);
+    }
+  });
+
+  it("sleeps exactly attempts - 1 times and never after the final failed attempt", async () => {
+    const { fetchImpl } = mockFetch(() => okResponse({ "X-Moedict-Release": OLD_RELEASE_TAG }));
+    const sleepCalls: number[] = [];
+    const logCalls: string[] = [];
+    await expect(
+      smokeWithVersionOverride(BASE_URL, WORKER_NAME, UUID, ["/"], RELEASE_TAG, {
+        fetch: fetchImpl,
+        priorReleaseTag: OLD_RELEASE_TAG,
+        overrideRetryAttempts: 4,
+        overrideRetryIntervalMs: 11,
+        sleep: async (ms) => {
+          sleepCalls.push(ms);
+        },
+        log: (message) => logCalls.push(message),
+      }),
+    ).rejects.toThrow(/X-Moedict-Release mismatch/);
+    expect(sleepCalls).toEqual([11, 11, 11]);
+    expect(logCalls).toHaveLength(3);
+    expect(logCalls.map((line) => line.match(/attempt (\d+)\/4/)?.[1])).toEqual(["1", "2", "3"]);
   });
 
   it("rejects empty workerName/versionUuid/baseUrl/routes/releaseTag", async () => {
