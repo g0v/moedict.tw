@@ -144,8 +144,9 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
 所以 staging 無法驗證 preview-assets 桶的公開資產。設定在`wrangler.jsonc`的`env.staging`區塊。
   但目前`moedict-assets`的 CORS 已將
  `https://cf-moedict-webkit-neo-staging.audreyt.workers.dev` 納入白名單（見
-  `commands/r2-assets-cors.json`、`bun run wrangler r2 bucket cors set/list moedict-assets`），
-  以支援 staging 同源字型載入驗證路徑。
+  `commands/r2-assets-cors.json`），以允許 staging 直接跨來源取用 `r2-assets.moedict.tw`
+  的舊版資產（styles.css 等）。關鍵 title 字型別名走 staging Worker 同源路徑（`/assets/*`
+  代理），與 R2 CORS 無關。
 - **環境選擇發生在建置期**：`@cloudflare/vite-plugin` 讀 `CLOUDFLARE_ENV`
   環境變數（build 時），不是 `wrangler deploy --env`。這也是為什麼
   `release-publish.mjs`／`release-deploy.mjs` 各自獨立讀

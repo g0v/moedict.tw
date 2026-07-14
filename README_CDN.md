@@ -41,11 +41,15 @@
 - 目前來源檔：`commands/r2-assets-cors.json`
 
 - 要讓 staging（`ASSET_BASE_URL=https://r2-assets.moedict.tw`）與 production 共用同一套公開 CDN，
-  且維持同源字型驗證能力，`staging` origin（`https://cf-moedict-webkit-neo-staging.audreyt.workers.dev`）
-  必須被 `moedict-assets` 的 CORS 白名單允許。
-- R2 CORS 變更不會即刻清掉既有 CDN HIT；既有 `styles.css`/字型仍可能先命中舊快取。
-  關鍵字型已改走同源備援路徑：`src/index.css` 的 `/assets/fonts/MOEDICT.*?v=20260713-cors`，
-  較舊的跨來源快取仍由現行 edge TTL 與 `/api/cache/purge` 清理流程管理。
+  `staging` origin（`https://cf-moedict-webkit-neo-staging.audreyt.workers.dev`）必須被
+  `moedict-assets` 的 CORS 白名單允許，才能直接跨來源取用 `r2-assets.moedict.tw` 上的舊版資產。
+- R2 CORS 規則變更**不會**令已快取的回應失效。若需清除 `r2-assets.moedict.tw` 自訂網域上的
+  CDN 快取，須透過 Cloudflare zone 的「按 URL / hostname 清除快取」功能（需對應 zone 的
+  Cache Purge 權限）；**`/api/cache/purge` 不涵蓋此 CDN**——該端點僅清除 Worker
+  allowlist 內的 cache tag（`dict-*`、`list`、`search` 等），與 R2 公開 CDN 無關。
+  舊快取亦可等待 edge TTL 自然過期。
+- 關鍵 title 字型別名 `/assets/fonts/MOEDICT.*?v=20260713-cors` 走 staging Worker 同源路徑
+  （`/assets/*` Worker 代理），與 R2 CORS 狀態及 CDN 快取無關。
 
 ### 3) 字典資料端點
 
