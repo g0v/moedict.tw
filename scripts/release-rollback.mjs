@@ -101,6 +101,8 @@ function errMessage(err) {
  *   baseUrl?: string;
  *   runner?: Runner;
  *   fetch?: FetchFn;
+ *   sleep?: (ms: number) => Promise<void>;
+ *   propagationSleepMs?: number;
  *   nowIso?: () => string;
  *   stateBaseDir?: string;
  *   stateFs?: import("./lib/deployment-state.mjs").FsAdapter;
@@ -122,11 +124,19 @@ export async function runReleaseRollback(targetUuid, opts = {}) {
   if (env !== "production" && env !== "staging") {
     throw new Error(`Unsupported CLOUDFLARE_ENV: ${String(env)}`);
   }
-  const runner =
-    opts.runner ??
-    runWrangler; /* v8 ignore next -- default spawns a real wrangler subprocess; unsafe to exercise in unit tests */
+  /* v8 ignore start -- default spawns a real wrangler subprocess; unsafe to exercise in unit tests */
+  const runner = opts.runner ?? runWrangler;
+  /* v8 ignore stop */
   const fetchImpl = opts.fetch ?? fetch;
   const nowIso = opts.nowIso ?? (() => new Date().toISOString());
+  // 30s default, mirroring release-deploy.mjs: Cloudflare's edge propagation
+  // for `versions deploy` can exceed the documented window in practice;
+  // probing too early hits PoPs still routing to the pre-deploy version.
+  // Injectable; set to 0 to skip in tests.
+  const propagationSleepMs = opts.propagationSleepMs ?? 30000;
+  /* v8 ignore start -- the default is a real setTimeout sleep; unit tests always inject a fake */
+  const sleepImpl = opts.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+  /* v8 ignore stop */
   const probeTimeoutOpts = {
     timeoutMs: opts.probeTimeoutMs,
     setTimeoutFn: opts.setTimeoutFn,
@@ -174,6 +184,14 @@ export async function runReleaseRollback(targetUuid, opts = {}) {
     ],
     { runner },
   );
+
+  // 5b. Wait for the traffic switch to propagate before smoking. Probing too
+  //     early can false-fail the smoke and trigger the restore path below —
+  //     re-promoting the exact version this rollback is trying to escape
+  //     (same edge lag release-deploy.mjs observed live on 2026-07-12). No
+  //     wait is needed after finalize (step 7): traffic already moved in
+  //     step 5 and nothing probes after finalize here.
+  if (propagationSleepMs > 0) await sleepImpl(propagationSleepMs);
 
   // 6. Bounded final smoke (no override header — target is actually live).
   //    On failure, restore current@100/target@0 and report both errors.

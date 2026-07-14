@@ -222,6 +222,9 @@ describe("field-level schema validation (fail-closed)", () => {
     expect(() => saveCurrentDeployment({} as never, { baseDir: dir })).toThrow(
       /workerName must be a non-empty string/,
     );
+    expect(() => saveCurrentDeployment({ ...CURRENT, tag: "" }, { baseDir: dir })).toThrow(
+      /tag must be a non-empty string/,
+    );
     expect(() =>
       saveCurrentDeployment({ ...CURRENT, deployedAt: "not-a-date" }, { baseDir: dir }),
     ).toThrow(/deployedAt must be a valid ISO date string/);

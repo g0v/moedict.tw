@@ -9,7 +9,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   deriveProbeRoutes,
   resolveBaseUrl,
@@ -211,6 +211,12 @@ describe("deriveProbeRoutes", () => {
     expect(() => deriveProbeRoutes({ files: [{ path: "index.html" }] })).toThrow(/hashed JS asset/);
   });
 
+  it("throws when the manifest has a hashed JS asset but no hashed CSS asset", () => {
+    expect(() => deriveProbeRoutes({ files: [{ path: "assets/index-AbCdEf12.js" }] })).toThrow(
+      /hashed CSS asset/,
+    );
+  });
+
   it("throws when the manifest itself is missing or has no files array", () => {
     expect(() => deriveProbeRoutes(null as never)).toThrow(/manifest.files is required/);
     expect(() => deriveProbeRoutes({} as never)).toThrow(/manifest.files is required/);
@@ -310,6 +316,27 @@ describe("runReleaseDeploy input validation and real-adapter defaults", () => {
     expect(fetchCalls.some((c) => c.url.includes("/assets/index-AbCdEf12.js"))).toBe(true);
     expect(fetchCalls.some((c) => c.url.includes("/assets/style-12345678.css"))).toBe(true);
   });
+
+  it("wraps a non-Error manifest failure via String(err) and defaults distClientDir to dist/client", async () => {
+    const { runner } = buildRunner();
+    const { fetchImpl } = buildFetch();
+    await expect(
+      runReleaseDeploy({
+        ...baseOpts("staging", { runner, fetch: fetchImpl }),
+        manifest: undefined,
+        // distClientDir deliberately omitted → the "dist/client" default arm.
+        // The injected fs throws a string primitive, not an Error — the
+        // orchestrator must surface it via String(err), not err.message.
+        manifestOpts: {
+          fs: {
+            readdirSync: () => {
+              throw "boom, not an Error instance";
+            },
+          },
+        },
+      }),
+    ).rejects.toThrow(/Release manifest unavailable.*boom, not an Error instance/);
+  });
 });
 
 // ── prod gate / current-state validation (no mutation) ──────────────
@@ -352,6 +379,18 @@ describe("production approval gate", () => {
     const { fetchImpl } = buildFetch();
     const result = await runReleaseDeploy(baseOpts("production", { runner, fetch: fetchImpl }));
     expect(result.releaseId).toBe(RELEASE_ID);
+  });
+
+  it("defaults env to production when omitted (gate checked, prod worker deployed)", async () => {
+    saveStagingApproval(
+      { gitSha: GIT_SHA, clientManifestDigest: DIGEST, approvedAt: "2026-07-12T00:00:00Z" },
+      { baseDir: dir },
+    );
+    const { runner } = buildRunner();
+    const { fetchImpl } = buildFetch();
+    const { env: _env, ...opts } = baseOpts("production", { runner, fetch: fetchImpl });
+    const result = await runReleaseDeploy(opts);
+    expect(result).toMatchObject({ env: "production", releaseId: RELEASE_ID, versionId: NEW_UUID });
   });
 });
 
@@ -966,6 +1005,60 @@ it("sleeps propagationSleepMs (default 30s) after each versions-deploy before th
   // Soak sleeps remain the short interval, not the propagation value.
   expect(sleepCalls.some((ms) => ms === 1)).toBe(true);
   expect(sleepCalls.every((ms) => ms === 7000 || ms === 1)).toBe(true);
+});
+
+it("defaults the propagation wait to 30s (three sleeps: post-phase1, post-promote, post-finalize)", async () => {
+  const { runner } = buildRunner();
+  const { fetchImpl } = buildFetch();
+  const sleepCalls: number[] = [];
+  await runReleaseDeploy({
+    ...baseOpts("staging", { runner, fetch: fetchImpl }),
+    propagationSleepMs: undefined,
+    sleep: async (ms: number) => {
+      sleepCalls.push(ms);
+    },
+  });
+  expect(sleepCalls.filter((ms) => ms === 30000)).toHaveLength(3);
+});
+
+it("uses the real global fetch when none is injected", async () => {
+  const { runner } = buildRunner();
+  const fetchCalls: string[] = [];
+  vi.stubGlobal("fetch", async (url: string) => {
+    fetchCalls.push(String(url));
+    return new Response("ok", { status: 200, headers: { "X-Moedict-Release": RELEASE_ID } });
+  });
+  try {
+    const result = await runReleaseDeploy(baseOpts("staging", { runner }));
+    expect(result.versionId).toBe(NEW_UUID);
+    expect(fetchCalls.length).toBeGreaterThan(0);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+it("defaults stateBaseDir to cwd-relative .wrangler/releases", async () => {
+  const { runner } = buildRunner();
+  const { fetchImpl } = buildFetch();
+  const scratch = mkdtempSync(join(tmpdir(), "moedict-release-cwd-"));
+  const prevCwd = process.cwd();
+  try {
+    process.chdir(scratch);
+    const result = await runReleaseDeploy({
+      ...baseOpts("staging", { runner, fetch: fetchImpl }),
+      stateBaseDir: undefined,
+    });
+    expect(result.versionId).toBe(NEW_UUID);
+  } finally {
+    process.chdir(prevCwd);
+  }
+  const current = readCurrentDeployment({
+    baseDir: join(scratch, ".wrangler", "releases", "staging"),
+  });
+  expect(current?.versionId).toBe(NEW_UUID);
+  const approval = readStagingApproval({ baseDir: join(scratch, ".wrangler", "releases") });
+  expect(approval?.gitSha).toBe(GIT_SHA);
+  rmSync(scratch, { recursive: true, force: true });
 });
 
 // ── state persistence ──────────────────────────────────────────────

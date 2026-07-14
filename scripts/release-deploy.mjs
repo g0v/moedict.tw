@@ -146,9 +146,9 @@ export async function runReleaseDeploy(opts = {}) {
   if (env !== "production" && env !== "staging") {
     throw new Error(`Unsupported CLOUDFLARE_ENV: ${String(env)}`);
   }
-  const runner =
-    opts.runner ??
-    runWrangler; /* v8 ignore next -- default spawns a real wrangler subprocess; unsafe to exercise in unit tests */
+  /* v8 ignore start -- default spawns a real wrangler subprocess; unsafe to exercise in unit tests */
+  const runner = opts.runner ?? runWrangler;
+  /* v8 ignore stop */
   const fetchImpl = opts.fetch ?? fetch;
   const nowIso = opts.nowIso ?? (() => new Date().toISOString());
   const soakIntervalMs = opts.soakIntervalMs ?? 5000;
@@ -158,9 +158,9 @@ export async function runReleaseDeploy(opts = {}) {
   // observed failures at 10s on a real workers.dev worker (3 consecutive runs,
   // zero failures once increased). Injectable; set to 0 to skip in tests.
   const propagationSleepMs = opts.propagationSleepMs ?? 30000;
-  const sleepImpl =
-    opts.sleep /* v8 ignore next -- real sleep; not exercised in unit tests */ ??
-    ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+  /* v8 ignore start -- the default is a real setTimeout sleep; unit tests always inject a fake. The mid-expression `v8 ignore next` form this replaces was NOT honored by vitest's v8 provider and left this arm uncovered. */
+  const sleepImpl = opts.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+  /* v8 ignore stop */
   const probeTimeoutOpts = {
     timeoutMs: opts.probeTimeoutMs,
     setTimeoutFn: opts.setTimeoutFn,

@@ -140,9 +140,9 @@ const WORKER_VERSION_ID_RE = /Worker Version ID:\s*(\S+)/;
 export async function uploadVersion(configPath, tag, opts = {}) {
   validateConfigPath(configPath);
   validateReleaseTag(tag);
-  const runner =
-    opts.runner ??
-    runWrangler; /* v8 ignore next -- default spawns a real wrangler subprocess; unsafe to exercise in unit tests */
+  /* v8 ignore start -- default spawns a real wrangler subprocess; unsafe to exercise in unit tests */
+  const runner = opts.runner ?? runWrangler;
+  /* v8 ignore stop */
 
   const argv = [
     "vp",
@@ -188,9 +188,9 @@ export async function uploadVersion(configPath, tag, opts = {}) {
 export async function deployVersionSplit(configPath, specs, opts = {}) {
   validateConfigPath(configPath);
   validateSpecs(specs);
-  const runner =
-    opts.runner ??
-    runWrangler; /* v8 ignore next -- default spawns a real wrangler subprocess; unsafe to exercise in unit tests */
+  /* v8 ignore start -- default spawns a real wrangler subprocess; unsafe to exercise in unit tests */
+  const runner = opts.runner ?? runWrangler;
+  /* v8 ignore stop */
 
   const argv = [
     "vp",
@@ -238,9 +238,9 @@ export async function rollbackToVersion(configPath, oldUuid, newUuid, opts = {})
 export async function listVersions(configPath, workerName, opts = {}) {
   validateConfigPath(configPath);
   validateWorkerName(workerName);
-  const runner =
-    opts.runner ??
-    runWrangler; /* v8 ignore next -- default spawns a real wrangler subprocess; unsafe to exercise in unit tests */
+  /* v8 ignore start -- default spawns a real wrangler subprocess; unsafe to exercise in unit tests */
+  const runner = opts.runner ?? runWrangler;
+  /* v8 ignore stop */
   const argv = [
     "vp",
     "exec",
@@ -361,9 +361,9 @@ export function findTagByVersionId(versions, uuid) {
 export async function getCurrentDeployment(configPath, workerName, opts = {}) {
   validateConfigPath(configPath);
   validateWorkerName(workerName);
-  const runner =
-    opts.runner ??
-    runWrangler; /* v8 ignore next -- default spawns a real wrangler subprocess; unsafe to exercise in unit tests */
+  /* v8 ignore start -- default spawns a real wrangler subprocess; unsafe to exercise in unit tests */
+  const runner = opts.runner ?? runWrangler;
+  /* v8 ignore stop */
   const argv = [
     "vp",
     "exec",
