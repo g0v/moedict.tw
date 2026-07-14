@@ -7,6 +7,7 @@ const ANDROID_WEBVIEW_UA =
 const MANDARIN_VERTICAL_ZHUYIN_SAMPLES = [
   { path: "/%E8%90%8C", title: "萌" },
   { path: "/%E6%95%96", title: "敖" },
+  { path: "/%E9%BB%83", title: "黃" }, // length=3 ㄏㄨㄤˊ; tone-node geometry regression target
 ];
 const TAIGI_TITLE_CANDIDATES = [
   { path: "/'%E9%A3%9F", title: "食" },
@@ -470,7 +471,7 @@ test.describe("Mandarin MOE vertical zhuyin proportions", () => {
         { ua: platform.ua },
       );
 
-      let checked = 0;
+      const checkedTitles = new Set<string>();
       for (const sample of MANDARIN_VERTICAL_ZHUYIN_SAMPLES) {
         const response = await page.goto(sample.path);
         expect(response?.status()).toBe(200);
@@ -483,7 +484,6 @@ test.describe("Mandarin MOE vertical zhuyin proportions", () => {
         if ((await page.locator(".result .entry h1.title hruby.rightangle").count()) === 0) {
           continue;
         }
-        checked += 1;
         await expect(page.locator(".result .entry h1.title hruby.rightangle").first()).toBeVisible({
           timeout: 8_000,
         });
@@ -544,16 +544,26 @@ test.describe("Mandarin MOE vertical zhuyin proportions", () => {
         }, sample.title);
 
         for (const item of metrics) {
+          // Length-3 initials (e.g. ㄏㄨㄤ for 黃) have a wider phonetic column than
+          // length 1/2; keep tight bounds for 1/2 so a real regression on those is caught.
+          const isLen3 = item.length === "3";
+          const ruWidthMax = isLen3 ? 5.1 : 5.0;
+          const zhuyinColMax = isLen3 ? 4.1 : 3.5;
+          const zhuyinRightMax = isLen3 ? 5.1 : 4.5;
+          const toneRightMax = isLen3 ? 5.1 : 5.0;
+
           expect(item.rbWidth, `${sample.title} ${item.text} Han square`).toBeGreaterThan(0.5);
           expect(item.rbWidth, `${sample.title} ${item.text} Han square`).toBeLessThan(1.6);
           expect(item.ruWidth, `${sample.title} ${item.text} annotated unit`).toBeGreaterThan(1.0);
-          expect(item.ruWidth, `${sample.title} ${item.text} annotated unit`).toBeLessThan(5.0);
+          expect(item.ruWidth, `${sample.title} ${item.text} annotated unit`).toBeLessThan(
+            ruWidthMax,
+          );
           expect(
             item.zhuyinColumnWidth,
             `${sample.title} ${item.text} zhuyin column`,
           ).toBeGreaterThan(0.1);
           expect(item.zhuyinColumnWidth, `${sample.title} ${item.text} zhuyin column`).toBeLessThan(
-            3.5,
+            zhuyinColMax,
           );
           expect(
             item.zhuyinLeft,
@@ -562,7 +572,7 @@ test.describe("Mandarin MOE vertical zhuyin proportions", () => {
           expect(
             item.zhuyinRight,
             `${sample.title} ${item.text} zhuyin stays in phonetic column`,
-          ).toBeLessThan(4.5);
+          ).toBeLessThan(zhuyinRightMax);
           expect(
             item.zhuyinTopInRu,
             `${sample.title} ${item.text} zhuyin top fits`,
@@ -586,7 +596,9 @@ test.describe("Mandarin MOE vertical zhuyin proportions", () => {
               item.toneLeft,
               `${sample.title} ${item.text} tone column starts`,
             ).toBeGreaterThan(0);
-            expect(item.toneRight, `${sample.title} ${item.text} tone column ends`).toBeLessThan(5);
+            expect(item.toneRight, `${sample.title} ${item.text} tone column ends`).toBeLessThan(
+              toneRightMax,
+            );
             expect(
               item.toneTopInRu,
               `${sample.title} ${item.text} tone top fits`,
@@ -597,10 +609,178 @@ test.describe("Mandarin MOE vertical zhuyin proportions", () => {
             ).toBeLessThan(4.5);
           }
         }
+        // Only mark checked after metrics are exercised.
+        checkedTitles.add(sample.title);
       }
-      expect(checked).toBeGreaterThan(0);
+      // 黃 (length=3) must have been checked; at least one other sample too.
+      expect(checkedTitles.has("黃"), "黃 (length=3 sample) was checked").toBe(true);
+      expect(
+        checkedTitles.size,
+        "at least two distinct samples rendered right-angle ruby",
+      ).toBeGreaterThanOrEqual(2);
     });
   }
+});
+
+// Same-origin font route, FontFace load status, and 黃 (ㄏㄨㄤˊ, length=3) tone-node geometry.
+// Rationale: r2-assets.moedict.tw CORS headers may be missing on stale edge PoPs, causing
+// browser font-load failures for cross-origin requests and breaking title/Zhuyin geometry.
+// The "MOEDICT Same-Origin" @font-face alias serves identical bytes via same-origin
+// /assets/fonts/* paths — immune to CORS cache state.  This test asserts:
+//   1. The Worker returns 200 font/woff2 for /assets/fonts/MOEDICT.woff2?v=20260713-cors
+//      from the same origin as the page (not cross-origin r2-assets).
+//   2. After explicit document.fonts.load(), the FontFace status is "loaded" and
+//      document.fonts.check() returns true for the alias family.
+//   3. The computed font-family on the diao element includes "MOEDICT Same-Origin".
+//   4. 黃 renders a right-angle title with ru[zhuyin][length="3"], and the diao
+//      tone node fits the vertical grid (would fail under wrong fallback font metrics).
+//   Secondary: the @font-face rule src is same-origin via CSS OM.
+test.describe("MOEDICT Same-Origin font and 黃 length-3 tone geometry", () => {
+  test.use({ viewport: { width: 393, height: 852 }, deviceScaleFactor: 2.75, isMobile: true });
+
+  test("same-origin font is 2xx font/woff2, FontFace loads, alias in computed stack; 黃 diao fits grid", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("phonetics", "bopomofo");
+      localStorage.setItem("pinyin_a", "HanYu");
+    });
+
+    // Install response watcher before navigation so we catch early font loads.
+    // The MOEDICT Same-Origin @font-face src is /assets/fonts/MOEDICT.woff2?v=20260713-cors.
+    const fontResponsePromise = page.waitForResponse(
+      (r) => r.url().includes("/assets/fonts/MOEDICT.woff2") && r.url().includes("v=20260713-cors"),
+      { timeout: 20_000 },
+    );
+
+    const pageResponse = await page.goto("/%E9%BB%83");
+    expect(pageResponse?.status(), "黃 page loads 200").toBe(200);
+    await page.waitForLoadState("domcontentloaded");
+
+    // 黃 must render a right-angle ruby title — pack/707.txt is now seeded in fixtures.
+    await expect(
+      page.locator(".result .entry h1.title hruby.rightangle"),
+      "黃 renders right-angle title (pack/707 fixture seeded)",
+    ).toBeVisible({ timeout: 15_000 });
+
+    // Explicitly load the alias to trigger the font fetch if not yet triggered.
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+      await document.fonts.load('37px "MOEDICT Same-Origin"', "黃ㄏㄨㄤˊ");
+    });
+
+    // 1. The font request was served by the Worker at the same origin (not cross-origin R2).
+    const fontResp = await fontResponsePromise;
+    expect(fontResp.status(), "MOEDICT.woff2 response is 2xx").toBeGreaterThanOrEqual(200);
+    expect(fontResp.status(), "MOEDICT.woff2 response is 2xx").toBeLessThan(300);
+    const fontRespUrl = new URL(fontResp.url());
+    const pageUrl = new URL(page.url());
+    expect(
+      fontRespUrl.origin,
+      "font served from same origin as page (not cross-origin r2-assets)",
+    ).toBe(pageUrl.origin);
+    expect(fontRespUrl.pathname, "font path is /assets/fonts/MOEDICT.woff2").toBe(
+      "/assets/fonts/MOEDICT.woff2",
+    );
+    const ct = fontResp.headers()["content-type"] ?? "";
+    expect(ct, "content-type is font/woff2").toContain("font/woff2");
+
+    // 2. FontFace status is "loaded" and document.fonts.check() returns true.
+    const fontLoadResult = await page.evaluate(async () => {
+      const faces = await document.fonts.load('37px "MOEDICT Same-Origin"', "黃ㄏㄨㄤˊ");
+      return {
+        loadedCount: faces.length,
+        statuses: faces.map((f) => f.status),
+        checkResult: document.fonts.check('37px "MOEDICT Same-Origin"', "黃ㄏㄨㄤˊ"),
+      };
+    });
+    expect(
+      fontLoadResult.loadedCount,
+      '"MOEDICT Same-Origin" FontFace resolved (load returned ≥1 face)',
+    ).toBeGreaterThan(0);
+    expect(
+      fontLoadResult.statuses.every((s) => s === "loaded"),
+      "all resolved FontFace objects have status loaded",
+    ).toBe(true);
+    expect(
+      fontLoadResult.checkResult,
+      'document.fonts.check returns true for "MOEDICT Same-Origin"',
+    ).toBe(true);
+
+    // 3. The computed font-family on the diao node includes "MOEDICT Same-Origin".
+    const diaoFontFamily = await page.evaluate(() => {
+      const diao = document.querySelector(
+        ".result .entry h1.title hruby.rightangle ru[zhuyin][length='3'] diao",
+      );
+      if (!diao) throw new Error("diao in length=3 ru not found for 黃");
+      return window.getComputedStyle(diao).fontFamily;
+    });
+    expect(
+      diaoFontFamily,
+      'computed font-family on 黃 diao includes "MOEDICT Same-Origin"',
+    ).toMatch(/MOEDICT Same-Origin/i);
+
+    // Secondary: @font-face src is same-origin via CSS OM.
+    const fontFaceSrc = await page.evaluate(() => {
+      for (const sheet of [...document.styleSheets]) {
+        try {
+          for (const rule of [...sheet.cssRules]) {
+            if (rule instanceof CSSFontFaceRule) {
+              const family = rule.style.getPropertyValue("font-family").replace(/['"]/g, "").trim();
+              if (family === "MOEDICT Same-Origin") return rule.style.getPropertyValue("src");
+            }
+          }
+        } catch {
+          // Cross-origin sheet — skip
+        }
+      }
+      return null;
+    });
+    expect(fontFaceSrc, '"MOEDICT Same-Origin" @font-face rule in stylesheet').not.toBeNull();
+    expect(fontFaceSrc, "src references /assets/fonts/MOEDICT (same-origin)").toContain(
+      "/assets/fonts/MOEDICT",
+    );
+    expect(fontFaceSrc, "src does not reference cross-origin r2-assets").not.toContain("r2-assets");
+
+    // 4. 黃 (ㄏㄨㄤˊ, length=3) diao tone node fits the vertical grid.
+    // Would fail if tone mark escapes column due to wrong font metrics from a failed font load.
+    const ru3 = page.locator(".result .entry h1.title hruby.rightangle ru[zhuyin][length='3']");
+    await expect(ru3, "黃 title has ru[zhuyin][length='3']").toBeVisible();
+    const diaoMetrics = await page.evaluate(() => {
+      const title = [...document.querySelectorAll(".result .entry h1.title")].find(
+        (el) =>
+          [...el.querySelectorAll("hruby.rightangle rb")]
+            .map((rb) => rb.textContent?.trim() ?? "")
+            .join("") === "黃",
+      );
+      if (!title) throw new Error("黃 right-angle title not found");
+      const fontSize = Number.parseFloat(window.getComputedStyle(title).fontSize);
+      const ruEl = title.querySelector("ru[zhuyin][length='3']");
+      if (!ruEl) throw new Error("ru[zhuyin][length='3'] not found in 黃 title");
+      const diaoEl = ruEl.querySelector("diao");
+      if (!diaoEl || !diaoEl.textContent)
+        throw new Error("diao node missing or empty in length=3 ru");
+      const ruRect = ruEl.getBoundingClientRect();
+      const diaoRect = diaoEl.getBoundingClientRect();
+      return {
+        toneTopInRu: (diaoRect.top - ruRect.top) / fontSize,
+        toneBottomInRu: (diaoRect.bottom - ruRect.top) / fontSize,
+        toneLeft: (diaoRect.left - ruRect.left) / fontSize,
+        toneRight: (diaoRect.right - ruRect.left) / fontSize,
+      };
+    });
+    expect(
+      diaoMetrics.toneTopInRu,
+      "黃 length=3 diao top fits vertical grid",
+    ).toBeGreaterThanOrEqual(-0.5);
+    expect(diaoMetrics.toneBottomInRu, "黃 length=3 diao bottom fits vertical grid").toBeLessThan(
+      4.5,
+    );
+    expect(diaoMetrics.toneLeft, "黃 length=3 diao stays in phonetic column").toBeGreaterThan(0);
+    expect(diaoMetrics.toneRight, "黃 length=3 diao right edge in phonetic column").toBeLessThan(
+      5.1,
+    );
+  });
 });
 
 test.describe("special routes", () => {

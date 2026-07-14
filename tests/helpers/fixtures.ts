@@ -14,6 +14,10 @@
  *   - 字 (U+5B57)  — lang=h, phck bucket 87
  *   - 上訴         — lang=c, pcck bucket 10 (first char 上 = U+4E0A)
  *   - 蛇 (U+86C7)  — lang=t, ptck bucket 71（文讀 siâ 無義項）
+ *
+ * Extra explicit fixtures (geometry / font tests):
+ *   - 黃 (U+9EC3)  — lang=a, pack bucket 707; ㄏㄨㄤˊ length=3 tone-node geometry
+ *   - MOEDICT.woff2 — ASSETS key fonts/MOEDICT.woff2; same-origin font route test
  */
 
 import { readFileSync } from "node:fs";
@@ -100,6 +104,17 @@ export function collectDictionaryFixtures(): FixtureEntry[] {
       path.join(DATA_DICT, "ptck", `${taiwaneseReadingOnlyBucket}.txt`),
       taiwaneseReadingOnlyKey,
     ),
+    httpMetadata: { contentType: "text/plain; charset=utf-8" },
+  });
+
+  // 黃 (U+9EC3) — lang=a, pack bucket 707; ㄏㄨㄤˊ has length=3 zhuyin which
+  // exercises the length=3 tone-node geometry and the same-origin font route.
+  const huangBucket = bucketOf("黃", "a");
+  const huangKey = `pack/${huangBucket}.txt`;
+  entries.push({
+    bucket: "DICTIONARY",
+    key: huangKey,
+    body: required(path.join(DATA_DICT, "pack", `${huangBucket}.txt`), huangKey),
     httpMetadata: { contentType: "text/plain; charset=utf-8" },
   });
 
@@ -361,6 +376,21 @@ export function collectAssetFixtures(): FixtureEntry[] {
       key: "stroke-json/840c.json",
       body: readFileSync(strokeJson840c),
       httpMetadata: { contentType: "application/json; charset=utf-8" },
+    });
+  }
+
+  // Real MOEDICT.woff2 from data/assets/fonts/ — seeded under ASSETS key
+  // fonts/MOEDICT.woff2 so the Worker's same-origin font route (/assets/fonts/MOEDICT.woff2)
+  // returns 200 with real font bytes. This lets e2e tests assert the correct
+  // HTTP status, content-type, and FontFace load status for the "MOEDICT Same-Origin"
+  // @font-face alias added in src/index.css.
+  const moedictWoff2Path = path.join(DATA_ASSETS, "fonts", "MOEDICT.woff2");
+  if (existsSync(moedictWoff2Path)) {
+    entries.push({
+      bucket: "ASSETS",
+      key: "fonts/MOEDICT.woff2",
+      body: readFileSync(moedictWoff2Path),
+      httpMetadata: { contentType: "font/woff2" },
     });
   }
 

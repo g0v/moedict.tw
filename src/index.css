@@ -66,6 +66,27 @@ body {
     U+FDFB1, U+FFBAB, U+FFBAE, U+FFBBB, U+FFC82, U+FFD36, U+FFD70, U+FFD9B, U+FFDD0, U+FFF46;
 }
 
+/* "MOEDICT Same-Origin" — same-origin alias for the MOEDICT title font.
+   The app serves /assets/fonts/MOEDICT.woff2 (and .otf/.woff) through the
+   same Worker origin, so these requests never require cross-origin R2 CORS
+   headers.  When r2-assets.moedict.tw CORS edge-cache contains a stale
+   pre-CORS HIT without Access-Control-Allow-Origin, staging loads fall back
+   to system glyphs and break title/Zhuyin geometry.  Placing this alias
+   *before* the bare MOEDICT family in critical font stacks ensures the
+   title font is resolved same-origin and is immune to that CORS cache state.
+   The ?v=20260713-cors query suffix busts any old edge cache key for these
+   paths; it does not affect font bytes. */
+@font-face {
+  font-family: "MOEDICT Same-Origin";
+  src:
+    url("/assets/fonts/MOEDICT.woff2?v=20260713-cors") format("woff2"),
+    url("/assets/fonts/MOEDICT.otf?v=20260713-cors") format("opentype"),
+    url("/assets/fonts/MOEDICT.woff?v=20260713-cors") format("woff");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -763,6 +784,7 @@ body[data-ruby-pref="zhuyin"] .result .entry .title {
   font-family:
     var(--title-leading-family),
     Numeral LF Serif,
+    "MOEDICT Same-Origin",
     MOEDICT,
     Fira Sans OT,
     Georgia,
@@ -843,14 +865,15 @@ html.moe-ios .result .entry .title {
 .result .entry .title hruby.rightangle ru[zhuyin] zhuyin,
 .result .entry .title hruby.rightangle ru[zhuyin] yin,
 .result .entry .title hruby.rightangle ru[zhuyin] diao {
-  font-family: MOEDICT, "Zhuyin Kaiti", cursive, serif !important;
+  font-family: "MOEDICT Same-Origin", MOEDICT, "Zhuyin Kaiti", cursive, serif !important;
 }
 
 /* Capacitor-only: prepend EduKai to zhuyin stack */
 html.moe-capacitor .result .entry .title hruby.rightangle ru[zhuyin] zhuyin,
 html.moe-capacitor .result .entry .title hruby.rightangle ru[zhuyin] yin,
 html.moe-capacitor .result .entry .title hruby.rightangle ru[zhuyin] diao {
-  font-family: "MOE EduKai Android", MOEDICT, "Zhuyin Kaiti", cursive, serif !important;
+  font-family:
+    "MOE EduKai Android", "MOEDICT Same-Origin", MOEDICT, "Zhuyin Kaiti", cursive, serif !important;
 }
 
 .result .entry .title hruby.rightangle ru[zhuyin] diao {
