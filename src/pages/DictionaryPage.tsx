@@ -51,6 +51,7 @@ interface Heteronym {
   pinyin?: string;
   trs?: string;
   alt?: string;
+  variants?: string[];
   audio_id?: string;
   synonyms?: string[] | string;
   /** TWBLG 文/白/俗/替讀音分類（g0v/moedict-webkit#96、#233），僅 lang='t' 有值；
@@ -1035,6 +1036,13 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
               <div className="cn-specific" lang="zh-Hans">
                 <span className="xref part-of-speech">简</span>
                 <span className="xref">{untag(heteronym.alt)}</span>
+              </div>
+            )}
+
+            {lang === "t" && heteronym.variants && heteronym.variants.length > 0 && (
+              <div className="twblg-variants">
+                <span className="xref part-of-speech">異用字</span>
+                <span className="xref">{heteronym.variants.join("、")}</span>
               </div>
             )}
 

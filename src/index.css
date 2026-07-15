@@ -1104,6 +1104,10 @@ body.lang-t .result .entry-item .example .mandarin::after {
   content: "）";
 }
 
+.twblg-variants {
+  margin: 4px 0;
+}
+
 /* Dark mode: keyword highlight and tone marks inside phrase/example cards
    (g0v/moedict-webkit#245 follow-up — white-on-white fix).
    In light mode `b`/`a.mark` have a yellow (#ffd) highlight and `zhuyin`

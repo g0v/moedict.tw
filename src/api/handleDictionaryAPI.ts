@@ -74,6 +74,7 @@ const KEY_MAP: Record<string, string> = {
   E: "english",
   T: "trs",
   A: "alt",
+  B: "variants",
   V: "vernacular",
   C: "combined",
   D: "dialects",
@@ -559,7 +560,7 @@ function decodeLangPart(lang: DictionaryLang, part = ""): string {
   }
 
   part = part.replace(/"`(.)~\u20DE"[^}]*},{"f":"([^（]+)[^"]*"/g, '"$1\u20DE $2"');
-  part = part.replace(/"([hbpdcnftrelsaqETAVCDS_=])":/g, (_m, k: string) => `"${KEY_MAP[k]}":`);
+  part = part.replace(/"([hbpdcnftrelsaqETAVBCDS_=])":/g, (_m, k: string) => `"${KEY_MAP[k]}":`);
 
   const HASH_OF: Record<DictionaryLang, string> = { a: "#", t: "#'", h: "#:", c: "#~" };
   const h = `./#${HASH_OF[lang]}`;
@@ -587,7 +588,7 @@ function decodeLangPart(lang: DictionaryLang, part = ""): string {
   return part;
 }
 
-function convertDictionaryStructure(entry: unknown): ConvertedDictionaryData {
+export function convertDictionaryStructure(entry: unknown): ConvertedDictionaryData {
   function convertObject(obj: unknown): unknown {
     if (Array.isArray(obj)) {
       return obj.map(convertObject);
