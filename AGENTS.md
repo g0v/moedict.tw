@@ -340,7 +340,9 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
 - 欄位是單字母縮寫，對照表在 `src/api/handleDictionaryAPI.ts` 的 `KEY_MAP`：
   `t`=title、`h`=heteronyms、`T`=trs（羅馬字）、`_`=id、`=`=audio_id、
   `d`=definitions、`f`=def、`e`=example、`r`=radical、`c`=stroke_count、
-  `n`=non_radical_stroke_count、`D`=dialects（十地區方言音）、`s`/`a`=同/反義。
+  `n`=non_radical_stroke_count、`B`=variants（異用字，僅 lang=`t`；
+  來源 g0v/moedict-data-twblg `x-異用字.json`，以 heteronym `\_`/主編碼 對應）、
+  `D`=dialects（十地區方言音）、`s`/`a`=同/反義。
 - **`T` 欄的斜線慣例**：一個 heteronym 的多個讀音以 `/` 相連
   （如 `"tshi̍h/ji̍h"`、`"tsi̍t-ji̍t/tsi̍t-li̍t"`），前端 `decorateRuby()` 會拆出
   主讀音與又音（`bAlt`/`pAlt`）。
@@ -374,6 +376,13 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
   且 **`D`/dialects 目前沒有任何 UI 會渲染**（暗資料）。補完需要資料合併 + 新 UI。
 - `詞彙方言差.csv` — 未整合（整詞的地區替代詞，如 醫院→病院/醫生館，
   以 `詞目` 為鍵，是獨立的新功能）。
+- `x-異用字.json` — **已整合**（2026-07，g0v/moedict-webkit#281）：以 heteronym
+  `_`/主編碼 對應，注入 `B`（variants）陣列，前端在 lang=`t` 時顯示「異用字：…」。
+  來源：`g0v/moedict-data-twblg` repo root `x-異用字.json`，pinned to commit
+  `437588d`（blob SHA1 `860d76d`，SHA-256 `aa5b0a…`），2110 個鍵，全部 string→string[]。
+  以 `scripts/inject-twblg-variants.py` 增量注入既有 ptck packs（不重建），保留
+  一行一詞條格式與所有其他欄位/順序；2097 個 id 命中、13 個為上游孤兒（ptck 無對應）。
+  moedict-process 已有 `appendTwblgVariants`（`src/pack/special.ts`）與對應測試。
 
 ## 測試架構重點
 
