@@ -107,6 +107,22 @@ export function collectDictionaryFixtures(): FixtureEntry[] {
     httpMetadata: { contentType: "text/plain; charset=utf-8" },
   });
 
+  // 異用字 (alternate-character) test fixtures (g0v/moedict-webkit#281):
+  // 你 (U+4F60, bucket 96, heteronym id=2881 → variants 汝)
+  // 囝 (U+56DD, bucket 93, heteronym id=2134 → variants 子)
+  // Both ptck buckets must be seeded so e2e tests can verify the
+  // .twblg-variants UI against real generated pack data.
+  for (const variantWord of ["你", "囝"] as const) {
+    const variantBucket = bucketOf(variantWord, "t");
+    const variantKey = `ptck/${variantBucket}.txt`;
+    entries.push({
+      bucket: "DICTIONARY",
+      key: variantKey,
+      body: required(path.join(DATA_DICT, "ptck", `${variantBucket}.txt`), variantKey),
+      httpMetadata: { contentType: "text/plain; charset=utf-8" },
+    });
+  }
+
   // 黃 (U+9EC3) — lang=a, pack bucket 707; ㄏㄨㄤˊ has length=3 zhuyin which
   // exercises the length=3 tone-node geometry and the same-origin font route.
   const huangBucket = bucketOf("黃", "a");

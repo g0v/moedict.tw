@@ -1330,3 +1330,47 @@ test.describe("definition-index permalink (/word/N, g0v/moedict.tw#131)", () => 
     await expect(page).not.toHaveTitle(/食\/1/);
   });
 });
+
+test.describe("台語異用字顯示 (g0v/moedict-webkit#281)", () => {
+  // 你 (/ˈlí/) has id=2881 in the ptck pack and maps to 汝 in x-異用字.json.
+  test("正面測試：你 (Taigi) 顯示異用字「汝」", async ({ page }) => {
+    const response = await page.goto("/'%E4%BD%A0"); // /'你
+    expect(response?.status()).toBe(200);
+    await waitForEntryHydration(page, "你");
+
+    const block = page.locator(".twblg-variants").first();
+    await expect(block).toBeVisible({ timeout: 10_000 });
+    await expect(block).toContainText("異用字");
+    await expect(block).toContainText("汝");
+    // Must not appear for other langs: this is the /' route (lang=t)
+    await expect(block.locator(".xref").first()).toContainText("異用字");
+  });
+
+  // 囝 (kiánn) has id=2134 and maps to 子.
+  test("正面測試：囝 (Taigi) 顯示異用字「子」", async ({ page }) => {
+    const response = await page.goto("/'%E5%9B%9D"); // /'囝
+    expect(response?.status()).toBe(200);
+    await waitForEntryHydration(page, "囝");
+
+    const block = page.locator(".twblg-variants").first();
+    await expect(block).toBeVisible({ timeout: 10_000 });
+    await expect(block).toContainText("子");
+  });
+
+  // 蛇 (bucket 71) has no B field on any heteronym — must not render .twblg-variants.
+  test("負面測試：無異用字條目不顯示 .twblg-variants", async ({ page }) => {
+    const response = await page.goto("/'%E8%9B%87"); // /'蛇
+    expect(response?.status()).toBe(200);
+    await waitForEntryHydration(page, "蛇");
+    await expect(page.locator(".twblg-variants")).toHaveCount(0);
+  });
+
+  // Mandarin entry (lang=a) must not show .twblg-variants — B field only
+  // exists on lang=t.  萌 is the canonical Mandarin fixture (bucket 12, seeded).
+  test("非台語條目不顯示 .twblg-variants（lang=a 萌）", async ({ page }) => {
+    const response = await page.goto("/%E8%90%8C"); // /萌 (Mandarin)
+    expect(response?.status()).toBe(200);
+    await waitForEntryHydration(page, "萌");
+    await expect(page.locator(".twblg-variants")).toHaveCount(0);
+  });
+});
