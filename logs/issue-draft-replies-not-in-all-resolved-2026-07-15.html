@@ -724,6 +724,9 @@
         #card-list {
           grid-template-columns: 1fr;
         }
+        .card {
+          min-width: 0 !important;
+        }
         .controls {
           position: static;
         }
@@ -822,7 +825,7 @@
             <div class="label-en">Upstream data / pipeline gap</div>
           </div>
           <div class="stat-card stat-D">
-            <div class="n">1</div>
+            <div class="n">0</div>
             <div class="label">本機 WIP、待資料前置條件</div>
             <div class="label-en">Local WIP, pending data prerequisite</div>
           </div>
@@ -832,12 +835,12 @@
             <div class="label-en">logs/issues/*.json</div>
           </div>
           <div class="stat-card" style="border-left-color: var(--green)">
-            <div class="n">20</div>
+            <div class="n">21</div>
             <div class="label">已併入分支 Included</div>
             <div class="label-en">code in all-resolved branch</div>
           </div>
           <div class="stat-card" style="border-left-color: var(--red)">
-            <div class="n">20</div>
+            <div class="n">19</div>
             <div class="label">未併入分支 Excluded</div>
             <div class="label-en">this report</div>
           </div>
@@ -856,7 +859,7 @@
             </div>
             <div class="metadata-item">
               <div class="k">整合 HEAD</div>
-              <div class="v"><code>3da9d99</code></div>
+              <div class="v"><code>32b717a</code></div>
             </div>
             <div class="metadata-item">
               <div class="k">origin/main 基線</div>
@@ -864,7 +867,7 @@
             </div>
             <div class="metadata-item">
               <div class="k">領先 commits</div>
-              <div class="v">58</div>
+              <div class="v">64</div>
             </div>
             <div class="metadata-item">
               <div class="k">工作樹 Worktree</div>
@@ -876,11 +879,11 @@
             </div>
             <div class="metadata-item">
               <div class="k">已併入分支</div>
-              <div class="v">20</div>
+              <div class="v">21</div>
             </div>
             <div class="metadata-item">
               <div class="k">未併入分支（本報告）</div>
-              <div class="v">20</div>
+              <div class="v">19</div>
             </div>
           </div>
           <p style="margin: 10px 0 0; font-size: 0.8rem">
@@ -889,20 +892,19 @@
             已在正式站或上游修復（僅驗證，未新增程式碼）； (B)
             非現行網站臭蟲（範圍外、凍結工具鏈或資料／授權阻礙）； (C)
             上游資料管線缺口（教育部原始資料或 moedict-process 層級）； (D) 本機 WIP
-            存在但待資料前置條件（#281 異用字，上游 ptck pack 尚無 B 欄位）。
+            存在但待資料前置條件（#281 異用字已併入整合分支）。
           </p>
           <p style="margin: 6px 0 0; font-size: 0.8rem">
             <strong>注意事項：</strong>所有 proposedResponse.posted=false；未對 GitHub
             發出任何留言、關閉或推送。 議題狀態可能與 GitHub 現況不同步（部分已於 2026-07-12
-            關閉）。 #281 的本機 WIP（wip/281-variants-forward-compat,
-            356b652）未併入整合分支、未發布；草稿不可宣稱已完成。 複製按鈕僅使用
-            navigator.clipboard，無任何網路請求。
+            關閉）。 #281 已於 commit 32b717a 併入整合分支且於 staging 驗證；本報告不含 #281 卡片。
+            複製按鈕僅使用 navigator.clipboard，無任何網路請求。
           </p>
           <p style="margin: 6px 0 0; font-size: 0.8rem">
             <strong>已併入分支的報告：</strong>見
             <a href="issue-resolution-batches-2026-07-13.html"
               >issue-resolution-batches-2026-07-13.html</a
-            >（20 個已實作議題的審閱台）。
+            >（21 個已實作議題的審閱台）。
           </p>
         </details>
 
@@ -924,9 +926,6 @@
             <li style="display: inline">
               <a href="#group-C">Group C: 上游資料／資料管線缺口 (3)</a>
             </li>
-            <li style="display: inline">
-              <a href="#group-D">Group D: 本機 WIP、待資料前置條件 (1)</a>
-            </li>
           </ul>
         </nav>
       </header>
@@ -943,11 +942,11 @@
               aria-label="搜尋議題"
             />
           </div>
-          <span class="result-count" id="result-count">20 / 20</span>
+          <span class="result-count" id="result-count">19 / 19</span>
         </div>
         <div class="chip-row" role="group" aria-label="分組篩選">
           <button type="button" class="chip active" data-filter="all" aria-pressed="true">
-            全部 All<span class="cnt">×20</span></button
+            全部 All<span class="cnt">×19</span></button
           ><button type="button" class="chip chip-A" data-filter="A" aria-pressed="false">
             已修復／已上線<span class="cnt">×5</span></button
           ><button type="button" class="chip chip-B" data-filter="B" aria-pressed="false">
@@ -955,7 +954,7 @@
           ><button type="button" class="chip chip-C" data-filter="C" aria-pressed="false">
             上游資料／資料管線缺口<span class="cnt">×3</span></button
           ><button type="button" class="chip chip-D" data-filter="D" aria-pressed="false">
-            本機 WIP、待資料前置條件<span class="cnt">×1</span>
+            本機 WIP、待資料前置條件<span class="cnt">×0</span>
           </button>
         </div>
       </div>
@@ -4606,230 +4605,6 @@ moedict.tw 無法在此進行任何程式碼修復；待 CC-CEDICT 社群更新�
                 type="button"
                 class="btn copy-btn"
                 data-target="draft-317"
-                aria-label="複製回覆草稿至剪貼簿"
-              >
-                複製草稿 Copy Draft
-              </button>
-            </div>
-          </div>
-        </article>
-
-        <div class="group-header group-D" id="group-D">
-          Group D：本機 WIP、待資料前置條件（Local WIP, pending data prerequisite）<span
-            class="count"
-          >
-            · 1 issue · #281 — branch 356b652, excluded; zero ptck B fields; never claim
-            completed/released</span
-          >
-        </div>
-        <article
-          class="card"
-          id="issue-281"
-          data-group="D"
-          data-issue="281"
-          data-disposition="not_planned"
-          lang="zh-TW"
-        >
-          <div class="card-head">
-            <div class="card-num group-D" aria-hidden="true">#281</div>
-            <div class="card-title-group">
-              <h2 class="card-title">
-                <a
-                  href="https://github.com/g0v/moedict-webkit/issues/281"
-                  rel="noopener noreferrer"
-                  target="_blank"
-                  >異用字請顯示治詞目頁</a
-                >
-              </h2>
-              <div class="card-sub">
-                <span class="badge badge-group group-D">本機 WIP、待資料前置條件</span>
-                <span>g0v/moedict-webkit</span>
-                <span>狀態: OPEN</span>
-                <span>作者: aiongg</span>
-                <span>建立: 2021-02-02</span>
-                <span>留言: 0</span>
-              </div>
-              <div class="badge-row">
-                <span class="badge badge-disposition">not_planned</span>
-                <span class="badge badge-confidence">信心: high</span>
-                <span class="badge badge-type">upstream_data_model_gap</span>
-              </div>
-              <div class="card-sub">
-                <span>標籤: —</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="card-body">
-            <div class="field-label">為何排除 Why Excluded</div>
-            <div class="field-value">
-              本機存在 WIP 前向相容程式碼（wip/281-variants-forward-compat, commit
-              356b652），但未併入本分支、未發布；上游 ptck pack 資料尚無
-              B（異用字）欄位，程式碼處於休眠狀態，不可宣稱已完成。
-            </div>
-
-            <div class="field-label">分類 Classification</div>
-            <div class="field-value">
-              重新歸類為 C（TWBLG 資料模型複雜度 → 改道 moedict-process/moedict.tw 待辦事項，非一律
-              wontfix），而非 style-guide.md §4 原先歸的 D（單詞條顯示/資料臭蟲）
-            </div>
-
-            <div class="field-label">決議 Decision</div>
-            <div class="field-value">not_planned</div>
-            <div class="field-value">
-              <strong>改道目標:</strong> g0v/moedict-process 與
-              g0v/moedict-data-twblg（台語辭典資料擷取管線），待新增『異用字』欄位擷取後，才在
-              g0v/moedict.tw 新增對應前端顯示區塊
-            </div>
-            <div class="field-value">
-              <strong>理由:</strong> issue
-              回報的現象屬實（你/囝兩例已在教育部官網逐一核實），但根因是上游資料管線從未擷取這個欄位，不是
-              moedict.tw 現行原始碼裡可修的顯示邏輯錯誤。g0v/moedict-webkit 本身已於 2026-07-10
-              凍結，不再開發新功能，就本議題而言只能收斂為 not_planned；但比照 style-guide.md bucket
-              C 的處理原則，不應以『資料為教育部所有、無法採納』的制式 wontfix
-              語氣一句帶過，而應誠實說明『資料連上游 CSV
-              快照都還沒有』這個更根本的限制，並指出後續應在 moedict-process/moedict-data-twblg
-              排入新的資料擷取待辦事項，而非直接假設功能不可行。
-            </div>
-
-            <div class="field-label">本 session 行動 Action Taken</div>
-            <div class="field-value">none</div>
-            <div class="field-value">
-              根因確認為上游資料管線缺漏（g0v/moedict-data-twblg 的 CSV
-              快照未收錄異用字欄位），moedict.tw 目前原始碼、pack 格式、API
-              轉換層皆無對應欄位可接，不存在『現行網站可修的臭蟲』；真正的修復需要先在
-              moedict-process/moedict-data-twblg
-              新增資料擷取步驟（重新爬取或取得教育部『異用字』資料集），屬於另一個資料管線儲存庫的新功能開發，超出本次『修正現行網站臭蟲』任務範圍，因此未建立
-              worktree、未修改任何程式碼、未提交、未推送。
-            </div>
-
-            <div class="impl-box impl-wip">
-              <div class="field-label">本機 WIP 細節（未併入分支）</div>
-              <div class="kv">
-                <dt>分支</dt>
-                <dd><code>wip/281-variants-forward-compat</code> (commit 356b652)</dd>
-                <dt>描述</dt>
-                <dd>
-                  B→variants field mapping, Heteronym.variants?: string[] display, .twblg-variants
-                  CSS, 4 unit tests
-                </dd>
-                <dt>資料缺口</dt>
-                <dd>
-                  grep &#x27;&quot;B&quot;:&#x27; data/dictionary/ptck/*.txt → 0 hits; B field
-                  absent from all ptck pack files
-                </dd>
-                <dt>已部署</dt>
-                <dd>否</dd>
-                <dt>本 session 程式碼</dt>
-                <dd>否（他人未提交工作）</dd>
-              </div>
-            </div>
-
-            <details class="evidence-details">
-              <summary>證據 Evidence (8)</summary>
-              <ul class="evidence-list">
-                <li>
-                  萌典公開 API 對「你」的台語詞條回應中沒有任何異用字/近似欄位<br /><small
-                    >curl https://www.moedict.tw/t/你.json（2026-07-12 即時查詢），完整 JSON 僅含
-                    c/h/n/r/t 與 heteronym 的 T/_/d/reading</small
-                  >
-                </li>
-                <li>
-                  教育部官網「你」詞目頁確實列有『異用字：汝』<br /><small
-                    >https://sutian.moe.edu.tw/zh-hant/su/2868/（2026-07-12
-                    瀏覽器擷取），頁面『異用字』區塊內容為「汝」</small
-                  >
-                </li>
-                <li>
-                  教育部官網「囝」詞目頁確實列有『異用字：子』<br /><small
-                    >https://sutian.moe.edu.tw/zh-hant/su/2124/（2026-07-12
-                    瀏覽器擷取），頁面『異用字』區塊內容為「子」</small
-                  >
-                </li>
-                <li>
-                  教育部官網「囡」詞目頁（id
-                  14762）未見『異用字』區塊，與回報第三例『囡→囝』不完全吻合<br /><small
-                    >https://sutian.moe.edu.tw/zh-hant/su/14762/（2026-07-12 瀏覽器擷取），頁面 HTML
-                    僅含部首筆畫區塊，無釋義/語音差異/異用字</small
-                  >
-                </li>
-                <li>
-                  g0v/moedict-data-twblg 的 9 份 uni/ CSV 全部不含『異用字』欄位<br /><small
-                    >curl 逐一取出
-                    https://raw.githubusercontent.com/g0v/moedict-data-twblg/master/uni/{例句,又音,反義詞對應,詞彙方言差,詞目總檔,語音方言差,近義詞對應,釋義,釋義.詞性對照}.csv
-                    的標頭列（2026-07-12），皆無『異用字』欄位；&#x27;詞目總檔.csv&#x27;
-                    標頭為「主編碼,屬性,詞目,音讀,文白屬性,部首」</small
-                  >
-                </li>
-                <li>
-                  本 repo 文件已知並追蹤的台語補充資料整合現況中，未提及『異用字』<br /><small
-                    >~/w/moedict.tw/AGENTS.md:246-254『台語（twblg）補充資料
-                    moedict-data-twblg/uni/*.csv
-                    的整合現況』一節，僅列又音.csv/語音方言差.csv/詞彙方言差.csv 三份</small
-                  >
-                </li>
-                <li>
-                  萌典 pack 資料格式與 API 轉換層完全沒有可承載異用字語意的既定欄位<br /><small
-                    >~/w/moedict.tw/src/api/handleDictionaryAPI.ts:56-80 的 KEY_MAP，列舉全部 23
-                    個既定單字母欄位縮寫，無異用字對應項</small
-                  >
-                </li>
-                <li>
-                  正式站台語萌典即時頁面不顯示異用字，與底層資料一致<br /><small
-                    >https://www.moedict.tw/&#x27;你（2026-07-12
-                    瀏覽器擷取純文字），頁面不含『異用字』字樣</small
-                  >
-                </li>
-              </ul>
-            </details>
-
-            <details class="risk-details">
-              <summary>風險 Risks (4)</summary>
-              <ul class="risk-list">
-                <li>
-                  『囡→囝』第三例在教育部官網「囡」詞目頁（id
-                  14762）查無『異用字』區塊，與回報不完全吻合；不排除該詞目有其他尚未核對的
-                  heteronym
-                  分頁、教育部資料近年有調整、或回報者引用的是民間慣用對應而非教育部官方逐字標記，需要更完整核對『囡』的所有相關詞目頁才能下定論，本次未逐一窮盡。
-                </li>
-                <li>
-                  本判定假設 g0v/moedict-data-twblg 的 GitHub master 分支快照即為 moedict-process
-                  實際消費的最新版本；若該資料另有未推送到 GitHub
-                  的本機分支或私有資料源已含異用字欄位，結論需要重新查證。
-                </li>
-                <li>
-                  sutian.moe.edu.tw 為即時查詢的官網（非穩定 API，靠表單擷取
-                  HTML），未來版面調整可能使本次擷取方式失效，若需重新驗證應留意頁面結構是否變動。
-                </li>
-                <li>
-                  主 checkout 存有前向相容的 B→variants 渲染程式碼（非本 session
-                  所有、未提交、未部署）；一旦上游資料管線開始輸出 B
-                  欄位，該程式碼即可立即啟用顯示，無需額外程式碼修改。但在資料管線更新前，disposition
-                  應維持 not_planned，不可因程式碼就緒而提前宣稱功能已完成。
-                </li>
-              </ul>
-            </details>
-          </div>
-
-          <div class="draft-section">
-            <div class="draft-header">
-              <span class="draft-flag">未送出 / DRAFT — NOT SENT</span>
-              <span class="draft-lang">語言: zh-TW</span>
-            </div>
-            <pre class="response-box" lang="zh-TW" id="draft-281">
-找到根本原因：萌典台語辭典目前的資料上游 `g0v/moedict-data-twblg`（教育部《臺灣台語常用詞辭典》CSV 快照）追蹤的 9 份補充資料檔（`又音.csv`、`反義詞對應.csv`、`詞彙方言差.csv`、`詞目總檔.csv`、`語音方言差.csv`、`近義詞對應.csv`、`釋義.csv`、`釋義.詞性對照.csv`、`例句.csv`）都沒有收錄「異用字」欄位；萌典 pack 資料格式與 API 轉換層（`handleDictionaryAPI.ts` 的 `KEY_MAP`）也完全沒有對應欄位可用。查證教育部官網 sutian.moe.edu.tw，「你」「囝」兩例確實各自列有「異用字：汝」「異用字：子」，回報內容屬實，但這項資料還沒有被擷取進 g0v 維護的台語辭典資料鏡像，所以不是萌典現行顯示邏輯漏接既有資料，而是整條資料管線根本還沒有這個欄位可用。
-
-`moedict-webkit` 的字典打包工具鏈已於 2026-07-10 退役（提交 `80358fc0`）。這個儲存庫目前只保留 `moedict.org` 的靜態前端，不再開發新功能，因此關閉此議題。
-
-如仍有需求，建議於 g0v/moedict-process 或 g0v/moedict-data-twblg 開一個新的資料擷取待辦事項，重新向教育部取得含「異用字」欄位的資料（例如比照 sutian.moe.edu.tw 詞目頁的「異用字」區塊），整合進 CSV 快照後，才能在 g0v/moedict.tw 現行前端新增對應顯示區塊。
-
-感謝回報，這是個很值得補上的欄位！</pre
-            >
-            <div class="card-actions">
-              <button
-                type="button"
-                class="btn copy-btn"
-                data-target="draft-281"
                 aria-label="複製回覆草稿至剪貼簿"
               >
                 複製草稿 Copy Draft

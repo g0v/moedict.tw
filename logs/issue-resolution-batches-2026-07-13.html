@@ -772,9 +772,9 @@
       <div class="hero-shell">
         <div class="kicker" aria-label="report metadata">
           <span class="pill">2026-07-13 consolidation report</span>
-          <span class="pill">Batch 1: 20 represented</span>
+          <span class="pill">Batch 1: 21 represented</span>
           <span class="pill">Batch 2: 5 verification-only</span>
-          <span class="pill">No push · no deploy · no staging · no GitHub writes</span>
+          <span class="pill">No push · no production deploy · no GitHub writes</span>
         </div>
         <h1>Issue resolution batches for <span class="accent">moedict.tw</span></h1>
         <p class="thesis">
@@ -784,10 +784,10 @@
           treats dictionary definitions as data-of-record rather than editable prose.
         </p>
         <div class="hero-meta" aria-label="branch facts">
-          <div class="metric"><strong>20</strong><span>represented on unified branch</span></div>
+          <div class="metric"><strong>21</strong><span>represented on unified branch</span></div>
           <div class="metric"><strong>5</strong><span>already fixed / verified only</span></div>
           <div class="metric">
-            <strong><span class="commit">1dc1cc4</span></strong
+            <strong><span class="commit">32b717a</span></strong
             ><span>final pre-report code HEAD</span>
           </div>
           <div class="metric">
@@ -834,7 +834,7 @@
           </div>
         </div>
         <div class="two-lane">
-          <article class="panel lane" data-count="20" aria-labelledby="lane-1-title">
+          <article class="panel lane" data-count="21" aria-labelledby="lane-1-title">
             <h3 id="lane-1-title">Batch 1 — unified branch</h3>
             <p>
               <strong>Disposition path:</strong> integrate current-site fixes or locally bounded
@@ -843,7 +843,7 @@
             </p>
             <ul>
               <li>Routing/search/discovery: #3, #92, #102, #122, #131, #214, #260.</li>
-              <li>Pronunciation/ruby/TWBLG: #22, #96, #100, #165, #186, #233, #256.</li>
+              <li>Pronunciation/ruby/TWBLG: #22, #96, #100, #165, #186, #233, #256, #281.</li>
               <li>Stroke system: #76, #132, #227, #230, #265.</li>
               <li>Appearance/accessibility: #245.</li>
             </ul>
@@ -927,12 +927,14 @@
             </p>
           </article>
         </div>
-        <div class="callout" data-tone="warning" style="margin-top: 1rem">
-          <strong>No staging rationale:</strong> consolidation did not push, deploy, create staging,
-          or touch GitHub. All Batch 1 contracts were locally verifiable through build, API,
-          unit/integration/e2e, generated data checks, browser rendering, and dry-run corpus
-          generation. Deploy and staging are operational rollout steps, not prerequisites for this
-          local integration report.
+        <div class="callout" data-tone="info" style="margin-top: 1rem">
+          <strong>Staging verification:</strong> staging deploy was performed after consolidation
+          (release <code>32b717a-a6b99db654cf</code>, Worker
+          <code>cb955d0e-ad2a-4c52-8645-80f782d78d5e</code>); 128 ptck packs uploaded to
+          <code>moedict-dictionary-preview</code> R2 bucket. No push or GitHub writes occurred.
+          Production was not deployed (still <code>23b7e89-1d1f2400cb1d</code>). All Batch 1
+          contracts were locally verifiable through build, API, unit/integration/e2e, generated data
+          checks, browser rendering, and dry-run corpus generation.
         </div>
       </section>
 
@@ -969,7 +971,7 @@
           <button class="filter-button" type="button" data-filter="appearance" aria-pressed="false">
             Appearance
           </button>
-          <span id="result-count" aria-live="polite">20 issue cards shown</span>
+          <span id="result-count" aria-live="polite">21 issue cards shown</span>
         </div>
         <noscript
           ><p class="callout">
@@ -1240,7 +1242,7 @@
                 </p>
                 <p class="evidence-line">
                   <strong>Final evidence:</strong> <span class="commit">3bdc4b0</span>,
-                  <span class="commit">2c6ecca</span>, <span class="commit">1dc1cc4</span>.
+                  <span class="commit">2c6ecca</span>, <span class="commit">32b717a</span>.
                   Contract: dictionary routes win; unmapped CNS standard characters can show an
                   “全字庫屬性・無辭典釋義” fallback; ETag/304 and corpus counts are covered. Caveat:
                   PUA is deliberately excluded from the first-pass generated corpus.
@@ -1567,6 +1569,59 @@
                 </p>
               </div>
             </details>
+            <details class="issue-card" id="issue-281" data-domain="pronunciation" open>
+              <summary>
+                <span class="issue-title">#281 — 異用字請顯示治詞目頁</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">completed</span>
+                  <span class="chip" data-tone="feature">variants</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>Why unified branch</h4>
+                <p>
+                  Taiwanese variant characters (異用字) were missing from the front-end display.
+                  Initial triage examined only <code>uni/*.csv</code> in
+                  <code>g0v/moedict-data-twblg</code> and missed the repository-root
+                  <code>x-異用字.json</code> sidecar (commit <span class="commit">437588d</span>,
+                  blob SHA1 <code>860d76d</code>, SHA-256 <code>aa5b0a4</code>, 2110 keys / 2780
+                  strings, all NFD, CC BY-ND 3.0 TW). The root cause was an ingestion/UI gap: the
+                  official sidecar existed but enriched packs lacked the B field and the
+                  frontend/API lacked mapping and rendering.
+                </p>
+                <h4>What changed</h4>
+                <p>
+                  Incrementally injected B (異用字) field into 128 ptck pack files (2097 heteronyms
+                  mapped, 13 explicit orphan IDs, 2083 lines changed) via
+                  <code>scripts/inject-twblg-variants.py</code>; byte-identical idempotence proven.
+                  Added <code>B: "variants"</code> mapping in <code>handleDictionaryAPI.ts</code>,
+                  UI rendering (<code>.twblg-variants</code>) in <code>DictionaryPage.tsx</code>
+                  (lang=t only, non-empty only), and 4/4 e2e tests in
+                  <code>tests/e2e/dictionary.spec.ts</code> (你→汝, 囝→子, 蛇 absent, 萌 lang=a
+                  absent). Commits: <span class="commit">aed8562</span>,
+                  <span class="commit">8ac28e9</span>, <span class="commit">e971c5c</span>,
+                  <span class="commit">32b717a</span>.
+                </p>
+                <p class="evidence-line">
+                  <strong>Staging verification evidence:</strong> 128 ptck packs uploaded to
+                  <code>moedict-dictionary-preview</code> R2 bucket; staging release
+                  <code>32b717a-a6b99db654cf</code> (Worker
+                  <code>cb955d0e-ad2a-4c52-8645-80f782d78d5e</code>). Playwright Chromium 3/3 pass:
+                  '你→.twblg-variants contains 汝, '囝→contains 子, '蛇→count=0. API B field
+                  <code>['汝']</code>. Staging CDN edge cache (s-maxage=86400) serves stale unbusted
+                  URLs for up to 24h; cache-busted requests confirmed correct. Production untouched
+                  (<code>23b7e89-1d1f2400cb1d</code>).
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/281"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Issue source</a
+                  >
+                </p>
+              </div>
+            </details>
           </div>
         </article>
 
@@ -1788,8 +1843,7 @@
               <summary>
                 <span class="issue-title">#245 — CSS: 支援深色模式</span
                 ><span class="issue-meta"
-                  ><span class="chip" data-tone="done"
-                    >completed pending deploy in source history</span
+                  ><span class="chip" data-tone="done">completed</span
                   ><span class="chip" data-tone="feature">theme</span></span
                 >
               </summary>
@@ -1805,12 +1859,16 @@
                   <code>index.html</code> bootstraps stored theme early;
                   <code>src/utils/theme-utils.ts</code> validates and applies system/light/dark;
                   user preferences expose a native select; CSS introduces semantic dark tokens and
-                  scoped legacy overrides.
+                  scoped legacy overrides. Subsequent commit
+                  <span class="commit">849b1cc</span> resolved the dark phrase-card contrast issue.
                 </p>
                 <p class="evidence-line">
-                  <strong>Final evidence:</strong> <span class="commit">e2ef910</span>. Contract:
-                  system dark, manual dark/light/system, persistence, and FOUC prevention work while
-                  preserving light-mode fallbacks.
+                  <strong>Staging verification evidence:</strong> commit
+                  <span class="commit">849b1cc</span> (staging predecessor release
+                  <code>849b1cc-ea42c6eedeba</code>, later subsumed by
+                  <span class="commit">32b717a</span> release <code>32b717a-a6b99db654cf</code>).
+                  All 7/7 dark-mode E2E and 133/133 Chromium E2E tests passed at that release; the
+                  final 32b717a release adds #281's 4 e2e tests for 137/137 total.
                 </p>
                 <p>
                   <a
@@ -1872,7 +1930,10 @@
                 <span class="commit">2c6ecca</span> gitignores generated CNS corpus and keeps the
                 golden fixture only.
               </p>
-              <p><span class="commit">1dc1cc4</span> hardens integrated CNS and e2e contracts.</p>
+              <p>
+                <span class="commit">3da9d99</span> hardens CNS corpus generation and upload
+                fail-closed.
+              </p>
             </div>
           </div>
           <div class="fact-grid" aria-label="CNS facts">
@@ -1932,11 +1993,15 @@
             </p>
           </article>
           <article class="timeline-card">
-            <h3>Unrelated #281 variants leakage</h3>
+            <h3>#281 Variant Characters Integration</h3>
             <p>
-              Review caught stray <code>.twblg-variants</code> styling from an unrelated issue path.
-              <span class="commit">aa7f206</span> removed it, preserving clean scope for the 20
-              represented issues.
+              The Taiwanese variant characters feature (#281) was integrated on the unified branch
+              (tip <span class="commit">32b717a</span>). Initial triage missed the repository-root
+              <code>x-異用字.json</code> sidecar and wrongly concluded "not_planned"; correction
+              found the sidecar (commit <span class="commit">437588d</span>, 2110 IDs / 2780
+              strings), incrementally injected B field into 128 packs (2097 mapped, 13 orphans), and
+              added API/UI rendering + 4/4 e2e tests. Staging verified (release
+              <code>32b717a-a6b99db654cf</code>); production not deployed.
             </p>
           </article>
           <article class="timeline-card">
@@ -1944,7 +2009,7 @@
             <p>
               Dark-mode tests had a brittle exact CSSOM <code>colorScheme</code> assertion tied to
               incidental system-mode defaults. Final hardening commit
-              <span class="commit">1dc1cc4</span> replaced this with visible-rendering checks while
+              <span class="commit">849b1cc</span> replaced this with visible-rendering checks while
               preserving exact assertions for manual theme override paths, so the test protects the
               theme contract rather than snapshotting an implementation detail.
             </p>
@@ -1998,12 +2063,9 @@
             <strong>typecheck / lint</strong><span>passed in final validation set</span>
           </div>
           <div class="verify-card">
-            <strong>unit tests</strong><span>64 files / 1704 tests</span>
+            <strong>unit+integration tests</strong><span>1941 tests pass</span>
           </div>
-          <div class="verify-card">
-            <strong>integration tests</strong><span>9 files / 131 tests</span>
-          </div>
-          <div class="verify-card"><strong>full Chromium e2e</strong><span>117 tests</span></div>
+          <div class="verify-card"><strong>full Chromium e2e</strong><span>137 tests</span></div>
           <div class="verify-card">
             <strong><code>vp build</code></strong
             ><span>passed</span>
@@ -2016,8 +2078,11 @@
             <strong>CNS dry-run</strong><span>77,208 emitted / 20,152 PUA skipped / 0 no-map</span>
           </div>
           <div class="verify-card">
-            <strong>Operational guardrail</strong
-            ><span>no push, deploy, staging, or GitHub writes during consolidation</span>
+            <strong>Operational status</strong
+            ><span
+              >staging release 32b717a-a6b99db654cf deployed and live-verified; production untouched
+              (23b7e89-1d1f2400cb1d); no push or GitHub writes</span
+            >
           </div>
         </div>
       </section>
@@ -2183,11 +2248,14 @@
           <div class="callout">
             <strong>Preserved boundaries:</strong> old isolated branches and worktrees may remain as
             historical records; this report describes the unified branch, not every stale SHA. The
-            original dirty main checkout was not edited.
+            original dirty main checkout served as a historical backup/rescue source for uncommitted
+            B→variants code; after owner-authorized extraction and integration into the unified
+            branch, the main checkout was discarded and cleaned — it was not left dirty.
           </div>
           <div class="callout">
-            <strong>No remote action:</strong> no push, no deploy, no staging creation, no GitHub
-            comments, and no GitHub issue/PR state changes occurred during consolidation.
+            <strong>No remote action:</strong> no push and no GitHub comments, issue/PR state
+            changes, or GitHub writes occurred. Staging deploy and R2 upload were performed for
+            verification (release <code>32b717a-a6b99db654cf</code>); production was not deployed.
           </div>
           <div class="callout">
             <strong>Bounded/partial issues identified:</strong> #100 is a historical multi-item
@@ -2218,7 +2286,7 @@
             <li>
               Issue artifacts:
               <code
-                >logs/issues/{3,22,76,92,96,100,102,122,131,132,165,173,179,186,214,227,230,233,234,240,245,256,260,265,270}.json</code
+                >logs/issues/{3,22,76,92,96,100,102,122,131,132,165,173,179,186,214,227,230,233,234,240,245,256,260,265,270,281}.json</code
               >.
             </li>
             <li>
@@ -2227,7 +2295,7 @@
             </li>
             <li>
               Final pre-report code HEAD:
-              <span class="commit">1dc1cc4fa5a9b0492a934bfba1b663eeac6a44fe</span>.
+              <span class="commit">32b717aa6b99db654cfa2280d96eb93a8d4239bb</span>.
             </li>
             <li>
               Base / merge-base:
