@@ -406,6 +406,10 @@ button:focus-visible {
     --moe-query-t: #261414;
     --moe-query-h: #142614;
     --moe-query-c: #141426;
+    --moe-example-bg: #252525;
+    --moe-example-border: #444;
+    --moe-mark-bg: #3d3200;
+    --moe-zhuyin-secondary: #aaa;
     color-scheme: dark;
   }
 }
@@ -426,6 +430,10 @@ html[data-theme="dark"] {
   --moe-query-t: #261414;
   --moe-query-h: #142614;
   --moe-query-c: #141426;
+  --moe-example-bg: #252525;
+  --moe-example-border: #444;
+  --moe-mark-bg: #3d3200;
+  --moe-zhuyin-secondary: #aaa;
   color-scheme: dark;
 }
 
@@ -1047,12 +1055,13 @@ body[data-ruby-pref="zhuyin"] .result .entry .title hruby.rightangle ru[zhuyin][
 }
 
 /* 台語例句特殊卡片版型（對齊原案） */
-body.lang-t .result .entry-item .example {
+body.lang-t .result .entry-item .example,
+body.lang-h .result .entry-item .example {
   display: inline-block;
   clear: both;
   width: auto;
-  border: 1px solid #d7d7d7;
-  background: #eee;
+  border: 1px solid var(--moe-example-border, #d7d7d7);
+  background: var(--moe-example-bg, #eee);
   padding: 8px 10px;
   margin: 6px 10px 6px 0;
   vertical-align: top;
@@ -1093,6 +1102,32 @@ body.lang-t .result .entry-item .example .mandarin::before {
 
 body.lang-t .result .entry-item .example .mandarin::after {
   content: "）";
+}
+
+/* Dark mode: keyword highlight and tone marks inside phrase/example cards
+   (g0v/moedict-webkit#245 follow-up — white-on-white fix).
+   In light mode `b`/`a.mark` have a yellow (#ffd) highlight and `zhuyin`
+   is rendered at #666; both are hardcoded in legacy styles.css. In dark
+   mode the card background switches to --moe-example-bg (#252525), so these
+   light-only colours must be overridden here.  The zhuyin override is scoped
+   to `.result .example` so it never touches the .title rightangle ruby. */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .result .entry-item .example b,
+  html:not([data-theme="light"]) .result .entry-item .example a.mark {
+    background: var(--moe-mark-bg, #ffd);
+    border-radius: 5px;
+  }
+  html:not([data-theme="light"]) .result .example hruby ru zhuyin {
+    color: var(--moe-zhuyin-secondary, #666);
+  }
+}
+html[data-theme="dark"] .result .entry-item .example b,
+html[data-theme="dark"] .result .entry-item .example a.mark {
+  background: var(--moe-mark-bg, #ffd);
+  border-radius: 5px;
+}
+html[data-theme="dark"] .result .example hruby ru zhuyin {
+  color: var(--moe-zhuyin-secondary, #666);
 }
 
 /* 舊版 /word/N「指定義項」永久連結：對應該條目時的醒目樣式（同原 alert-success 效果） */
