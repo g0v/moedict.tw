@@ -195,6 +195,22 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
 - `data/dictionary/lookup/pinyin/**` 與 `search-index/**` 是**衍生物**，
   由 `scripts/build-pinyin-lookup.mjs`、`build-search-index.mjs` 從 pack 檔重建
   （`predev`/`prebuild` 自動跑）。改 pack 資料後不要手改衍生檔，重建再一起上傳。
+- **`{a,t,h,c}/xref-by-id.json` 必須全部存在於本機**（2026-07-18
+  修復）：`upload_dictionary.sh` 對 `LANG_FOLDERS` 做 rclone **sync**，本機
+  缺檔會刪除 R2 上對應的物件。正式站目前只有
+  `t/xref-by-id.json`（532,761 bytes，`684d07ae74de9…`）非空——跨語言
+  by-heteronym-ID 參照索引（依 heteronym id 查詢的異語言對照，非
+  `異用字`／B 欄位那組資料）；`a/h/c` 三個在正式站確實不存在
+  （`wrangler r2 object get moedict-dictionary/{lang}/xref-by-id.json
+--remote` 回 `The specified key does not exist`），本機以 API 的 `{}`
+  fallback 內容原樣保存。四個語言各自獨立：每個檔案只補齊該語言資料夾在
+  本機的鏡像完整性、讓本機回應與 API fallback 一致，`a/h/c` 的 `{}`
+  並不會「保護」`t` 不被刪除——是 `t/xref-by-id.json` 自己存在於本機這件事
+  防止它被 sync 刪除（見 `scripts/check-dictionary-data.mjs` Check 5：
+  存在性 + JSON 物件 shape + `t` 非空的守門）。`t` 的 583 個（3.47%）id 在
+  目前 `data/dictionary/ptck/` 找不到對應 heteronym（多為地名／專有名詞，
+  執行期 `getCrossReferencesById` 單純 lookup miss、不會壞），這是正式站
+  既有資料特性，不是本次修復引入的落差，故意不在此 gate 內強制 id 完整性。
 
 ## 筆順 JSON（`/api/stroke-json`）與 6,063 字語料管線
 
