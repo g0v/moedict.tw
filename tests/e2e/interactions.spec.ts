@@ -89,13 +89,21 @@ test.describe("LRU (last viewed) records", () => {
 test.describe("cross-language navigation", () => {
   test("a → c same-word swap (prefix only)", async ({ page }) => {
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
-    // Manually navigate via URL rewrite to /~萌 (simulating lang-switch click)
+    // Deterministic: wait for the actual rendered entry title (not
+    // networkidle, which is flaky — background timers/prefetches such as
+    // the fulltext search index and font probes can keep the network
+    // "busy" well past the point the entry has actually rendered).
+    await expect(page.locator('h1.title[data-title="萌"]')).toBeVisible({ timeout: 15_000 });
+    // Manually navigate via URL rewrite to /~萌 (simulating lang-switch click).
+    // The 兩岸詞典 (c) route renders 萌 in a table cell, not the h1.title
+    // used by the "a" dictionary above, so assert with Playwright's
+    // auto-retrying `toHaveTitle`/`toContainText` instead of a fixed
+    // selector or a one-shot read-then-assert (which races the SPA's own
+    // client-side render just like the unconditional domcontentloaded wait
+    // this replaces).
     await page.goto("/~%E8%90%8C");
-    await page.waitForLoadState("domcontentloaded");
     await expect(page).toHaveTitle(/萌/);
-    const text = await page.locator("body").innerText();
-    expect(text).toContain("萌");
+    await expect(page.locator("body")).toContainText("萌");
   });
 });
 
