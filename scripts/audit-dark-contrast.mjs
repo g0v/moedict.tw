@@ -323,6 +323,7 @@ const STATE_MOBILE_QUERY_FOCUS_TYPE = "mobile-query-focus-type";
 const STATE_FULLTEXT_FOCUS_TYPE = "fulltext-search-focus-type";
 const STATE_USER_PREF_OPEN = "user-pref-open";
 const STATE_HOVER_TOOLTIP = "hover-result-tooltip";
+const STATE_ENTRY_ACTIONS = "entry-actions-interactive";
 const STATE_STROKE_ANIMATION = "stroke-animation-open";
 const STATE_STARRED_ALL_LANGS = "starred-all-langs-open";
 const STATE_STARRED_IMPORT = "starred-import-panel-open";
@@ -604,6 +605,40 @@ async function auditCombo(
       viewport: viewport.name,
       theme,
       state: STATE_USER_PREF_OPEN,
+      kind: "action-failed",
+      error: String(err),
+    }),
+  );
+
+  // 5. Exercise every entry action's hover/focus state.
+  await withIsolatedState(
+    browser,
+    viewport,
+    theme,
+    route,
+    STATE_ENTRY_ACTIONS,
+    findingStore,
+    actionFailures,
+    collectOpts,
+    async (page) => {
+      const actions = page.locator(".entry-actions").first();
+      if ((await actions.count()) === 0) return false;
+      for (const selector of [".entry-copy-button", "a.variants-link", '[role="button"].star']) {
+        const control = actions.locator(selector).first();
+        if ((await control.count()) > 0) {
+          await control.hover({ timeout: 5000 });
+          await control.focus();
+          await page.waitForTimeout(100);
+        }
+      }
+      return true;
+    },
+  ).catch((err) =>
+    actionFailures.push({
+      route,
+      viewport: viewport.name,
+      theme,
+      state: STATE_ENTRY_ACTIONS,
       kind: "action-failed",
       error: String(err),
     }),

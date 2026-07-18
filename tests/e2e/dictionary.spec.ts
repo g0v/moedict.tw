@@ -49,6 +49,20 @@ test.describe("dictionary pages per language", () => {
     expect(body.length).toBeGreaterThan(100); // definition text loaded
   });
 
+  test("star action toggles persistence with Enter and Space", async ({ page }) => {
+    await page.goto("/%E8%90%8C");
+    await waitForEntryHydration(page, "萌");
+    const star = page.locator(".entry-actions .star");
+    await star.focus();
+    await expect(star).toHaveAttribute("aria-label", "加入字詞記錄簿");
+    await page.keyboard.press("Enter");
+    await expect(star).toHaveAttribute("aria-label", "已加入記錄簿");
+    expect(await page.evaluate(() => localStorage.getItem("starred-a"))).toContain("萌");
+    await page.keyboard.press(" ");
+    await expect(star).toHaveAttribute("aria-label", "加入字詞記錄簿");
+    expect(await page.evaluate(() => localStorage.getItem("starred-a"))).not.toContain("萌");
+  });
+
   test("'食 (t) — 台語萌典", async ({ page }) => {
     const response = await page.goto("/'%E9%A3%9F");
     expect(response?.status()).toBe(200);
@@ -67,6 +81,26 @@ test.describe("dictionary pages per language", () => {
     await expect(readingOnlyEntry.locator(".reading-type")).toHaveText("文");
     await expect(readingOnlyEntry.locator(".reading-only-note")).toHaveText("本音讀無義項。");
     await expect(readingOnlyEntry.locator(".audioBlock")).toHaveCount(0);
+
+    // 蛇 has TWO heteronyms: 白讀 tsuâ has a real definition, 文讀 siâ is
+    // reading-only. hasEntryDefinitions is true for the word overall (at
+    // least one heteronym has definitions), so the shared action row shows
+    // copy + variants-link + star (single-char) as usual.
+    await expect(page.locator(".entry-actions .star")).toHaveCount(1);
+    await expect(page.locator(".entry-actions a.variants-link")).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "複製解釋" })).toHaveCount(1);
+    await expect(page.locator(".entry-actions").locator(":scope > :nth-child(1)")).toHaveClass(
+      /entry-copy-button/,
+    );
+    await expect(page.locator(".entry-actions").locator(":scope > :nth-child(2)")).toHaveClass(
+      /variants-link/,
+    );
+    await expect(page.locator(".entry-actions").locator(":scope > :last-child")).toHaveClass(
+      /star/,
+    );
+    await expect(
+      page.locator(".entry-actions").locator(":scope > :nth-child(1) svg"),
+    ).toHaveAttribute("aria-hidden", "true");
   });
 
   test("'長褲 (t) — pinned no-definition entry renders 本音讀無義項 without a reading badge (g0v/moedict-webkit#271)", async ({
@@ -94,12 +128,52 @@ test.describe("dictionary pages per language", () => {
     await expect(entry.locator(".reading-only-note")).toHaveText("本音讀無義項。");
     await expect(entry.locator(".reading-type")).toHaveCount(0);
     await expect(entry.locator(".audioBlock")).toHaveCount(0);
+
+    // 長褲 is a genuinely no-definition pinned entry (single heteronym,
+    // reading-only) — the action row must still show the star toggle, must
+    // NOT show variants-link (2-char title), and must render ZERO copy
+    // buttons/status since there is no definition content to copy.
+    await expect(page.locator(".entry-actions .star")).toHaveCount(1);
+    await expect(page.locator(".entry-actions a.variants-link")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "複製解釋" })).toHaveCount(0);
+    await expect(page.locator(".entry-copy-status")).toHaveCount(0);
   });
 
   test(":字 (h) — 客語萌典", async ({ page }) => {
     const response = await page.goto("/%3A%E5%AD%97");
     expect(response?.status()).toBe(200);
     await waitForEntryHydration(page, "字");
+
+    // 字 has multi-dialect Hakka readings (四/海/大/平/安/南) rendered in
+    // .bopomofo, each a "<dialect-label><romanization>" pair (e.g.
+    // "四sii⁵⁵") — this whole pronunciation block must never leak into the
+    // 複製解釋 payload; only the actual definition text should. Romanized
+    // reading text (Latin letters) is used as the negative signal rather
+    // than the single-Han-character dialect labels alone, since a bare
+    // 四/海/大/南 could coincidentally appear inside real Chinese prose.
+    const readingTexts = await page.locator(".bopomofo .pinyin > span").allInnerTexts();
+    expect(readingTexts.length).toBeGreaterThan(0);
+    const defText = (await page.locator(".entry .definition .def").first().innerText()).trim();
+    expect(defText.length).toBeGreaterThan(0);
+
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async (value: string) =>
+            ((window as Window & { __copied?: string }).__copied = value),
+        },
+      });
+    });
+    await page.getByRole("button", { name: "複製解釋" }).click();
+    await expect(page.locator(".entry-copy-status")).toHaveText("已複製");
+    const copied = await page.evaluate(
+      () => (window as Window & { __copied?: string }).__copied ?? "",
+    );
+    expect(copied).toContain(defText);
+    for (const readingText of readingTexts) {
+      expect(copied).not.toContain(readingText.trim());
+    }
   });
 
   test("~上訴 (c) — 兩岸萌典", async ({ page }) => {
@@ -715,7 +789,7 @@ test.describe("@romanization romanization overlay geometry regression (g0v/moedi
 });
 
 test.describe("教育部《異體字字典》連結 (g0v/moedict-webkit#3)", () => {
-  test("單字條目顯示連結到教育部異體字字典查詢頁", async ({ page }) => {
+  test("單字條目顯示連結到教育部異體字字典查詢頁，且位於動作列而非標題列", async ({ page }) => {
     await page.goto("/%E8%90%8C");
     await waitForEntryHydration(page, "萌");
     const link = page.locator("a.variants-link").first();
@@ -726,12 +800,27 @@ test.describe("教育部《異體字字典》連結 (g0v/moedict-webkit#3)", () 
     );
     await expect(link).toHaveAttribute("target", "_blank");
     await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+
+    // The link now lives in the single .entry-actions row alongside the
+    // star/favorite toggle and the copy-explanation button, not inside the
+    // title row's .radical corner.
+    const actionsRow = page.locator(".entry-actions");
+    await expect(actionsRow).toHaveCount(1);
+    await expect(actionsRow.locator("a.variants-link")).toHaveCount(1);
+    await expect(page.locator(".radical a.variants-link")).toHaveCount(0);
+    await expect(page.locator("h1.title a.variants-link")).toHaveCount(0);
+    await expect(actionsRow.locator(".star")).toHaveCount(1);
+    await expect(actionsRow.locator(".entry-copy-button")).toHaveCount(1);
   });
 
   test("多字詞條（非單字）不顯示異體字字典連結", async ({ page }) => {
     await page.goto("/~%E4%B8%8A%E8%A8%B4");
     await waitForEntryHydration(page, "上訴");
     await expect(page.locator("a.variants-link")).toHaveCount(0);
+    // Star and copy actions still render for multi-character entries.
+    const actionsRow = page.locator(".entry-actions");
+    await expect(actionsRow.locator(".star")).toHaveCount(1);
+    await expect(actionsRow.locator(".entry-copy-button")).toHaveCount(1);
   });
 });
 
@@ -1431,22 +1520,32 @@ test.describe("台語異用字顯示 (g0v/moedict-webkit#281)", () => {
   });
 });
 
-test.describe("definition copy action (RESCOPE #258)", () => {
-  test("copies only one definition payload and is keyboard accessible", async ({ page }) => {
+test.describe("entry copy-explanation action (RESCOPE #258, single action-row button)", () => {
+  test("renders exactly one keyboard-accessible copy button per entry, no per-definition controls", async ({
+    page,
+  }) => {
     await page.goto("/%E8%90%8C");
     await waitForEntryHydration(page, "萌");
-    const item = page
-      .locator("li")
-      .filter({ has: page.getByRole("button", { name: "複製解釋" }) })
-      .first();
-    const button = item.getByRole("button", { name: "複製解釋" });
-    await expect(button).toHaveAttribute("aria-label", "複製解釋");
-    const expected = await item.evaluate((element) => {
-      const copy = element.cloneNode(true) as HTMLElement;
-      copy.querySelector(".definition-copy-controls")?.remove();
-      return (copy.innerText || copy.textContent || "").replace(/\s+/g, " ").trim();
-    });
-    let copied = "";
+    const buttons = page.getByRole("button", { name: "複製解釋" });
+    await expect(buttons).toHaveCount(1);
+    await expect(buttons).toHaveAttribute("aria-label", "複製解釋");
+    await expect(page.locator(".definition-copy-controls")).toHaveCount(0);
+    await expect(page.locator("li .entry-copy-button")).toHaveCount(0);
+    // Lives in the shared action row, alongside star/variants.
+    await expect(page.locator(".entry-actions .entry-copy-button")).toHaveCount(1);
+  });
+
+  test("copies every visible definition in order, excluding controls and title romanization", async ({
+    page,
+  }) => {
+    await page.goto("/%E8%90%8C");
+    await waitForEntryHydration(page, "萌");
+
+    // 萌 (bucket 12 seeded fixture) has two visible definitions for its
+    // single heteronym; both must appear in the copied payload, in order.
+    const defTexts = await page.locator(".entry .definition .def").allInnerTexts();
+    expect(defTexts.length).toBeGreaterThanOrEqual(2);
+
     await page.evaluate(() => {
       Object.defineProperty(navigator, "clipboard", {
         configurable: true,
@@ -1456,12 +1555,53 @@ test.describe("definition copy action (RESCOPE #258)", () => {
         },
       });
     });
+
+    await page.getByRole("button", { name: "複製解釋" }).click();
+    await expect(page.locator(".entry-copy-status")).toHaveText("已複製");
+    const copied = await page.evaluate(
+      () => (window as Window & { __copied?: string }).__copied ?? "",
+    );
+
+    let cursor = -1;
+    for (const text of defTexts) {
+      const idx = copied.indexOf(text.trim());
+      expect(idx).toBeGreaterThan(cursor);
+      cursor = idx;
+    }
+
+    // No UI chrome / action labels leak into the payload.
+    expect(copied).not.toContain("複製解釋");
+    expect(copied).not.toContain("已複製");
+    expect(copied).not.toContain("加入字詞記錄簿");
+
+    // 萌's romanization ("méng") is never spelled out inside its Chinese
+    // definitions — it only exists as the #186 .romanization-selectable
+    // overlay inside the (stripped) title. Duplicate-pinyin regression guard.
+    expect(copied).not.toContain("méng");
+  });
+
+  test("keyboard Enter on the focused button copies and shows the success status", async ({
+    page,
+  }) => {
+    await page.goto("/%E8%90%8C");
+    await waitForEntryHydration(page, "萌");
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async (value: string) =>
+            ((window as Window & { __copied?: string }).__copied = value),
+        },
+      });
+    });
+    const button = page.getByRole("button", { name: "複製解釋" });
     await button.focus();
     await page.keyboard.press("Enter");
-    await expect(item.locator(".definition-copy-status")).toHaveText("已複製");
-    copied = await page.evaluate(() => (window as Window & { __copied?: string }).__copied ?? "");
-    expect(copied).toBe(expected);
-    await expect(page.locator(".definition-copy-status")).toHaveCount(1);
+    await expect(page.locator(".entry-copy-status")).toHaveText("已複製");
+    const copied = await page.evaluate(
+      () => (window as Window & { __copied?: string }).__copied ?? "",
+    );
+    expect(copied.length).toBeGreaterThan(0);
   });
 
   test("clipboard rejection uses the real textarea fallback", async ({ page }) => {
@@ -1475,36 +1615,260 @@ test.describe("definition copy action (RESCOPE #258)", () => {
     });
     await page.goto("/%E8%90%8C");
     await waitForEntryHydration(page, "萌");
-    const item = page
-      .locator("li")
-      .filter({ has: page.getByRole("button", { name: "複製解釋" }) })
-      .first();
-    await item.getByRole("button", { name: "複製解釋" }).click();
-    await expect(item.locator(".definition-copy-status")).toHaveText("已複製");
+    await page.getByRole("button", { name: "複製解釋" }).click();
+    await expect(page.locator(".entry-copy-status")).toHaveText("已複製");
   });
 
-  test("keeps statuses isolated across heteronyms", async ({ page }) => {
+  test("shows the failure status when both clipboard APIs are unavailable", async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { writeText: async () => Promise.reject(new Error("denied")) },
+      });
+      document.execCommand = (() => false) as typeof document.execCommand;
+    });
+    await page.goto("/%E8%90%8C");
+    await waitForEntryHydration(page, "萌");
+    await page.getByRole("button", { name: "複製解釋" }).click();
+    await expect(page.locator(".entry-copy-status")).toHaveText("複製失敗，請手動選取文字");
+  });
+
+  test("multi-heteronym entries: one button copies every heteronym's definitions in order, newline-separated", async ({
+    page,
+  }) => {
     await page.goto("/'%E9%A3%9F");
     await waitForEntryHydration(page, "食");
     const entries = page.locator(".entry");
-    expect(await entries.count()).toBeGreaterThan(1);
-    const firstItem = entries
-      .nth(0)
-      .locator("li")
-      .filter({
-        has: page.getByRole("button", { name: "複製解釋" }),
-      })
-      .first();
-    const secondItem = entries
-      .nth(1)
-      .locator("li")
-      .filter({
-        has: page.getByRole("button", { name: "複製解釋" }),
-      })
-      .first();
-    await firstItem.getByRole("button", { name: "複製解釋" }).click();
-    await expect(firstItem.locator(".definition-copy-status")).toHaveText("已複製");
-    await expect(secondItem.locator(".definition-copy-status")).toHaveCount(0);
+    const entryCount = await entries.count();
+    expect(entryCount).toBeGreaterThan(1);
+    // Exactly one copy button total — not one per heteronym.
+    await expect(page.getByRole("button", { name: "複製解釋" })).toHaveCount(1);
+
+    const firstDef = (await entries.nth(0).locator(".definition .def").first().innerText()).trim();
+    const lastDef = (
+      await entries
+        .nth(entryCount - 1)
+        .locator(".definition .def")
+        .first()
+        .innerText()
+    ).trim();
+
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async (value: string) =>
+            ((window as Window & { __copied?: string }).__copied = value),
+        },
+      });
+    });
+    await page.getByRole("button", { name: "複製解釋" }).click();
+    await expect(page.locator(".entry-copy-status")).toHaveText("已複製");
+    const copied = await page.evaluate(
+      () => (window as Window & { __copied?: string }).__copied ?? "",
+    );
+    const firstIdx = copied.indexOf(firstDef);
+    const lastIdx = copied.indexOf(lastDef);
+    expect(firstIdx).toBeGreaterThanOrEqual(0);
+    expect(lastIdx).toBeGreaterThan(firstIdx);
+    // Heteronym blocks are newline-separated (at least one newline per
+    // heteronym boundary).
+    expect(copied.split("\n").length).toBeGreaterThanOrEqual(entryCount);
+  });
+
+  test("entry actions expose themed hover contrast and visible focus rings", async ({ page }) => {
+    await page.goto("/%E8%90%8C");
+    await waitForEntryHydration(page, "萌");
+    const row = page.locator(".entry-actions").first();
+    for (const selector of [".entry-copy-button", "a.variants-link", ".star"]) {
+      const control = row.locator(selector);
+      await control.hover();
+      await control.focus();
+      await expect
+        .poll(() => control.evaluate((el) => getComputedStyle(el).outlineWidth))
+        .toBe("2px");
+    }
+    const colors = await row.locator(".entry-copy-button").evaluate((el) => {
+      const style = getComputedStyle(el);
+      return { background: style.backgroundColor, color: style.color };
+    });
+    expect(colors.background).not.toBe(colors.color);
+    await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
+    const darkColors = await row.locator(".star").evaluate((el) => {
+      const style = getComputedStyle(el);
+      return { background: style.backgroundColor, color: style.color };
+    });
+    expect(darkColors.background).toBe("rgb(42, 42, 42)");
+    expect(darkColors.color).toBe("rgb(230, 227, 223)");
+  });
+  test("desktop: action row is right-aligned below the radical/stroke row", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto("/%E8%90%8C");
+    await waitForEntryHydration(page, "萌");
+    const row = page.locator(".entry-actions").first();
+    const radical = page.locator(".radical").first();
+    await expect(row).toBeVisible();
+    const star = row.locator(".star");
+    const copyBtn = row.locator(".entry-copy-button");
+    const variantsLink = row.locator("a.variants-link");
+    const [rowBox, radicalBox, starBox, copyBox, variantsBox] = await Promise.all([
+      row.boundingBox(),
+      radical.boundingBox(),
+      star.boundingBox(),
+      copyBtn.boundingBox(),
+      variantsLink.boundingBox(),
+    ]);
+    expect(rowBox && radicalBox && starBox && copyBox && variantsBox).toBeTruthy();
+    if (!rowBox || !radicalBox || !starBox || !copyBox || !variantsBox) return;
+
+    expect(
+      Math.abs(rowBox.x + rowBox.width - (radicalBox.x + radicalBox.width)),
+    ).toBeLessThanOrEqual(2);
+    expect(rowBox.y).toBeGreaterThanOrEqual(radicalBox.y + radicalBox.height - 2);
+    expect(copyBox.x + copyBox.width).toBeLessThanOrEqual(variantsBox.x + 1);
+
+    expect(variantsBox.x + variantsBox.width).toBeLessThanOrEqual(starBox.x + 1);
+    expect(copyBox.width).toBeCloseTo(variantsBox.width, 5);
+    expect(variantsBox.width).toBeCloseTo(starBox.width, 5);
+    expect(copyBox.height).toBeCloseTo(variantsBox.height, 5);
+    expect(variantsBox.height).toBeCloseTo(starBox.height, 5);
+    for (const box of [starBox, copyBox, variantsBox]) {
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(1280 + 1);
+    }
+  });
+  test("action dimensions stay equal at 200% zoom", async ({ page }) => {
+    await page.goto("/%E8%90%8C");
+    await waitForEntryHydration(page, "萌");
+    await page.evaluate(() => {
+      document.documentElement.style.zoom = "2";
+    });
+    const sizes = await page.locator(".entry-actions").evaluate((row) =>
+      [".entry-copy-button", "a.variants-link", ".star"].map((selector) => {
+        const rect = row.querySelector(selector)!.getBoundingClientRect();
+        return { width: rect.width, height: rect.height };
+      }),
+    );
+    expect(sizes[0].width).toBeCloseTo(sizes[1].width, 5);
+    expect(sizes[1].width).toBeCloseTo(sizes[2].width, 5);
+    expect(sizes[0].height).toBeCloseTo(sizes[1].height, 5);
+    expect(sizes[1].height).toBeCloseTo(sizes[2].height, 5);
+  });
+
+  test("mobile: action row remains right-aligned below radical without overlap", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/%E8%90%8C");
+    await waitForEntryHydration(page, "萌");
+    const row = page.locator(".entry-actions").first();
+    const radical = page.locator(".radical").first();
+    await expect(row).toBeVisible();
+    const star = row.locator(".star");
+    const copyBtn = row.locator(".entry-copy-button");
+    const variantsLink = row.locator("a.variants-link");
+    const [rowBox, radicalBox, starBox, copyBox, variantsBox] = await Promise.all([
+      row.boundingBox(),
+      radical.boundingBox(),
+      star.boundingBox(),
+      copyBtn.boundingBox(),
+      variantsLink.boundingBox(),
+    ]);
+    expect(rowBox && radicalBox && starBox && copyBox && variantsBox).toBeTruthy();
+    if (!rowBox || !radicalBox || !starBox || !copyBox || !variantsBox) return;
+    for (const box of [copyBox, variantsBox, starBox]) {
+      expect(box.width).toBe(44);
+      expect(box.height).toBe(44);
+    }
+
+    expect(
+      Math.abs(rowBox.x + rowBox.width - (radicalBox.x + radicalBox.width)),
+    ).toBeLessThanOrEqual(2);
+    expect(rowBox.y).toBeGreaterThanOrEqual(radicalBox.y + radicalBox.height - 2);
+    const boxes = [starBox, copyBox, variantsBox];
+    for (const box of boxes) {
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(375 + 1);
+    }
+    const overlaps = (a: typeof starBox, b: typeof starBox) =>
+      a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+    expect(overlaps(starBox, copyBox)).toBe(false);
+    expect(overlaps(copyBox, variantsBox)).toBe(false);
+    expect(copyBox.x + copyBox.width).toBeLessThanOrEqual(variantsBox.x + 1);
+    expect(variantsBox.x + variantsBox.width).toBeLessThanOrEqual(starBox.x + 1);
+  });
+  test("mobile: enlarged long title reserves controls and preserves Hakka adjacency", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 700 });
+    await page.goto("/%E8%90%8C%E8%8A%BD");
+    await waitForEntryHydration(page, "萌芽");
+    await page
+      .locator("h1.title")
+      .first()
+      .evaluate((element) => {
+        element.setAttribute("style", "font-size: 64px; line-height: 1.2");
+      });
+    const heading = page.locator(".entry-heading").first();
+    const stack = page.locator(".entry-control-stack").first();
+    const titleLocator = page.locator("h1.title").first();
+    const firstItem = page.locator(".entry-item").first();
+    const [headingBox, stackBox, titleBox, itemBox] = await Promise.all([
+      heading.boundingBox(),
+      stack.boundingBox(),
+      titleLocator.boundingBox(),
+      firstItem.boundingBox(),
+    ]);
+    expect(headingBox && stackBox && titleBox && itemBox).toBeTruthy();
+    if (!headingBox || !stackBox || !titleBox || !itemBox) return;
+    expect(stackBox.x).toBeGreaterThanOrEqual(0);
+    expect(stackBox.x + stackBox.width).toBeLessThanOrEqual(375 + 1);
+    const titleRects = await titleLocator.evaluate((title) => {
+      const range = document.createRange();
+      const walker = document.createTreeWalker(title, NodeFilter.SHOW_TEXT);
+      const rects: Array<{ left: number; right: number; top: number; bottom: number }> = [];
+      let node: Node | null;
+      while ((node = walker.nextNode())) {
+        range.selectNodeContents(node);
+        for (const rect of range.getClientRects()) {
+          if (rect.width > 0 && rect.height > 0) {
+            rects.push({
+              left: rect.left,
+              right: rect.right,
+              top: rect.top,
+              bottom: rect.bottom,
+            });
+          }
+        }
+      }
+      return rects;
+    });
+    const tolerance = 1;
+    for (const rect of titleRects) {
+      const separated =
+        rect.right <= stackBox.x + tolerance ||
+        rect.left >= stackBox.x + stackBox.width - tolerance ||
+        rect.bottom <= stackBox.y + tolerance ||
+        rect.top >= stackBox.y + stackBox.height - tolerance;
+      expect(separated).toBe(true);
+    }
+    expect(itemBox.y).toBeGreaterThanOrEqual(
+      Math.max(titleBox.y + titleBox.height, stackBox.y + stackBox.height) - 1,
+    );
+    await page.goto("/%3A%E5%AD%97");
+    await expect(page.locator("h1.title").first()).toContainText("字", { timeout: 15_000 });
+    const adjacency = await page
+      .locator("h1.title")
+      .first()
+      .evaluate((title) => {
+        const next = title.nextElementSibling;
+        return {
+          className: next?.className ?? "",
+          display: next ? getComputedStyle(next).display : "",
+        };
+      });
+    expect(adjacency.className).toContain("bopomofo");
+    expect(adjacency.display).not.toBe("none");
   });
 });
 

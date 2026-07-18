@@ -284,11 +284,6 @@ html.moe-capacitor .fulltext-search-input {
     display: block !important;
   }
 
-  body .iconic-color.star {
-    right: 22px;
-    top: 151px;
-  }
-
   /* Search bar: position between gear and bookmark.
 	   Use .nav > .class to beat .nav > li { position: relative } (0,0,2,0 > 0,0,1,1) */
   .nav > .navbar-fulltext-search-item-mobile {
@@ -733,11 +728,19 @@ body.lang-t .iconic-color {
   color: #744;
 }
 
+/* legacy styles.css（後載入）仍對 `.iconic-color.star` 設
+   `position:absolute; right:42px; top:113px`（且行動版另有 `right:22px;
+   top:151px`／`body.cordova` 158px !important 覆寫）——那是舊版把星號浮在
+   標題右上角的版型。星號現在改為 `.entry-actions` 動作列內的行內元素，
+   用較高特異性（`.result .entry-actions .iconic-color.star`）把 position
+   收回 static、offset 歸零，蓋過 legacy 的絕對定位規則。 */
+.result .entry-actions .iconic-color.star {
+  position: static;
+  top: auto;
+  right: auto;
+}
 .iconic-color.star {
   background: white;
-  position: absolute;
-  right: 0;
-  top: 50px;
   /* 原 FontAwesome [class^="icon-"] { margin-right: .3em }：保留與 moedict.tw 相同的 4.8px 右邊距 */
   margin-right: 0.3em;
 }
@@ -749,6 +752,29 @@ body.lang-t .iconic-color {
 
 .iconic-color.star:hover {
   background: #ccc !important;
+}
+.entry-actions .entry-copy-button,
+.entry-actions .variants-link,
+.entry-actions .star {
+  box-sizing: border-box;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .result .entry-actions .iconic-color.star {
+    background: var(--moe-surface-alt);
+    color: var(--moe-text);
+  }
+  html:not([data-theme="light"]) .result .entry-actions .iconic-color.star:hover {
+    background: var(--moe-surface-alt) !important;
+    color: var(--moe-text);
+  }
+}
+html[data-theme="dark"] .result .entry-actions .iconic-color.star {
+  background: var(--moe-surface-alt);
+  color: var(--moe-text);
+}
+html[data-theme="dark"] .result .entry-actions .iconic-color.star:hover {
+  background: var(--moe-surface-alt) !important;
+  color: var(--moe-text);
 }
 
 /* 單字詞條 hover 高亮，點擊觸發筆順動畫 */
@@ -782,28 +808,98 @@ body.lang-t .iconic-color {
   background-color: transparent;
 }
 
-.definition-copy-controls {
+/* 星號收藏／複製解釋／異體字字典連結：單一動作列，取代原先各自散落的絕對
+   定位星號、逐條複製按鈕、標題旁的異體字連結圖示（UI 調整：見對應 issue）。
+   idx===0 時渲染一次；flex-wrap 讓窄螢幕自然換行，不需要另外的手機專屬版型。*/
+/* Float the controls in a BFC so the title keeps its legacy full-width
+   block/ruby geometry while the heading reserves the taller control stack. */
+.result .entry-heading {
+  display: flow-root;
+}
+
+.result .entry-control-stack {
+  float: right;
   display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-start;
+  min-width: max-content;
+  margin-left: 1rem;
+}
+
+.result .entry-control-stack .radical {
+  float: none;
+  margin: 0;
+  padding-top: 5px;
+  text-align: right;
+}
+
+.result .entry-actions {
+  position: static;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: 0.5rem;
-  margin-top: 0.35rem;
+  max-width: 100%;
+  margin: 0;
 }
-.definition-copy-button {
-  padding: 0.2rem 0.5rem;
-  border: 1px solid currentColor;
+.entry-copy-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 30px;
+  padding: 7px;
+  border: 0;
   border-radius: 4px;
   background: transparent;
-  font-size: 0.78rem;
-  font-weight: 400;
-  line-height: 1.3;
+  color: inherit;
+  cursor: pointer;
 }
-.definition-copy-status {
+.entry-copy-button:hover,
+.entry-copy-button:focus-visible {
+  background: var(--moe-surface-alt, #ccc);
+  color: var(--moe-text, inherit);
+}
+.entry-copy-button .moe-icon {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.143em;
+}
+.result .entry-actions button:focus-visible,
+.result .entry-actions a:focus-visible,
+.result .entry-actions [role="button"]:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.entry-actions button:active,
+.entry-actions a:active,
+.entry-actions [role="button"]:active {
+  transform: scale(0.94);
+  transition: transform 100ms ease-out;
+}
+.entry-copy-status {
   font-size: 0.78rem;
 }
 @media (max-width: 767px) {
-  .definition-copy-button {
-    min-height: 32px;
-    padding: 0.25rem 0.55rem;
+  .entry-actions .entry-copy-button,
+  .entry-actions .variants-link,
+  .entry-actions .star {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .entry-actions button:active,
+  .entry-actions a:active,
+  .entry-actions [role="button"]:active {
+    transition: none;
+    transform: none;
   }
 }
 
