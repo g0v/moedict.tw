@@ -395,6 +395,16 @@ describe("production approval gate", () => {
 });
 
 describe("environment namespacing", () => {
+  it("reads deployment state from the default releases directory when no baseDir is provided", () => {
+    const prevCwd = process.cwd();
+    try {
+      process.chdir(dir);
+      expect(readCurrentDeployment()).toBeNull();
+    } finally {
+      process.chdir(prevCwd);
+    }
+  });
+
   it("keeps staging and production current/version-history state under separate <root>/<env>/ dirs", async () => {
     saveStagingApproval(
       { gitSha: GIT_SHA, clientManifestDigest: DIGEST, approvedAt: "2026-07-12T00:00:00Z" },
