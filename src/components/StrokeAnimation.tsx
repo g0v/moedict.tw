@@ -13,6 +13,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { readStrokeSpeedPref, resolveStrokeSpeedOptions } from "../utils/stroke-speed-utils";
 
 interface StrokeAnimationProps {
   /** 要動畫的字詞（可為多字） */
@@ -149,11 +150,14 @@ export function StrokeAnimation({ title, visible, lang = "a" }: StrokeAnimationP
         }
 
         // 執行筆順動畫（同原 $('#strokes').strokeWords(words, {url, dataType, -svg})）
-        // 透過本機 Worker 代理，解決 CORS 問題（/api/stroke-json/{cp}.json）
+        // 透過本機 Worker 代理，解決 CORS 問題（/api/stroke-json/{cp}.json）。
+        // 速度選項在此才讀取（而非 effect deps）：中途變更偏好不影響進行中的
+        // 動畫，重播／重新開啟才會套用最新設定（issue #98）。
         $(container).strokeWords(words, {
           url: "/api/stroke-json/",
           dataType: "json",
           svg: false,
+          ...resolveStrokeSpeedOptions(readStrokeSpeedPref()),
         });
         console.debug("[StrokeAnimation] draw started", {
           runId: currentRunId,

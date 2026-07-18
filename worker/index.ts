@@ -630,6 +630,7 @@ async function dispatchCore(request: Request, env: Env, ctx?: ExecutionContext):
     return await handleImageGeneration(url, {
       FONTS: env.FONTS,
       ASSETS: getAssetsBucket(env) ?? undefined,
+      DICTIONARY: env.DICTIONARY,
     });
   }
 

@@ -489,6 +489,66 @@ describe("convertPinyinByLang — lang t (Taiwanese)", () => {
       const out = convertPinyinByLang("t", "khu\u0069\u0301", false); // TL "khuí"
       expect(out.normalize("NFC")).toBe("k\u00F9i"); // "kùi" (kh->k, acute->grave, mark moved to u)
     });
+
+    // Coverage for toneDt()'s full vowel/nasal priority fallthrough
+    // (o > e > a > u > i > ng > m > bare-append), each isolated to a
+    // syllable that only offers that one target so the earlier branches
+    // in the chain cannot short-circuit it.
+    it("places the tone mark on a bare o vowel adjacent to k (o branch)", () => {
+      const out = convertPinyinByLang("t", "ko\u0301k", false);
+      // 'kok' with acute → DT consonant k→g, tone repositions onto o (grave);
+      // 'o' adjacent to k/n/m is exempt from the o→or rewrite, so this
+      // isolates toneDt's `/o/i.test(noTone)` branch specifically.
+      expect(out.normalize("NFC")).toBe("g\u00F2k"); // "gòk"
+    });
+
+    it("places the tone mark on a bare e vowel (e branch)", () => {
+      const out = convertPinyinByLang("t", "he\u0301", false);
+      // 'he' with acute → DT consonant h stays h, tone repositions onto e (grave).
+      expect(out.normalize("NFC")).toBe("h\u00E8"); // "hè"
+    });
+
+    it("places the tone mark on a bare a vowel (a branch)", () => {
+      const out = convertPinyinByLang("t", "ha\u0301", false);
+      expect(out.normalize("NFC")).toBe("h\u00E0"); // "hà"
+    });
+
+    it("places the tone mark on a bare u vowel with no oa/oe/o/e/a present (u branch)", () => {
+      const out = convertPinyinByLang("t", "ku\u0301", false);
+      // k→g (DT rule), tone repositions onto u.
+      expect(out.normalize("NFC")).toBe("g\u00F9"); // "gù"
+    });
+
+    it("places the tone mark on a bare i vowel with no o/e/a/u present (i branch)", () => {
+      const out = convertPinyinByLang("t", "hi\u0301", false);
+      expect(out.normalize("NFC")).toBe("h\u00EC"); // "hì"
+    });
+
+    it("places the tone mark inside 'ng' when no vowel is present (ng branch)", () => {
+      const out = convertPinyinByLang("t", "hng\u0301", false);
+      expect(out).toContain("\u0300"); // grave landed between n and g
+      expect(out).toMatch(/hn\u0300g/i);
+    });
+
+    it("places the tone mark on a bare m nasal when no vowel/ng is present (m branch)", () => {
+      const out = convertPinyinByLang("t", "hm\u0301", false);
+      expect(out).toContain("\u0300");
+      expect(out).toMatch(/hm\u0300/i);
+    });
+
+    it("appends the tone mark at the end when no vowel/nasal target exists at all (fallback branch)", () => {
+      const out = convertPinyinByLang("t", "h\u0301", false);
+      // No o/e/a/u/i/ng/m in "h" → tone mark appended after the consonant.
+      expect(out.normalize("NFC")).toBe("h\u0300");
+    });
+
+    it("returns the segment unchanged when it carries no DT tone mark at all (no-match branch)", () => {
+      // toneDt() is invoked per split segment; a punctuation-only segment
+      // like the space in "kong ke" carries no combining tone mark and must
+      // pass through unchanged rather than throwing on toneMatch being null.
+      const out = convertPinyinByLang("t", "kong ke", false);
+      expect(out).toContain(" ");
+    });
   });
 
   describe("POJ variant", () => {

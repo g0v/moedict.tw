@@ -67,6 +67,24 @@ describe("/{langPrefix}{word}.json", () => {
     expect(sia?.id).toBeUndefined();
   });
 
+  it("resolves 長褲 as the pinned no-definition Taiwanese entry (g0v/moedict-webkit#271)", async () => {
+    const { status, body } = await fetchJson<DictEntry>("/api/'%E9%95%B7%E8%A4%B2.json");
+    expect(status).toBe(200);
+    // Multi-char lang=t titles resolve to per-character cross-reference
+    // anchors on the default route (same as every other multi-char entry,
+    // e.g. 管理 → `<a href="./#'管">管</a><a href="./#'理">理</a>`) — strip
+    // tags to assert the resolved word while still proving the anchor shape
+    // matches the established per-character convention.
+    expect(body.title?.replace(/<[^>]*>/g, "")).toBe("長褲");
+    expect(body.title).toBe(`<a href="./#'長">長</a><a href="./#'褲">褲</a>`);
+    expect(body.heteronyms?.length).toBe(1);
+    const heteronym = body.heteronyms?.[0];
+    expect(heteronym?.trs?.normalize("NFC")).toBe("tn\u0302g-kho\u0300o".normalize("NFC"));
+    expect(heteronym?.definitions).toEqual([]);
+    expect(heteronym?.reading).toBeUndefined();
+    expect(heteronym?.id).toBeUndefined();
+  });
+
   it(":{word} → h lang", async () => {
     const { status, body } = await fetchJson<DictEntry>("/api/%3A%E5%AD%97.json");
     expect(status).toBe(200);

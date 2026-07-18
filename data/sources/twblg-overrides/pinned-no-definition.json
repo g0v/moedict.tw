@@ -1,0 +1,20 @@
+{
+  "_meta": {
+    "purpose": "Explicit, individually pinned no-definition Taiwanese (ptck) pack entries for titles that already carry official 詞目總檔.csv 屬性=2 (無義項音讀) coverage in t/index.json but have no ptck pack record at all — the class AGENTS.md documents as 'only collected into t/index.json' today. Each entry here is a narrow, source-attributed exception, NOT a blanket policy change: scripts/inject-twblg-pinned-entries.py only creates a pack record for a title explicitly listed below, verified against MOE's official 臺灣台語常用詞辭典 (sutian.moe.edu.tw) at the time it was pinned.",
+    "scope_note": "Do NOT add entries here speculatively. Each entry requires (1) a live sutian.moe.edu.tw canonical page confirming title+reading+no-definition (釋義=臺華共同詞，無義項或其他無釋義註記), and (2) a live sutian.moe.edu.tw /tshiau/ search confirming it is the sole exact match for the title.",
+    "license": "CC BY-ND 3.0 TW (教育部臺灣閩南語常用詞辭典) — reading/title facts only, no definition text is present or copied.",
+    "injector": "scripts/inject-twblg-pinned-entries.py"
+  },
+  "entries": [
+    {
+      "title": "長褲",
+      "T": "tn̂g-khòo",
+      "issue": "g0v/moedict-webkit#271",
+      "verified": "2026-07-17",
+      "source_entry_url": "https://sutian.moe.edu.tw/zh-hant/su/25638/",
+      "source_search_url": "https://sutian.moe.edu.tw/zh-hant/tshiau/?lui=tai_su&tsha=%E9%95%B7%E8%A4%B2",
+      "source_note": "MOE 臺灣台語常用詞辭典 su/25638: 詞目 長褲, 音讀 tn̂g-khòo, 分類 衣著裝扮—衣帽鞋襪, 釋義 (臺華共同詞，無義項). tshiau search for 長褲 returns this single exact result.",
+      "internal_corroboration": "data/dictionary/ptck/119.txt line 227 (entry 長 %u9577, heteronym tn̂g) already cites 長褲/tn̂g-khòo as an in-corpus usage example inside its own definition text, independently matching the pinned reading."
+    }
+  ]
+}

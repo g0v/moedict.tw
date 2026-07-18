@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="en" data-report="issue-resolution-batches-2026-07-13">
+<html lang="zh-Hant" data-report="issue-resolution-batches-2026-07-13">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
-    <title>moedict.tw issue resolution batches — 2026-07-13</title>
+    <title>萌典議題處理批次 · 2026-07-17</title>
     <style>
       :root {
         --burgundy: #6b0000;
@@ -767,56 +767,51 @@
     </style>
   </head>
   <body>
-    <a class="skip-link" href="#main">Skip to report content</a>
+    <a class="skip-link" href="#main">跳至報告內容</a>
     <header class="hero" role="banner">
       <div class="hero-shell">
-        <div class="kicker" aria-label="report metadata">
-          <span class="pill">2026-07-13 consolidation report</span>
-          <span class="pill">Batch 1: 21 represented</span>
-          <span class="pill">Batch 2: 5 verification-only</span>
-          <span class="pill">No push · no production deploy · no GitHub writes</span>
+        <div class="kicker" aria-label="報告彙整資訊">
+          <span class="pill">2026-07-17 彙整報告</span>
+          <span class="pill">批次 1：21 個已實作</span>
+          <span class="pill">批次 2：5 個僅驗證完成</span>
+          <span class="pill">未推送・未部署正式環境・未寫入 GitHub</span>
         </div>
-        <h1>Issue resolution batches for <span class="accent">moedict.tw</span></h1>
+        <h1><span class="accent">moedict.tw</span> 議題處理批次</h1>
         <p class="thesis">
-          <strong>Thesis:</strong> consolidate code when the contract is local, observable, and
-          testable; use verification-only disposition when main/data/runtime already resolves the
-          report. The unified branch prefers semantic supersets over duplicate cherry-picks, and it
-          treats dictionary definitions as data-of-record rather than editable prose.
+          <strong>主旨：</strong>可由本機程式碼處理、觀測並測試的契約，就整合修正；若
+          main、資料或執行環境已符合回報需求，就只記錄驗證結果。整合分支優先採用涵蓋既有修法的語意超集，不重複
+          cherry-pick；辭典釋義則視為資料原典，不任意改寫。
         </p>
-        <div class="hero-meta" aria-label="branch facts">
-          <div class="metric"><strong>21</strong><span>represented on unified branch</span></div>
-          <div class="metric"><strong>5</strong><span>already fixed / verified only</span></div>
+        <div class="hero-meta" aria-label="分支現況">
+          <div class="metric"><strong>21</strong><span>整合分支已實作</span></div>
+          <div class="metric"><strong>5</strong><span>既有狀態已驗證完成</span></div>
           <div class="metric">
-            <strong><span class="commit">32b717a</span></strong
-            ><span>final pre-report code HEAD</span>
+            <strong><span class="commit">5ea9fbf</span></strong
+            ><span>目前 HEAD</span>
           </div>
           <div class="metric">
-            <strong>40</strong
-            ><span
-              >commits ahead of <span class="commit">origin/main@0a2599b</span> before this
-              report</span
-            >
+            <strong>65</strong
+            ><span>領先 <span class="commit">origin/main@d887339</span> 的提交數</span>
           </div>
         </div>
         <p class="footer-note" style="position: relative; z-index: 1; margin-top: 1rem">
-          Branch: <code>integration/all-resolved-issues-20260713</code>. Merge-base:
-          <code>origin/main@0a2599b729049c4633f5554d03c97904972c95bd</code>. Stroke integration tip
-          <code>58ffb8e</code> is an ancestor.
+          分支：<code>integration/all-resolved-issues-20260713</code>。合併基準：
+          <code>origin/main@d887339</code>。筆順整合提交 <code>58ffb8e</code> 已包含於目前分支。
         </p>
       </div>
     </header>
 
-    <nav class="toc" aria-label="Report sections">
+    <nav class="toc" aria-label="報告章節">
       <div class="toc-inner">
-        <a href="#overview">Overview</a>
-        <a href="#methodology">Methodology</a>
-        <a href="#batch-1">Batch 1</a>
-        <a href="#spotlight-260">#260 spotlight</a>
-        <a href="#quality">Integration quality</a>
-        <a href="#verification">Verification</a>
-        <a href="#batch-2">Batch 2</a>
-        <a href="#boundaries">Boundaries</a>
-        <a href="#sources">Sources</a>
+        <a href="#overview">總覽</a>
+        <a href="#methodology">方法與理由</a>
+        <a href="#batch-1">批次 1</a>
+        <a href="#spotlight-260">#260 重點說明</a>
+        <a href="#quality">整合品質</a>
+        <a href="#verification">驗證</a>
+        <a href="#batch-2">批次 2</a>
+        <a href="#boundaries">範圍界線</a>
+        <a href="#sources">來源</a>
       </div>
     </nav>
 
@@ -824,138 +819,133 @@
       <section id="overview" aria-labelledby="overview-title">
         <div class="section-head">
           <div>
-            <h2 id="overview-title">Two-lane disposition overview</h2>
+            <h2 id="overview-title">兩條處理路徑</h2>
             <p>
-              The two batches deliberately use different paths: Batch 1 is represented in the
-              unified branch because each item has a current, bounded code/data/UI contract. Batch 2
-              was already resolved by existing main, deployed runtime, or data behavior and
-              therefore should not introduce duplicate branch code.
+              兩個批次刻意採取不同路徑。批次 1
+              的每個項目都有現行且範圍明確的程式碼、資料或介面契約，因此納入整合分支。批次 2
+              已由既有 main、已部署的執行環境或資料行為解決，不應再加入重複程式碼。
             </p>
           </div>
         </div>
         <div class="two-lane">
           <article class="panel lane" data-count="21" aria-labelledby="lane-1-title">
-            <h3 id="lane-1-title">Batch 1 — unified branch</h3>
+            <h3 id="lane-1-title">批次 1：整合分支</h3>
             <p>
-              <strong>Disposition path:</strong> integrate current-site fixes or locally bounded
-              features into <code>integration/all-resolved-issues-20260713</code>, superseding stale
-              isolated SHAs where needed.
+              <strong>處理路徑：</strong>將現行網站修正或範圍明確的功能整合至
+              <code>integration/all-resolved-issues-20260713</code
+              >；必要時以目前的完整修法取代過時的獨立 SHA。
             </p>
             <ul>
-              <li>Routing/search/discovery: #3, #92, #102, #122, #131, #214, #260.</li>
-              <li>Pronunciation/ruby/TWBLG: #22, #96, #100, #165, #186, #233, #256, #281.</li>
-              <li>Stroke system: #76, #132, #227, #230, #265.</li>
-              <li>Appearance/accessibility: #245.</li>
+              <li>路由、搜尋與探索：#3、#92、#102、#122、#131、#214、#260。</li>
+              <li>發音、ruby 與 TWBLG：#22、#96、#100、#165、#186、#233、#256、#281。</li>
+              <li>筆順系統：#76、#132、#227、#230、#265。</li>
+              <li>外觀與無障礙：#245。</li>
             </ul>
           </article>
           <article class="panel lane" data-count="5" aria-labelledby="lane-2-title">
-            <h3 id="lane-2-title">Batch 2 — verified complete</h3>
+            <h3 id="lane-2-title">批次 2：驗證完成</h3>
             <p>
-              <strong>Disposition path:</strong> document current evidence without adding code,
-              because the live site, current data pipeline, mobile-source submodule, or deployed R2
-              assets already satisfy the report.
+              <strong>處理路徑：</strong
+              >不新增程式碼，只記錄現況證據。正式站、現行資料管線、行動版來源子模組或已部署的 R2
+              資產已符合回報需求。
             </p>
             <ul>
               <li>
-                #173 whole-word Taiwanese romanization and numeric-tone lookup already shipped via
-                <span class="commit">cc0ec62</span>.
+                #173 的台語羅馬字整詞查詢與數字調號查詢已由 commit
+                <span class="commit">cc0ec62</span> 上線。
               </li>
-              <li>#179 Taigi ruby overlap eliminated by the later hruby/bopomofo architecture.</li>
-              <li>#234 placeholder “無義項” readings already excluded from shipped pack data.</li>
-              <li>#240 long-press text selection implemented by PR #118/#120 code.</li>
-              <li>#270 is <em>g0v/moedict-webkit issue #270</em>, not a missing moedict.tw PR.</li>
+              <li>#179 的台語 ruby 重疊問題已由後來的 hruby／注音架構消除。</li>
+              <li>#234 的「無義項」占位音讀已從上線 pack 資料排除。</li>
+              <li>#240 的長按選取文字已由 PR #118／#120 的程式碼實作。</li>
+              <li>
+                #270 指的是 <em>g0v/moedict-webkit issue #270</em>，不是不存在的 moedict.tw PR。
+              </li>
             </ul>
           </article>
         </div>
         <div class="callout" style="margin-top: 1rem">
-          <strong>Token resolution callout:</strong> the user’s <code>pr://270</code> token is not a
-          real <code>g0v/moedict.tw</code> pull request. The local authoritative artifact
-          <code>logs/issues/270.json</code> identifies the intended item as
+          <strong>編號釐清：</strong>使用者提供的 <code>pr://270</code> 並非真正的
+          <code>g0v/moedict.tw</code> pull request。本機權威紀錄
+          <code>logs/issues/270.json</code> 指向
           <a
             href="https://github.com/g0v/moedict-webkit/issues/270"
             target="_blank"
             rel="noopener noreferrer"
             >g0v/moedict-webkit issue #270</a
-          >, fixed by <code>g0v/moedict.tw</code> PR #134 / commit
-          <span class="commit">9b46099</span>. This report treats it as that issue and does not
-          pretend PR 270 exists.
+          >；該議題已由 <code>g0v/moedict.tw</code> PR #134／commit
+          <span class="commit">9b46099</span> 修正。本報告據此處理，不虛構 PR 270。
         </div>
       </section>
 
       <section id="methodology" aria-labelledby="methodology-title">
         <div class="section-head">
           <div>
-            <h2 id="methodology-title">Methodology and rationale</h2>
+            <h2 id="methodology-title">方法與理由</h2>
             <p>
-              The consolidation rules were intentionally conservative: fix only what the active
-              surface owns; verify instead of reimplementing when the report is already satisfied.
+              整合規則刻意保守：只修正現行服務所負責的部分；若回報需求已滿足，就驗證現況，不重做一份。
             </p>
           </div>
         </div>
         <div class="method-grid">
           <article class="panel">
-            <h3>Active vs frozen surfaces</h3>
+            <h3>現行與凍結介面</h3>
             <p>
-              <code>www.moedict.tw</code> is the active React/Vite + Cloudflare Workers site.
-              <code>moedict-webkit</code> is frozen historical UI; its issues can still describe
-              real symptoms, but implementation belongs in <code>moedict.tw</code> when current code
-              owns the behavior.
+              <code>www.moedict.tw</code> 是現行的 React／Vite 與 Cloudflare Workers 網站。<code
+                >moedict-webkit</code
+              >
+              是凍結的舊版介面；其議題仍可能描述真實症狀，但若行為由現行程式碼負責，實作應放在
+              <code>moedict.tw</code>。
             </p>
           </article>
           <article class="panel">
-            <h3>Local-code boundary</h3>
+            <h3>本機程式碼界線</h3>
             <p>
-              Branch work was appropriate when source, R2 lookup behavior, generated indices, CSS,
-              or frontend interaction could be changed and tested locally. Upstream data/license
-              gaps were documented rather than guessed.
+              若原始碼、R2 查詢行為、衍生索引、CSS
+              或前端互動可在本機修改並測試，就適合納入分支。上游資料或授權缺口只記錄，不猜測內容。
             </p>
           </article>
           <article class="panel">
-            <h3>Semantic supersets</h3>
+            <h3>語意超集</h3>
             <p>
-              The unified branch did not blindly cherry-pick every isolated commit. Duplicate TWBLG
-              badge work, stroke UX overlap, and CNS generated output were reconciled into current
-              commits that preserve observable contracts.
+              整合分支沒有盲目 cherry-pick 每個獨立 commit。重複的 TWBLG 標記、筆順使用者體驗與 CNS
+              衍生輸出，均整合為保留可觀測契約的現行修法。
             </p>
           </article>
           <article class="panel">
-            <h3>Data integrity</h3>
+            <h3>資料完整性</h3>
             <p>
-              No dictionary definitions were edited: CC BY-ND dictionary content remains
-              data-of-record. Generated or source-owned artifacts were changed only where pipeline
-              contracts justified them.
+              未修改任何辭典釋義。受 CC BY-ND
+              約束的辭典內容仍是資料原典；只有在資料管線契約允許時，才調整衍生或由原始碼管理的產物。
             </p>
           </article>
         </div>
         <div class="callout" data-tone="info" style="margin-top: 1rem">
-          <strong>Staging verification:</strong> staging deploy was performed after consolidation
-          (release <code>32b717a-a6b99db654cf</code>, Worker
-          <code>cb955d0e-ad2a-4c52-8645-80f782d78d5e</code>); 128 ptck packs uploaded to
-          <code>moedict-dictionary-preview</code> R2 bucket. No push or GitHub writes occurred.
-          Production was not deployed (still <code>23b7e89-1d1f2400cb1d</code>). All Batch 1
-          contracts were locally verifiable through build, API, unit/integration/e2e, generated data
-          checks, browser rendering, and dry-run corpus generation.
+          <strong>2026-07-13 測試環境驗證快照：</strong>整合後曾部署測試環境（release
+          <code>32b717a-a6b99db654cf</code>，Worker
+          <code>cb955d0e-ad2a-4c52-8645-80f782d78d5e</code>），並將 128 個 ptck pack 上傳至
+          <code>moedict-dictionary-preview</code> R2 bucket。過程未推送分支，也未寫入
+          GitHub；正式環境當時未部署，仍為 <code>23b7e89-1d1f2400cb1d</code>。批次 1 的契約均已透過
+          build、API、unit／integration／e2e、衍生資料檢查、瀏覽器呈現與 dry-run
+          語料產生流程在本機驗證。
         </div>
       </section>
 
       <section id="batch-1" aria-labelledby="batch-1-title">
         <div class="section-head">
           <div>
-            <h2 id="batch-1-title">Batch 1 — 20 represented on the unified branch</h2>
+            <h2 id="batch-1-title">批次 1：整合分支上的 21 個項目</h2>
             <p>
-              Use the filter to focus by domain; every card includes the issue title,
-              classification, why it belongs here, what changed, final branch evidence,
-              test/observable contract, and caveats where needed.
+              可依領域篩選。每張卡片列出議題標題、分類、納入理由、變更內容、最終分支證據、測試或可觀測契約，以及必要的注意事項。
             </p>
           </div>
         </div>
-        <div class="filter-bar" role="group" aria-label="Filter Batch 1 issue cards">
-          <span class="label">Domain:</span>
+        <div class="filter-bar" role="group" aria-label="篩選批次 1 議題卡片">
+          <span class="label">領域：</span>
           <button class="filter-button" type="button" data-filter="all" aria-pressed="true">
-            All
+            全部
           </button>
           <button class="filter-button" type="button" data-filter="routing" aria-pressed="false">
-            Routing/search/discovery
+            路由、搜尋與探索
           </button>
           <button
             class="filter-button"
@@ -963,68 +953,63 @@
             data-filter="pronunciation"
             aria-pressed="false"
           >
-            Pronunciation/ruby
+            發音與 ruby
           </button>
           <button class="filter-button" type="button" data-filter="stroke" aria-pressed="false">
-            Stroke
+            筆順
           </button>
           <button class="filter-button" type="button" data-filter="appearance" aria-pressed="false">
-            Appearance
+            外觀
           </button>
-          <span id="result-count" aria-live="polite">21 issue cards shown</span>
+          <span id="result-count" aria-live="polite">顯示 21 張議題卡片</span>
         </div>
         <noscript
           ><p class="callout">
-            <strong>Filtering requires JavaScript.</strong> All issue cards are visible without
-            JavaScript.
+            篩選功能需要 JavaScript。停用 JavaScript 時仍會顯示所有議題卡片。
           </p></noscript
         >
 
         <article class="domain" id="domain-routing" data-domain-section="routing">
           <header>
-            <h3>Routing, search, and discovery</h3>
+            <h3>路由、搜尋與探索</h3>
             <p>
-              Items where the active site can route users to the correct resource, recover legacy
-              links, add search modes, or provide attribute fallback without changing dictionary
-              definitions.
+              現行網站可將使用者導向正確資源、恢復舊連結、增加搜尋模式，或提供屬性備援，且不改寫辭典釋義的項目。
             </p>
           </header>
           <div class="cards">
             <details class="issue-card" id="issue-3" data-domain="routing" open>
               <summary>
-                <span class="issue-title">#3 — link to MOE variants dictionary</span
+                <span class="issue-title">#3 — 連結至教育部異體字字典</span
                 ><span class="issue-meta"
-                  ><span class="chip" data-tone="feature">feature wish with local fix</span
-                  ><span class="chip" data-tone="partial">sub-ask 1 only</span></span
+                  ><span class="chip" data-tone="feature">具本機修正的功能願望</span
+                  ><span class="chip" data-tone="partial">僅處理子項 1</span></span
                 >
               </summary>
               <div class="issue-body">
-                <h4>Why unified branch</h4>
+                <h4>為何納入整合分支</h4>
                 <p>
-                  The old direct educode URL died and the mapping table has licensing risk, but
-                  MOE’s current search endpoint can resolve a single character without
-                  redistributing data. That is a bounded active-site link feature.
+                  舊的 educode 直連網址已失效，映射表也有授權風險；但 MOE
+                  現行搜尋端點可解析單一字元，無須重新散布資料，因此這是範圍明確的現行網站連結功能。
                 </p>
-                <h4>What changed</h4>
+                <h4>變更內容</h4>
                 <p>
-                  <code>src/pages/DictionaryPage.tsx</code> adds a single-character external
-                  “教育部《異體字字典》” link beside stroke/radical controls;
-                  <code>tests/e2e/dictionary.spec.ts</code> covers presence and absence.
+                  <code>src/pages/DictionaryPage.tsx</code> 新增單一字元外部
+                  “教育部《異體字字典》”連結，位於筆順／部首控制項旁；
+                  <code>tests/e2e/dictionary.spec.ts</code> 涵蓋連結存在與不存在的情況。
                 </p>
                 <p class="evidence-line">
-                  <strong>Final evidence:</strong> <span class="commit">fcba9ab</span>. Observable
-                  contract: `/萌` shows a link to
-                  <code>dict.variants.moe.edu.tw/search.jsp?QTP=0&amp;WORD=萌</code> with
-                  <code>target="_blank"</code> and <code>rel="noopener noreferrer"</code>;
-                  multi-character entries do not show it. Caveat: inline listing of all variants
-                  remains out of scope because that would require separately licensed variant data.
+                  <strong>最終證據：</strong> <span class="commit">fcba9ab</span>。可觀測契約：`/萌`
+                  會顯示連結至
+                  <code>dict.variants.moe.edu.tw/search.jsp?QTP=0&amp;WORD=萌</code>，並具有
+                  <code>target="_blank"</code> 與 <code>rel="noopener noreferrer"</code>；
+                  多字詞條不顯示該連結。注意事項：列出所有異體字仍超出範圍，因為這需要另行授權的異體字資料。
                 </p>
                 <p>
                   <a
                     href="https://github.com/g0v/moedict-webkit/issues/3"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >Issue source</a
+                    >議題來源</a
                   >
                 </p>
               </div>
@@ -1034,36 +1019,33 @@
               <summary>
                 <span class="issue-title">#92 — 非漢字搜尋</span
                 ><span class="issue-meta"
-                  ><span class="chip" data-tone="done">completed</span
-                  ><span class="chip" data-tone="feature">search</span></span
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="feature">搜尋</span></span
                 >
               </summary>
               <div class="issue-body">
-                <h4>Why unified branch</h4>
+                <h4>為何納入整合分支</h4>
                 <p>
-                  Romanization search was already shipped, but pure Zhuyin input was still stripped
-                  by the current searchbox. The missing path was local and testable by converting
-                  Zhuyin to the existing HanYu lookup keys.
+                  羅馬字搜尋已經上線，但目前搜尋框仍會剝除純注音輸入。缺少的路徑可在本機以將注音轉為既有漢語查詢鍵的方式實作並測試。
                 </p>
-                <h4>What changed</h4>
+                <h4>變更內容</h4>
                 <p>
-                  Added <code>src/utils/bopomofo-query-utils.ts</code>; updated
-                  <code>src/components/searchbox.tsx</code> to route pure Zhuyin for Mandarin and
-                  cross-strait dictionaries into the existing pinyin lookup pipeline; added unit
-                  coverage.
+                  新增 <code>src/utils/bopomofo-query-utils.ts</code>；更新
+                  <code>src/components/searchbox.tsx</code>，將純注音的國語與
+                  兩岸字典查詢導入既有拼音查詢管線，並加入單元 測試。
                 </p>
                 <p class="evidence-line">
-                  <strong>Final evidence:</strong> <span class="commit">7e998d7</span>. Contract:
-                  <code>ㄅㄚ</code> yields Mandarin suggestions; <code>ㄌㄠˇ˙ㄕ</code> finds 老實;
-                  <code>ㄓㄨㄥㄍㄨㄛˊ</code> in cross-strait context finds 中國. Taigi/Hakka and
-                  mixed paste cleanup are preserved.
+                  <strong>最終證據：</strong> <span class="commit">7e998d7</span>。契約：
+                  <code>ㄅㄚ</code> 會產生國語建議；<code>ㄌㄠˇ˙ㄕ</code> 可找到老實；
+                  <code>ㄓㄨㄥㄍㄨㄛˊ</code>
+                  在兩岸字典情境可找到中國。台語／客語與混合貼上清理均維持不變。
                 </p>
                 <p>
                   <a
                     href="https://github.com/g0v/moedict-webkit/issues/92"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >Issue source</a
+                    >議題來源</a
                   >
                 </p>
               </div>
@@ -1073,34 +1055,32 @@
               <summary>
                 <span class="issue-title">#102 — 按 back 希望能回到之前的 scrolling position</span
                 ><span class="issue-meta"
-                  ><span class="chip" data-tone="done">completed</span
-                  ><span class="chip" data-tone="feature">navigation</span></span
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="feature">導覽</span></span
                 >
               </summary>
               <div class="issue-body">
-                <h4>Why unified branch</h4>
+                <h4>為何納入整合分支</h4>
                 <p>
-                  The current SPA could reproduce the back-button scroll race: native restoration
-                  ran while a short entry DOM was mounted, then clamped the saved list offset. This
-                  is active frontend state behavior.
+                  目前的 SPA 可重現返回按鈕的捲動競態：原生還原在較短的項目 DOM
+                  掛載時執行，接著將儲存的清單偏移量截斷。這是現行前端狀態行為。
                 </p>
-                <h4>What changed</h4>
+                <h4>變更內容</h4>
                 <p>
-                  <code>src/App.tsx</code> now owns manual scroll restoration keyed by React Router
-                  history entry; restoration polls until the destination DOM can contain the saved
-                  offset and prevents stale scrollY overwrites during restore.
+                  <code>src/App.tsx</code> 現在自行負責由 React Router
+                  歷史紀錄項目索引鍵控管的手動捲動還原；還原過程會持續輪詢， 直到目的地 DOM
+                  高度足以容納已儲存的偏移量， 並避免還原期間被過期的 scrollY 覆寫。
                 </p>
                 <p class="evidence-line">
-                  <strong>Final evidence:</strong> <span class="commit">a79b041</span>. Contract:
-                  deep list → entry → browser back restores the prior scroll position; PUSH
-                  navigation into an entry starts at top.
+                  <strong>最終證據：</strong> <span class="commit">a79b041</span>。契約： 深層清單 →
+                  項目 → 瀏覽器返回會還原先前捲動位置；PUSH 導覽進入項目時從頂端開始。
                 </p>
                 <p>
                   <a
                     href="https://github.com/g0v/moedict-webkit/issues/102"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >Issue source</a
+                    >議題來源</a
                   >
                 </p>
               </div>
@@ -1110,36 +1090,34 @@
               <summary>
                 <span class="issue-title">#122 — 台語及客語萌典增加部首檢索</span
                 ><span class="issue-meta"
-                  ><span class="chip" data-tone="partial">split</span
-                  ><span class="chip" data-tone="feature">radicals</span></span
+                  ><span class="chip" data-tone="partial">分流</span
+                  ><span class="chip" data-tone="feature">部首</span></span
                 >
               </summary>
               <div class="issue-body">
-                <h4>Why unified branch</h4>
+                <h4>為何納入整合分支</h4>
                 <p>
-                  Taiwanese pack data already carried radical and residual-stroke fields; Hakka pack
-                  data did not. The Taiwanese half was therefore a bounded local indexing/routing
-                  gap, while Hakka remains data-blocked.
+                  台語 pack 資料已有部首與剩餘筆畫欄位，客語 pack
+                  資料則沒有。因此台語部分是範圍明確的本機索引／路由缺口，客語仍受資料限制。
                 </p>
-                <h4>What changed</h4>
+                <h4>變更內容</h4>
                 <p>
-                  Added <code>scripts/regenerate-t-taxonomy.mjs</code> and generated
-                  <code>data/dictionary/t/@*.json</code>; extended radical routing, tooltips,
-                  DictionaryPage radical links, StarredPage, SSR titles, App routes, and navbar to
-                  support <code>/'@</code>.
+                  新增 <code>scripts/regenerate-t-taxonomy.mjs</code> 並產生
+                  <code>data/dictionary/t/@*.json</code>；擴充部首路由、提示、 DictionaryPage
+                  部首連結、StarredPage、SSR 標題、App 路由與導覽列， 以支援 <code>/'@</code>。
                 </p>
                 <p class="evidence-line">
-                  <strong>Final evidence:</strong> <span class="commit">baf4f56</span>. Contract:
-                  <code>/t/@子.json</code> and <code>/'@子.json</code> round-trip through the same
-                  real generated data. Caveat: Taiwanese implemented; Hakka is blocked because
-                  <code>phck</code> has zero <code>r</code> fields.
+                  <strong>最終證據：</strong> <span class="commit">baf4f56</span>。契約：
+                  <code>/t/@子.json</code> 與 <code>/'@子.json</code>
+                  透過同一份真實的產生資料往返一致。注意事項：台語已實作；客語受阻，因為
+                  <code>phck</code> 有零 <code>r</code> 欄位。
                 </p>
                 <p>
                   <a
                     href="https://github.com/g0v/moedict-webkit/issues/122"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >Issue source</a
+                    >議題來源</a
                   >
                 </p>
               </div>
@@ -1147,36 +1125,35 @@
 
             <details class="issue-card" id="issue-131" data-domain="routing" open>
               <summary>
-                <span class="issue-title">#131 — phrase links are with '#'</span
+                <span class="issue-title">#131 — 詞語連結帶有 '#'</span
                 ><span class="issue-meta"
-                  ><span class="chip" data-tone="done">completed</span
-                  ><span class="chip" data-tone="feature">legacy route</span></span
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="feature">舊版路由</span></span
                 >
               </summary>
               <div class="issue-body">
-                <h4>Why unified branch</h4>
+                <h4>為何納入整合分支</h4>
                 <p>
-                  The active site still emitted legacy <code>./#...</code> links. Ordinary clicks
-                  were intercepted, but new-tab/copy/direct URL cases lost the fragment at HTTP
-                  request time and resolved to the homepage.
+                  現行網站仍會產生舊版 <code>./#...</code> 連結。一般點擊
+                  會被攔截，但新分頁／複製／直接網址情境會在 HTTP 請求時遺失片段並解析到首頁。
                 </p>
-                <h4>What changed</h4>
+                <h4>變更內容</h4>
                 <p>
-                  <code>src/utils/dictionary-route.ts</code> gained
-                  <code>resolveLegacyHashRoute</code>; <code>src/main.tsx</code> rewrites legacy
-                  hash routes with <code>replaceState</code> before React Router mounts.
+                  <code>src/utils/dictionary-route.ts</code> 新增了
+                  <code>resolveLegacyHashRoute</code>；<code>src/main.tsx</code> 會在 React Router
+                  掛載前，以 <code>replaceState</code>
+                  重寫舊版雜湊路由連結。
                 </p>
                 <p class="evidence-line">
-                  <strong>Final evidence:</strong> <span class="commit">265b974</span>. Contract:
-                  copied/opened legacy hash links recover to real pathnames without inventing a
-                  second prefix parser.
+                  <strong>最終證據：</strong> <span class="commit">265b974</span>。契約：
+                  複製／開啟的舊版雜湊連結可還原為真實路徑名稱，不另造第二個前綴解析器。
                 </p>
                 <p>
                   <a
                     href="https://github.com/g0v/moedict-webkit/issues/131"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >Issue source</a
+                    >議題來源</a
                   >
                 </p>
               </div>
@@ -1187,34 +1164,34 @@
                 <span class="issue-title"
                   >#214 — 搜尋簡化字「广」(5e7f)時希望可以提示「⼴」(2f34)</span
                 ><span class="issue-meta"
-                  ><span class="chip" data-tone="done">completed</span
-                  ><span class="chip" data-tone="feature">Unicode fallback</span></span
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="feature">Unicode 備援</span></span
                 >
               </summary>
               <div class="issue-body">
-                <h4>Why unified branch</h4>
+                <h4>為何納入整合分支</h4>
                 <p>
-                  The literal 2017 广 scenario is now satisfied by data, but the same normalization
-                  boundary still broke pasted Kangxi Radical block characters such as
-                  <code>⼴</code>. This is a local query-layer fallback issue.
+                  2017
+                  年的「广」情境目前已由資料滿足，但相同的正規化邊界仍會使貼上的康熙部首區塊字元，例如
+                  <code>⼴</code>，無法查得結果。這是本機查詢層的備援缺口問題。
                 </p>
-                <h4>What changed</h4>
+                <h4>變更內容</h4>
                 <p>
-                  <code>src/api/handleDictionaryAPI.ts</code> adds lookup-time-only NFKC fallback
-                  that recomputes the pack bucket when the raw character misses;
-                  <code>tests/unit/api-dictionary-nfkc-fallback.test.ts</code> locks behavior.
+                  <code>src/api/handleDictionaryAPI.ts</code> 新增了僅在查詢時觸發的 NFKC
+                  備援機制，於原始字元查無結果時重新計算封裝分桶；
+                  <code>tests/unit/api-dictionary-nfkc-fallback.test.ts</code> 鎖定此行為。
                 </p>
                 <p class="evidence-line">
-                  <strong>Final evidence:</strong> <span class="commit">7e998d7</span>. Contract:
-                  <code>/a/⼴.json</code>, <code>/uni/⼴.json</code>, raw/source paths resolve
-                  through the normalized key without normalizing pack data globally.
+                  <strong>最終證據：</strong> <span class="commit">7e998d7</span>。契約：
+                  <code>/a/⼴.json</code>、<code>/uni/⼴.json</code>、原始／來源路徑
+                  皆透過正規化鍵解析，不必全域正規化 pack 資料。
                 </p>
                 <p>
                   <a
                     href="https://github.com/g0v/moedict-webkit/issues/214"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >Issue source</a
+                    >議題來源</a
                   >
                 </p>
               </div>
@@ -1223,36 +1200,36 @@
               <summary>
                 <span class="issue-title">#260 — 許願：讓「全字庫」加入萌典的搜尋資料</span
                 ><span class="issue-meta"
-                  ><span class="chip" data-tone="done">implemented model</span
-                  ><span class="chip" data-tone="feature">CNS fallback</span></span
+                  ><span class="chip" data-tone="done">已實作模型</span
+                  ><span class="chip" data-tone="feature">CNS 備援</span></span
                 >
               </summary>
               <div class="issue-body">
-                <h4>Why unified branch</h4>
+                <h4>為何納入整合分支</h4>
                 <p>
-                  The original investigation framed CNS as a reroutable product feature, but the
-                  integration branch implemented a bounded first model: attribute fallback for
-                  unmapped standard CJK codepoints without changing dictionary-of-record semantics.
+                  原始調查將 CNS
+                  定義為可重新路由的產品功能，但整合分支實作了範圍明確的第一版模型：為未映射的標準
+                  CJK codepoint 提供屬性備援，不改變辭典原典語意。
                 </p>
-                <h4>What changed</h4>
+                <h4>變更內容</h4>
                 <p>
-                  Added a dedicated CNS API/UI fallback path, cache tagging, offline mirror data,
-                  golden fixture, generator/dry-run safeguards, no-shadow route precedence, and
-                  attribution that separates OGDL-licensed CNS data from OFL font assets.
+                  新增專用的 CNS API／UI 備援路徑、快取標記、離線鏡像資料、黃金測試
+                  fixture、產生器／dry-run 防護、無遮蔽路由優先順序，以及區分 OGDL 授權 CNS 資料與
+                  OFL 字型資產的著作權標示。
                 </p>
                 <p class="evidence-line">
-                  <strong>Final evidence:</strong> <span class="commit">3bdc4b0</span>,
-                  <span class="commit">2c6ecca</span>, <span class="commit">32b717a</span>.
-                  Contract: dictionary routes win; unmapped CNS standard characters can show an
-                  “全字庫屬性・無辭典釋義” fallback; ETag/304 and corpus counts are covered. Caveat:
-                  PUA is deliberately excluded from the first-pass generated corpus.
+                  <strong>最終證據：</strong> <span class="commit">3bdc4b0</span>、
+                  <span class="commit">2c6ecca</span>、<span class="commit">32b717a</span>。
+                  契約：辭典路由優先於此備援；未映射的標準 CJK 字元可顯示
+                  「全字庫屬性・無辭典釋義」後備卡片；ETag／304 行為與語料統計數字皆有測試涵蓋。
+                  注意事項：PUA 私人使用區字元刻意排除於第一版產生語料之外。
                 </p>
                 <p>
                   <a
                     href="https://github.com/g0v/moedict-webkit/issues/260"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >Issue source</a
+                    >議題來源</a
                   >
                 </p>
               </div>
@@ -1262,10 +1239,10 @@
 
         <article class="domain" id="domain-pronunciation" data-domain-section="pronunciation">
           <header>
-            <h3>Pronunciation, ruby, and TWBLG annotations</h3>
+            <h3>發音、注音標示與 TWBLG 標註</h3>
             <p>
-              These fixes converge on readable, selectable, correctly annotated pronunciation
-              without duplicating screen-reader text or inventing upstream dictionary content.
+              這些修正共同收斂於可讀、可選取、正確標註的發音顯示，
+              且不重複螢幕報讀文字，也不臆造上游辭典內容。
             </p>
           </header>
           <div class="cards">
@@ -1274,36 +1251,34 @@
                 <span class="issue-title"
                   >#22 — TWBLG: 標註＜文＞＜白＞兩音，分別給出錄音檔播放鈕。</span
                 ><span class="issue-meta"
-                  ><span class="chip" data-tone="done">completed</span
-                  ><span class="chip" data-tone="partial">bundled issue</span></span
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="partial">合併議題</span></span
                 >
               </summary>
               <div class="issue-body">
-                <h4>Why unified branch</h4>
+                <h4>為何納入整合分支</h4>
                 <p>
-                  The genuinely fixable part—rendering existing TWBLG reading classifications—was
-                  the same display omission as #96/#233. Independent audio buttons were already
-                  correct; definition-less placeholder readings intentionally remain excluded.
+                  真正可修復的部分（呈現既有的 TWBLG 音讀分類）與 #96／#233
+                  屬於相同的顯示疏漏；獨立的錄音按鈕原本即正確運作；無釋義的佔位讀音則刻意維持排除。
                 </p>
-                <h4>What changed</h4>
+                <h4>變更內容</h4>
                 <p>
-                  The shared TWBLG badge implementation reads <code>heteronym.reading</code> for
-                  Taigi entries and passes a <code>readingType</code> to
-                  <code>TitlePronunciation</code>, backed by
-                  <code>src/utils/reading-type-labels.ts</code> and CSS badge styling.
+                  共用的 TWBLG 徽章實作讀取台語詞目的 <code>heteronym.reading</code>， 並將
+                  <code>readingType</code> 傳遞給 <code>TitlePronunciation</code>，背後由
+                  <code>src/utils/reading-type-labels.ts</code> 與 CSS 徽章樣式支援。
                 </p>
                 <p class="evidence-line">
-                  <strong>Final evidence:</strong> <span class="commit">3713405</span> plus
-                  reconciliation follow-ups. Contract: entries such as 肉/平 show 文/白/俗/替 tags
-                  beside the corresponding reading; each heteronym retains its own audio control.
-                  Caveat: no “empty listing” placeholders, because that would regress #234.
+                  <strong>最終證據：</strong> <span class="commit">3713405</span> 加上
+                  後續修正整合。可觀測契約：如「肉／平」等詞目會在對應讀音旁顯示 文／白／俗／替
+                  標籤；每個異讀音各自保有自身的錄音控制項。
+                  注意事項：不提供「空清單」佔位，否則將使 #234 退化。
                 </p>
                 <p>
                   <a
                     href="https://github.com/g0v/moedict-webkit/issues/22"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >Issue source</a
+                    >議題來源</a
                   >
                 </p>
               </div>
@@ -1313,36 +1288,36 @@
               <summary>
                 <span class="issue-title">#96 — TWBLG: 增加「文」「白」「俗」</span
                 ><span class="issue-meta"
-                  ><span class="chip" data-tone="done">completed</span
-                  ><span class="chip" data-tone="feature">duplicate implementation</span></span
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="feature">重複實作</span></span
                 >
               </summary>
               <div class="issue-body">
-                <h4>Why unified branch</h4>
+                <h4>為何納入整合分支</h4>
                 <p>
-                  The data already existed in <code>ptck</code> and the API payload; the frontend
-                  simply never rendered it. This was a pure display-layer omission.
+                  資料早已存在於 <code>ptck</code> 與 API 回傳內容中；前端只是從未加以呈現。
+                  這純粹是顯示層的疏漏。
                 </p>
-                <h4>What changed</h4>
+                <h4>變更內容</h4>
                 <p>
-                  <code>TitlePronunciation</code> renders a compact reading-type badge with full
-                  labels; <code>DictionaryPage.tsx</code> strips autolink HTML from
-                  <code>heteronym.reading</code>; tests preserve title-child ordering.
+                  <code>TitlePronunciation</code> 會渲染出附完整標籤的精簡音讀類型徽章；
+                  <code>DictionaryPage.tsx</code> 會從 <code>heteronym.reading</code> 中剝除自動連結
+                  HTML； 測試涵蓋標題子節點順序的保留。
                 </p>
                 <p class="evidence-line">
-                  <strong>Final evidence:</strong> <span class="commit">3713405</span> plus
-                  <span class="commit">dec4481</span>, <span class="commit">25f1774</span>,
-                  <span class="commit">aa7f206</span>, <span class="commit">913fdf1</span>,
-                  <span class="commit">b6cc8cb</span>. Contract: TWBLG reading-type badges appear
-                  only for <code>lang='t'</code>. Caveat: #22/#96/#233 share one duplicate-resolving
-                  implementation.
+                  <strong>最終證據：</strong> <span class="commit">3713405</span> 加上
+                  <span class="commit">dec4481</span>、<span class="commit">25f1774</span>、
+                  <span class="commit">aa7f206</span>、<span class="commit">913fdf1</span>、
+                  <span class="commit">b6cc8cb</span>。可觀測契約：TWBLG 音讀類型徽章 僅在
+                  <code>lang='t'</code> 時出現。注意事項：#22／#96／#233
+                  共用同一個解決重複問題的實作。
                 </p>
                 <p>
                   <a
                     href="https://github.com/g0v/moedict-webkit/issues/96"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >Issue source</a
+                    >議題來源</a
                   >
                 </p>
               </div>
@@ -1352,35 +1327,34 @@
               <summary>
                 <span class="issue-title">#100 — &lt;ruby&gt;的後續工程</span
                 ><span class="issue-meta"
-                  ><span class="chip" data-tone="partial">historical bundle</span
-                  ><span class="chip" data-tone="done">a11y fix</span></span
+                  ><span class="chip" data-tone="partial">歷史性合併議題</span
+                  ><span class="chip" data-tone="done">無障礙修正</span></span
                 >
               </summary>
               <div class="issue-body">
-                <h4>Why unified branch</h4>
+                <h4>為何納入整合分支</h4>
                 <p>
-                  The 2013 issue bundled many asks, most already shipped or superseded.
-                  Investigation found one bounded current accessibility bug: right-angle ruby was
-                  exposed twice to assistive names.
+                  這則 2013 年的議題捆綁了多項需求，多數早已上線或已被取代。
+                  經調查僅發現一項界限明確的當前無障礙缺陷：直角注音被輔助功能名稱重複讀出兩次。
                 </p>
-                <h4>What changed</h4>
+                <h4>變更內容</h4>
                 <p>
-                  <code>src/utils/ruby2hruby.ts</code> marks compatibility
-                  <code>&lt;rt&gt;</code> nodes so the visual CSS-generated annotation does not
-                  cause duplicate accessible speech while preserving copy behavior.
+                  <code>src/utils/ruby2hruby.ts</code> 為相容性
+                  <code>&lt;rt&gt;</code> 節點加上標記，使視覺上由 CSS 產生的標註
+                  不致造成輔助語音重複播報，同時維持複製行為不變。
                 </p>
                 <p class="evidence-line">
-                  <strong>Final evidence:</strong> <span class="commit">2022bd3</span>. Contract:
-                  screen-reader naming no longer double-reads title/example ruby pronunciation.
-                  Caveat: #100 remains a historical multi-item bundle; this branch addresses the
-                  bounded current bug, not every 2013 wishlist variant.
+                  <strong>最終證據：</strong> <span class="commit">2022bd3</span>。可觀測契約：
+                  螢幕報讀器的命名不再重複讀出標題／例句的注音發音。 注意事項：#100
+                  仍是一則歷史性的多項目合併議題；本分支僅處理 界限明確的當前缺陷，並非涵蓋 2013
+                  年願望清單中的每一項變體需求。
                 </p>
                 <p>
                   <a
                     href="https://github.com/g0v/moedict-webkit/issues/100"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >Issue source</a
+                    >議題來源</a
                   >
                 </p>
               </div>
@@ -1390,36 +1364,34 @@
               <summary>
                 <span class="issue-title">#165 — 閩南語拼音切換和顯示</span
                 ><span class="issue-meta"
-                  ><span class="chip" data-tone="partial">completed with residue</span
-                  ><span class="chip" data-tone="feature">Taigi romanization</span></span
+                  ><span class="chip" data-tone="partial">已完成但留有殘留問題</span
+                  ><span class="chip" data-tone="feature">台語羅馬字</span></span
                 >
               </summary>
               <div class="issue-body">
-                <h4>Why unified branch</h4>
+                <h4>為何納入整合分支</h4>
                 <p>
-                  Live reproduction found two narrow, confirmed bugs in the current TL→POJ/DT
-                  conversion: punctuation terminators for <code>--nnh</code>/<code>--nn</code>, and
-                  DT tone mark placement.
+                  實機重現後，在現行 TL→POJ／DT 轉換中找到兩個範圍狹窄且可確認的錯誤：
+                  <code>--nnh</code>／<code>--nn</code> 的標點終止符， 以及 DT 聲調符號的擺放位置。
                 </p>
-                <h4>What changed</h4>
+                <h4>變更內容</h4>
                 <p>
-                  <code>src/utils/pinyin-preference-utils.ts</code> widens terminator classes and
-                  adds DT tone repositioning mirroring the established POJ priority; tests cover
-                  full sentence contexts and <code>tsuí → zùi</code>.
+                  <code>src/utils/pinyin-preference-utils.ts</code> 擴充了終止符類別， 並新增與既有
+                  POJ 優先序相呼應的 DT 聲調重新定位； 測試涵蓋完整句子情境與
+                  <code>tsuí → zùi</code>。
                 </p>
                 <p class="evidence-line">
-                  <strong>Final evidence:</strong> <span class="commit">5eadd12</span>. Contract:
-                  POJ light-tone nasal particles convert before sentence punctuation; DT places tone
-                  marks according to its own vowel priority. Caveat: documented residue remains for
-                  broader DT light-tone and phrase-initial sandhi questions that need corpus/norm
-                  decisions.
+                  <strong>最終證據：</strong> <span class="commit">5eadd12</span>。可觀測契約： POJ
+                  輕聲鼻化助詞會在句子標點之前完成轉換；DT 依其自身的元音優先序
+                  擺放聲調符號。注意事項：更廣泛的 DT 輕聲及詞首連讀變調問題仍有文獻記載的
+                  殘留待處理，需要語料庫／規範方面的決策。
                 </p>
                 <p>
                   <a
                     href="https://github.com/g0v/moedict-webkit/issues/165"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >Issue source</a
+                    >議題來源</a
                   >
                 </p>
               </div>
@@ -1429,36 +1401,34 @@
               <summary>
                 <span class="issue-title">#186 — 讓台語萌典的主要拼音(注音)可選取複製</span
                 ><span class="issue-meta"
-                  ><span class="chip" data-tone="done">completed</span
-                  ><span class="chip" data-tone="feature">copy/select</span></span
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="feature">複製／選取</span></span
                 >
               </summary>
               <div class="issue-body">
-                <h4>Why unified branch</h4>
+                <h4>為何納入整合分支</h4>
                 <p>
-                  The visible Taigi main romanization was CSS-generated content while the true
-                  <code>&lt;rt&gt;</code> text was clipped away, so selection yielded mixed
-                  Han/zhuyin/romanization and missed the visible glyphs.
+                  畫面上可見的台語主要羅馬字是由 CSS 產生的內容，而真正的
+                  <code>&lt;rt&gt;</code> 文字卻被裁切隱藏，因此選取時會產生混雜的
+                  漢字／注音／羅馬字結果，且無法選到畫面上實際顯示的字形。
                 </p>
-                <h4>What changed</h4>
+                <h4>變更內容</h4>
                 <p>
-                  CSS and <code>ruby2hruby</code> changes overlay real Unicode
-                  <code>&lt;rt&gt;</code> text at the generated glyph geometry while keeping it
-                  visually transparent; DictionaryPage guards stroke-click behavior when selection
-                  is active.
+                  CSS 與 <code>ruby2hruby</code> 的變更會在產生的字形幾何位置上 疊加真正的 Unicode
+                  <code>&lt;rt&gt;</code> 文字，同時維持視覺上透明； DictionaryPage
+                  會在選取進行中時避免誤觸筆畫點擊行為。
                 </p>
                 <p class="evidence-line">
-                  <strong>Final evidence:</strong> <span class="commit">e8ffe0e</span> and
-                  <span class="commit">d447060</span>. Contract: visible main romanization can be
-                  selected/copied cleanly; selecting text does not accidentally trigger stroke
-                  animation.
+                  <strong>最終證據：</strong> <span class="commit">e8ffe0e</span> 與
+                  <span class="commit">d447060</span>。可觀測契約：畫面上可見的主要羅馬字
+                  可乾淨地選取／複製；選取文字不會意外觸發筆畫動畫。
                 </p>
                 <p>
                   <a
                     href="https://github.com/g0v/moedict-webkit/issues/186"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >Issue source</a
+                    >議題來源</a
                   >
                 </p>
               </div>
@@ -1468,34 +1438,33 @@
               <summary>
                 <span class="issue-title">#233 — TWBLG: 標注「文」「白」「俗」「替」屬性</span
                 ><span class="issue-meta"
-                  ><span class="chip" data-tone="done">duplicate with fix</span
-                  ><span class="chip" data-tone="partial">sorting not included</span></span
+                  ><span class="chip" data-tone="done">重複但已修正</span
+                  ><span class="chip" data-tone="partial">不含排序功能</span></span
                 >
               </summary>
               <div class="issue-body">
-                <h4>Why unified branch</h4>
+                <h4>為何納入整合分支</h4>
                 <p>
-                  #233 restates #96 with UI mockups. The same data-present/frontend-missing
-                  diagnosis applies, and duplicate implementation needed consolidation to one final
-                  branch design.
+                  #233 以介面示意圖重述了 #96。同樣的「資料已存在／前端未呈現」診斷成立，
+                  重複的實作需要整併為單一最終分支設計。
                 </p>
-                <h4>What changed</h4>
+                <h4>變更內容</h4>
                 <p>
-                  The unified TWBLG badge path covers #233’s annotation placement request through
-                  <code>TitlePronunciation</code>, while avoiding a competing local diff.
+                  整合後的 TWBLG 徽章路徑透過
+                  <code>TitlePronunciation</code> 涵蓋了 #233 提出的標註位置需求，
+                  同時避免與另一份本機差異互相競爭。
                 </p>
                 <p class="evidence-line">
-                  <strong>Final evidence:</strong> <span class="commit">3713405</span> plus
-                  reconciliation follow-ups. Contract: 文/白/俗/替 tags are visible beside Taigi
-                  readings. Caveat: #233’s automatic reading sorting and intra-reading jump links
-                  remain outside this shared fix.
+                  <strong>最終證據：</strong> <span class="commit">3713405</span> 加上
+                  後續修正整合。可觀測契約：文／白／俗／替 標籤會顯示於台語讀音旁。 注意事項：#233
+                  所提出的自動音讀排序與讀音內部跳轉連結， 仍不在此共用修正的範圍內。
                 </p>
                 <p>
                   <a
                     href="https://github.com/g0v/moedict-webkit/issues/233"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >Issue source</a
+                    >議題來源</a
                   >
                 </p>
               </div>
@@ -1505,66 +1474,66 @@
               <summary>
                 <span class="issue-title">#256 — 許願：可以直接複製羅馬拼音</span
                 ><span class="issue-meta"
-                  ><span class="chip" data-tone="done">completed</span
-                  ><span class="chip" data-tone="feature">native selection</span></span
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="feature">原生選取</span></span
                 >
               </summary>
               <div class="issue-body">
-                <h4>Why unified branch</h4>
+                <h4>為何納入整合分支</h4>
                 <p>
-                  The site originally carried real romanization text in a hidden
+                  網站原本在隱藏的
                   <code>&lt;rt&gt;</code>
-                  element (commit <span class="commit">e8ffe0e</span> base), but native selection
-                  copied a garbled mixed string (Han + zhuyin + romanization). The #186 overlay that
-                  places the selectable span at the visible glyph position already solved the
-                  problem; a dedicated button was unnecessary complexity.
+                  元素中帶有真實的羅馬字文字（以提交
+                  <span class="commit">e8ffe0e</span> 為基準），但原生選取複製出來的卻是
+                  混雜錯亂的字串（漢字＋注音＋羅馬字）。#186 疊加方案已將可選取的 span
+                  定位在畫面可見字形處，已解決此問題；另設專屬按鈕反而是不必要的複雜度。
                 </p>
-                <h4>What changed</h4>
+                <h4>變更內容</h4>
                 <p>
-                  Removed the dedicated <code>複製羅馬拼音</code> button and all associated
-                  clipboard wiring (<code>hasRomanization</code> prop,
-                  <code>collectRubyRomanization</code>, copy icon, button markup,
-                  <code>.copyBlock</code>/<code>.copyRomanization</code> CSS). Commit
-                  <span class="commit">523c7f9</span>.
+                  移除了專屬的 <code>複製羅馬拼音</code> 按鈕及其所有相關的 剪貼簿連結邏輯（<code
+                    >hasRomanization</code
+                  >
+                  屬性、 <code>collectRubyRomanization</code>、複製圖示、按鈕標記、
+                  <code>.copyBlock</code>／<code>.copyRomanization</code> CSS）。提交
+                  <span class="commit">523c7f9</span>。
                 </p>
-                <h4>Safari fix (commit <span class="commit">81d444b</span>)</h4>
+                <h4>Safari 修正（提交 <span class="commit">81d444b</span>）</h4>
                 <p>
-                  After the button removal, Safari/WebKit showed a broken layout: the
-                  <code>h1.title</code> expanded to ~164 px, the play button was displaced far below
-                  the headword, and <code>huáng</code> appeared below the audio button. Root cause:
-                  WebKit's layout engine forces <code>&lt;rt&gt;</code> to
-                  <code>position: static</code> inside its ruby-text box generation, overriding even
-                  <code>position: absolute !important</code> set by both CSS and JS
-                  <code>setProperty</code>. The static position keeps <code>&lt;rt&gt;</code> in
-                  normal ruby flow, expanding the h1 and displacing the audio block and romanization
-                  downward — <code>huáng</code> appears after the audio button.
+                  移除按鈕後，Safari／WebKit 出現版面錯亂：
+                  <code>h1.title</code> 被撐高至約 164 px，播放按鈕被推到詞目下方甚遠處，
+                  <code>huáng</code> 則出現在錄音按鈕下方。根本原因在於： WebKit 的排版引擎在其 ruby
+                  文字方塊生成過程中，強制將 <code>&lt;rt&gt;</code> 設為
+                  <code>position: static</code>，即使 CSS 與 JS 的 <code>setProperty</code> 皆設定了
+                  <code>position: absolute !important</code>，也仍會被覆寫。 這種靜態定位使
+                  <code>&lt;rt&gt;</code> 停留在正常的 ruby 排版流程中， 因而撐大 h1
+                  並將音檔區塊與羅馬字向下推移， <code>huáng</code> 於是出現在錄音按鈕之後。
                 </p>
                 <p>
-                  Fix: <code>ruby2hruby.ts</code> now builds a
-                  <code>&lt;span class="romanization-selectable" aria-hidden="true"&gt;</code>
-                  directly from <code>rt.textContent</code> in the non-zhuyin rtc conversion loop,
-                  with
-                  <code>position: absolute; color: transparent; user-select: text</code> applied by
-                  <code>src/index.css</code>. A plain <code>&lt;span&gt;</code> in the same
-                  <code>&lt;ru&gt;</code> parent correctly receives
-                  <code>position: absolute</code> on all engines. The native
-                  <code>&lt;rt&gt;</code> must <strong>not</strong> be restored to this role:
-                  WebKit's constraint is engine-level and cannot be overridden by author CSS.
+                  修正方式：<code>ruby2hruby.ts</code> 現在會在非注音的 rtc 轉換迴圈中， 直接從
+                  <code>rt.textContent</code> 建構一個
+                  <code>&lt;span class="romanization-selectable" aria-hidden="true"&gt;</code>，
+                  並由 <code>src/index.css</code> 套用
+                  <code>position: absolute; color: transparent; user-select: text</code>。 同一個
+                  <code>&lt;ru&gt;</code> 父層中的一般 <code>&lt;span&gt;</code>，
+                  在所有引擎上都能正確接受 <code>position: absolute</code>。原生的
+                  <code>&lt;rt&gt;</code> 絕<strong>不可</strong>再被還原承擔此角色： WebKit
+                  的限制屬於引擎層級，無法透過作者端 CSS 覆寫。
                 </p>
                 <p class="evidence-line">
-                  <strong>Final evidence:</strong> <span class="commit">523c7f9</span> (button
-                  removal) + <span class="commit">81d444b</span> (Safari-safe span architecture).
-                  WebKit and Chromium each 15/15 <code>@romanization</code> tests passing, including
-                  real pointer drag (<code>huáng</code>, <code>tsia̍h</code>), geometry invariants
-                  (overlay above rb row, h1 height/font-size ratio &lt; 4, audioBlock within h1
-                  bounds), phonetics preference suppression, and no duplicate AT reading.
+                  <strong>最終證據：</strong> <span class="commit">523c7f9</span>（移除按鈕）加上
+                  <span class="commit">81d444b</span>（Safari 安全的 span 架構）。 WebKit 與
+                  Chromium 各自 15/15 個
+                  <code>@romanization</code> 測試皆通過，包含真實的滑鼠拖曳選取
+                  （<code>huáng</code>、<code>tsia̍h</code>）、幾何不變性檢查 （疊加層位於 rb
+                  列之上、h1 高度／字級比例 &lt; 4、audioBlock 落於 h1
+                  邊界內）、語音偏好設定的抑制，以及無重複的輔助技術報讀。
                 </p>
                 <p>
                   <a
                     href="https://github.com/g0v/moedict-webkit/issues/256"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >Issue source</a
+                    >議題來源</a
                   >
                 </p>
               </div>
@@ -1573,51 +1542,53 @@
               <summary>
                 <span class="issue-title">#281 — 異用字請顯示治詞目頁</span
                 ><span class="issue-meta"
-                  ><span class="chip" data-tone="done">completed</span>
-                  <span class="chip" data-tone="feature">variants</span></span
+                  ><span class="chip" data-tone="done">已完成</span>
+                  <span class="chip" data-tone="feature">異用字</span></span
                 >
               </summary>
               <div class="issue-body">
-                <h4>Why unified branch</h4>
+                <h4>為何納入整合分支</h4>
                 <p>
-                  Taiwanese variant characters (異用字) were missing from the front-end display.
-                  Initial triage examined only <code>uni/*.csv</code> in
-                  <code>g0v/moedict-data-twblg</code> and missed the repository-root
-                  <code>x-異用字.json</code> sidecar (commit <span class="commit">437588d</span>,
-                  blob SHA1 <code>860d76d</code>, SHA-256 <code>aa5b0a4</code>, 2110 keys / 2780
-                  strings, all NFD, CC BY-ND 3.0 TW). The root cause was an ingestion/UI gap: the
-                  official sidecar existed but enriched packs lacked the B field and the
-                  frontend/API lacked mapping and rendering.
+                  台語異用字在前端顯示中缺漏。初步排查僅檢視了
+                  <code>g0v/moedict-data-twblg</code> 中的
+                  <code>uni/*.csv</code>，卻遺漏了儲存庫根目錄下的
+                  <code>x-異用字.json</code> 附屬檔案（提交
+                  <span class="commit">437588d</span>，blob SHA1 <code>860d76d</code>，SHA-256
+                  <code>aa5b0a4</code>，共 2110 個鍵／2780 筆字串，皆為 NFD 正規化， 授權為 CC BY-ND
+                  3.0 TW）。根本原因是資料匯入與介面之間的落差：
+                  官方附屬檔案確實存在，但強化封裝檔缺少 B 欄位， 前端／API 也缺乏對應的映射與渲染。
                 </p>
-                <h4>What changed</h4>
+                <h4>變更內容</h4>
                 <p>
-                  Incrementally injected B (異用字) field into 128 ptck pack files (2097 heteronyms
-                  mapped, 13 explicit orphan IDs, 2083 lines changed) via
-                  <code>scripts/inject-twblg-variants.py</code>; byte-identical idempotence proven.
-                  Added <code>B: "variants"</code> mapping in <code>handleDictionaryAPI.ts</code>,
-                  UI rendering (<code>.twblg-variants</code>) in <code>DictionaryPage.tsx</code>
-                  (lang=t only, non-empty only), and 4/4 e2e tests in
-                  <code>tests/e2e/dictionary.spec.ts</code> (你→汝, 囝→子, 蛇 absent, 萌 lang=a
-                  absent). Commits: <span class="commit">aed8562</span>,
-                  <span class="commit">8ac28e9</span>, <span class="commit">e971c5c</span>,
-                  <span class="commit">32b717a</span>.
+                  透過
+                  <code>scripts/inject-twblg-variants.py</code>
+                  將 B（異用字）欄位逐步注入 128 個 ptck 封裝檔（映射 2097 筆異讀音， 13 筆明確孤兒
+                  ID，共變更 2083 行）；並驗證位元組層級的冪等性。 在
+                  <code>handleDictionaryAPI.ts</code> 中新增 <code>B: "variants"</code> 映射， 於
+                  <code>DictionaryPage.tsx</code> 中新增介面渲染
+                  （<code>.twblg-variants</code>，僅限 lang=t 且非空時顯示）， 並於
+                  <code>tests/e2e/dictionary.spec.ts</code> 中新增 4/4 端對端測試 （你→汝、囝→子、蛇
+                  應缺席、萌 lang=a 應缺席）。提交： <span class="commit">aed8562</span>、
+                  <span class="commit">8ac28e9</span>、<span class="commit">e971c5c</span>、
+                  <span class="commit">32b717a</span>。
                 </p>
                 <p class="evidence-line">
-                  <strong>Staging verification evidence:</strong> 128 ptck packs uploaded to
-                  <code>moedict-dictionary-preview</code> R2 bucket; staging release
-                  <code>32b717a-a6b99db654cf</code> (Worker
-                  <code>cb955d0e-ad2a-4c52-8645-80f782d78d5e</code>). Playwright Chromium 3/3 pass:
-                  '你→.twblg-variants contains 汝, '囝→contains 子, '蛇→count=0. API B field
-                  <code>['汝']</code>. Staging CDN edge cache (s-maxage=86400) serves stale unbusted
-                  URLs for up to 24h; cache-busted requests confirmed correct. Production untouched
-                  (<code>23b7e89-1d1f2400cb1d</code>).
+                  <strong>預備環境驗證證據：</strong>128 個 ptck 封裝已上傳至
+                  <code>moedict-dictionary-preview</code> R2 儲存桶；預備環境發布版本
+                  <code>32b717a-a6b99db654cf</code>（Worker
+                  <code>cb955d0e-ad2a-4c52-8645-80f782d78d5e</code>）。Playwright Chromium 3/3
+                  測試通過：「你」→<code>.twblg-variants</code> 含「汝」，
+                  「囝」→含「子」，「蛇」→count=0。API 的 B 欄位為 <code>['汝']</code>。預備環境 CDN
+                  邊緣快取（s-maxage=86400）對未加破快取參數的 URL 最多可能延遲 24
+                  小時才更新；已確認加上破快取參數的請求結果正確。
+                  正式環境未受影響（<code>23b7e89-1d1f2400cb1d</code>）。
                 </p>
                 <p>
                   <a
                     href="https://github.com/g0v/moedict-webkit/issues/281"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >Issue source</a
+                    >議題來源</a
                   >
                 </p>
               </div>
@@ -1627,11 +1598,10 @@
 
         <article class="domain" id="domain-stroke" data-domain-section="stroke">
           <header>
-            <h3>Stroke system</h3>
+            <h3>筆順系統</h3>
             <p>
-              The stroke items were integrated as a layered model: honest missing-data UX, disabled
-              unavailable triggers, replay behavior, a refreshed MOE corpus pipeline, and R2-backed
-              runtime serving.
+              筆順相關項目以分層模型整合：誠實的缺資料狀態體驗、對不可用項目停用觸發、
+              重播行為、更新後的教育部語料管線，以及由 R2 支援的執行期服務。
             </p>
           </header>
           <div class="cards">
@@ -1639,34 +1609,33 @@
               <summary>
                 <span class="issue-title">#76 — 若沒有筆順資料, 應更明確顯示 not found</span
                 ><span class="issue-meta"
-                  ><span class="chip" data-tone="done">completed</span
-                  ><span class="chip" data-tone="feature">missing-state UX</span></span
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="feature">缺資料狀態體驗</span></span
                 >
               </summary>
               <div class="issue-body">
-                <h4>Why unified branch</h4>
+                <h4>為何納入整合分支</h4>
                 <p>
-                  The legacy stroke renderer is still shipped in current assets, and its 404 path
-                  still produced a blank faded grid. The missing-state fix was local to current
-                  CSS/vendor JS behavior.
+                  舊版筆順渲染器至今仍隨現行資產一併發布，其 404 路徑過去仍只會產生一片
+                  空白的淡化格線。此缺資料狀態修正僅涉及現行 CSS／第三方 JS 行為， 屬於局部範圍。
                 </p>
-                <h4>What changed</h4>
+                <h4>變更內容</h4>
                 <p>
-                  <code>data/assets/js/jquery.strokeWords.js</code> renders a visible
-                  <code>?</code> / “尚無筆順資料” badge with ARIA labeling instead of a blank faded
-                  canvas; <code>src/index.css</code> styles the badge.
+                  <code>data/assets/js/jquery.strokeWords.js</code> 會渲染出一個可見的
+                  <code>?</code> ／「尚無筆順資料」徽章並附上 ARIA 標籤，
+                  取代原本空白淡化的畫布；<code>src/index.css</code> 為該徽章設定樣式。
                 </p>
                 <p class="evidence-line">
-                  <strong>Final evidence:</strong> <span class="commit">463c137</span> and
-                  <span class="commit">2ef24a6</span>. Contract: a missing stroke JSON path is
-                  visually and accessibly distinct from loading or crash.
+                  <strong>最終證據：</strong> <span class="commit">463c137</span> 與
+                  <span class="commit">2ef24a6</span>。契約：缺少筆順 JSON 路徑時，
+                  在視覺與無障礙上皆能明確區別於載入中或發生錯誤的狀態。
                 </p>
                 <p>
                   <a
                     href="https://github.com/g0v/moedict-webkit/issues/76"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >Issue source</a
+                    >議題來源</a
                   >
                 </p>
               </div>
@@ -1674,37 +1643,35 @@
 
             <details class="issue-card" id="issue-132" data-domain="stroke" open>
               <summary>
-                <span class="issue-title"
-                  >#132 — Disable stroke animation actions when unavailable</span
+                <span class="issue-title">#132 — 筆順動畫功能不可用時應停用觸發項</span
                 ><span class="issue-meta"
-                  ><span class="chip" data-tone="done">completed</span
-                  ><span class="chip" data-tone="feature">disabled state</span></span
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="feature">停用狀態</span></span
                 >
               </summary>
               <div class="issue-body">
-                <h4>Why unified branch</h4>
+                <h4>為何納入整合分支</h4>
                 <p>
-                  The UI had enough information to HEAD-check stroke JSON availability before
-                  enabling stroke triggers. This belongs in active DictionaryPage behavior.
+                  介面早已具備足夠資訊，可在啟用筆順觸發項之前以 HEAD 請求檢查筆順 JSON
+                  是否可用。此邏輯屬於現行 DictionaryPage 的運作行為範圍。
                 </p>
-                <h4>What changed</h4>
+                <h4>變更內容</h4>
                 <p>
-                  Added <code>src/hooks/useStrokeAvailability.ts</code>;
-                  <code>DictionaryPage.tsx</code> disables pencil/title triggers when a single
-                  character is known unavailable; e2e tests cover disabled trigger behavior.
+                  新增 <code>src/hooks/useStrokeAvailability.ts</code>；
+                  <code>DictionaryPage.tsx</code> 會在已知單一字元不可用時，
+                  停用鉛筆／標題觸發項；端對端測試涵蓋停用觸發項的行為。
                 </p>
                 <p class="evidence-line">
-                  <strong>Final evidence:</strong> <span class="commit">b8ddc54</span>,
-                  <span class="commit">b7af3b9</span>, <span class="commit">0172365</span>.
-                  Contract: unavailable single-character stroke controls expose disabled semantics
-                  and tooltips; multi-character fallback behavior remains unchanged.
+                  <strong>最終證據：</strong> <span class="commit">b8ddc54</span>、
+                  <span class="commit">b7af3b9</span>、<span class="commit">0172365</span>。
+                  契約：不可用的單字筆順控制項會呈現停用語義與提示文字； 多字元的備援行為維持不變。
                 </p>
                 <p>
                   <a
                     href="https://github.com/g0v/moedict-webkit/issues/132"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >Issue source</a
+                    >議題來源</a
                   >
                 </p>
               </div>
@@ -1714,37 +1681,34 @@
               <summary>
                 <span class="issue-title">#227 — 「町」字筆順錯誤</span
                 ><span class="issue-meta"
-                  ><span class="chip" data-tone="done">completed</span
-                  ><span class="chip" data-tone="feature">MOE corpus</span></span
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="feature">教育部語料</span></span
                 >
               </summary>
               <div class="issue-body">
-                <h4>Why unified branch</h4>
+                <h4>為何納入整合分支</h4>
                 <p>
-                  The original “wrong glyph” screenshot no longer reproduced, but 町 still lacked
-                  stroke JSON because the mirrored corpus was a stale 4,808-character snapshot while
-                  MOE now exposes 6,063 characters.
+                  原始「筆順錯誤」截圖已無法重現，但「町」仍缺乏筆順 JSON，
+                  原因是鏡像語料仍停留在舊有的 4,808 字快照， 而教育部目前已提供 6,063 字的資料。
                 </p>
-                <h4>What changed</h4>
+                <h4>變更內容</h4>
                 <p>
-                  <code>commands/fetch-moe-stroke.mjs</code> and
-                  <code>commands/sync-moe-stroke-corpus.mjs</code> re-derive MOE XML from the
-                  redesigned learningweb site, validate schema, and support full-corpus
-                  upload/verify workflow.
+                  <code>commands/fetch-moe-stroke.mjs</code> 與
+                  <code>commands/sync-moe-stroke-corpus.mjs</code> 會從改版後的 learningweb
+                  網站重新取得教育部 XML 資料、驗證結構描述， 並支援完整語料的上傳／驗證流程。
                 </p>
                 <p class="evidence-line">
-                  <strong>Final evidence:</strong> <span class="commit">4692fcb</span>,
-                  <span class="commit">c2772e1</span>, <span class="commit">c23b820</span>.
-                  Contract: 町 <code>753a.json</code> is real MOE-derived stroke data; final
-                  validation included 6,063-character corpus verification in the historical
-                  deployment evidence.
+                  <strong>最終證據：</strong> <span class="commit">4692fcb</span>、
+                  <span class="commit">c2772e1</span>、<span class="commit">c23b820</span>。
+                  契約：「町」的 <code>753a.json</code> 為真正教育部來源的筆順資料；
+                  最終驗證在歷史部署證據中涵蓋了 6,063 字語料的驗證。
                 </p>
                 <p>
                   <a
                     href="https://github.com/g0v/moedict-webkit/issues/227"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >Issue source</a
+                    >議題來源</a
                   >
                 </p>
               </div>
@@ -1754,33 +1718,32 @@
               <summary>
                 <span class="issue-title">#230 — 控制筆順動畫</span
                 ><span class="issue-meta"
-                  ><span class="chip" data-tone="done">completed</span
-                  ><span class="chip" data-tone="feature">replay control</span></span
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="feature">重播控制</span></span
                 >
               </summary>
               <div class="issue-body">
-                <h4>Why unified branch</h4>
+                <h4>為何納入整合分支</h4>
                 <p>
-                  Users had to close and reopen the stroke panel to replay. The interaction is
-                  entirely current frontend state and does not depend on retired webkit tooling.
+                  使用者過去必須先關閉再重新開啟筆順面板才能重播動畫。
+                  此互動完全屬於現行前端狀態，並不依賴已淘汰的 webkit 工具鏈。
                 </p>
-                <h4>What changed</h4>
+                <h4>變更內容</h4>
                 <p>
-                  <code>StrokeAnimation.tsx</code> turns <code>#strokes</code> into a keyboard/mouse
-                  replay button; later follow-up stops propagation so replay does not toggle the
-                  outer panel closed.
+                  <code>StrokeAnimation.tsx</code> 將 <code>#strokes</code> 變為可用鍵盤／滑鼠操作的
+                  重播按鈕；後續的追加修正加上了事件阻止冒泡， 使重播動作不會連帶將外層面板關閉。
                 </p>
                 <p class="evidence-line">
-                  <strong>Final evidence:</strong> <span class="commit">e0a3387</span> and
-                  <span class="commit">4668e44</span>. Contract: click/Enter/Space on the stroke
-                  canvas replays animation without hiding the panel.
+                  <strong>最終證據：</strong> <span class="commit">e0a3387</span> 與
+                  <span class="commit">4668e44</span>。契約：在筆順畫布上點擊／按下 Enter／Space
+                  鍵可重播動畫，且不會使面板隱藏。
                 </p>
                 <p>
                   <a
                     href="https://github.com/g0v/moedict-webkit/issues/230"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >Issue source</a
+                    >議題來源</a
                   >
                 </p>
               </div>
@@ -1790,39 +1753,35 @@
               <summary>
                 <span class="issue-title">#265 — 「汛」筆順示意圖破損</span
                 ><span class="issue-meta"
-                  ><span class="chip" data-tone="done">completed</span
-                  ><span class="chip" data-tone="verify"
-                    >production-verified then consolidated</span
-                  ></span
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="verify">正式環境驗證後整合</span></span
                 >
               </summary>
               <div class="issue-body">
-                <h4>Why unified branch</h4>
+                <h4>為何納入整合分支</h4>
                 <p>
-                  汛 was already production-verified after the full MOE corpus ship, but the unified
-                  branch still needed to consolidate the local rendering fallback and
-                  R2-serving/runtime pipeline that make that evidence durable.
+                  「汛」在完整教育部語料上線後，早已於正式環境驗證通過；
+                  但整合分支仍需將本機渲染備援方案， 以及讓該證據得以長久維持的 R2
+                  服務／執行期管線一併整併進來。
                 </p>
-                <h4>What changed</h4>
+                <h4>變更內容</h4>
                 <p>
-                  The missing badge superset covers broken/missing stroke UX; the corpus pipeline
-                  supplies <code>6c5b.json</code>; <code>handleStrokeAPI</code> serves
-                  <code>/api/stroke-json</code> from the Worker <code>ASSETS</code> binding with
-                  cache/ETag behavior.
+                  缺資料徽章的涵蓋範圍已擴及破損／缺漏的筆順體驗； 語料管線提供
+                  <code>6c5b.json</code>；<code>handleStrokeAPI</code> 透過 Worker 的
+                  <code>ASSETS</code> 綁定， 以快取／ETag 行為提供 <code>/api/stroke-json</code>。
                 </p>
                 <p class="evidence-line">
-                  <strong>Final evidence:</strong> <span class="commit">463c137</span>,
-                  <span class="commit">c2772e1</span>, <span class="commit">c23b820</span>.
-                  Contract: 汛 renders real stroke data when present; genuinely missing chars show
-                  the badge. Caveat: already production-verified, now represented by consolidated
-                  branch code.
+                  <strong>最終證據：</strong> <span class="commit">463c137</span>、
+                  <span class="commit">c2772e1</span>、<span class="commit">c23b820</span>。
+                  契約：有資料時「汛」會渲染真實筆順資料；真正缺漏的字元則顯示徽章。
+                  注意事項：此項在正式環境已驗證通過，現改由整合後的分支程式碼一併呈現。
                 </p>
                 <p>
                   <a
                     href="https://github.com/g0v/moedict-webkit/issues/265"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >Issue source</a
+                    >議題來源</a
                   >
                 </p>
               </div>
@@ -1832,10 +1791,10 @@
 
         <article class="domain" id="domain-appearance" data-domain-section="appearance">
           <header>
-            <h3>Appearance and accessibility</h3>
+            <h3>外觀與無障礙</h3>
             <p>
-              Bounded frontend preferences and CSS behavior that improve the current site without
-              disturbing the legacy stylesheet baseline.
+              範圍明確的前端偏好設定與 CSS 行為，能在不破壞舊版樣式表基準的前提下，
+              改善現行網站體驗。
             </p>
           </header>
           <div class="cards">
@@ -1843,39 +1802,40 @@
               <summary>
                 <span class="issue-title">#245 — CSS: 支援深色模式</span
                 ><span class="issue-meta"
-                  ><span class="chip" data-tone="done">completed</span
-                  ><span class="chip" data-tone="feature">theme</span></span
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="feature">佈景主題</span></span
                 >
               </summary>
               <div class="issue-body">
-                <h4>Why unified branch</h4>
+                <h4>為何納入整合分支</h4>
                 <p>
-                  The active site had no <code>prefers-color-scheme: dark</code> behavior and no
-                  manual theme preference. This was a bounded current CSS/preference feature, not a
-                  frozen-webkit change.
+                  現行網站原本沒有 <code>prefers-color-scheme: dark</code> 行為，
+                  也沒有手動的佈景主題偏好設定。這是一項範圍明確的現行 CSS／偏好設定功能，而非凍結中
+                  webkit 的變更。
                 </p>
-                <h4>What changed</h4>
+                <h4>變更內容</h4>
                 <p>
-                  <code>index.html</code> bootstraps stored theme early;
-                  <code>src/utils/theme-utils.ts</code> validates and applies system/light/dark;
-                  user preferences expose a native select; CSS introduces semantic dark tokens and
-                  scoped legacy overrides. Subsequent commit
-                  <span class="commit">849b1cc</span> resolved the dark phrase-card contrast issue.
+                  <code>index.html</code> 會及早載入已儲存的佈景主題設定；
+                  <code>src/utils/theme-utils.ts</code> 負責驗證並套用
+                  系統／淺色／深色模式；使用者偏好設定介面提供原生下拉選單； CSS
+                  新增語義化的深色權杖與範圍限定的舊版樣式覆寫。 後續提交
+                  <span class="commit">849b1cc</span> 解決了深色模式下 短語卡片對比度不足的問題。
                 </p>
                 <p class="evidence-line">
-                  <strong>Staging verification evidence:</strong> commit
-                  <span class="commit">849b1cc</span> (staging predecessor release
-                  <code>849b1cc-ea42c6eedeba</code>, later subsumed by
-                  <span class="commit">32b717a</span> release <code>32b717a-a6b99db654cf</code>).
-                  All 7/7 dark-mode E2E and 133/133 Chromium E2E tests passed at that release; the
-                  final 32b717a release adds #281's 4 e2e tests for 137/137 total.
+                  <strong>測試環境驗證證據：</strong>提交
+                  <span class="commit">849b1cc</span>（測試環境前身發布版本
+                  <code>849b1cc-ea42c6eedeba</code>，後續由
+                  <span class="commit">32b717a</span> 發布版本
+                  <code>32b717a-a6b99db654cf</code> 取代）。在該版本， 深色模式端對端測試 7/7
+                  通過，Chromium 端對端測試 133/133 通過； 最終的 32b717a 發布版本再加入 #281 的 4
+                  項端對端測試， 合計 137/137 通過。
                 </p>
                 <p>
                   <a
                     href="https://github.com/g0v/moedict-webkit/issues/245"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >Issue source</a
+                    >議題來源</a
                   >
                 </p>
               </div>
@@ -1887,76 +1847,69 @@
       <section id="spotlight-260" aria-labelledby="spotlight-260-title">
         <article class="spotlight">
           <div class="kicker">
-            <span class="pill">Batch 1 spotlight</span
-            ><span class="pill">First fully implemented model</span
-            ><span class="pill">CNS11643 fallback</span>
+            <span class="pill">批次 1 重點</span><span class="pill">首個完整實作的模型</span
+            ><span class="pill">CNS11643 後備方案</span>
           </div>
           <h2 id="spotlight-260-title">#260 — 許願：讓「全字庫」加入萌典的搜尋資料</h2>
           <p>
-            <strong>Why it matters:</strong> #260 began as a product reroute/spec item, but the
-            unified branch implements the first complete model: a CNS attribute fallback that never
-            pretends CNS is a fifth dictionary, never shadows real dictionary entries, and keeps
-            attribution/license boundaries visible.
+            <strong>為何重要：</strong>#260 原本只是產品重新導向／規格類項目，
+            但整合分支實作出第一個完整的模型：一套 CNS 屬性後備方案， 從不假裝 CNS
+            是第五本辭典，從不遮蔽真正的辭典詞條， 並持續保持出處／授權界線清楚可見。
           </p>
           <div class="spot-grid">
             <div>
-              <h3>CNS no-shadow behavior and dispatch</h3>
+              <h3>CNS 不遮蔽行為與路由分派</h3>
               <p>
-                Two distinct precedence rules govern CNS integration. In the <strong>UI</strong>,
-                the existing a/t/h/c dictionary lookup completes first; the CNS fetch and fallback
-                card render only after the lookup returns no hit <em>and</em> the query is exactly
-                one Unicode scalar covered by CNS data. In the <strong>Worker</strong>, the explicit
-                <code>/api/cns/{char}.json</code> route matcher is placed intentionally
-                <em>before</em> the generic <code>.json</code> dictionary catch-all so it remains
-                reachable as its own named path. CNS does not extend <code>DictionaryLang</code> —
-                it is a separate attribute source, not a fifth dictionary.
+                CNS 整合由兩條各自獨立的優先順序規則所支配。在<strong>介面</strong>端， 既有的
+                <code>a/t/h/c</code> 辭典查詢會先完成；只有在該查詢
+                <em>沒有</em>命中結果、<em>且</em>查詢字串恰好是 CNS 資料所涵蓋的 單一 Unicode
+                標量字元時，CNS 擷取與後備卡片才會渲染。 在 <strong>Worker</strong> 端，明確的
+                <code>/api/cns/{char}.json</code> 路由比對器 刻意被放置在通用的
+                <code>.json</code> 辭典萬用路由<em>之前</em>， 以確保其可作為獨立命名路徑被存取。CNS
+                並不擴充 <code>DictionaryLang</code>：它是獨立的屬性來源，而非第五本辭典。
               </p>
               <ul>
-                <li>Dedicated cache tags for CNS data rather than reusing dictionary tags.</li>
-                <li>
-                  Offline <code>/cns/</code> mirror so the fallback card can work with deterministic
-                  local fixtures.
-                </li>
-                <li>PUA exclusion in the generated first-pass corpus.</li>
+                <li>為 CNS 資料設有專屬快取標籤，而非沿用辭典快取標籤。</li>
+                <li>設有離線 <code>/cns/</code> 鏡像，使後備卡片能以確定性的 本機測試素材運作。</li>
+                <li>在產生的第一版語料中排除 PUA（私人使用區）字元。</li>
               </ul>
             </div>
             <div class="panel">
-              <h3>Final branch commits</h3>
+              <h3>最終分支提交</h3>
               <p>
-                <span class="commit">3bdc4b0</span> implements CNS11643 attribute fallback for
-                single Unicode scalars covered by CNS data.
+                <span class="commit">3bdc4b0</span> 為 CNS 資料所涵蓋的單一 Unicode 標量字元實作
+                CNS11643 屬性後備方案。
               </p>
               <p>
-                <span class="commit">2c6ecca</span> gitignores generated CNS corpus and keeps the
-                golden fixture only.
+                <span class="commit">2c6ecca</span> 將產生的 CNS 語料加入 gitignore，
+                僅保留黃金測試素材。
               </p>
               <p>
-                <span class="commit">3da9d99</span> hardens CNS corpus generation and upload
-                fail-closed.
+                <span class="commit">3da9d99</span> 強化 CNS 語料產生與上傳流程，
+                使其在失敗時安全關閉（fail-closed）。
               </p>
             </div>
           </div>
-          <div class="fact-grid" aria-label="CNS facts">
+          <div class="fact-grid" aria-label="CNS 相關數據">
             <div class="fact">
-              <strong>Corpus dry-run</strong><span>77,208 standard Unicode emitted</span>
+              <strong>語料試跑</strong><span>產出 77,208 個標準 Unicode 字元</span>
             </div>
-            <div class="fact"><strong>PUA policy</strong><span>20,152 PUA skipped</span></div>
-            <div class="fact"><strong>Mapping integrity</strong><span>0 no-map rows</span></div>
+            <div class="fact"><strong>PUA 政策</strong><span>跳過 20,152 個 PUA 字元</span></div>
+            <div class="fact"><strong>映射完整性</strong><span>0 筆無映射資料</span></div>
             <div class="fact">
-              <strong>Golden sample</strong><span>䴉 → ㄒㄩㄢˊ, 24 strokes, 鳥 radical, WVHAF</span>
-            </div>
-            <div class="fact">
-              <strong>HTTP contract</strong><span>ETag / If-None-Match → 304 behavior covered</span>
+              <strong>黃金樣本</strong><span>䴉 → ㄒㄩㄢˊ，24 畫，部首「鳥」，WVHAF</span>
             </div>
             <div class="fact">
-              <strong>Attribution</strong><span>OGDL data vs OFL font terms separated</span>
+              <strong>HTTP 契約</strong><span>已涵蓋 ETag／If-None-Match → 304 行為</span>
+            </div>
+            <div class="fact">
+              <strong>出處標示</strong><span>OGDL 資料與 OFL 字型條款已分開標示</span>
             </div>
           </div>
           <div class="callout" style="margin-top: 1rem">
-            <strong>Source boundary:</strong> CNS attributes have no definitions. The fallback card
-            says “全字庫屬性・無辭典釋義” and exposes attributes such as phonetic readings, radical,
-            stroke count, Cangjie, source, and character image. It does not invent definitions or
-            merge CNS into dictionary-of-record content.
+            <strong>來源界線：</strong>CNS 屬性資料不含釋義。後備卡片顯示
+            「全字庫屬性・無辭典釋義」，並呈現如注音讀音、部首、筆畫數、
+            倉頡碼、出處與字形圖片等屬性。它不會臆造釋義， 也不會將 CNS 併入正式辭典內容之中。
           </div>
         </article>
       </section>
@@ -1964,76 +1917,76 @@
       <section id="quality" aria-labelledby="quality-title">
         <div class="section-head">
           <div>
-            <h2 id="quality-title">Integration quality: not blind merges</h2>
+            <h2 id="quality-title">整合品質：不是盲目合併</h2>
             <p>
-              The unified branch represents review and reconciliation work, not a pile of isolated
-              branch snapshots. Aggregate tests matter because independent fixes can be locally
-              valid yet collide at shared seams.
+              整合分支代表的是審查與協調的成果，而非一堆各自獨立的分支快照拼湊而成。
+              整體測試之所以重要，是因為各自獨立的修正即使在局部各自成立，
+              仍可能在共用的接合處互相衝突。
             </p>
           </div>
         </div>
         <div class="quality-grid">
           <article class="timeline-card">
-            <h3>Conflict markers and stale merge residue</h3>
+            <h3>衝突標記與陳舊合併殘留</h3>
             <p>
-              Review found unresolved or leftover conflict structure in shared
-              reading-label/title-pronunciation tests. Follow-ups
-              <span class="commit">dec4481</span>, <span class="commit">25f1774</span>, and
-              <span class="commit">b08365e</span> restored syntactic integrity and kept the richer
-              badge/copy contracts.
+              審查發現共用的讀音標籤／標題音讀測試中，存在未解決或殘留的衝突結構。 後續修正
+              <span class="commit">dec4481</span>、 <span class="commit">25f1774</span> 與
+              <span class="commit">b08365e</span> 恢復了語法完整性，
+              並保留了較完整的徽章／複製契約。
             </p>
           </article>
           <article class="timeline-card">
-            <h3>Duplicate JSDoc/properties</h3>
+            <h3>重複的 JSDoc／屬性</h3>
             <p>
-              TWBLG <code>reading</code> annotations appeared in duplicate or in the wrong place
-              after reconciliation. <span class="commit">aa7f206</span> and
-              <span class="commit">b6cc8cb</span> deduplicated the interface documentation and kept
-              the property where it is read.
+              整併後，TWBLG <code>reading</code> 標註出現重複或位置錯誤的情形。
+              <span class="commit">aa7f206</span> 與
+              <span class="commit">b6cc8cb</span> 去除了介面文件中的重複內容，
+              並保留該屬性於實際被讀取之處。
             </p>
           </article>
           <article class="timeline-card">
-            <h3>#281 Variant Characters Integration</h3>
+            <h3>#281 異用字整合</h3>
             <p>
-              The Taiwanese variant characters feature (#281) was integrated on the unified branch
-              (tip <span class="commit">32b717a</span>). Initial triage missed the repository-root
-              <code>x-異用字.json</code> sidecar and wrongly concluded "not_planned"; correction
-              found the sidecar (commit <span class="commit">437588d</span>, 2110 IDs / 2780
-              strings), incrementally injected B field into 128 packs (2097 mapped, 13 orphans), and
-              added API/UI rendering + 4/4 e2e tests. Staging verified (release
-              <code>32b717a-a6b99db654cf</code>); production not deployed.
+              台語異用字功能（#281）已整合進整合分支（當時分支頂端為
+              <span class="commit">32b717a</span>）。初步排查遺漏了儲存庫根目錄下的
+              <code>x-異用字.json</code> 附屬檔案，並誤判為「不予規劃」；
+              後續更正找到了該附屬檔案（提交 <span class="commit">437588d</span>，2110 個 ID／2780
+              筆字串）， 將 B 欄位逐步注入 128 個封裝檔（2097 筆已映射，13 筆孤兒）， 並新增
+              API／介面渲染以及 4/4 端對端測試。已於測試環境驗證 （發布版本
+              <code>32b717a-a6b99db654cf</code>）；尚未部署至正式環境。
             </p>
           </article>
           <article class="timeline-card">
-            <h3>Brittle dark-mode assertion</h3>
+            <h3>脆弱的深色模式判斷式</h3>
             <p>
-              Dark-mode tests had a brittle exact CSSOM <code>colorScheme</code> assertion tied to
-              incidental system-mode defaults. Final hardening commit
-              <span class="commit">849b1cc</span> replaced this with visible-rendering checks while
-              preserving exact assertions for manual theme override paths, so the test protects the
-              theme contract rather than snapshotting an implementation detail.
+              深色模式測試原本使用一個脆弱的、與系統模式預設值偶然相依的精確 CSSOM
+              <code>colorScheme</code> 判斷式。最終強化提交
+              <span class="commit">849b1cc</span> 將其改為可見渲染結果的檢查，
+              同時對手動佈景主題覆寫路徑保留精確判斷式，
+              使該測試守護的是佈景主題契約本身，而非對實作細節拍照存證。
             </p>
           </article>
           <article class="timeline-card">
-            <h3>External PNG / networkidle e2e hangs</h3>
+            <h3>外部 PNG／networkidle 端對端測試卡住</h3>
             <p>
-              The aggregate e2e run exposed no-match <code>CharacterImageView</code> pages
-              (vertical-ruby and cross-language cases) waiting on canonical
-              <code>www.moedict.tw/*.png</code> fetches and <code>networkidle</code> settling.
-              <span class="commit">1dc1cc4</span> added a deterministic external glyph route stub
-              and DOM-specific readiness conditions so the suite no longer blocks on live network
-              assets; the final run used a fresh server (<code>CI=1</code>, reuse disabled).
-              Separately, <span class="commit">0172365</span> hardened the local stroke-script
-              fixture (<code>840c.json</code>) for the stroke e2e path, which is a distinct concern
-              from the PNG timeout cases.
+              整體端對端測試執行時，發現無匹配結果的
+              <code>CharacterImageView</code> 頁面（直式注音與跨語言情境） 會卡在等待標準的
+              <code>www.moedict.tw/*.png</code> 請求與 <code>networkidle</code> 穩定狀態。
+              <span class="commit">1dc1cc4</span> 新增了確定性的外部字形路由替身 以及針對 DOM
+              的就緒條件，使測試套件不再受阻於即時網路資源；
+              最終執行採用了全新的伺服器（<code>CI=1</code>，停用重複使用）。 另外，<span
+                class="commit"
+                >0172365</span
+              >
+              強化了筆順端對端測試路徑所用的 本機筆順腳本測試素材（<code>840c.json</code>），
+              這與前述 PNG 逾時案例屬於不同層面的問題。
             </p>
           </article>
           <article class="timeline-card">
-            <h3>Stale-server ambiguity</h3>
+            <h3>陳舊伺服器造成的歧異</h3>
             <p>
-              Final hardening in <span class="commit">1dc1cc4</span> makes integrated CNS/e2e
-              contracts deterministic and avoids passing against a stale server or stale generated
-              data.
+              <span class="commit">1dc1cc4</span> 中的最終強化， 使整合後的
+              CNS／端對端測試契約具有確定性， 避免測試在陳舊的伺服器或陳舊的產生資料上誤判為通過。
             </p>
           </article>
         </div>
@@ -2042,46 +1995,43 @@
       <section id="verification" aria-labelledby="verification-title">
         <div class="section-head">
           <div>
-            <h2 id="verification-title">Final verification dashboard</h2>
-            <p>
-              These are the final integration evidence points for the code head before this report
-              commit.
-            </p>
+            <h2 id="verification-title">最終驗證儀表板</h2>
+            <p>以下為本報告提交前，程式碼分支頂端的最終整合證據， 擷取自 2026-07-13 的歷史快照。</p>
           </div>
         </div>
         <div class="verify-grid">
           <div class="verify-card">
             <strong><code>vp check</code></strong
-            ><span>canonical formatter/lint/type-aware check passed</span>
+            ><span>標準格式化／靜態檢查／型別感知檢查通過</span>
           </div>
           <div class="verify-card"><strong>check:data</strong><span>1414 / 1414</span></div>
-          <div class="verify-card"><strong>check:css-ids</strong><span>0 unallowed IDs</span></div>
+          <div class="verify-card"><strong>check:css-ids</strong><span>0 個不合規 ID</span></div>
           <div class="verify-card">
-            <strong>CSS lint baseline</strong><span>exact legacy baseline accepted</span>
+            <strong>CSS 靜態檢查基準</strong><span>與舊版基準完全一致，通過</span>
           </div>
           <div class="verify-card">
-            <strong>typecheck / lint</strong><span>passed in final validation set</span>
+            <strong>型別檢查／靜態檢查</strong><span>於最終驗證集合中通過</span>
           </div>
+          <div class="verify-card"><strong>單元＋整合測試</strong><span>1941 項測試通過</span></div>
           <div class="verify-card">
-            <strong>unit+integration tests</strong><span>1941 tests pass</span>
+            <strong>完整 Chromium 端對端測試</strong><span>137 項測試</span>
           </div>
-          <div class="verify-card"><strong>full Chromium e2e</strong><span>137 tests</span></div>
           <div class="verify-card">
             <strong><code>vp build</code></strong
-            ><span>passed</span>
+            ><span>通過</span>
           </div>
           <div class="verify-card">
             <strong><code>bun run build</code></strong
-            ><span>passed</span>
+            ><span>通過</span>
           </div>
           <div class="verify-card">
-            <strong>CNS dry-run</strong><span>77,208 emitted / 20,152 PUA skipped / 0 no-map</span>
+            <strong>CNS 試跑</strong><span>產出 77,208 筆／跳過 20,152 筆 PUA／0 筆無映射</span>
           </div>
           <div class="verify-card">
-            <strong>Operational status</strong
+            <strong>運作狀態</strong
             ><span
-              >staging release 32b717a-a6b99db654cf deployed and live-verified; production untouched
-              (23b7e89-1d1f2400cb1d); no push or GitHub writes</span
+              >測試環境發布版本 32b717a-a6b99db654cf 已部署並經即時驗證；正式環境未變動
+              （23b7e89-1d1f2400cb1d）；未進行推送或 GitHub 寫入操作</span
             >
           </div>
         </div>
@@ -2090,22 +2040,21 @@
       <section id="batch-2" aria-labelledby="batch-2-title">
         <div class="section-head">
           <div>
-            <h2 id="batch-2-title">Batch 2 — already fixed / verification-only</h2>
+            <h2 id="batch-2-title">批次 2：既有修正已驗證</h2>
             <p>
-              These five items are intentionally concise: the correct action was to verify and
-              document, not to add duplicate branch code. Statements below are limited to evidence
-              present in the issue artifacts.
+              這五個項目刻意保持精簡：正確的作法是驗證並記錄現況，
+              而非再新增重複的分支程式碼。以下敘述僅限於議題附件中已有的證據。
             </p>
           </div>
         </div>
         <div class="panel" style="overflow-x: auto">
-          <table aria-label="Batch 2 verified issues">
+          <table aria-label="批次 2 已驗證議題">
             <thead>
               <tr>
-                <th>Issue</th>
-                <th>Original symptom</th>
-                <th>Why no new branch code</th>
-                <th>Verified evidence</th>
+                <th>議題</th>
+                <th>原始症狀</th>
+                <th>為何不新增分支程式碼</th>
+                <th>驗證證據</th>
               </tr>
             </thead>
             <tbody>
@@ -2115,22 +2064,21 @@
                     href="https://github.com/g0v/moedict-webkit/issues/173"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >issue link</a
+                    >議題連結</a
                   >
                 </td>
                 <td>
-                  Numeric-tone Tai-lo/POJ queries such as <code>huat4-inn2</code>, and even
-                  tone-marked whole-word <code>li̍k-sú</code>, did not resolve.
+                  數字調符的台羅／POJ 查詢，例如
+                  <code>huat4-inn2</code>，甚至連標調的整詞 <code>li̍k-sú</code>，過去都無法解析。
                 </td>
                 <td>
-                  Commit <span class="commit">cc0ec62</span> had already shipped whole-word
-                  Taiwanese romanization lookup via sidecar maps and lookup unioning before this
-                  verification pass.
+                  提交 <span class="commit">cc0ec62</span> 早在此次驗證之前，
+                  就已透過附屬對照表與查詢聯集，實作出整詞的台語羅馬字查詢功能。
                 </td>
                 <td>
-                  Artifact records live curl and browser checks: <code>huat4-inn2</code>,
-                  <code>huat-inn2</code>, <code>liksu</code>, uppercase/digit variants, and a
-                  three-syllable corpus sample resolve. Focused unit checks: 56/56 pass.
+                  附件記錄了實機 curl 與瀏覽器檢查：<code>huat4-inn2</code>、
+                  <code>huat-inn2</code>、<code>liksu</code>、大小寫／數字變體，
+                  以及三音節語料樣本皆能正確解析。專項單元測試：56/56 通過。
                 </td>
               </tr>
               <tr id="issue-179">
@@ -2139,22 +2087,19 @@
                     href="https://github.com/g0v/moedict-webkit/issues/179"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >issue link</a
+                    >議題連結</a
                   >
                 </td>
+                <td>舊版 Firefox 的截圖顯示台語詞目缺少注音，範例中的羅馬字則出現偏移／重疊。</td>
                 <td>
-                  Old Firefox screenshots showed Taigi entries without Zhuyin and with romanization
-                  shifted/overlapped in examples.
+                  現行前端架構（由提交
+                  <span class="commit">c7da00e</span> 引入）會合成台語注音， 並使用自訂的
+                  <code>hruby.rightangle</code> 版面配置， 取代原生 ruby 行為。
                 </td>
                 <td>
-                  The current frontend architecture, introduced by
-                  <span class="commit">c7da00e</span>, synthesizes Taigi Zhuyin and uses custom
-                  <code>hruby.rightangle</code> layout instead of native ruby behavior.
-                </td>
-                <td>
-                  Artifact records desktop 1440×900 and mobile 375×812 DOM coordinate checks across
-                  ruby preferences for <code>啥物</code>, <code>物</code>, and <code>食</code>; no
-                  overlap and Zhuyin is visible.
+                  附件記錄了桌機 1440×900 與行動裝置 375×812 的 DOM 座標檢查， 涵蓋
+                  <code>啥物</code>、<code>物</code>、<code>食</code>
+                  等詞目在各 ruby 偏好設定下的顯示；均無重疊，注音清晰可見。
                 </td>
               </tr>
               <tr id="issue-234">
@@ -2163,22 +2108,21 @@
                     href="https://github.com/g0v/moedict-webkit/issues/234"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >issue link</a
+                    >議題連結</a
                   >
                 </td>
                 <td>
-                  Searching a Taigi single character found placeholder “單字不成詞者，無義項”
-                  readings rather than meaningful entries.
+                  查詢台語單字時，只找到「單字不成詞者，無義項」的佔位讀音， 而非有意義的詞條。
                 </td>
                 <td>
-                  Current <code>ptck</code> pack data already excludes placeholder readings. The
-                  filtering source is upstream pack generation, not current frontend code, and no
-                  local bug remained.
+                  現行 <code>ptck</code> 封裝資料本身已排除佔位讀音。
+                  篩選邏輯的來源在於上游封裝檔的產生階段，而非現行前端程式碼，
+                  並未殘留任何本機缺陷。
                 </td>
                 <td>
-                  Artifact verifies 臆 and 蛇 through MOE source, production API, local pack files,
-                  search index, browser search, and full data grep for “不成詞”/“無義項” with zero
-                  matches.
+                  附件驗證了「臆」與「蛇」，透過教育部來源資料、正式環境 API、
+                  本機封裝檔、搜尋索引、瀏覽器搜尋，
+                  以及對「不成詞」／「無義項」的全資料搜尋，結果皆為零筆命中。
                 </td>
               </tr>
               <tr id="issue-240">
@@ -2187,22 +2131,20 @@
                     href="https://github.com/g0v/moedict-webkit/issues/240"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >issue link</a
+                    >議題連結</a
                   >
                 </td>
-                <td>Android App long-press could not select/copy dictionary content.</td>
+                <td>Android App 長按過去無法選取／複製辭典內文。</td>
                 <td>
-                  moedict.tw PR #118 (<span class="commit">bb49d4d</span>) and PR #120 (<span
+                  moedict.tw PR #118（<span class="commit">bb49d4d</span>）與 PR #120（<span
                     class="commit"
                     >421f738</span
-                  >) already implemented selectable content and selection-aware click suppression;
-                  app submodule later incorporated it. Play Store rollout remained operational, not
-                  source code.
+                  >）早已實作可選取內容以及選取狀態下抑制點擊事件的行為； App
+                  子模組隨後併入了這項變更。Play Store 上架流程屬於作業層面， 而非原始碼問題。
                 </td>
                 <td>
-                  Artifact records production style checks and behavior: with an active selection,
-                  clicking a character link does not navigate; after clearing selection, the same
-                  click navigates normally.
+                  附件記錄了正式環境的樣式檢查與行為：在有選取狀態時，
+                  點擊字元連結不會跳轉；清除選取後，同樣的點擊則會正常跳轉。
                 </td>
               </tr>
               <tr id="issue-270">
@@ -2211,22 +2153,20 @@
                     href="https://github.com/g0v/moedict-webkit/issues/270"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >issue link</a
+                    >議題連結</a
                   >
                 </td>
+                <td>多個台語音檔按鈕失效，涉及舊版 Rackspace 音檔涵蓋範圍以外的 ID。</td>
                 <td>
-                  Several Taigi audio buttons failed for IDs beyond the old Rackspace audio
-                  coverage.
+                  此項目對應的是 g0v/moedict-webkit 議題 #270。 該項已由 g0v/moedict.tw PR
+                  #134／提交
+                  <span class="commit">9b46099</span> 修復， 該提交將舊版音檔／筆順的 CDN 資產遷移至
+                  R2。
                 </td>
                 <td>
-                  The intended item is g0v/moedict-webkit issue #270. It was already fixed by
-                  g0v/moedict.tw PR #134 / commit <span class="commit">9b46099</span>, which
-                  migrated legacy audio/stroke CDN assets to R2.
-                </td>
-                <td>
-                  Artifact records all six reported audio IDs returning HTTP 200 from
-                  <code>r2-assets.moedict.tw/audio/t/{id}.ogg</code> and <code>.mp3</code>; the
-                  previous local fallback branch was superseded.
+                  附件記錄了全部六個回報的音檔 ID，皆從
+                  <code>r2-assets.moedict.tw/audio/t/{id}.ogg</code> 與 <code>.mp3</code> 回傳 HTTP
+                  200；先前的本機備援分支已被取代。
                 </td>
               </tr>
             </tbody>
@@ -2237,36 +2177,35 @@
       <section id="boundaries" aria-labelledby="boundaries-title">
         <div class="section-head">
           <div>
-            <h2 id="boundaries-title">Scope boundaries and non-claims</h2>
+            <h2 id="boundaries-title">範圍界線與非宣稱事項</h2>
             <p>
-              This report is intentionally narrow: it explains the two requested batches and the
-              unified branch evidence, not the entire historical issue queue.
+              本報告刻意保持範圍限縮：僅說明所要求的兩個批次以及整合分支的證據，
+              並非涵蓋全部歷史議題清單。
             </p>
           </div>
         </div>
         <div class="two-lane">
           <div class="callout">
-            <strong>Preserved boundaries:</strong> old isolated branches and worktrees may remain as
-            historical records; this report describes the unified branch, not every stale SHA. The
-            original dirty main checkout served as a historical backup/rescue source for uncommitted
-            B→variants code; after owner-authorized extraction and integration into the unified
-            branch, the main checkout was discarded and cleaned — it was not left dirty.
+            <strong>保留的範圍界線：</strong>舊有的獨立分支與工作樹可能仍以歷史記錄形式存在；
+            本報告描述的是整合分支，並非逐一交代每個陳舊的 SHA。 原本未提交的髒 main
+            檢出，曾作為未提交 B→異用字程式碼的歷史備份／搶救來源；
+            在經擁有者授權完成擷取並整合進整合分支之後， 該 main
+            檢出已被捨棄並清理，並未留下未清理的髒狀態。
           </div>
           <div class="callout">
-            <strong>No remote action:</strong> no push and no GitHub comments, issue/PR state
-            changes, or GitHub writes occurred. Staging deploy and R2 upload were performed for
-            verification (release <code>32b717a-a6b99db654cf</code>); production was not deployed.
+            <strong>未執行任何遠端操作：</strong>未進行推送， 也未新增任何 GitHub 留言、議題／PR
+            狀態變更，或任何 GitHub 寫入操作。 測試環境部署與 R2 上傳僅為驗證目的而執行 （發布版本
+            <code>32b717a-a6b99db654cf</code>）；正式環境未部署。
           </div>
           <div class="callout">
-            <strong>Bounded/partial issues identified:</strong> #100 is a historical multi-item
-            bundle; #122 is Taiwanese implemented / Hakka data-blocked; #165 has documented
-            romanization residue; #22/#96/#233 share one duplicate implementation; #265 was already
-            production-verified but now consolidated.
+            <strong>已識別的有限範圍／部分解決議題：</strong>#100 是一則歷史性的多項目合併議題；
+            #122 台語部分已實作／客語資料受阻；#165 有文獻記載的羅馬字轉換殘留問題； #22／#96／#233
+            共用同一個重複實作；#265 早已在正式環境驗證通過， 現已整併。
           </div>
           <div class="callout">
-            <strong>Not a universal claim:</strong> this is not a claim that all 40 issue logs are
-            locally solvable, nor that every frozen <code>moedict-webkit</code> report should be
-            handled by code. Each issue still needs source/data/runtime ownership analysis.
+            <strong>非全面性宣稱：</strong>本報告並非宣稱全部 40 則議題記錄皆可於本機解決，
+            也非宣稱每一則凍結中的 <code>moedict-webkit</code> 回報都應以程式碼處理。
+            每一則議題仍需個別進行原始碼／資料／執行環境歸屬分析。
           </div>
         </div>
       </section>
@@ -2274,39 +2213,38 @@
       <section id="sources" aria-labelledby="sources-title">
         <div class="section-head">
           <div>
-            <h2 id="sources-title">Sources and generation note</h2>
+            <h2 id="sources-title">來源與追溯資料</h2>
             <p>
-              All evidence in this report was derived from local artifacts and the final integration
-              worktree; local paths appear as code text, not as clickable filesystem links.
+              本報告中的所有證據皆源自本機附件與最終整合工作樹；
+              本機路徑以程式碼文字形式呈現，並非可點擊的檔案系統連結。
             </p>
           </div>
         </div>
         <div class="panel">
           <ul>
             <li>
-              Issue artifacts:
+              議題附件：
               <code
                 >logs/issues/{3,22,76,92,96,100,102,122,131,132,165,173,179,186,214,227,230,233,234,240,245,256,260,265,270,281}.json</code
-              >.
+              >。
             </li>
             <li>
-              Final integration worktree: <code>moedict.tw-all-resolved</code>, branch
-              <code>integration/all-resolved-issues-20260713</code>.
+              最終整合工作樹：<code>moedict.tw-all-resolved</code>，分支
+              <code>integration/all-resolved-issues-20260713</code>。
             </li>
             <li>
-              Final pre-report code HEAD:
-              <span class="commit">32b717aa6b99db654cfa2280d96eb93a8d4239bb</span>.
+              報告產出前的最終程式碼 HEAD：
+              <span class="commit">32b717aa6b99db654cfa2280d96eb93a8d4239bb</span>。
             </li>
             <li>
-              Base / merge-base:
-              <span class="commit">0a2599b729049c4633f5554d03c97904972c95bd</span>.
+              基準／合併基準（merge-base）：
+              <span class="commit">0a2599b729049c4633f5554d03c97904972c95bd</span>。
             </li>
-            <li>Source guide read before generation: <code>AGENTS.md</code>.</li>
+            <li>產出前已讀取的來源指引文件：<code>AGENTS.md</code>。</li>
           </ul>
           <p class="footer-note">
-            Generated as a standalone HTML5 document with inline CSS and a tiny optional inline
-            filter script. No remote fonts, CDN scripts, images, analytics, or network dependencies
-            are used.
+            本文件為獨立產出的 HTML5 文件，內含行內 CSS 與一段極精簡的選用行內篩選腳本。
+            不使用任何遠端字型、CDN 腳本、圖片、分析工具或網路相依資源。
           </p>
         </div>
       </section>
@@ -2326,7 +2264,7 @@
           }
           for (const button of buttons)
             button.setAttribute("aria-pressed", String(button.dataset.filter === filter));
-          if (count) count.textContent = `${visible} issue card${visible === 1 ? "" : "s"} shown`;
+          if (count) count.textContent = `顯示 ${visible} 張議題卡片`;
         }
         for (const button of buttons)
           button.addEventListener("click", () => apply(button.dataset.filter));

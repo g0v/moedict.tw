@@ -19,6 +19,13 @@ describe("isPureBopomofoQuery", () => {
     expect(isPureBopomofoQuery("ˇ")).toBe(false);
   });
 
+  it("rejects null/undefined input via the nullish-coalescing guard", () => {
+    // @ts-expect-error exercising the runtime `?? ""` guard against a bad caller
+    expect(isPureBopomofoQuery(null)).toBe(false);
+    // @ts-expect-error exercising the runtime `?? ""` guard against a bad caller
+    expect(isPureBopomofoQuery(undefined)).toBe(false);
+  });
+
   it("rejects input mixed with Han characters or Latin letters", () => {
     expect(isPureBopomofoQuery("萌ㄇㄥˊ")).toBe(false);
     expect(isPureBopomofoQuery("ba1")).toBe(false);
@@ -88,6 +95,12 @@ describe("bopomofoSyllableToPinyin", () => {
     expect(bopomofoSyllableToPinyin("ㄅㄍ")).toBeNull();
     expect(bopomofoSyllableToPinyin("ㄅㄚㄢ")).toBeNull();
   });
+
+  it("returns null when initial+medial combination has no rime table entry", () => {
+    // ㄅ (initial) + ㄩ (medial) + ㄚ (final): ü-medial table only defines
+    // {"", ㄝ, ㄢ, ㄣ, ㄥ} as finals — ㄚ is absent, so the rime lookup misses.
+    expect(bopomofoSyllableToPinyin("ㄅㄩㄚ")).toBeNull();
+  });
 });
 
 describe("convertBopomofoQueryToPinyin", () => {
@@ -115,5 +128,18 @@ describe("convertBopomofoQueryToPinyin", () => {
   it("returns null for a syllable sequence that cannot be fully segmented", () => {
     // 兩個聲母相鄰，不構成合法音節序列。
     expect(convertBopomofoQueryToPinyin("ㄅㄍ")).toBeNull();
+  });
+
+  it("returns null when a trailing tone-mark-like character breaks full consumption", () => {
+    // The syllable regex greedily matches "ㄅㄚˊ" and stops; the leftover
+    // trailing "ˇ" means `consumed !== word.length` for that word.
+    expect(convertBopomofoQueryToPinyin("ㄅㄚˊˇ")).toBeNull();
+  });
+
+  it("returns null when a leading neutral-tone marker leaves an unmatched index gap", () => {
+    // A doubled neutral-tone dot "˙˙" before the syllable makes the regex's
+    // first match start at index 1, not 0 — the `match.index !== consumed`
+    // guard rejects it.
+    expect(convertBopomofoQueryToPinyin("\u02D9\u02D9\u3105\u3105\u311A")).toBeNull();
   });
 });

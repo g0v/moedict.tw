@@ -595,6 +595,22 @@ describe("dispatch — /api/stroke-json R2 ASSETS", () => {
   });
 });
 
+describe("dispatch — /api/cns/{char}.json CNS11643 fallback", () => {
+  it("routes to handleCnsAPI before the generic .json catch-all and serves a seeded record", async () => {
+    const env = makeEnv({
+      DICTIONARY: makeBucket({
+        "cns/by-codepoint/4D/4D09.json": {
+          body: JSON.stringify({ char: "\u4D09", cns: "4-6C51" }),
+          contentType: "application/json",
+        },
+      }),
+    });
+    const res = await dispatch(req(`/api/cns/${encodeURIComponent("\u4D09")}.json`), env);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ char: "\u4D09", cns: "4-6C51" });
+  });
+});
+
 describe("dispatch — generic API fallback", () => {
   it('returns {"name":"Cloudflare"} for unmatched /api/ paths', async () => {
     const res = await dispatch(req("/api/totally-unknown"), makeEnv());

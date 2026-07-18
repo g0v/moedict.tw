@@ -245,5 +245,10 @@ export function convertBopomofoQueryToPinyin(input: string): string | null {
     if (consumed !== word.length) return null;
   }
 
-  return syllables.length > 0 ? syllables.join(" ") : null;
+  // isPureBopomofoQuery already guarantees `words` is non-empty (trimmed input
+  // must contain a real zhuyin character), and every word that reaches here
+  // pushed at least one syllable (the while-loop either returns null on its
+  // first non-matching iteration or fully consumes the word into `syllables`),
+  // so `syllables` is always non-empty by this point.
+  return syllables.join(" ");
 }

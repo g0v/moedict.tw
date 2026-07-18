@@ -186,3 +186,92 @@ test.describe("stroke animation trigger", () => {
     await expect(page.locator("#strokes")).toHaveCount(1, { timeout: 5_000 });
   });
 });
+
+// Regression for RESCOPE issue #98 (筆順動畫速度控制): the preferences panel
+// gains a 筆順動畫速度 <select> (slow/normal/fast) that persists to
+// localStorage `stroke-speed` and, unlike the phonetics/pinyin prefs, applies
+// live without a page reload.
+test.describe("筆順動畫速度 preference (issue #98)", () => {
+  async function openPrefPanel(page: Page): Promise<void> {
+    await page.evaluate(() => {
+      const panel = document.getElementById("user-pref");
+      if (!panel) throw new Error("user-pref element not found in DOM");
+      panel.style.display = "block";
+    });
+    await page.waitForFunction(() => {
+      const el = document.getElementById("user-pref");
+      return el !== null && el.offsetHeight > 0;
+    });
+  }
+
+  test("panel exposes a 3-option select defaulting to normal when no pref is stored", async ({
+    page,
+  }) => {
+    await page.goto("/%E8%90%8C");
+    await page.waitForLoadState("networkidle");
+
+    await openPrefPanel(page);
+
+    const select = page.locator("#pref-select-stroke_speed");
+    await expect(select).toBeVisible();
+    await expect(select).toHaveValue("normal");
+
+    const optionValues = await select
+      .locator("option")
+      .evaluateAll((opts) => opts.map((o) => (o as HTMLOptionElement).value));
+    expect(optionValues).toEqual(["slow", "normal", "fast"]);
+
+    const optionLabels = await select
+      .locator("option")
+      .evaluateAll((opts) => opts.map((o) => (o as HTMLOptionElement).textContent));
+    expect(optionLabels).toEqual(["慢速", "正常速度", "快速"]);
+  });
+
+  test("seeded stroke-speed=fast in localStorage is reflected as the select's initial value", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem("stroke-speed", "fast");
+    });
+    await page.goto("/%E8%90%8C");
+    await page.waitForLoadState("networkidle");
+
+    await openPrefPanel(page);
+
+    const select = page.locator("#pref-select-stroke_speed");
+    await expect(select).toHaveValue("fast");
+  });
+
+  test("changing the select persists to localStorage and does not reload the page", async ({
+    page,
+  }) => {
+    await page.goto("/%E8%90%8C");
+    await page.waitForLoadState("networkidle");
+
+    // Tag this specific document instance so a reload (which produces a brand
+    // new document/window) would make the marker disappear.
+    await page.evaluate(() => {
+      (window as unknown as { __strokeSpeedSpecMarker?: boolean }).__strokeSpeedSpecMarker = true;
+    });
+
+    await openPrefPanel(page);
+
+    const select = page.locator("#pref-select-stroke_speed");
+    await expect(select).toHaveValue("normal");
+
+    await page.selectOption("#pref-select-stroke_speed", "slow");
+    await expect(select).toHaveValue("slow");
+
+    expect(await page.evaluate(() => window.localStorage.getItem("stroke-speed"))).toBe("slow");
+
+    // If the page had reloaded, this marker would be gone.
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { __strokeSpeedSpecMarker?: boolean }).__strokeSpeedSpecMarker,
+      ),
+    ).toBe(true);
+
+    // Value survives further interaction (panel still reflects the change).
+    await expect(select).toHaveValue("slow");
+  });
+});

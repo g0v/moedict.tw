@@ -14,12 +14,21 @@
  *     (`s === s.normalize('NFD')`) — hard gate. The corpus was verified
  *     100% NFD (2026-07); any non-NFD segment is a regression, typically
  *     an NFC string merged from upstream CSV without normalize('NFD').
+ *  4. Every entry pinned in
+ *     `data/sources/twblg-overrides/pinned-no-definition.json` (see
+ *     scripts/inject-twblg-pinned-entries.py, g0v/moedict-webkit#271) must
+ *     be present in its ptck bucket with the EXACT expected value —
+ *     delegated to `inject-twblg-pinned-entries.py --check` (non-mutating)
+ *     so the expected-value derivation (NFD, title markup, bucket/key
+ *     encoding) has one implementation, not a second reimplementation here
+ *     that could silently drift from the injector.
  *
  * Run: `vp run check:data` / `vp node scripts/check-dictionary-data.mjs`
  * CI:  static job.
  */
 
-import { readdirSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -118,11 +127,60 @@ for (const { rel, data } of ptckData) {
   }
 }
 
+// --- Check 4: pinned no-definition entries (g0v/moedict-webkit#271) ---
+// Delegates to the injector's own --check mode (single source of truth for
+// how an expected pack entry is derived from a manifest row) rather than
+// re-deriving NFD/bucket/title-markup rules a second time in JS.
+const PINNED_MANIFEST = path.join(
+  REPO_ROOT,
+  "data",
+  "sources",
+  "twblg-overrides",
+  "pinned-no-definition.json",
+);
+const PTCK_DIR = path.join(DICT_DIR, "ptck");
+const INJECTOR = path.join(REPO_ROOT, "scripts", "inject-twblg-pinned-entries.py");
+let pinnedCheckedCount = 0;
+if (!existsSync(PINNED_MANIFEST)) {
+  fail(
+    `pinned no-definition manifest missing at ${path.relative(REPO_ROOT, PINNED_MANIFEST)} ` +
+      `— g0v/moedict-webkit#271 provenance would silently stop being verified`,
+  );
+} else {
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(PINNED_MANIFEST, "utf8"));
+  } catch (e) {
+    fail(`pinned no-definition manifest is not valid JSON: ${e.message}`);
+  }
+  if (manifest) {
+    pinnedCheckedCount = Array.isArray(manifest.entries) ? manifest.entries.length : 0;
+    if (pinnedCheckedCount === 0) {
+      fail(
+        "pinned no-definition manifest has zero entries — expected at least " +
+          "the 長褲 (g0v/moedict-webkit#271) pin shipped with this repo",
+      );
+    } else {
+      try {
+        execFileSync("python3", [INJECTOR, PINNED_MANIFEST, PTCK_DIR, "--check"], {
+          cwd: REPO_ROOT,
+          stdio: "pipe",
+          encoding: "utf8",
+        });
+      } catch (e) {
+        const output = [e.stdout, e.stderr].filter(Boolean).join("\n");
+        fail(`pinned no-definition manifest check failed:\n${output || e.message}`);
+      }
+    }
+  }
+}
+
 console.log(
   `[check-dictionary-data] ${totalParsed}/${totalFiles} files parsed, ` +
     `${heteronymsWithT} ptck heteronyms with T, ` +
     `${dupViolations} canonical-duplicate violation(s), ` +
-    `${nfdViolations} non-NFD segment(s)`,
+    `${nfdViolations} non-NFD segment(s), ` +
+    `${pinnedCheckedCount} pinned no-definition entr${pinnedCheckedCount === 1 ? "y" : "ies"} checked`,
 );
 
 if (failures > 0) {

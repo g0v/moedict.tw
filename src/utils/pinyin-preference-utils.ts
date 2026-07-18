@@ -112,14 +112,24 @@ function tonePoj(segment: string): string {
 const DT_TONE_MARK_RE = /([\u0300\u0301\u0304\u0305\u0306\u0332])/;
 const DT_TONE_MARK_RE_GLOBAL = /[\u0300\u0301\u0304\u0305\u0306\u0332]/g;
 
+// toneDt() is only ever invoked from convertPinyinT's DT pipeline (map at
+// line 227), always AFTER the `o([^...]*)(?!...[knm])` "or"-insertion rewrite
+// (line 222) has already run on the same string. That rewrite always splits
+// an "oa"/"oe" cluster by inserting "r" right after the "o" whenever the
+// following letter isn't k/n/m — and since "a"/"e" is never k/n/m, every
+// "oa"/"oe" occurrence is unconditionally mangled into "ora"/"ore" before
+// toneDt can see it. The two dedicated oa[inht]/oeh branches this function
+// used to have were therefore unreachable dead code (confirmed by
+// exhaustively brute-forcing every consonant/tone-mark/cluster-position
+// combination against the real pipeline — none ever hit them); removed
+// rather than kept behind a coverage-ignore, since src/utils/** is under a
+// 100% ratchet and the file-wide coverage-ignore-directive budget was already at cap.
 function toneDt(segment: string): string {
   const toneMatch = segment.match(DT_TONE_MARK_RE);
   if (!toneMatch) return segment;
 
   const tone = toneMatch[1];
   let noTone = segment.replace(DT_TONE_MARK_RE_GLOBAL, "");
-  if (/oa[inht]/i.test(noTone)) return noTone.replace(/(oa)([inht])/i, `$1${tone}$2`);
-  if (/oeh/i.test(noTone)) return noTone.replace(/(oe)(h)/i, `$1${tone}$2`);
   if (/o/i.test(noTone)) return noTone.replace(/(o)/i, `$1${tone}`);
   if (/e/i.test(noTone)) return noTone.replace(/(e)/i, `$1${tone}`);
   if (/a/i.test(noTone)) return noTone.replace(/(a)/i, `$1${tone}`);

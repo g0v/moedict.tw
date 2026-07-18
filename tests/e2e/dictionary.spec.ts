@@ -69,6 +69,33 @@ test.describe("dictionary pages per language", () => {
     await expect(readingOnlyEntry.locator(".audioBlock")).toHaveCount(0);
   });
 
+  test("'長褲 (t) — pinned no-definition entry renders 本音讀無義項 without a reading badge (g0v/moedict-webkit#271)", async ({
+    page,
+  }) => {
+    const response = await page.goto("/'%E9%95%B7%E8%A4%B2");
+    expect(response?.status()).toBe(200);
+    await page.locator("h1.title").waitFor({ state: "visible", timeout: 15_000 });
+    const titleCharacters = page.locator("h1.title a");
+    await expect(titleCharacters).toHaveCount(2);
+    await expect(titleCharacters).toHaveText(["長", "褲"]);
+    const romanization = page.locator("h1.title .romanization-selectable");
+    await expect(romanization).toHaveCount(1);
+    await expect
+      .poll(async () =>
+        (await romanization.allTextContents())
+          .join("")
+          .replace(/\u2011/g, "-")
+          .normalize("NFC"),
+      )
+      .toBe("tn̂g-khòo");
+
+    const entry = page.locator(".entry");
+    await expect(entry).toHaveCount(1);
+    await expect(entry.locator(".reading-only-note")).toHaveText("本音讀無義項。");
+    await expect(entry.locator(".reading-type")).toHaveCount(0);
+    await expect(entry.locator(".audioBlock")).toHaveCount(0);
+  });
+
   test(":字 (h) — 客語萌典", async ({ page }) => {
     const response = await page.goto("/%3A%E5%AD%97");
     expect(response?.status()).toBe(200);
@@ -1240,6 +1267,35 @@ test.describe("special routes", () => {
     await expect(page.locator("body")).toContainText(/[一二人入]/, { timeout: 10_000 });
   });
 
+  test("/@口 radical detail page has no duplicate a.stroke-char hrefs (g0v/moedict-webkit radical-key dedup)", async ({
+    page,
+  }) => {
+    // Regression for a duplicate-React-key bug: 口's own stroke-0 row listed
+    // the radical character itself twice, producing key collision `0-口` in
+    // both RadicalView.tsx and RadicalDetailView.tsx (`${stroke}-${char}`)
+    // and a real duplicated <a> link in the rendered DOM (confirmed live on
+    // production, not just a local dev-mode console warning — production
+    // React silently strips the key-uniqueness warning but the underlying
+    // DOM duplication is real there too). Fixed at the data-normalization
+    // source (normalizeRows in radical-page-utils.ts) so every consumer
+    // (RadicalView, RadicalDetailView, and the useRadicalTooltip hover
+    // preview) is covered by one fix.
+    const response = await page.goto("/@%E5%8F%A3");
+    expect(response?.status()).toBe(200);
+    await page.waitForLoadState("networkidle");
+
+    const hrefs = await page
+      .locator("a.stroke-char")
+      .evaluateAll((els) => els.map((el) => (el as HTMLAnchorElement).getAttribute("href")));
+    expect(hrefs.length).toBeGreaterThan(0);
+    expect(new Set(hrefs).size).toBe(hrefs.length);
+
+    // The radical character itself must still appear exactly once, not zero
+    // (over-eager dedup) or two-plus (the original bug).
+    const selfLinks = hrefs.filter((href) => href === "/口");
+    expect(selfLinks).toHaveLength(1);
+  });
+
   test("/about shows about content", async ({ page }) => {
     const response = await page.goto("/about");
     expect(response?.status()).toBe(200);
@@ -1372,5 +1428,173 @@ test.describe("台語異用字顯示 (g0v/moedict-webkit#281)", () => {
     expect(response?.status()).toBe(200);
     await waitForEntryHydration(page, "萌");
     await expect(page.locator(".twblg-variants")).toHaveCount(0);
+  });
+});
+
+test.describe("definition copy action (RESCOPE #258)", () => {
+  test("copies only one definition payload and is keyboard accessible", async ({ page }) => {
+    await page.goto("/%E8%90%8C");
+    await waitForEntryHydration(page, "萌");
+    const item = page
+      .locator("li")
+      .filter({ has: page.getByRole("button", { name: "複製解釋" }) })
+      .first();
+    const button = item.getByRole("button", { name: "複製解釋" });
+    await expect(button).toHaveAttribute("aria-label", "複製解釋");
+    const expected = await item.evaluate((element) => {
+      const copy = element.cloneNode(true) as HTMLElement;
+      copy.querySelector(".definition-copy-controls")?.remove();
+      return (copy.innerText || copy.textContent || "").replace(/\s+/g, " ").trim();
+    });
+    let copied = "";
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async (value: string) =>
+            ((window as Window & { __copied?: string }).__copied = value),
+        },
+      });
+    });
+    await button.focus();
+    await page.keyboard.press("Enter");
+    await expect(item.locator(".definition-copy-status")).toHaveText("已複製");
+    copied = await page.evaluate(() => (window as Window & { __copied?: string }).__copied ?? "");
+    expect(copied).toBe(expected);
+    await expect(page.locator(".definition-copy-status")).toHaveCount(1);
+  });
+
+  test("clipboard rejection uses the real textarea fallback", async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { writeText: async () => Promise.reject(new Error("denied")) },
+      });
+      document.execCommand = ((command: string) =>
+        command === "copy") as typeof document.execCommand;
+    });
+    await page.goto("/%E8%90%8C");
+    await waitForEntryHydration(page, "萌");
+    const item = page
+      .locator("li")
+      .filter({ has: page.getByRole("button", { name: "複製解釋" }) })
+      .first();
+    await item.getByRole("button", { name: "複製解釋" }).click();
+    await expect(item.locator(".definition-copy-status")).toHaveText("已複製");
+  });
+
+  test("keeps statuses isolated across heteronyms", async ({ page }) => {
+    await page.goto("/'%E9%A3%9F");
+    await waitForEntryHydration(page, "食");
+    const entries = page.locator(".entry");
+    expect(await entries.count()).toBeGreaterThan(1);
+    const firstItem = entries
+      .nth(0)
+      .locator("li")
+      .filter({
+        has: page.getByRole("button", { name: "複製解釋" }),
+      })
+      .first();
+    const secondItem = entries
+      .nth(1)
+      .locator("li")
+      .filter({
+        has: page.getByRole("button", { name: "複製解釋" }),
+      })
+      .first();
+    await firstItem.getByRole("button", { name: "複製解釋" }).click();
+    await expect(firstItem.locator(".definition-copy-status")).toHaveText("已複製");
+    await expect(secondItem.locator(".definition-copy-status")).toHaveCount(0);
+  });
+});
+
+test.describe("charimg-result romanize checkbox (RESCOPE #169)", () => {
+  // 萌黃 has no whole-word dictionary entry (confirmed: not a key in
+  // data/dictionary/pack/12.txt), so DictionaryPage's whole-word lookup 404s
+  // and falls back to per-character fuzzy search (state.terms = ["萌","黃"]),
+  // rendering CharacterImageView instead of the normal .result entry view.
+  // Both individual characters have real dictionary entries with pinyin +
+  // bopomofo (data/dictionary/pack/12.txt / 707.txt), so loadSegments()
+  // resolves real romanization data once the checkbox is checked.
+  const FALLBACK_PATH = "/%E8%90%8C%E9%BB%83";
+
+  test("toggling the checkbox updates img src (romanize=1&lang=a), shows the caption, and persists to localStorage", async ({
+    page,
+  }) => {
+    const response = await page.goto(FALLBACK_PATH);
+    expect(response?.status()).toBe(200);
+    await page.locator(".charimg-result").waitFor({ state: "visible", timeout: 15_000 });
+
+    // Segment rows render after loadSegments() resolves — wait for the first
+    // segment glyph image instead of the "載入中..." placeholder row.
+    const segmentImg = page.locator("img.charimg-glyph-segment").first();
+    await segmentImg.waitFor({ state: "visible", timeout: 15_000 });
+
+    const checkbox = page.locator("#charimg-romanize");
+    await expect(checkbox).not.toBeChecked();
+
+    // Before toggling: no romanize/lang query params, no caption.
+    const srcBefore = await segmentImg.getAttribute("src");
+    expect(srcBefore).not.toContain("romanize=1");
+    expect(srcBefore).not.toContain("lang=");
+    await expect(page.locator(".charimg-caption")).toHaveCount(0);
+
+    await checkbox.check();
+    await expect(checkbox).toBeChecked();
+
+    // After toggling: img src carries romanize=1&lang=a (page is lang=a, no
+    // route prefix), and the on-page caption renders real pinyin/bopomofo
+    // reused from the same loadSegments() fetch — not fetched again.
+    await expect(async () => {
+      const src = await segmentImg.getAttribute("src");
+      expect(src).toContain("romanize=1");
+      expect(src).toContain("lang=a");
+    }).toPass({ timeout: 5_000 });
+
+    const caption = page.locator(".charimg-caption").first();
+    await expect(caption).toBeVisible();
+    await expect(caption.locator(".pinyin")).toBeVisible();
+    await expect(caption.locator(".bopomofo")).toBeVisible();
+    const pinyinText = await caption.locator(".pinyin").innerText();
+    expect(pinyinText.length).toBeGreaterThan(0);
+
+    expect(await page.evaluate(() => window.localStorage.getItem("charimg-romanize"))).toBe("1");
+
+    // Reload: the checked state and img src both persist from localStorage.
+    await page.reload();
+    await page.locator(".charimg-result").waitFor({ state: "visible", timeout: 15_000 });
+    await page.locator("img.charimg-glyph-segment").first().waitFor({ state: "visible" });
+    await expect(page.locator("#charimg-romanize")).toBeChecked();
+    const srcAfterReload = await page
+      .locator("img.charimg-glyph-segment")
+      .first()
+      .getAttribute("src");
+    expect(srcAfterReload).toContain("romanize=1");
+
+    // Unchecking removes the caption and the query params again, and persists "0".
+    await page.locator("#charimg-romanize").uncheck();
+    await expect(page.locator(".charimg-caption")).toHaveCount(0);
+    expect(await page.evaluate(() => window.localStorage.getItem("charimg-romanize"))).toBe("0");
+  });
+
+  test("og:image / twitter:image never carry romanize=1 regardless of the stored checkbox preference", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem("charimg-romanize", "1");
+    });
+    const response = await page.goto(FALLBACK_PATH);
+    expect(response?.status()).toBe(200);
+    await page.locator(".charimg-result").waitFor({ state: "visible", timeout: 15_000 });
+    await page.waitForLoadState("networkidle");
+
+    const ogImage = await page.locator('meta[property="og:image"]').getAttribute("content");
+    const twitterImage = await page.locator('meta[name="twitter:image"]').getAttribute("content");
+    expect(ogImage).not.toBeNull();
+    expect(twitterImage).not.toBeNull();
+    expect(ogImage).not.toContain("romanize");
+    expect(twitterImage).not.toContain("romanize");
+    expect(ogImage).toMatch(/\.png$/);
+    expect(twitterImage).toMatch(/\.png$/);
   });
 });

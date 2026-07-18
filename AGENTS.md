@@ -369,6 +369,32 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
   追加 `{T, d: [], reading?}` heteronym；`T` 寫成 NFD，不複製 `主編碼`（前端會把
   台語 `_` 當音檔 ID）。主站用文/白/俗/替 badge 標示，並顯示「本音讀無義項」；
   只有無義項、沒有既有 pack 條目的詞目仍只收入 `t/index.json`。
+- **無 pack 條目的無義項詞目（title 只在 `t/index.json`，ptck 完全沒有該
+  key）維持預設行為：只收入 `t/index.json`**，不自動建立 pack 條目——`詞目
+總檔.csv` 屬性 `2` 的整合只會「追加」heteronym 到已存在的 pack 條目，
+  絕不會為缺少 pack 條目的詞目憑空生出一筆。這類詞目目前約有 500-680 個
+  （g0v/moedict-webkit#271 稽核），大量回填需要逐筆核對官方來源，不在此
+  規則範圍內。
+- **例外：逐筆核實、來源標註的 pinned no-definition 記錄**（2026-07，
+  g0v/moedict-webkit#271 長褲）：若某詞目「同時」符合 (a) `t/index.json`
+  已列出、(b) ptck 完全沒有 pack 條目、(c) 有現行 sutian.moe.edu.tw 官方
+  頁面明確核實「詞目＋音讀＋無義項」且 `/tshiau/` 搜尋確認為唯一完全符合
+  結果，才可在 `data/sources/twblg-overrides/pinned-no-definition.json`
+  逐筆加入一條 pin（含 `source_entry_url`/`source_search_url`/
+  `source_note`），由 `scripts/inject-twblg-pinned-entries.py` 寫入對應
+  ptck bucket 的新 `{"T":"…","d":[]}` 單一 heteronym 記錄（NFD、無 `_`、
+  無 `reading`、無 audio）。**這不是政策改變，是一次一筆、需要官方核實
+  才能加入的窄例外**——嚴禁未逐筆核實就批次回填其餘 500+ 詞目。指令：
+  `vp run twblg-pins:inject`（寫入，冪等）、`vp run twblg-pins:check`
+  （唯讀驗證，已接入 `vp run check:data` 的第 4 項檢查；缺漏或內容不符
+  皆會讓 `check:data` fail-closed）。manifest 刻意放在
+  `data/sources/twblg-overrides/`（不在 `data/dictionary/` 底下）——
+  `commands/upload_dictionary.sh` 只同步固定白名單子目錄
+  （`pack/pcck/phck/ptck`、`a/c/h/t`、`search-index`、`translation-data`、
+  `lookup/pinyin`），未列在白名單的子目錄不會被上傳，把這份來源標註
+  manifest 放在 `data/dictionary/` 底下只會造成「看起來會同步、實際上
+  不會」的誤解；`data/sources/` 明確標示它是原始碼/建置期 metadata，
+  不是執行期字典物件。
 - `又音.csv` — **已整合**（以 `主編碼` 對 heteronym `_` id，append 進 `T` 斜線；
   1365 個 id 中 30 個在 pack 裡無對應詞條，為上游孤兒）。類型 2（俗唸作）、
   3（合音唸作）被扁平化為同一斜線格式，未保留類型標籤。

@@ -184,6 +184,24 @@ describe("handleCnsAPI — 400 invalid input", () => {
     const res = await handleCnsAPI(req, url, env);
     expect(res.status).toBe(400);
   });
+
+  it("rejects malformed percent-encoding (bare %) via the decode-failure branch", async () => {
+    const env = makeMockEnv({});
+    const [req, url] = makeRequest("/api/cns/%.json");
+    const res = await handleCnsAPI(req, url, env);
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.error).toBe("Bad Request");
+  });
+
+  it("rejects a control-character scalar (U+0000) via isAcceptableScalar", async () => {
+    const env = makeMockEnv({});
+    const [req, url] = makeRequest("/api/cns/%00.json");
+    const res = await handleCnsAPI(req, url, env);
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.error).toBe("Bad Request");
+  });
 });
 
 describe("handleCnsAPI — 404 not in dataset", () => {
@@ -265,5 +283,75 @@ describe("handleCnsAPI — PUA characters return 404", () => {
     const [req, url] = makeRequest(`/api/cns/${encodeURIComponent(puaChar)}.json`);
     const res = await handleCnsAPI(req, url, env);
     expect(res.status).toBe(404);
+  });
+
+  it("U+100001 (PUA-B) returns 404", async () => {
+    const puaChar = String.fromCodePoint(0x100001);
+    const env = makeMockEnv({});
+    const [req, url] = makeRequest(`/api/cns/${encodeURIComponent(puaChar)}.json`);
+    const res = await handleCnsAPI(req, url, env);
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("handleCnsAPI — record without httpEtag", () => {
+  it("serves 200 without an ETag header when the R2 object omits httpEtag", async () => {
+    const env = {
+      DICTIONARY: {
+        async get(key: string) {
+          if (key !== IBIS_KEY) return null;
+          return {
+            async text() {
+              return JSON.stringify(IBIS_RECORD);
+            },
+            // httpEtag intentionally omitted.
+          };
+        },
+      },
+    };
+    const [req, url] = makeRequest(`/api/cns/${encodeURIComponent(IBIS_RECORD.char)}.json`);
+    const res = await handleCnsAPI(req, url, env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("ETag")).toBeNull();
+    const body = (await res.json()) as { char: string };
+    expect(body.char).toBe(IBIS_RECORD.char);
+  });
+});
+describe("handleCnsAPI — 500 Internal Server Error", () => {
+  it("R2 DICTIONARY.get() throwing returns 500 with no-store", async () => {
+    const env = {
+      DICTIONARY: {
+        async get(): Promise<never> {
+          throw new Error("R2 unavailable");
+        },
+      },
+    };
+    const [req, url] = makeRequest(`/api/cns/${encodeURIComponent(IBIS_RECORD.char)}.json`);
+    const res = await handleCnsAPI(req, url, env);
+    expect(res.status).toBe(500);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("Internal Server Error");
+  });
+
+  it("obj.text() throwing after a successful R2 get() returns 500 with no-store", async () => {
+    const env = {
+      DICTIONARY: {
+        async get() {
+          return {
+            httpEtag: `"mock-etag"`,
+            async text(): Promise<never> {
+              throw new Error("body read failed");
+            },
+          };
+        },
+      },
+    };
+    const [req, url] = makeRequest(`/api/cns/${encodeURIComponent(IBIS_RECORD.char)}.json`);
+    const res = await handleCnsAPI(req, url, env);
+    expect(res.status).toBe(500);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("Internal Server Error");
   });
 });

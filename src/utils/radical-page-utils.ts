@@ -59,6 +59,13 @@ export function normalizeRows(raw: unknown): string[][] {
   try {
     if (!raw) return [];
 
+    // 部首表原始資料某些列會重複列出同一字元（例：部首字元本身在 0 畫列
+    // 出現兩次，見 g0v/moedict-webkit 部首頁 /@口 的 stroke-0 row），逐列
+    // 去重以避免 React key 碰撞（RadicalView/RadicalDetailView 以
+    // `${stroke}-${char}` 為 key）及畫面上出現重複連結。保留列內首次出現
+    // 的順序，不影響筆畫分組本身。
+    const dedupeRow = (row: string[]): string[] => Array.from(new Set(row));
+
     if (typeof raw === "object" && !Array.isArray(raw)) {
       const obj = raw as Record<string, unknown>;
       const keys = Object.keys(obj)
@@ -69,7 +76,7 @@ export function normalizeRows(raw: unknown): string[][] {
       for (let i = 0; i <= max; i += 1) {
         const row = obj[String(i)];
         rows[i] = Array.isArray(row)
-          ? row.filter(Boolean).map((item) => normalizeRadicalVariant(String(item)))
+          ? dedupeRow(row.filter(Boolean).map((item) => normalizeRadicalVariant(String(item))))
           : [];
       }
       return rows;
@@ -78,13 +85,13 @@ export function normalizeRows(raw: unknown): string[][] {
     if (Array.isArray(raw) && raw.every((row) => Array.isArray(row) || row == null)) {
       return raw.map((row) =>
         Array.isArray(row)
-          ? row.filter(Boolean).map((item) => normalizeRadicalVariant(String(item)))
+          ? dedupeRow(row.filter(Boolean).map((item) => normalizeRadicalVariant(String(item))))
           : [],
       );
     }
 
     if (Array.isArray(raw)) {
-      return [raw.filter(Boolean).map((item) => normalizeRadicalVariant(String(item)))];
+      return [dedupeRow(raw.filter(Boolean).map((item) => normalizeRadicalVariant(String(item))))];
     }
 
     return [];

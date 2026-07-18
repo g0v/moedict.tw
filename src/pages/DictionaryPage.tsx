@@ -25,6 +25,7 @@ import {
   writeLastLookup,
 } from "../utils/word-record-utils";
 import { fetchDictionaryEntry, readCachedDictionaryEntry } from "../utils/dictionary-cache";
+import { writeTextToClipboard } from "../utils/clipboard";
 import { setCurrentXrefs } from "../utils/xref-switch-utils";
 import { StrokeAnimation } from "../components/StrokeAnimation";
 import { applyHeadToDocument, getDictionaryHead } from "../ssr/head";
@@ -504,6 +505,16 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
     error: null,
   });
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+  const [copyStatus, setCopyStatus] = useState<{ key: string; ok: boolean } | null>(null);
+  const copyStatusTimerRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (copyStatusTimerRef.current != null) {
+        window.clearTimeout(copyStatusTimerRef.current);
+      }
+    },
+    [],
+  );
   const [isStarred, setIsStarred] = useState(false);
   const [strokesVisible, setStrokesVisible] = useState(false);
   const [cnsFallback, setCnsFallback] = useState<CnsFallbackState>({
@@ -699,6 +710,25 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
     },
     [strokeAnimationDisabled],
   );
+
+  const copyDefinition = useCallback(async (event: MouseEvent<HTMLButtonElement>, key: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const item = event.currentTarget.closest("li");
+    if (!item) return;
+    const copy = item.cloneNode(true) as HTMLElement;
+    copy.querySelector(".definition-copy-controls")?.remove();
+    const text = (copy.innerText || copy.textContent || "").replace(/\s+/g, " ").trim();
+    const ok = await writeTextToClipboard(text);
+    if (copyStatusTimerRef.current != null) {
+      window.clearTimeout(copyStatusTimerRef.current);
+    }
+    setCopyStatus({ key, ok });
+    copyStatusTimerRef.current = window.setTimeout(() => {
+      setCopyStatus((current) => (current?.key === key ? null : current));
+      copyStatusTimerRef.current = null;
+    }, 3000);
+  }, []);
 
   const onContentClick = (event: MouseEvent<HTMLDivElement>): void => {
     const target = event.target;
@@ -1063,6 +1093,14 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                       const flatDefIdx = definitionIndexMap.get(def);
                       const isTargetDefinition =
                         targetDefIdx != null && flatDefIdx === targetDefIdx;
+                      const copyKey = `${idx}-${groupIdx}-${defIdx}`;
+                      const hasCopyPayload =
+                        Boolean(def.def) ||
+                        toStringArray(def.example).length > 0 ||
+                        toStringArray(def.quote).length > 0 ||
+                        toStringArray(def.link).length > 0 ||
+                        toStringArray(def.synonyms).length > 0 ||
+                        toStringArray(def.antonyms).length > 0;
                       return (
                         <li
                           key={`${type}-${defIdx}`}
@@ -1185,6 +1223,30 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                               style={{ margin: "0 0 22px -44px" }}
                               dangerouslySetInnerHTML={{ __html: afterParallel }}
                             />
+                          )}
+                          {hasCopyPayload && (
+                            <div className="definition-copy-controls">
+                              <button
+                                type="button"
+                                className="definition-copy-button"
+                                aria-label="複製解釋"
+                                title="複製解釋"
+                                onClick={(event) => {
+                                  void copyDefinition(event, copyKey);
+                                }}
+                              >
+                                複製解釋
+                              </button>
+                              {copyStatus?.key === copyKey && (
+                                <span
+                                  className="definition-copy-status"
+                                  role="status"
+                                  aria-live="polite"
+                                >
+                                  {copyStatus.ok ? "已複製" : "複製失敗，請手動選取文字"}
+                                </span>
+                              )}
+                            </div>
                           )}
                         </li>
                       );

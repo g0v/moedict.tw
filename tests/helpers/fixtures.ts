@@ -14,10 +14,16 @@
  *   - 字 (U+5B57)  — lang=h, phck bucket 87
  *   - 上訴         — lang=c, pcck bucket 10 (first char 上 = U+4E0A)
  *   - 蛇 (U+86C7)  — lang=t, ptck bucket 71（文讀 siâ 無義項）
+ *   - 長褲          — lang=t, ptck bucket 119（pinned whole-record 無義項，
+ *     g0v/moedict-webkit#271; source-attributed manifest at
+ *     data/sources/twblg-overrides/pinned-no-definition.json）
  *
  * Extra explicit fixtures (geometry / font tests):
  *   - 黃 (U+9EC3)  — lang=a, pack bucket 707; ㄏㄨㄤˊ length=3 tone-node geometry
  *   - MOEDICT.woff2 — ASSETS key fonts/MOEDICT.woff2; same-origin font route test
+ *   - TauhuOo2005-Regular.otf / FiraSansOT-Regular.otf — ASSETS keys
+ *     fonts/TauhuOo2005-Regular.otf / fonts/FiraSansOT-Regular.otf; glyph
+ *     fallback + romanize=1 caption font render tests (RESCOPE #169)
  */
 
 import { readFileSync } from "node:fs";
@@ -107,6 +113,24 @@ export function collectDictionaryFixtures(): FixtureEntry[] {
     httpMetadata: { contentType: "text/plain; charset=utf-8" },
   });
 
+  // 長褲 (pinned no-definition entry, g0v/moedict-webkit#271): lang=t,
+  // ptck bucket 119. Whole-record no-definition (no `_`/audio id, no
+  // `reading` badge) — distinct fixture from 蛇's per-heteronym reading-only
+  // shape above. Source-attributed manifest:
+  // data/sources/twblg-overrides/pinned-no-definition.json.
+  const pinnedNoDefinitionWord = "長褲";
+  const pinnedNoDefinitionBucket = bucketOf(pinnedNoDefinitionWord, "t");
+  const pinnedNoDefinitionKey = `ptck/${pinnedNoDefinitionBucket}.txt`;
+  entries.push({
+    bucket: "DICTIONARY",
+    key: pinnedNoDefinitionKey,
+    body: required(
+      path.join(DATA_DICT, "ptck", `${pinnedNoDefinitionBucket}.txt`),
+      pinnedNoDefinitionKey,
+    ),
+    httpMetadata: { contentType: "text/plain; charset=utf-8" },
+  });
+
   // 異用字 (alternate-character) test fixtures (g0v/moedict-webkit#281):
   // 你 (U+4F60, bucket 96, heteronym id=2881 → variants 汝)
   // 囝 (U+56DD, bucket 93, heteronym id=2134 → variants 子)
@@ -153,6 +177,24 @@ export function collectDictionaryFixtures(): FixtureEntry[] {
   for (const lang of ["a", "t", "h", "c"] as const) {
     const key = `${lang}/${radicalFixture}`;
     const body = optional(path.join(DATA_DICT, lang, radicalFixture), key);
+    if (body) {
+      entries.push({
+        bucket: "DICTIONARY",
+        key,
+        body,
+        httpMetadata: { contentType: "application/json; charset=utf-8" },
+      });
+    }
+  }
+
+  // @口.json — seeded for the /@口 duplicate-radical-key regression test
+  // (tests/e2e/dictionary.spec.ts "special routes"): 口's own stroke-0 row
+  // lists the radical character itself twice in the raw upstream data,
+  // exercising normalizeRows' per-row dedup (radical-page-utils.ts).
+  const radicalDupFixture = "@口.json";
+  for (const lang of ["a", "t", "h", "c"] as const) {
+    const key = `${lang}/${radicalDupFixture}`;
+    const body = optional(path.join(DATA_DICT, lang, radicalDupFixture), key);
     if (body) {
       entries.push({
         bucket: "DICTIONARY",
@@ -407,6 +449,32 @@ export function collectAssetFixtures(): FixtureEntry[] {
       key: "fonts/MOEDICT.woff2",
       body: readFileSync(moedictWoff2Path),
       httpMetadata: { contentType: "font/woff2" },
+    });
+  }
+
+  // Real Tauhu Oo 補完字型 and Fira Sans OT (romanize=1 caption font, RESCOPE
+  // #169) from data/assets/fonts/ — seeded under the ASSETS keys
+  // src/utils/image-generation.ts reads via loadFallbackFontBuffer /
+  // loadCaptionFontBuffer, so integration tests can exercise the real
+  // <text>-fallback and romanize=1 caption render paths (not just the
+  // 404/503 "font missing" arms).
+  const tauhuOoPath = path.join(DATA_ASSETS, "fonts", "TauhuOo2005-Regular.otf");
+  if (existsSync(tauhuOoPath)) {
+    entries.push({
+      bucket: "ASSETS",
+      key: "fonts/TauhuOo2005-Regular.otf",
+      body: readFileSync(tauhuOoPath),
+      httpMetadata: { contentType: "font/otf" },
+    });
+  }
+
+  const firaSansOtPath = path.join(DATA_ASSETS, "fonts", "FiraSansOT-Regular.otf");
+  if (existsSync(firaSansOtPath)) {
+    entries.push({
+      bucket: "ASSETS",
+      key: "fonts/FiraSansOT-Regular.otf",
+      body: readFileSync(firaSansOtPath),
+      httpMetadata: { contentType: "font/otf" },
     });
   }
 

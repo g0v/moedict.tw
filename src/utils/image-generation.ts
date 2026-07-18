@@ -1,6 +1,8 @@
 import { Resvg, type ResvgRenderOptions } from "@cf-wasm/resvg";
 import { CACHE_CONTROL } from "../api/cache";
 import { stripLangPrefix, tryDecodeURIComponent, type DictionaryLang } from "./dictionary-route";
+import { bucketOf } from "../api/handleDictionaryAPI";
+import { readR2JsonCached, type R2JsonSource } from "../api/r2-json-cache";
 
 interface FontSvgObject {
   size: number;
@@ -21,8 +23,13 @@ interface AssetBucket {
 
 interface Env {
   FONTS: FontBucket;
-  /** R2-backed static asset bucket；用來讀取 Tauhu Oo 補完字型（見 loadFallbackFontBuffer）。 */
+  /** R2-backed static asset bucket；用來讀取 Tauhu Oo 補完字型（見 loadFallbackFontBuffer）、
+   *  以及 romanize=1 caption 用的 Fira Sans OT 字型（見 loadCaptionFontBuffer）。 */
   ASSETS?: AssetBucket;
+  /** R2-backed dictionary bucket；romanize=1 時讀取整詞羅馬拼音（見
+   *  fetchWholeWordRomanization）。一般字圖請求（無 romanize、lang 不合法、
+   *  或未提供）完全用不到，也不會多打 R2（見該函式的 fail-open 短路）。 */
+  DICTIONARY?: R2JsonSource;
 }
 
 interface LayoutDimensions {
@@ -129,6 +136,13 @@ export function getCORSHeaders(): Record<string, string> {
 export async function handleImageGeneration(url: URL, env: Env): Promise<Response> {
   const { cleanText } = parseTextFromUrl(url.pathname);
   const fontParam = url.searchParams.get("font") || "kai";
+  // romanize=1&lang=<a|t|h|c>：字圖下方加註整詞羅馬拼音（RESCOPE #169）。lang
+  // 需驗證屬於四本字典之一，缺失或不合法一律視為未帶（fail-open，只產生純
+  // 字形圖，不視為錯誤）；未帶 romanize=1 時完全不觸發 DICTIONARY 讀取，維持
+  // 與功能加入前逐位元組相同的預設輸出。
+  const romanizeParam = url.searchParams.get("romanize");
+  const langParam = url.searchParams.get("lang");
+  const captionLang = isDictionaryLangValue(langParam) ? langParam : null;
 
   try {
     // 限制文字長度
@@ -153,19 +167,31 @@ export async function handleImageGeneration(url: URL, env: Env): Promise<Respons
       });
     }
 
+    // romanize=1 且 lang 合法時，查詢整詞羅馬拼音（見 fetchWholeWordRomanization
+    // 的 fail-open 短路：查無資料、lang='h'、或 DICTIONARY 未提供時一律回傳
+    // 空字串，圖片照樣正常產生，只是不帶 caption）。
+    const romanization =
+      romanizeParam === "1" && captionLang !== null
+        ? await fetchWholeWordRomanization(cleanText, captionLang, env)
+        : "";
+
     // 生成 SVG 圖片，使用 R2 中的字體 SVG 檔案
-    const { svg, usedFallbackGlyph } = await generateTextSVGWithR2Fonts(
+    const { svg, usedFallbackGlyph, hasCaption } = await generateTextSVGWithR2Fonts(
       displayText,
       fontParam,
       env,
+      romanization,
     );
 
     // 若有字元在 R2 找不到逐字 SVG（例如增補平面的罕見字/方言用字），必須改用內建
-    // Tauhu Oo 補完字型讓 resvg 畫出真正字形。resvg 在 Workers 環境沒有系統字型，
-    // 若拿不到補完字型，那些字只會留白——絕不能把這種殘缺結果當成 200 成功回應快取
-    // 一整年（png 的 s-maxage 是 31536000），不然補完字型之後就算修好，殘缺圖仍會
-    // 卡在 edge cache 裡。拿不到補完字型時直接回 503 + no-store，讓下一次請求重試。
+    // Tauhu Oo 補完字型讓 resvg 畫出真正字形；若 hasCaption，還需要額外載入 Fira
+    // Sans OT 讓 caption 文字有字型可畫。resvg 在 Workers 環境沒有系統字型，兩者
+    // 缺一都只會留白——絕不能把這種殘缺結果當成 200 成功回應快取一整年（png 的
+    // s-maxage 是 31536000），不然字型之後就算修好，殘缺圖仍會卡在 edge cache
+    // 裡。任一字型載入失敗都直接回 503 + no-store，讓下一次請求重試。兩個字型
+    // buffer 一起 push 進同一個 fontBuffers 陣列，互不覆蓋。
     const resvgOptions: ResvgRenderOptions = {};
+    const fontBuffers: Uint8Array[] = [];
     if (usedFallbackGlyph) {
       const fallbackFontBuffer = await loadFallbackFontBuffer(env);
       if (!fallbackFontBuffer) {
@@ -178,7 +204,24 @@ export async function handleImageGeneration(url: URL, env: Env): Promise<Respons
           },
         });
       }
-      resvgOptions.font = { fontBuffers: [fallbackFontBuffer] };
+      fontBuffers.push(fallbackFontBuffer);
+    }
+    if (hasCaption) {
+      const captionFontBuffer = await loadCaptionFontBuffer(env);
+      if (!captionFontBuffer) {
+        return new Response("目前無法載入羅馬拼音字型，請稍後再試", {
+          status: 503,
+          headers: {
+            "Content-Type": "text/plain; charset=utf-8",
+            "Cache-Control": "no-store",
+            ...getCORSHeaders(),
+          },
+        });
+      }
+      fontBuffers.push(captionFontBuffer);
+    }
+    if (fontBuffers.length > 0) {
+      resvgOptions.font = { fontBuffers };
     }
 
     // 使用 resvg 將 SVG 轉換為 PNG
@@ -291,6 +334,7 @@ const fontAvailabilityCache = new WeakMap<object, Map<string, boolean>>();
 const glyphSvgCache = new WeakMap<object, Map<string, string | null>>();
 const GLYPH_CACHE_MAX_ENTRIES = 2048;
 const fallbackFontCache = new WeakMap<object, Promise<Uint8Array | null>>();
+const captionFontCache = new WeakMap<object, Promise<Uint8Array | null>>();
 
 /**
  * 檢查字體是否在 R2 中可用
@@ -381,6 +425,100 @@ async function loadFallbackFontBuffer(env: Env): Promise<Uint8Array | null> {
 }
 
 /**
+ * romanize=1 字圖標註（RESCOPE #169）用的專屬字型：Fira Sans OT
+ * （SIL OFL 1.1，隨附於 ASSETS R2 bucket，鍵值 fonts/FiraSansOT-Regular.otf）。
+ * 內部 name table 家族名稱就是 "Fira Sans OT"（fonttools 驗證過），resvg 依此
+ * 比對，所以 <text> 一定要標 font-family="Fira Sans OT, serif" 才會命中。與
+ * FALLBACK_FONT_ASSET_KEY（Tauhu Oo）各自獨立、互不覆蓋——見 handleImageGeneration
+ * 把兩者的 buffer 一起 push 進同一個 fontBuffers 陣列的寫法。
+ */
+const CAPTION_FONT_ASSET_KEY = "fonts/FiraSansOT-Regular.otf";
+const CAPTION_FONT_FAMILY = "Fira Sans OT";
+
+/**
+ * 載入 romanize=1 caption 用的 Fira Sans OT 字型（fontBuffers）。與
+ * loadFallbackFontBuffer 機制相同、各自快取；只在確定要畫 caption
+ * （generateTextSVGWithR2Fonts 回傳 hasCaption=true）時才呼叫，一般字圖
+ * 請求（無 romanize、lang 不合法、或查無羅馬拼音資料）完全不會多打這次 R2 GET。
+ */
+async function loadCaptionFontBuffer(env: Env): Promise<Uint8Array | null> {
+  const assets = env.ASSETS; // capture: narrowing does not flow into the closure
+  if (!assets) return null;
+  const cached = captionFontCache.get(assets);
+  if (cached) return cached;
+  const loading = (async (): Promise<Uint8Array | null> => {
+    try {
+      const asset = await assets.get(CAPTION_FONT_ASSET_KEY);
+      if (!asset) {
+        console.log(`[DEBUG] Caption font asset not found at ${CAPTION_FONT_ASSET_KEY}`);
+        return null;
+      }
+      return new Uint8Array(await asset.arrayBuffer());
+    } catch (error) {
+      console.error("[DEBUG] Failed to load caption font buffer:", error);
+      return null;
+    }
+  })();
+  captionFontCache.set(assets, loading);
+  return loading;
+}
+
+/** `?lang=` 白名單驗證：缺失或不合法一律視為未帶（fail-open，只產生純字形圖）。 */
+function isDictionaryLangValue(input: string | null): input is DictionaryLang {
+  return input === "a" || input === "t" || input === "h" || input === "c";
+}
+
+/** SVG 屬性/文字節點內插前的最小 XML 跳脫（&/</>/"/'）。 */
+function escapeXmlText(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+/**
+ * 讀取整詞（非逐字）羅馬拼音／台羅／拼音，供 romanize=1 字圖標註使用
+ * （RESCOPE #169）。只取第一個 heteronym（h[0]），且每次 render 最多打一次
+ * DICTIONARY R2 GET（readR2JsonCached 本身另有 10 分鐘 per-isolate memo，
+ * 見 src/api/r2-json-cache.ts）。原始 pack 資料的欄位是單字母代碼：'p' 是
+ * 拼音（lang a/c 皆用漢語拼音），'T' 是台羅（lang t）；用 ?? 依序嘗試兩者，
+ * 三種語言共用同一段邏輯（同 src/oembed/render-embed-document.ts 的
+ * `heteronym.pinyin || heteronym.trs` 慣例，只是這裡讀的是尚未經
+ * KEY_MAP 轉換的原始鍵）。
+ *
+ * lang='h' 客語資料的 p 欄位是逐字標調的四縣/海陸/大埔/饒平/詔安/南四縣
+ * 多腔並列格式（例："四⃞sii⁵⁵ 海⃞sii³³…"），與其他語言乾淨的單一羅馬拼音
+ * 字串形態不同，直接顯示會破版，因此在打 DICTIONARY 之前就短路回傳空字串
+ * （documented Hakka exclusion）。
+ */
+export async function fetchWholeWordRomanization(
+  word: string,
+  lang: DictionaryLang,
+  env: Env,
+): Promise<string> {
+  if (lang === "h") return "";
+  const dictionary = env.DICTIONARY;
+  if (!dictionary) return "";
+  try {
+    const bucketPath = `p${lang}ck/${bucketOf(word, lang)}.txt`;
+    const responseData = (await readR2JsonCached(dictionary, bucketPath)) as Record<
+      string,
+      { h?: Array<{ p?: unknown; T?: unknown }> }
+    > | null;
+    if (!responseData) return "";
+    const entry = responseData[escape(word)];
+    const heteronyms = entry?.h;
+    if (!Array.isArray(heteronyms) || heteronyms.length === 0) return "";
+    const romanization = heteronyms[0]?.p ?? heteronyms[0]?.T ?? "";
+    return typeof romanization === "string" ? romanization : "";
+  } catch {
+    return "";
+  }
+}
+
+/**
  * 使用 R2 中的字體 SVG 檔案生成文字 SVG。
  * 依 Unicode 碼點（而非 UTF-16 code unit）逐字處理，避免超出 BMP 的增補平面字元
  * （如 𣁳 U+23073）被拆成兩個 surrogate half，多算格數、也查不到正確的字體 SVG。
@@ -390,7 +528,8 @@ export async function generateTextSVGWithR2Fonts(
   text: string,
   font: string,
   env: Env,
-): Promise<{ svg: string; usedFallbackGlyph: boolean }> {
+  romanization?: string,
+): Promise<{ svg: string; usedFallbackGlyph: boolean; hasCaption: boolean }> {
   const chars = Array.from(text);
   const { width, height } = calculateLayout(chars.length);
   const cellSize = 375;
@@ -678,20 +817,41 @@ export async function generateTextSVGWithR2Fonts(
 
   console.log(`[DEBUG] Total text elements generated: ${textElements.length}`);
 
+  // romanize=1 字圖標註（RESCOPE #169）：呼叫端已完成 lang 驗證與整詞羅馬拼音
+  // 查詢（見 fetchWholeWordRomanization），這裡只負責裁切、跳脫與版面。空字串
+  // （未帶 romanization、或查無資料）完全不影響輸出——finalHeight 等於原本的
+  // svgHeight，captionElement 是空字串，緊接在 textElements 之後不留任何多餘
+  // 空白，維持與 romanize 功能加入前逐位元組相同的輸出（byte-identical）。
+  const CAPTION_MAX_CODEPOINTS = 40;
+  const CAPTION_BAND_HEIGHT = 120;
+  const trimmedRomanization = String(romanization ?? "").trim();
+  const cappedRomanization = (() => {
+    if (!trimmedRomanization) return "";
+    const codepoints = Array.from(trimmedRomanization);
+    return codepoints.length > CAPTION_MAX_CODEPOINTS
+      ? `${codepoints.slice(0, CAPTION_MAX_CODEPOINTS).join("")}…`
+      : trimmedRomanization;
+  })();
+  const hasCaption = cappedRomanization.length > 0;
+  const finalHeight = svgHeight + (hasCaption ? CAPTION_BAND_HEIGHT : 0);
+  const captionElement = hasCaption
+    ? `<text x="${svgWidth / 2}" y="${svgHeight + CAPTION_BAND_HEIGHT / 2}" dy="0.35em" font-family="${CAPTION_FONT_FAMILY}, serif" font-size="56px" fill="#000" text-anchor="middle">${escapeXmlText(cappedRomanization)}</text>`
+    : "";
+
   const finalSVG = `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="${svgWidth}" height="${svgHeight}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgWidth} ${svgHeight}">
-	<rect width="${svgWidth}" height="${svgHeight}" fill="#F0F0F0"/>
+<svg width="${svgWidth}" height="${finalHeight}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgWidth} ${finalHeight}">
+	<rect width="${svgWidth}" height="${finalHeight}" fill="#F0F0F0"/>
 	${gridElements.join("")}
-	${textElements.join("")}
+	${textElements.join("")}${captionElement}
 </svg>`;
 
   console.log(
     `[DEBUG] Final SVG generated, grid elements: ${gridElements.length}, text elements: ${textElements.length}`,
   );
-  console.log(`[DEBUG] SVG dimensions: ${svgWidth}x${svgHeight}`);
+  console.log(`[DEBUG] SVG dimensions: ${svgWidth}x${finalHeight}`);
   console.log(`[DEBUG] Text element content: ${textElements[0] || "No text elements"}`);
 
-  return { svg: finalSVG, usedFallbackGlyph };
+  return { svg: finalSVG, usedFallbackGlyph, hasCaption };
 }
 
 /**

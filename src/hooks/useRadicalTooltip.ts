@@ -126,7 +126,7 @@ async function buildRadicalTooltipHTML(rawId: string): Promise<string> {
       html += `<a href="${entryPrefix}${encodeURIComponent(char)}" class="stroke-char">${escapeHtml(char)}</a>`;
     }
     if (chars.length > 15) {
-      html += `<span style="color:#666;">（還有 ${chars.length - 15} 個字）</span>`;
+      html += `<span class="stroke-list-more">（還有 ${chars.length - 15} 個字）</span>`;
     }
     html += "</span></div>";
   }

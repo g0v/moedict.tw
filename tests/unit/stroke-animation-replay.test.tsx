@@ -18,6 +18,40 @@ import { flushSync } from "react-dom";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vite-plus/test";
 import { StrokeAnimation } from "../../src/components/StrokeAnimation";
 
+interface StrokeWordsCall {
+  words: string;
+  options: {
+    url: string;
+    dataType: string;
+    svg: boolean;
+    delays?: unknown;
+    updatesPerStep?: unknown;
+  };
+}
+
+/** Marks the stroke-animation dependency scripts as already loaded, so
+ * loadScript()'s existing-`<script src>` short-circuit resolves them
+ * synchronously instead of hanging on a real network fetch in happy-dom. */
+function stubStrokeScriptsAsLoaded(): void {
+  for (const name of ["raf.min.js", "gl-matrix-min.js", "sax.js", "jquery.strokeWords.js"]) {
+    const el = document.createElement("script");
+    el.setAttribute("src", `/assets/js/${name}`);
+    document.head.appendChild(el);
+  }
+}
+
+/** Stubs window.jQuery so `$(container).strokeWords(words, options)` records
+ * each call instead of touching a real jQuery/canvas implementation. */
+function stubStrokeWordsJQuery(calls: StrokeWordsCall[]): void {
+  const jq = ((_target: unknown) => ({
+    strokeWords: (words: string, options: StrokeWordsCall["options"]) => {
+      calls.push({ words, options });
+    },
+  })) as unknown as ((target: unknown) => unknown) & { fn: { strokeWords: unknown } };
+  jq.fn = { strokeWords: () => {} };
+  (window as unknown as { jQuery: unknown }).jQuery = jq;
+}
+
 let container: HTMLDivElement;
 let root: Root;
 
@@ -157,5 +191,87 @@ describe("StrokeAnimation click-to-replay (moedict-webkit#230)", () => {
       });
     });
     expect(container.querySelector("#strokes")).toBeNull();
+  });
+});
+
+describe("StrokeAnimation stroke-speed options (issue #98)", () => {
+  afterEach(() => {
+    delete (window as unknown as { jQuery?: unknown }).jQuery;
+    for (const name of ["raf.min.js", "gl-matrix-min.js", "sax.js", "jquery.strokeWords.js"]) {
+      document.head
+        .querySelectorAll(`script[src="/assets/js/${name}"]`)
+        .forEach((el) => el.remove());
+    }
+  });
+
+  it("passes the byte-identical normal defaults when no pref is stored", async () => {
+    const calls: StrokeWordsCall[] = [];
+    stubStrokeScriptsAsLoaded();
+    stubStrokeWordsJQuery(calls);
+
+    renderStroke();
+    await flushAsync();
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.options).toEqual({
+      url: "/api/stroke-json/",
+      dataType: "json",
+      svg: false,
+      delays: { stroke: 0.5, word: 0.5 },
+      updatesPerStep: 10,
+    });
+  });
+
+  it("passes slow options when stroke-speed=slow is stored", async () => {
+    window.localStorage.setItem("stroke-speed", "slow");
+    const calls: StrokeWordsCall[] = [];
+    stubStrokeScriptsAsLoaded();
+    stubStrokeWordsJQuery(calls);
+
+    renderStroke();
+    await flushAsync();
+
+    expect(calls[0]?.options.delays).toEqual({ stroke: 0.8, word: 0.8 });
+    expect(calls[0]?.options.updatesPerStep).toBe(6);
+  });
+
+  it("passes fast options when stroke-speed=fast is stored", async () => {
+    window.localStorage.setItem("stroke-speed", "fast");
+    const calls: StrokeWordsCall[] = [];
+    stubStrokeScriptsAsLoaded();
+    stubStrokeWordsJQuery(calls);
+
+    renderStroke();
+    await flushAsync();
+
+    expect(calls[0]?.options.delays).toEqual({ stroke: 0.3, word: 0.3 });
+    expect(calls[0]?.options.updatesPerStep).toBe(14);
+  });
+
+  it("re-reads the pref fresh on replay: a mid-animation change only applies to the next draw run", async () => {
+    const calls: StrokeWordsCall[] = [];
+    stubStrokeScriptsAsLoaded();
+    stubStrokeWordsJQuery(calls);
+
+    renderStroke();
+    await flushAsync();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.options.updatesPerStep).toBe(10); // normal default
+
+    // Change the stored pref without unmounting/replaying — the effect that
+    // already drew must NOT react to this (it is not in the effect deps).
+    window.localStorage.setItem("stroke-speed", "fast");
+    expect(calls).toHaveLength(1);
+
+    // Replay (click #strokes) picks up the new pref on this fresh draw run.
+    const strokes = container.querySelector("#strokes") as HTMLElement;
+    act(() => {
+      strokes.click();
+    });
+    await flushAsync(2);
+
+    expect(calls).toHaveLength(2);
+    expect(calls[1]?.options.delays).toEqual({ stroke: 0.3, word: 0.3 });
+    expect(calls[1]?.options.updatesPerStep).toBe(14);
   });
 });

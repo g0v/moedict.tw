@@ -8,11 +8,24 @@ import {
   readFontSize,
   writeFontSize,
 } from "../utils/font-size-utils";
+import {
+  type StrokeSpeedLevel,
+  STROKE_SPEED_LABELS,
+  readStrokeSpeedPref,
+  writeStrokeSpeedPref,
+} from "../utils/stroke-speed-utils";
 import { type ThemePref, applyTheme, readThemePref, writeThemePref } from "../utils/theme-utils";
 import { SvgIcon } from "./SvgIcon";
 
 type Lang = "a" | "t" | "h" | "c";
-type PrefKey = "phonetics" | "pinyin_a" | "pinyin_t" | "pinyin_h" | "bopomofo_sandhi_t" | "theme";
+type PrefKey =
+  | "phonetics"
+  | "pinyin_a"
+  | "pinyin_t"
+  | "pinyin_h"
+  | "bopomofo_sandhi_t"
+  | "theme"
+  | "stroke_speed";
 
 interface PrefOption {
   value: string;
@@ -31,6 +44,12 @@ const THEME_OPTIONS: PrefOption[] = [
   { value: "system", label: "跟隨系統" },
   { value: "light", label: "淺色" },
   { value: "dark", label: "深色" },
+];
+
+const STROKE_SPEED_OPTIONS: PrefOption[] = [
+  { value: "slow", label: STROKE_SPEED_LABELS.slow },
+  { value: "normal", label: STROKE_SPEED_LABELS.normal },
+  { value: "fast", label: STROKE_SPEED_LABELS.fast },
 ];
 
 const PHONETICS_OPTIONS: PrefOption[] = [
@@ -193,6 +212,7 @@ export function UserPref() {
   );
   const [fontSize, setFontSize] = useState<number>(() => readFontSize());
   const [themePref, setThemePref] = useState<ThemePref>(() => readThemePref());
+  const [strokeSpeed, setStrokeSpeed] = useState<StrokeSpeedLevel>(() => readStrokeSpeedPref());
 
   useEffect(() => {
     const classList = document.body.classList;
@@ -212,6 +232,10 @@ export function UserPref() {
     applyTheme(themePref);
     writeThemePref(themePref);
   }, [themePref]);
+
+  useEffect(() => {
+    writeStrokeSpeedPref(strokeSpeed);
+  }, [strokeSpeed]);
 
   useEffect(() => {
     applyFontSize(fontSize);
@@ -291,6 +315,13 @@ export function UserPref() {
             options={THEME_OPTIONS}
             value={themePref}
             onChange={(nextValue) => setThemePref(nextValue as ThemePref)}
+          />
+          <PrefList
+            name="stroke_speed"
+            label="筆順動畫速度"
+            options={STROKE_SPEED_OPTIONS}
+            value={strokeSpeed}
+            onChange={(nextValue) => setStrokeSpeed(nextValue as StrokeSpeedLevel)}
           />
           <PrefList
             name="phonetics"

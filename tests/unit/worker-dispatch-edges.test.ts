@@ -265,6 +265,100 @@ describe("dispatch — *.png fallback font wiring (Tauhu Oo via ASSETS)", () => 
   });
 });
 
+describe("dispatch — *.png romanize=1 caption font wiring (Fira Sans OT via ASSETS, RESCOPE #169)", () => {
+  const meng = {
+    "%u840C": { h: [{ b: "ㄇㄥˊ", p: "méng", d: [{ f: "草木初生的芽。" }] }] },
+  };
+
+  it("loads Fira Sans OT from ASSETS and wires it into resvg as fontBuffers when romanize=1&lang=a resolves a reading", async () => {
+    const env = makeEnv({
+      FONTS: makeBucket({
+        "TW-Kai/U+840C.svg": { body: '<svg><path d="M0 0 L1 1"/></svg>' },
+      }),
+      DICTIONARY: makeBucket({
+        "pack/12.txt": { body: JSON.stringify(meng) },
+      }),
+      ASSETS: makeBucket({
+        "fonts/FiraSansOT-Regular.otf": { body: "fake-fira-bytes" },
+      }),
+    });
+
+    const res = await dispatch(req("/%E8%90%8C.png?romanize=1&lang=a"), env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/png");
+
+    const call = resvgCalls.at(-1);
+    const options = call?.options as { font?: { fontBuffers?: Uint8Array[] } } | undefined;
+    expect(options?.font?.fontBuffers).toHaveLength(1);
+    expect(new TextDecoder().decode(options!.font!.fontBuffers![0])).toBe("fake-fira-bytes");
+  });
+
+  it("merges the Tauhu Oo fallback buffer and the Fira Sans OT caption buffer into the same fontBuffers array without overwriting either", async () => {
+    // 'ㄋ*𣁳仔 reuses the missing-glyph fixture (𣁳 has no FONTS entry, forcing
+    // the Tauhu Oo <text> fallback) while ALSO requesting romanize=1&lang=t so
+    // fetchWholeWordRomanization resolves a non-empty reading and the caption
+    // path also needs Fira Sans OT — both font buffers must be present.
+    const pngPath = `/${encodeURIComponent("'𣁳仔")}.png?romanize=1&lang=t`;
+    const env = makeEnv({
+      FONTS: makeBucket({
+        "TW-Kai/U+840C.svg": { body: '<svg><path d="M0 0 L1 1"/></svg>' }, // checkFontAvailability probe
+        "TW-Kai/U+4ED4.svg": { body: '<svg><path d="M0 0 L1 1"/></svg>' }, // 仔 only; 𣁳 absent
+      }),
+      DICTIONARY: makeBucket({
+        "ptck/115.txt": {
+          body: JSON.stringify({ "%uD84C%uDC73%u4ED4": { h: [{ T: "tsi̍h-á" }] } }),
+        },
+      }),
+      ASSETS: makeBucket({
+        "fonts/TauhuOo2005-Regular.otf": { body: "fake-otf-bytes" },
+        "fonts/FiraSansOT-Regular.otf": { body: "fake-fira-bytes" },
+      }),
+    });
+
+    const res = await dispatch(req(pngPath), env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/png");
+
+    const call = resvgCalls.at(-1);
+    const options = call?.options as { font?: { fontBuffers?: Uint8Array[] } } | undefined;
+    const decoded = (options?.font?.fontBuffers ?? []).map((buf) => new TextDecoder().decode(buf));
+    expect(decoded).toEqual(["fake-otf-bytes", "fake-fira-bytes"]);
+  });
+
+  it("returns 503 no-store (never a year-long cacheable broken caption) when the Fira Sans OT font is unavailable", async () => {
+    const env = makeEnv({
+      FONTS: makeBucket({
+        "TW-Kai/U+840C.svg": { body: '<svg><path d="M0 0 L1 1"/></svg>' },
+      }),
+      DICTIONARY: makeBucket({
+        "pack/12.txt": { body: JSON.stringify(meng) },
+      }),
+      ASSETS: makeBucket(), // no fonts/FiraSansOT-Regular.otf entry seeded
+    });
+
+    const res = await dispatch(req("/%E8%90%8C.png?romanize=1&lang=a"), env);
+    expect(res.status).toBe(503);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("never fetches the caption font when romanize=1 is present but lang is invalid (fail-open, glyph-only)", async () => {
+    const assetsGet = vi.fn(async () => null);
+    const env = makeEnv({
+      FONTS: makeBucket({
+        "TW-Kai/U+840C.svg": { body: '<svg><path d="M0 0 L1 1"/></svg>' },
+      }),
+      DICTIONARY: makeBucket({
+        "pack/12.txt": { body: JSON.stringify(meng) },
+      }),
+      ASSETS: { get: assetsGet } as unknown as AnyEnv["ASSETS"],
+    });
+
+    const res = await dispatch(req("/%E8%90%8C.png?romanize=1&lang=xx"), env);
+    expect(res.status).toBe(200);
+    expect(assetsGet).not.toHaveBeenCalled();
+  });
+});
+
 describe("dispatch — final null-body 404", () => {
   it("returns 404 with empty body and no Content-Type for an unmatched non-asset, non-png path", async () => {
     // /random/thing.bin: not /api, not /assets, not .png, not HTML-shell-

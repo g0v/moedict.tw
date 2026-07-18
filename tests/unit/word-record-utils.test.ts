@@ -5,9 +5,12 @@ import {
   buildStarKey,
   clearLRUWords,
   clearStarredWords,
+  exportStarredWords,
   getLRUStorageKey,
   getStarredStorageKey,
   hasStarWord,
+  importStarredWords,
+  parseImportedWords,
   parseLRUWords,
   parseStarredWords,
   readLRUWords,
@@ -321,5 +324,107 @@ describe("last-lookup", () => {
     window.localStorage.setItem("prev-id", "萌");
     window.localStorage.setItem("lang", "c");
     expect(readLastLookup()).toEqual({ word: "萌", lang: "c" });
+  });
+});
+
+describe("exportStarredWords (#219)", () => {
+  it("returns empty string for lang with no stars", () => {
+    expect(exportStarredWords("a")).toBe("");
+  });
+
+  it("joins current storage order with newlines, no trailing metadata", () => {
+    addStarWord("a", "萌");
+    addStarWord("a", "典");
+    // addStarWord prepends, so most-recently-starred word is first.
+    expect(exportStarredWords("a")).toBe("典\n萌");
+  });
+
+  it("is scoped to the given lang only", () => {
+    addStarWord("a", "萌");
+    addStarWord("t", "食");
+    expect(exportStarredWords("a")).toBe("萌");
+    expect(exportStarredWords("t")).toBe("食");
+  });
+});
+
+describe("parseImportedWords (#219)", () => {
+  it("dedupes by first occurrence, preserving order", () => {
+    expect(parseImportedWords("萌\n典\n萌\n")).toEqual(["萌", "典"]);
+  });
+
+  it("trims whitespace and drops blank lines", () => {
+    expect(parseImportedWords("  萌  \n\n\n  典\n")).toEqual(["萌", "典"]);
+  });
+
+  it("splits on CRLF, CR, and LF line endings", () => {
+    expect(parseImportedWords("萌\r\n典\r字\n詞")).toEqual(["萌", "典", "字", "詞"]);
+  });
+
+  it("rejects lines failing shouldRecordWord", () => {
+    expect(parseImportedWords("萌\n#\nabout\n=*\na/b\n萌.png\n典")).toEqual(["萌", "典"]);
+  });
+
+  it("returns empty for empty / whitespace-only / non-string input", () => {
+    expect(parseImportedWords("")).toEqual([]);
+    expect(parseImportedWords("   \n  \n")).toEqual([]);
+    expect(parseImportedWords(null as unknown as string)).toEqual([]);
+  });
+});
+
+describe("importStarredWords (#219)", () => {
+  it("imports fresh words into an empty starred set, preserving pasted order", () => {
+    const result = importStarredWords("a", "萌\n典\n字");
+    expect(result).toEqual({ imported: ["萌", "典", "字"], skipped: 0, total: 3 });
+    // addStarWord prepends on each call; importStarredWords must counteract
+    // that so storage read-back matches pasted order, not reversed order.
+    expect(readStarredWords("a")).toEqual(["萌", "典", "字"]);
+  });
+
+  it("merges imported-new words ahead of untouched existing words", () => {
+    addStarWord("a", "舊詞");
+    const result = importStarredWords("a", "萌\n典");
+    expect(result.imported).toEqual(["萌", "典"]);
+    expect(readStarredWords("a")).toEqual(["萌", "典", "舊詞"]);
+  });
+
+  it("skipped counts invalid, in-paste duplicate, and already-existing lines", () => {
+    addStarWord("a", "已收藏");
+    const result = importStarredWords("a", "新詞\n已收藏\n新詞\n#\n");
+    // total nonempty lines: 新詞, 已收藏, 新詞, # = 4
+    // imported: only 新詞 (already-existing 已收藏 filtered, dup 新詞 filtered, # invalid)
+    expect(result).toEqual({ imported: ["新詞"], skipped: 3, total: 4 });
+    expect(readStarredWords("a")).toEqual(["新詞", "已收藏"]);
+  });
+
+  it("is a no-op (all skipped, no write) when every line fails shouldRecordWord", () => {
+    const before = readStarredWords("a");
+    const result = importStarredWords("a", "#\nabout\n=*");
+    expect(result).toEqual({ imported: [], skipped: 3, total: 3 });
+    expect(readStarredWords("a")).toEqual(before);
+  });
+
+  it("does not write when input is empty or whitespace-only", () => {
+    expect(importStarredWords("a", "")).toEqual({ imported: [], skipped: 0, total: 0 });
+    expect(importStarredWords("a", "   \n  ")).toEqual({ imported: [], skipped: 0, total: 0 });
+    expect(window.localStorage.getItem(getStarredStorageKey("a"))).toBeNull();
+  });
+
+  it("does not touch sibling-language storage keys", () => {
+    addStarWord("t", "既有");
+    importStarredWords("a", "萌\n典");
+    expect(readStarredWords("t")).toEqual(["既有"]);
+    expect(window.localStorage.getItem(getStarredStorageKey("t"))).toBe(buildStarKey("既有"));
+  });
+
+  it("reports actually-persisted words only — a setItem failure mid-import is skipped, not falsely imported", () => {
+    const setItemSpy = vi.spyOn(window.localStorage, "setItem").mockImplementation(() => {
+      throw new Error("QuotaExceededError");
+    });
+
+    const result = importStarredWords("a", "萌");
+    expect(result).toEqual({ imported: [], skipped: 1, total: 1 });
+    expect(window.localStorage.getItem(getStarredStorageKey("a"))).toBeNull();
+
+    setItemSpy.mockRestore();
   });
 });

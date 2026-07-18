@@ -129,6 +129,15 @@ describe("handleStrokeAPI R2 reads", () => {
     expect((await response.json()).error).toBe("Not Found");
   });
 
+  it("returns 404 for HEAD when the object is absent from ASSETS (head() path)", async () => {
+    const env = { ASSETS: makeBucket(new Map()) };
+    const url = new URL("http://localhost/api/stroke-json/ffff.json");
+    const request = new Request(url.toString(), { method: "HEAD" });
+    const response = await handleStrokeAPI(request, url, env, corsHeaders);
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe("");
+  });
+
   it("returns 404 (not 500) for 6c5b.json when 汛 is not yet uploaded", async () => {
     // Until the full 6,063 corpus lands in the env's ASSETS bucket, missing
     // characters must keep failing closed with 404 so the client badge UX
