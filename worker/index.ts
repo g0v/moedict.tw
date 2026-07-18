@@ -8,6 +8,7 @@ import { handleEmbedPage } from "../src/oembed/handle-embed-page";
 import { escapeHeadContent, resolveHeadByPath } from "../src/ssr/head";
 import { handleImageGeneration } from "../src/utils/image-generation";
 import { CACHE_CONTROL, handleCachePurge } from "../src/api/cache";
+import { handleCnsAPI } from "../src/api/handleCnsAPI";
 import type { CachePurger } from "../src/api/cache";
 import {
   buildDefinitionDescription,
@@ -537,9 +538,15 @@ async function dispatchCore(request: Request, env: Env, ctx?: ExecutionContext):
       });
     }
 
-    // 筆順 JSON 代理（/api/stroke-json/{codepoint}.json）
+    // 筆順 JSON（/api/stroke-json/{codepoint}.json）— 直接從 ASSETS R2 讀取
     if (url.pathname.startsWith("/api/stroke-json/")) {
-      return handleStrokeAPI(request, url, corsHeaders);
+      return handleStrokeAPI(request, url, env, corsHeaders);
+    }
+
+    // CNS11643 屬性後備 API（/api/cns/{char}.json）——
+    // 必須在通用 .json catch-all 之前，否則永遠不會到達
+    if (url.pathname.startsWith("/api/cns/") && url.pathname.endsWith(".json")) {
+      return handleCnsAPI(request, url, env);
     }
 
     // 分類詞彙列表 API（=成語、'=諺語、:=諺語、~=同實異名，選配 .json）——
@@ -623,6 +630,7 @@ async function dispatchCore(request: Request, env: Env, ctx?: ExecutionContext):
     return await handleImageGeneration(url, {
       FONTS: env.FONTS,
       ASSETS: getAssetsBucket(env) ?? undefined,
+      DICTIONARY: env.DICTIONARY,
     });
   }
 

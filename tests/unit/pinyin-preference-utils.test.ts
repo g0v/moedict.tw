@@ -453,10 +453,101 @@ describe("convertPinyinByLang — lang t (Taiwanese)", () => {
     });
 
     it("converts terminal double-n (nn) to superscript n (U+207F)", () => {
-      // The nn-replacement regex requires end-of-string or whitespace/ASCII hyphen
-      // after the nn — hence we test on bare 'ann' and a space-separated case.
+      // The nn-replacement regex requires end-of-string, whitespace, an ASCII/
+      // U+2011 hyphen, or sentence punctuation after the nn.
       expect(convertPinyinByLang("t", "ann")).toContain("\u207F");
       expect(convertPinyinByLang("t", "ann ke")).toContain("\u207F");
+    });
+
+    // Regression coverage for g0v/moedict-webkit#165: by the time this rule
+    // runs, convertPinyinByLang has already rewritten every ASCII "-" to
+    // U+2011 (non-breaking hyphen) — the old `nn($|[-\s])` pattern only
+    // matched a *literal* ASCII hyphen, so a hyphen-joined word like
+    // "ann-ke" never got its "nn" superscripted at all.
+    it("converts nn before a U+2011 word-join hyphen (not just end-of-string/space)", () => {
+      expect(convertPinyinByLang("t", "ann-ke")).toContain("\u207F");
+    });
+
+    // Regression coverage for g0v/moedict-webkit#165 item 2 ("三個拼音系統的
+    // 聲調位置規則不一樣" / 水 tsuí example): DT must reposition the tone mark
+    // to its own placement priority (o>e>a>u>i>ng>m), not merely swap the
+    // mark's identity in place. TL places the tone on the *second* vowel of
+    // a "ui" cluster (tsuí); DT's own priority puts u ahead of i, so the
+    // correct DT form is "zùi" (grave over u), not "zuí" (grave over i).
+    it("repositions the tone mark per DT's own vowel priority, not TL's (tsuí -> zùi)", () => {
+      // NFD input: t s u i+U+0301(acute, TL tone 2) — matches the dictionary's
+      // stored T-field encoding (AGENTS.md requires NFD for the T field).
+      const out = convertPinyinByLang("t", "tsu\u0069\u0301", false);
+      expect(out.normalize("NFC")).toBe("z\u00F9i"); // "zùi"
+    });
+
+    it("repositions the tone mark for a second 'ui' word, confirming it's not tsuí-specific", () => {
+      // TL places the tone on the second vowel of a "ui" cluster (per TL's
+      // own diphthong rule); DT's priority (o>e>a>u>i>ng>m) puts u ahead of
+      // i, so it must move — same mechanism as tsuí -> zùi, different word,
+      // to confirm the fix isn't overfit to one lexical item.
+      const out = convertPinyinByLang("t", "khu\u0069\u0301", false); // TL "khuí"
+      expect(out.normalize("NFC")).toBe("k\u00F9i"); // "kùi" (kh->k, acute->grave, mark moved to u)
+    });
+
+    // Coverage for toneDt()'s full vowel/nasal priority fallthrough
+    // (o > e > a > u > i > ng > m > bare-append), each isolated to a
+    // syllable that only offers that one target so the earlier branches
+    // in the chain cannot short-circuit it.
+    it("places the tone mark on a bare o vowel adjacent to k (o branch)", () => {
+      const out = convertPinyinByLang("t", "ko\u0301k", false);
+      // 'kok' with acute → DT consonant k→g, tone repositions onto o (grave);
+      // 'o' adjacent to k/n/m is exempt from the o→or rewrite, so this
+      // isolates toneDt's `/o/i.test(noTone)` branch specifically.
+      expect(out.normalize("NFC")).toBe("g\u00F2k"); // "gòk"
+    });
+
+    it("places the tone mark on a bare e vowel (e branch)", () => {
+      const out = convertPinyinByLang("t", "he\u0301", false);
+      // 'he' with acute → DT consonant h stays h, tone repositions onto e (grave).
+      expect(out.normalize("NFC")).toBe("h\u00E8"); // "hè"
+    });
+
+    it("places the tone mark on a bare a vowel (a branch)", () => {
+      const out = convertPinyinByLang("t", "ha\u0301", false);
+      expect(out.normalize("NFC")).toBe("h\u00E0"); // "hà"
+    });
+
+    it("places the tone mark on a bare u vowel with no oa/oe/o/e/a present (u branch)", () => {
+      const out = convertPinyinByLang("t", "ku\u0301", false);
+      // k→g (DT rule), tone repositions onto u.
+      expect(out.normalize("NFC")).toBe("g\u00F9"); // "gù"
+    });
+
+    it("places the tone mark on a bare i vowel with no o/e/a/u present (i branch)", () => {
+      const out = convertPinyinByLang("t", "hi\u0301", false);
+      expect(out.normalize("NFC")).toBe("h\u00EC"); // "hì"
+    });
+
+    it("places the tone mark inside 'ng' when no vowel is present (ng branch)", () => {
+      const out = convertPinyinByLang("t", "hng\u0301", false);
+      expect(out).toContain("\u0300"); // grave landed between n and g
+      expect(out).toMatch(/hn\u0300g/i);
+    });
+
+    it("places the tone mark on a bare m nasal when no vowel/ng is present (m branch)", () => {
+      const out = convertPinyinByLang("t", "hm\u0301", false);
+      expect(out).toContain("\u0300");
+      expect(out).toMatch(/hm\u0300/i);
+    });
+
+    it("appends the tone mark at the end when no vowel/nasal target exists at all (fallback branch)", () => {
+      const out = convertPinyinByLang("t", "h\u0301", false);
+      // No o/e/a/u/i/ng/m in "h" → tone mark appended after the consonant.
+      expect(out.normalize("NFC")).toBe("h\u0300");
+    });
+
+    it("returns the segment unchanged when it carries no DT tone mark at all (no-match branch)", () => {
+      // toneDt() is invoked per split segment; a punctuation-only segment
+      // like the space in "kong ke" carries no combining tone mark and must
+      // pass through unchanged rather than throwing on toneMatch being null.
+      const out = convertPinyinByLang("t", "kong ke", false);
+      expect(out).toContain(" ");
     });
   });
 
@@ -487,6 +578,26 @@ describe("convertPinyinByLang — lang t (Taiwanese)", () => {
     it("turns nasal endings nn/nnh into superscript n", () => {
       expect(convertPinyinByLang("t", "ann")).toBe("a\u207F");
       expect(convertPinyinByLang("t", "annh")).toBe("ah\u207F");
+    });
+
+    // Regression coverage for g0v/moedict-webkit#165 item 1 (乎 "--honnh"
+    // example): the nn/nnh terminator character class used to only accept
+    // end-of-string, whitespace, or a hyphen — so the *exact* real-world
+    // shape from the issue's own example sentence ("...tshit-thô--honnh?",
+    // "...pháinn-sè--lah!") never converted, because a light-tone particle
+    // almost always sits right before sentence-final "?" or "!". The
+    // headword-only form ("--honnh" with nothing after it) already worked,
+    // masking the bug for anyone who didn't test it inside a sentence.
+    it("converts nnh before sentence-final punctuation (?, !), not just end-of-string", () => {
+      expect(convertPinyinByLang("t", "--honnh?", false)).toBe("\u2011\u2011hoh\u207F?");
+      expect(convertPinyinByLang("t", "--lah!", false)).toBe("\u2011\u2011lah!");
+    });
+
+    it("converts nnh inside a full example sentence ending in a question mark", () => {
+      // g0v/moedict-webkit#165's own example: 你今仔日欲出去𨑨迌乎？
+      const trs =
+        "L\u00ED kin\u2011\u00E1\u2011ji\u030Dt beh tshut\u2011kh\u00EC tshit\u2011th\u00F4--honnh?";
+      expect(convertPinyinByLang("t", trs, false)).toContain("hoh\u207F?");
     });
 
     it("rewrites er/ir to e+U+0358 / i+U+0358", () => {

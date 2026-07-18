@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState, type JSX, type MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRadicalTooltip } from "../hooks/useRadicalTooltip";
-import { fetchRadicalRows, type RadicalLang } from "../utils/radical-page-utils";
+import {
+  fetchRadicalRows,
+  getRadicalLangPrefix,
+  type RadicalLang,
+} from "../utils/radical-page-utils";
 import { addToLRU } from "../utils/word-record-utils";
 
 interface RadicalDetailViewProps {
@@ -61,9 +65,10 @@ export function RadicalDetailView({ lang, radical }: RadicalDetailViewProps) {
     void navigate(to);
   };
 
-  const backHref = lang === "c" ? "/~@" : "/@";
-  const backTooltip = lang === "c" ? "~@" : "@";
-  const charPrefix = lang === "c" ? "/~" : "/";
+  const langPrefix = getRadicalLangPrefix(lang);
+  const backHref = `/${langPrefix}@`;
+  const backTooltip = `${langPrefix}@`;
+  const charPrefix = `/${langPrefix}`;
 
   let resultContent: JSX.Element | null = null;
   if (state.loading) {

@@ -245,3 +245,83 @@ export function readLastLookup(): { lang: DictionaryLang; word: string } | null 
   const lang = normalizeLang(safeGetItem(LAST_LANG_KEY) || "a");
   return { lang, word };
 }
+
+export interface ImportStarredWordsResult {
+  imported: string[];
+  skipped: number;
+  total: number;
+}
+
+/**
+ * #219: bounded manual plain-text export. One starred word per line, current
+ * storage order (most-recently-starred first, matching addStarWord's own
+ * prepend semantics), no trailing metadata/blank line.
+ */
+export function exportStarredWords(lang: DictionaryLang): string {
+  return readStarredWords(lang).join("\n");
+}
+
+/**
+ * Pure parse/validate/dedupe step for pasted plain text. Splits on
+ * CRLF/CR/LF, trims each line, drops blank lines, rejects anything
+ * `shouldRecordWord` would reject, and dedupes by first occurrence
+ * (matching the seen-map idiom already used by `parseStarredWords` /
+ * `parseLRUWords`). Does not consult existing storage — that diff is done
+ * by `importStarredWords`, which also needs the raw nonempty-line count to
+ * report `skipped`.
+ */
+export function parseImportedWords(raw: string): string[] {
+  const list: string[] = [];
+  if (typeof raw !== "string" || !raw.trim()) return list;
+  const seen: Record<string, 1> = Object.create(null) as Record<string, 1>;
+  const lines = raw.split(/\r\n|\r|\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (!shouldRecordWord(trimmed)) continue;
+    const word = normalizeWord(trimmed);
+    if (!word || seen[word]) continue;
+    seen[word] = 1;
+    list.push(word);
+  }
+  return list;
+}
+
+/**
+ * #219: bounded manual plain-text import, current-language starred words
+ * only. Merges newly-imported words ahead of untouched existing words,
+ * preserving pasted order. `skipped` counts every nonempty line that was
+ * invalid, an in-paste duplicate, already starred, or (rare) failed to
+ * persist — i.e. `total - imported.length`. Empty/whitespace-only input is
+ * a no-op (no storage write). Writes go exclusively through `addStarWord`,
+ * so the existing starred-<lang> key/writer stays the single source of
+ * truth. `imported` is verified post-write via `hasStarWord` rather than
+ * trusted from the pre-write candidate list, so a `localStorage.setItem`
+ * failure (quota, private-mode Safari, etc. — swallowed by `safeSetItem`)
+ * is reported as skipped instead of falsely claimed as imported.
+ */
+export function importStarredWords(lang: DictionaryLang, raw: string): ImportStarredWordsResult {
+  if (typeof raw !== "string" || !raw.trim()) {
+    return { imported: [], skipped: 0, total: 0 };
+  }
+
+  const total = raw.split(/\r\n|\r|\n/).filter((line) => line.trim().length > 0).length;
+  const parsed = parseImportedWords(raw);
+  const candidates = parsed.filter((word) => !hasStarWord(lang, word));
+
+  // addStarWord prepends the word to the front of current storage, so a
+  // forward loop would reverse pasted order. Iterate in reverse instead:
+  // the last call (candidates[0]) lands closest to the front, which
+  // preserves pasted order in the final stored sequence.
+  for (let i = candidates.length - 1; i >= 0; i--) {
+    addStarWord(lang, candidates[i]);
+  }
+
+  // Re-verify against storage: safeSetItem silently swallows write
+  // failures, so a candidate is only reported as imported if it actually
+  // landed.
+  const imported = candidates.filter((word) => hasStarWord(lang, word));
+  const skipped = total - imported.length;
+
+  return { imported, skipped, total };
+}

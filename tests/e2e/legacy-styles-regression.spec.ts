@@ -57,10 +57,23 @@ async function routeStylesCss(page: Page, getCss: () => string): Promise<void> {
 // https://r2-assets.test.local/styles.css via AssetLoader, its relative
 // URLs resolve to r2-assets.test.local/fonts/* which is already blocked by
 // _fixtures.ts's blanket 404 — so this only affects the /assets/ path.)
+// Only /assets/fonts/MOEDICT.{woff2,otf,woff} fall through to the test
+// server — those paths are seeded in ASSETS and served 200. All other
+// /assets/fonts/* are legacy CSS sub-resources the Worker would proxy to
+// r2-assets.test.local → DNS fail → 502; those are still blocked here.
 async function blockCssSubresources(page: Page): Promise<void> {
   const notFound = (route: Route) =>
     route.fulfill({ status: 404, contentType: "text/plain; charset=utf-8", body: "" });
-  await page.route("**/assets/fonts/**", notFound);
+  await page.route("**/assets/fonts/**", (route) => {
+    // Only MOEDICT.woff2 (and its siblings) are seeded in ASSETS and served
+    // by the test Worker. All other /assets/fonts/* are legacy CSS sub-resources
+    // that the Worker would proxy to r2-assets.test.local → DNS fail → 502;
+    // block those so networkidle can fire.
+    if (new URL(route.request().url()).pathname.includes("/MOEDICT.")) {
+      return route.fallback();
+    }
+    return notFound(route);
+  });
   await page.route("**/assets/images/leather_x2.jpg", notFound);
   await page.route("**/assets/images/subtle_stripes_x2.png", notFound);
 }

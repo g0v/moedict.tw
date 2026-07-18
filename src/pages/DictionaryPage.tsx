@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRadicalTooltip } from "../hooks/useRadicalTooltip";
+import { useStrokeAvailability } from "../hooks/useStrokeAvailability";
 import { cleanTextForTTS, speakText } from "../utils/tts-utils";
 import { getAudioUrl, playAudioUrl } from "../utils/audio-utils";
 import { AUDIO_CDN_MAP } from "../utils/media-cdn";
@@ -24,6 +25,7 @@ import {
   writeLastLookup,
 } from "../utils/word-record-utils";
 import { fetchDictionaryEntry, readCachedDictionaryEntry } from "../utils/dictionary-cache";
+import { writeTextToClipboard } from "../utils/clipboard";
 import { setCurrentXrefs } from "../utils/xref-switch-utils";
 import { StrokeAnimation } from "../components/StrokeAnimation";
 import { applyHeadToDocument, getDictionaryHead } from "../ssr/head";
@@ -50,8 +52,11 @@ interface Heteronym {
   pinyin?: string;
   trs?: string;
   alt?: string;
+  variants?: string[];
   audio_id?: string;
   synonyms?: string[] | string;
+  /** TWBLG 文/白/俗/替讀音分類（g0v/moedict-webkit#96、#233），僅 lang='t' 有值；
+   *  API 回傳時已包成 autolink 的 `<a href="...">文</a>`，渲染前需 untag。 */
   reading?: string;
   definitions?: Definition[];
 }
@@ -80,6 +85,30 @@ interface DictionaryState {
   entry: DictionaryAPIResponse | null;
   terms: string[];
   error: string | null;
+}
+
+interface CnsAttributes {
+  phonetic?: string[];
+  radical?: { id: number; char: string | null };
+  stroke?: number;
+  cangjie?: string[];
+  strokeSequence?: string;
+  source?: string;
+}
+
+interface CnsRecord {
+  char: string;
+  unicode: string;
+  codepoint: number;
+  cns: string;
+  pua: boolean;
+  attributes: CnsAttributes;
+}
+
+interface CnsFallbackState {
+  loading: boolean;
+  record: CnsRecord | null;
+  error: boolean;
 }
 
 interface DictionaryPageProps {
@@ -375,7 +404,8 @@ function normalizeRadicalChar(input: string): string {
 
 function RadicalGlyph({ char, lang }: { char: string; lang: DictionaryLang }) {
   const ch = normalizeRadicalChar(char);
-  const radicalToken = `${lang === "c" ? "~@" : "@"}${ch}`;
+  const radicalPrefix = lang === "c" ? "~" : lang === "t" ? "'" : "";
+  const radicalToken = `${radicalPrefix}@${ch}`;
   return (
     <span className="glyph">
       <a
@@ -392,6 +422,76 @@ function RadicalGlyph({ char, lang }: { char: string; lang: DictionaryLang }) {
   );
 }
 
+/** 全字庫屬性後備卡 — 四部辭典皆無時顯示於 no-match 頁 */
+function CnsAttributesPanel({ record }: { record: CnsRecord }) {
+  const { attributes } = record;
+  return (
+    <div className="entry cns-attributes" data-source="cns11643">
+      <div className="entry-item">
+        <div className="cns-badge">全字庫屬性・無辭典釋義</div>
+        <table className="cns-attr-table">
+          <tbody>
+            <tr>
+              <th>字元</th>
+              <td>
+                {record.char}{" "}
+                <span className="cns-meta">
+                  {record.unicode}・CNS {record.cns}
+                </span>
+              </td>
+            </tr>
+            {attributes.phonetic && attributes.phonetic.length > 0 && (
+              <tr>
+                <th>注音</th>
+                <td>{attributes.phonetic.join("、")}</td>
+              </tr>
+            )}
+            {attributes.radical && (
+              <tr>
+                <th>部首</th>
+                <td>
+                  {attributes.radical.id}・{attributes.radical.char ?? ""}
+                </td>
+              </tr>
+            )}
+            {attributes.stroke != null && (
+              <tr>
+                <th>筆畫</th>
+                <td>{attributes.stroke}</td>
+              </tr>
+            )}
+            {attributes.cangjie && attributes.cangjie.length > 0 && (
+              <tr>
+                <th>倉頡</th>
+                <td>{attributes.cangjie.join("、")}</td>
+              </tr>
+            )}
+            {attributes.strokeSequence && (
+              <tr>
+                <th>筆順</th>
+                <td className="cns-stroke-seq">{attributes.strokeSequence}</td>
+              </tr>
+            )}
+            {attributes.source && (
+              <tr>
+                <th>來源</th>
+                <td>{attributes.source}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+        <p className="cns-attribution">
+          資料來源：
+          <a href="https://www.cns11643.gov.tw" target="_blank" rel="noopener noreferrer">
+            數位發展部 CNS11643 全字庫
+          </a>
+          ，政府資料開放授權條款第 1 版（OGDL-1.0）。
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPageProps) {
   const navigate = useNavigate();
   const touchAnchorStartAtRef = useRef<number | null>(null);
@@ -405,12 +505,36 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
     error: null,
   });
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+  const [copyStatus, setCopyStatus] = useState<{ ok: boolean } | null>(null);
+  const copyStatusTimerRef = useRef<number | null>(null);
+  const resultRef = useRef<HTMLDivElement | null>(null);
+  useEffect(
+    () => () => {
+      if (copyStatusTimerRef.current != null) {
+        window.clearTimeout(copyStatusTimerRef.current);
+      }
+    },
+    [],
+  );
   const [isStarred, setIsStarred] = useState(false);
   const [strokesVisible, setStrokesVisible] = useState(false);
+  const [cnsFallback, setCnsFallback] = useState<CnsFallbackState>({
+    loading: false,
+    record: null,
+    error: false,
+  });
   const storageWord = useMemo(
     () => untag((state.entry?.title || queryWord || "").trim()),
     [state.entry?.title, queryWord],
   );
+  // issue #132：單字詞條若已知缺筆順資料（stroke-json 404），停用筆順動畫
+  // 觸發按鈕，避免使用者點下去只看到一片空白、淡到 50% 透明度的畫布。
+  const strokeCandidateChar = useMemo(
+    () => (isSingleCharTerm(storageWord) ? storageWord : null),
+    [storageWord],
+  );
+  const strokeAvailable = useStrokeAvailability(strokeCandidateChar);
+  const strokeAnimationDisabled = strokeAvailable === false;
 
   // 舊版 /word/N「指定義項」永久連結：1-based，跨該詞所有音項合併計數，
   // 不受 UI 依詞性分組顯示順序影響 — 對照的是同一份 definition 物件參照。
@@ -418,6 +542,14 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
     const raw = state.entry?.heteronyms;
     return dedupeHeteronyms(Array.isArray(raw) ? raw : []);
   }, [state.entry]);
+  // groupDefinitions() keys by String(type||""), so any non-empty definitions
+  // array always yields at least one group/.entry-item — this is equivalent
+  // to "does at least one heteronym have a rendered definition group" without
+  // duplicating the grouping logic here.
+  const hasEntryDefinitions = useMemo(
+    () => heteronyms.some((h) => Array.isArray(h.definitions) && h.definitions.length > 0),
+    [heteronyms],
+  );
   const definitionIndexMap = useMemo(() => {
     const map = new Map<Definition, number>();
     let counter = 0;
@@ -513,6 +645,39 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
     };
   }, [lang, queryWord]);
 
+  // CNS11643 屬性後備：僅在四部辭典皆無（error 或 terms 非空）且查詢為恰好一個
+  // Unicode 字元時，才發出 CNS 請求。字典命中（state.entry 有值）時絕不觸發。
+  useEffect(() => {
+    const isSingleScalar = Array.from(queryWord).length === 1;
+    const dictHit = Boolean(state.entry);
+    const dictNoMatch =
+      !state.loading && !dictHit && (state.error !== null || state.terms.length > 0);
+    if (!isSingleScalar || !dictNoMatch) {
+      setCnsFallback({ loading: false, record: null, error: false });
+      return;
+    }
+    const controller = new AbortController();
+    setCnsFallback({ loading: true, record: null, error: false });
+    fetch(`/api/cns/${encodeURIComponent(queryWord)}.json`, { signal: controller.signal })
+      .then(async (cnsRes) => {
+        if (controller.signal.aborted) return;
+        if (cnsRes.ok) {
+          const data = (await cnsRes.json()) as CnsRecord;
+          setCnsFallback({ loading: false, record: data, error: false });
+        } else {
+          setCnsFallback({ loading: false, record: null, error: false });
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setCnsFallback({ loading: false, record: null, error: true });
+        }
+      });
+    return () => {
+      controller.abort();
+    };
+  }, [queryWord, state.entry, state.error, state.terms.length, state.loading]);
+
   useEffect(() => {
     if (!state.entry) return;
     addToLRU(queryWord, lang);
@@ -541,12 +706,56 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
 
   const toggleStrokeAnimation = useCallback(
     (event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>) => {
+      // g0v/moedict-webkit#186: 主要拼音/注音現在可以直接在可見字形上拖曳選
+      // 取複製；拖曳放開時瀏覽器仍會在同一個元素上送出一個 click（mousedown
+      // /mouseup 落在同一元素），若不擋下就會在使用者複製拼音的當下意外開
+      // 合筆順動畫，蓋掉剛選好的文字。只在滑鼠事件、且確實有非空選取時才略
+      // 過；鍵盤 Enter/Space 觸發（KeyboardEvent）不受影響。
+      if (event.type === "click" && hasActiveSelection()) return;
       event.preventDefault();
       event.stopPropagation();
+      if (strokeAnimationDisabled) return;
       setStrokesVisible((v) => !v);
     },
-    [],
+    [strokeAnimationDisabled],
   );
+
+  const copyEntryDefinitions = useCallback(async (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const container = resultRef.current;
+    if (!container) return;
+    // `.entry-item` (one per part-of-speech group) is the only DOM unit that
+    // holds actual definition content (POS tag + <ol> of <li> def/example/
+    // quote/link/synonyms/antonyms). Querying `.entry > .entry-item` in DOM
+    // order — rather than whole `.entry` heteronym blocks — naturally
+    // excludes every non-definition sibling: the action row (star/copy/
+    // variants), the radical/stroke-order corner, the title/pronunciation
+    // heading, Hakka's multi-dialect `.bopomofo` reading block, `.cn-specific`
+    // / `.twblg-variants` metadata, the reading-only note, dialect synonyms,
+    // and cross-reference link lists — without having to strip each by name.
+    const entryItems = Array.from(container.querySelectorAll(":scope > .entry > .entry-item"));
+    const text = entryItems
+      .map((item) => {
+        const copy = item.cloneNode(true) as HTMLElement;
+        // Taiwanese example/quote/link lines route through the same #186
+        // ruby2hruby() decoration as the title, so .romanization-selectable
+        // overlay spans can appear inside .entry-item too — strip them here.
+        copy.querySelectorAll(".romanization-selectable").forEach((node) => node.remove());
+        return (copy.innerText || copy.textContent || "").replace(/\s+/g, " ").trim();
+      })
+      .filter(Boolean)
+      .join("\n");
+    const ok = await writeTextToClipboard(text);
+    if (copyStatusTimerRef.current != null) {
+      window.clearTimeout(copyStatusTimerRef.current);
+    }
+    setCopyStatus({ ok });
+    copyStatusTimerRef.current = window.setTimeout(() => {
+      setCopyStatus(null);
+      copyStatusTimerRef.current = null;
+    }, 3000);
+  }, []);
 
   const onContentClick = (event: MouseEvent<HTMLDivElement>): void => {
     const target = event.target;
@@ -606,18 +815,26 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
             <p className="def">{state.error}</p>
           </div>
         </div>
+        {cnsFallback.record && <CnsAttributesPanel record={cnsFallback.record} />}
       </div>
     );
   }
 
   if (state.terms.length > 0) {
     return (
-      <CharacterImageView
-        queryWord={queryWord}
-        terms={state.terms}
-        lang={lang}
-        langTokenPrefix={langTokenPrefix}
-      />
+      <>
+        <CharacterImageView
+          queryWord={queryWord}
+          terms={state.terms}
+          lang={lang}
+          langTokenPrefix={langTokenPrefix}
+        />
+        {cnsFallback.record && (
+          <div className="result">
+            <CnsAttributesPanel record={cnsFallback.record} />
+          </div>
+        )}
+      </>
     );
   }
 
@@ -642,6 +859,7 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
 
   return (
     <div
+      ref={resultRef}
       className="result"
       onClick={onContentClick}
       onTouchStartCapture={onContentTouchStartCapture}
@@ -678,7 +896,8 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
             : [];
         const dialectSynonyms =
           lang === "t" || lang === "h" ? splitCommaSeparatedItems(heteronym.synonyms) : [];
-
+        // TWBLG 文/白/俗/替讀音分類（g0v/moedict-webkit#96、#233）：資料只在
+        // lang='t' 的 ptck pack 出現，其餘語言的 heteronym 沒有這個欄位。
         const definitions = Array.isArray(heteronym.definitions) ? heteronym.definitions : [];
         const groups = groupDefinitions(definitions);
         const readingType = lang === "t" ? untag(heteronym.reading ?? "").trim() : "";
@@ -686,171 +905,222 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
           lang === "t" && definitions.length === 0 && Boolean(heteronym.trs?.trim());
 
         return (
-          <div key={`${title}-${idx}`} className="entry" style={{ position: "relative" }}>
-            {/* 部首＋筆畫＋筆順動畫按鈕（同原 $char div.radical） */}
-            <div className="radical">
-              {(entry.radical || entry.stroke_count || entry.non_radical_stroke_count) && (
-                <>
-                  {entry.radical && <RadicalGlyph char={entry.radical} lang={lang} />}
-                  <span className="count">
-                    <span className="sym">+</span>
-                    {entry.non_radical_stroke_count ?? 0}
-                  </span>
-                  <span className="count"> = {entry.stroke_count ?? ""}</span>
-                  {"\u00A0"}
-                </>
-              )}
-              {/* 紅底鉛筆按鈕（同原 a.iconic-circle.stroke.icon-pencil） */}
-              <a
-                className="iconic-circle stroke"
-                title="筆順動畫"
-                role="button"
-                tabIndex={0}
-                onClick={toggleStrokeAnimation}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    toggleStrokeAnimation(e);
-                  }
-                }}
-              >
-                <SvgIcon name="pencil" size="1em" aria-hidden="true" />
-              </a>
-            </div>
-            {idx === 0 && (
-              <span
-                className="star iconic-color"
-                title={isStarred ? "已加入記錄簿" : "加入字詞記錄簿"}
-                style={{ top: "50px", right: "0px", cursor: "pointer" }}
-                data-word={title}
-                data-lang={lang}
-                role="button"
-                tabIndex={0}
-                aria-label={isStarred ? "已加入記錄簿" : "加入字詞記錄簿"}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  event.preventDefault();
-                  toggleStar();
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    toggleStar();
-                  }
-                }}
-              >
-                <SvgIcon
-                  name={isStarred ? "star" : "starEmpty"}
-                  size="1em"
-                  style={isStarred ? undefined : { transform: "scale(1.12)" }}
-                  aria-hidden="true"
-                />
-              </span>
-            )}
-            <h1 className="title" data-title={title}>
-              <TitlePronunciation
-                lang={lang}
-                youyin={rubyData.youyin}
-                bAlt={rubyData.bAlt}
-                pAlt={rubyData.pAlt}
-                pronunAudioId={lang !== "h" ? pronunAudioId : undefined}
-                readingType={readingType}
-                isPlaying={playingAudioId === pronunAudioId}
-                onToggleAudio={() => {
-                  if (!pronunAudioId) return;
-                  const audioId = pronunAudioId;
-                  playAudioUrl(getAudioUrl(lang, audioId), (playing) => {
-                    setPlayingAudioId(playing ? audioId : null);
-                  });
-                }}
-              >
-                <span
-                  className={isSingleCharTitle ? "single-char-stroke-trigger" : undefined}
-                  role={isSingleCharTitle ? "button" : undefined}
-                  tabIndex={isSingleCharTitle ? 0 : undefined}
-                  onClick={isSingleCharTitle ? toggleStrokeAnimation : undefined}
-                  onKeyDown={
-                    isSingleCharTitle
-                      ? (event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            toggleStrokeAnimation(event);
+          <div key={`${title}-${idx}`} className="entry">
+            <div className="entry-heading">
+              <div className="entry-control-stack">
+                <div className="radical">
+                  {(entry.radical || entry.stroke_count || entry.non_radical_stroke_count) && (
+                    <>
+                      {entry.radical && <RadicalGlyph char={entry.radical} lang={lang} />}
+                      <span className="count">
+                        <span className="sym">+</span>
+                        {entry.non_radical_stroke_count ?? 0}
+                      </span>
+                      <span className="count"> = {entry.stroke_count ?? ""}</span>
+                      {"\u00A0"}
+                    </>
+                  )}
+                  <a
+                    className="iconic-circle stroke"
+                    title={strokeAnimationDisabled ? "此字尚無筆順動畫資料" : "筆順動畫"}
+                    role="button"
+                    tabIndex={strokeAnimationDisabled ? -1 : 0}
+                    aria-disabled={strokeAnimationDisabled || undefined}
+                    aria-label={strokeAnimationDisabled ? "筆順動畫（此字尚無資料）" : undefined}
+                    onClick={strokeAnimationDisabled ? undefined : toggleStrokeAnimation}
+                    onKeyDown={
+                      strokeAnimationDisabled
+                        ? undefined
+                        : (e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              toggleStrokeAnimation(e);
+                            }
                           }
+                    }
+                  >
+                    <SvgIcon name="pencil" size="1em" aria-hidden="true" />
+                  </a>
+                </div>
+                {idx === 0 && (
+                  <div className="entry-actions">
+                    {hasEntryDefinitions && (
+                      <button
+                        type="button"
+                        className="entry-copy-button"
+                        aria-label="複製解釋"
+                        title="複製解釋"
+                        onClick={(event) => {
+                          void copyEntryDefinitions(event);
+                        }}
+                      >
+                        <SvgIcon name="copy" size="1em" aria-hidden="true" />
+                      </button>
+                    )}
+                    {hasEntryDefinitions && copyStatus && (
+                      <span className="entry-copy-status" role="status" aria-live="polite">
+                        {copyStatus.ok ? "已複製" : "複製失敗，請手動選取文字"}
+                      </span>
+                    )}
+                    {isSingleCharTitle && (
+                      <a
+                        className="iconic-circle stroke variants-link"
+                        title="教育部《異體字字典》"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        href={`https://dict.variants.moe.edu.tw/search.jsp?QTP=0&WORD=${encodeURIComponent(title)}`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <SvgIcon name="book" size="1em" aria-hidden="true" />
+                      </a>
+                    )}
+                    <span
+                      className="star iconic-color"
+                      title={isStarred ? "已加入記錄簿" : "加入字詞記錄簿"}
+                      data-word={title}
+                      data-lang={lang}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={isStarred ? "已加入記錄簿" : "加入字詞記錄簿"}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        event.preventDefault();
+                        toggleStar();
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          toggleStar();
                         }
-                      : undefined
-                  }
+                      }}
+                    >
+                      <SvgIcon
+                        name={isStarred ? "star" : "starEmpty"}
+                        size="1em"
+                        style={isStarred ? undefined : { transform: "scale(1.12)" }}
+                        aria-hidden="true"
+                      />
+                    </span>
+                  </div>
+                )}
+              </div>
+              <h1 className="title" data-title={title}>
+                <TitlePronunciation
+                  lang={lang}
+                  youyin={rubyData.youyin}
+                  bAlt={rubyData.bAlt}
+                  pAlt={rubyData.pAlt}
+                  pronunAudioId={lang !== "h" ? pronunAudioId : undefined}
+                  readingType={readingType}
+                  isPlaying={playingAudioId === pronunAudioId}
+                  onToggleAudio={() => {
+                    if (!pronunAudioId) return;
+                    const audioId = pronunAudioId;
+                    playAudioUrl(getAudioUrl(lang, audioId), (playing) => {
+                      setPlayingAudioId(playing ? audioId : null);
+                    });
+                  }}
                 >
-                  {(() => {
-                    if (lang === "h") return <span dangerouslySetInnerHTML={{ __html: title }} />;
-                    const htmlRuby = rubyData.ruby || "";
-                    if (!htmlRuby) return <span dangerouslySetInnerHTML={{ __html: title }} />;
-                    const hruby = rightAngle(htmlRuby);
-                    return <span dangerouslySetInnerHTML={{ __html: hruby }} />;
-                  })()}
-                </span>
-              </TitlePronunciation>
-            </h1>
-            {hakkaReadings.length > 0 && (
-              <div className="bopomofo">
-                <span className="pinyin">
-                  {hakkaReadings.map((item) => {
-                    const audioKey = `${heteronym.audio_id}:${item.variant}`;
-                    return (
-                      <span key={`${title}-${idx}-${item.variant}`}>
-                        <span className="audioBlock">
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            aria-label={playingAudioId === audioKey ? "停止播放" : "播放發音"}
-                            className="part-of-speech"
-                            title={playingAudioId === audioKey ? "停止播放" : "播放發音"}
-                            style={{
-                              cursor: "pointer",
-                              fontSize: "1.4em",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 4,
-                            }}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              playAudioUrl(
-                                getHakkaVariantAudioUrl(item.variant, heteronym.audio_id!),
-                                (playing) => {
-                                  setPlayingAudioId(playing ? audioKey : null);
-                                },
-                              );
-                            }}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter" || event.key === " ") {
-                                event.preventDefault();
+                  <span
+                    className={isSingleCharTitle ? "single-char-stroke-trigger" : undefined}
+                    role={isSingleCharTitle ? "button" : undefined}
+                    tabIndex={isSingleCharTitle && !strokeAnimationDisabled ? 0 : undefined}
+                    aria-disabled={isSingleCharTitle && strokeAnimationDisabled ? true : undefined}
+                    onClick={
+                      isSingleCharTitle && !strokeAnimationDisabled
+                        ? toggleStrokeAnimation
+                        : undefined
+                    }
+                    onKeyDown={
+                      isSingleCharTitle && !strokeAnimationDisabled
+                        ? (event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              toggleStrokeAnimation(event);
+                            }
+                          }
+                        : undefined
+                    }
+                  >
+                    {(() => {
+                      if (lang === "h") return <span dangerouslySetInnerHTML={{ __html: title }} />;
+                      const htmlRuby = rubyData.ruby || "";
+                      if (!htmlRuby) return <span dangerouslySetInnerHTML={{ __html: title }} />;
+                      const hruby = rightAngle(htmlRuby);
+                      return <span dangerouslySetInnerHTML={{ __html: hruby }} />;
+                    })()}
+                  </span>
+                </TitlePronunciation>
+              </h1>
+              {hakkaReadings.length > 0 && (
+                <div className="bopomofo">
+                  <span className="pinyin">
+                    {hakkaReadings.map((item) => {
+                      const audioKey = `${heteronym.audio_id}:${item.variant}`;
+                      return (
+                        <span key={`${title}-${idx}-${item.variant}`}>
+                          <span className="audioBlock">
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              aria-label={playingAudioId === audioKey ? "停止播放" : "播放發音"}
+                              className="part-of-speech"
+                              title={playingAudioId === audioKey ? "停止播放" : "播放發音"}
+                              style={{
+                                cursor: "pointer",
+                                fontSize: "1.4em",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                              }}
+                              onClick={(event) => {
+                                event.stopPropagation();
                                 playAudioUrl(
                                   getHakkaVariantAudioUrl(item.variant, heteronym.audio_id!),
                                   (playing) => {
                                     setPlayingAudioId(playing ? audioKey : null);
                                   },
                                 );
-                              }
-                            }}
-                          >
-                            <SvgIcon
-                              name={playingAudioId === audioKey ? "stop" : "play"}
-                              size="1em"
-                              aria-hidden="true"
-                            />
-                            {item.dialect}
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  playAudioUrl(
+                                    getHakkaVariantAudioUrl(item.variant, heteronym.audio_id!),
+                                    (playing) => {
+                                      setPlayingAudioId(playing ? audioKey : null);
+                                    },
+                                  );
+                                }
+                              }}
+                            >
+                              <SvgIcon
+                                name={playingAudioId === audioKey ? "stop" : "play"}
+                                size="1em"
+                                aria-hidden="true"
+                              />
+                              {item.dialect}
+                            </span>
                           </span>
+                          <span dangerouslySetInnerHTML={{ __html: item.readingHtml }} />
                         </span>
-                        <span dangerouslySetInnerHTML={{ __html: item.readingHtml }} />
-                      </span>
-                    );
-                  })}
-                </span>
-              </div>
-            )}
+                      );
+                    })}
+                  </span>
+                </div>
+              )}
+            </div>
 
             {heteronym.alt && (
               <div className="cn-specific" lang="zh-Hans">
                 <span className="xref part-of-speech">简</span>
                 <span className="xref">{untag(heteronym.alt)}</span>
+              </div>
+            )}
+
+            {lang === "t" && heteronym.variants && heteronym.variants.length > 0 && (
+              <div className="twblg-variants">
+                <span className="xref part-of-speech">異用字</span>
+                <span className="xref">{heteronym.variants.join("、")}</span>
               </div>
             )}
 

@@ -3,10 +3,16 @@
  *   children（ruby/title）→ small.youyin → span.audioBlock →
  *   small.alternative → small.reading-type
  *
- * 前四個節點依 legacy `~/w/moedict-webkit/view.ls:132-158` 的 ground truth；
- * 新增的 reading-type 固定放在最後。
+ * 三個節點依 legacy `~/w/moedict-webkit/view.ls:132-158` 的 ground truth；
+ * reading-type 固定放在最後。
  * 過去曾有 commit 把 .alternative 插到 .audioBlock 之前，造成播放鍵被
  * block-level 的 .alternative 擠到下方（視覺回歸）。本測試把順序固化。
+ *
+ * small.reading-type 是 g0v/moedict-webkit#96、#233 新增的 TWBLG 文/白/
+ * 俗/替讀音分類標記，legacy 沒有對應節點，固定加在既有三個節點之後。
+ *
+ * 「複製羅馬拼音」按鈕（#256）已移除；羅馬拼音現在可透過滑鼠/觸控
+ * 拖曳直接選取（#186 CSS 疊加層），不需要獨立按鈕。
  */
 
 import { renderToStaticMarkup } from "react-dom/server";
@@ -25,15 +31,15 @@ function render(overrides: Record<string, unknown> = {}): string {
     pronunAudioId: "12345" as string | undefined,
     isPlaying: false,
     onToggleAudio: noop,
-    readingType: "文" as string | undefined,
+    readingType: undefined as string | undefined,
   };
   const props = { ...defaults, ...overrides };
   return renderToStaticMarkup(<TitlePronunciation {...props} />);
 }
 
 describe("TitlePronunciation 順序不變量", () => {
-  it("(a) t-lang 全部項目齊全時，既有順序不變且 reading-type 固定在最後", () => {
-    const html = render();
+  it("(a) t-lang 全部項目齊全時，children → youyin → audioBlock → alternative → reading-type 順序正確", () => {
+    const html = render({ readingType: "文" });
     const iChildren = html.indexOf('data-testid="ruby"');
     const iYouyin = html.indexOf('class="youyin"');
     const iAudioBlock = html.indexOf('class="audioBlock"');
@@ -52,6 +58,12 @@ describe("TitlePronunciation 順序不變量", () => {
     expect(iYouyin).toBeLessThan(iAudioBlock);
     expect(iAudioBlock).toBeLessThan(iAlternative);
     expect(iAlternative).toBeLessThan(iReadingType);
+  });
+
+  it("no copyBlock rendered — romanization is selectable via #186 CSS overlay, not a button", () => {
+    const html = render();
+    expect(html).not.toContain('class="copyBlock"');
+    expect(html).not.toContain("copyRomanization");
   });
 
   it("(b) 無 bAlt/pAlt 時不渲染 small.alternative", () => {
@@ -119,5 +131,36 @@ describe("TitlePronunciation 順序不變量", () => {
   it("youyin 不存在時不渲染 small.youyin", () => {
     const html = render({ youyin: undefined });
     expect(html).not.toContain('class="youyin"');
+  });
+
+  it("(e) readingType 有值時，排在 alternative 之後，並帶正確分類標籤 title", () => {
+    const html = render({ readingType: "文" });
+    const iAlternative = html.indexOf('class="alternative"');
+    const iReadingType = html.indexOf('class="reading-type"');
+    expect(iAlternative).toBeGreaterThanOrEqual(0);
+    expect(iReadingType).toBeGreaterThan(iAlternative);
+    expect(html).toContain('title="文讀音（文言音）"');
+    expect(html).toContain(">文</small>");
+  });
+
+  it("(f) readingType 未提供時不渲染 small.reading-type", () => {
+    const html = render();
+    expect(html).not.toContain('class="reading-type"');
+  });
+
+  it("(g) readingType 為未知代碼時，title 直接 fallback 回原始代碼", () => {
+    const html = render({ readingType: "X" });
+    expect(html).toContain('class="reading-type" title="X"');
+    expect(html).toContain(">X</small>");
+  });
+
+  it.each([
+    ["文", "文讀音（文言音）"],
+    ["白", "白讀音（白話音）"],
+    ["俗", "俗讀音"],
+    ["替", "替代字讀音（訓用字）"],
+  ])("(h) readingType=%s 對應標籤 %s", (code, label) => {
+    const html = render({ readingType: code });
+    expect(html).toContain(`title="${label}"`);
   });
 });

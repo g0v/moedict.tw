@@ -6,9 +6,14 @@
  * - main.ls: strokeWords(), drawOutline(), strokeWord()
  * - view.ls: Heteronym 組件中的 #historical-scripts 按鈕
  * - index.html: <div id="strokes"> 位於 .results 頂部
+ *
+ * 新增（moedict-webkit#230）：點擊 #strokes 容器可重播筆順動畫，取代原本
+ * 必須整個關閉再重新開啟才能重看的流程；容器同時具備 role=button /
+ * tabIndex=0 / aria-label，支援鍵盤（Enter／Space）觸發重播。
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { readStrokeSpeedPref, resolveStrokeSpeedOptions } from "../utils/stroke-speed-utils";
 
 interface StrokeAnimationProps {
   /** 要動畫的字詞（可為多字） */
@@ -145,11 +150,14 @@ export function StrokeAnimation({ title, visible, lang = "a" }: StrokeAnimationP
         }
 
         // 執行筆順動畫（同原 $('#strokes').strokeWords(words, {url, dataType, -svg})）
-        // 透過本機 Worker 代理，解決 CORS 問題（/api/stroke-json/{cp}.json）
+        // 透過本機 Worker 代理，解決 CORS 問題（/api/stroke-json/{cp}.json）。
+        // 速度選項在此才讀取（而非 effect deps）：中途變更偏好不影響進行中的
+        // 動畫，重播／重新開啟才會套用最新設定（issue #98）。
         $(container).strokeWords(words, {
           url: "/api/stroke-json/",
           dataType: "json",
           svg: false,
+          ...resolveStrokeSpeedOptions(readStrokeSpeedPref()),
         });
         console.debug("[StrokeAnimation] draw started", {
           runId: currentRunId,
@@ -236,6 +244,10 @@ export function StrokeAnimation({ title, visible, lang = "a" }: StrokeAnimationP
     setLoadingHistorical(false);
   }, [title, loadingHistorical]);
 
+  // 點擊筆順動畫容器可重播（issue #230：不必整個關閉再重新開啟才能重看）。
+  // 透過重設 containerKey 強制卸載並重新掛載 #strokes，觸發上方 effect 重新繪製。
+  // （visible 恆為 true：容器只在 `if (!visible) return null;` 之後才會渲染。）
+
   if (!visible) return null;
 
   return (
@@ -265,7 +277,27 @@ export function StrokeAnimation({ title, visible, lang = "a" }: StrokeAnimationP
       </a>
 
       {/* 筆順動畫容器（同原 <div id="strokes">） */}
-      <div key={containerKey} ref={containerRef} id="strokes" lang={lang} />
+      <div
+        key={containerKey}
+        ref={containerRef}
+        id="strokes"
+        lang={lang}
+        role="button"
+        tabIndex={0}
+        title="點擊重播筆順動畫"
+        aria-label="點擊重播筆順動畫"
+        onClick={(e) => {
+          e.stopPropagation();
+          setContainerKey((prev) => prev + 1);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setContainerKey((prev) => prev + 1);
+          }
+        }}
+        style={{ cursor: "pointer" }}
+      />
 
       {/* 歷代書體展示區：各書體一個 section，橫向展示各字 GIF */}
       {historicalVisible && historicalData.length > 0 && (

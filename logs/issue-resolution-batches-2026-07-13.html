@@ -1,0 +1,2274 @@
+<!doctype html>
+<html lang="zh-Hant" data-report="issue-resolution-batches-2026-07-13">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>萌典議題處理批次 · 2026-07-17</title>
+    <style>
+      :root {
+        --burgundy: #6b0000;
+        --burgundy-2: #8b1e1e;
+        --burgundy-3: #b94747;
+        --ink: #221915;
+        --muted: #67544c;
+        --paper: #fff8ee;
+        --paper-2: #f7ead6;
+        --paper-3: #efe0c7;
+        --card: rgba(255, 253, 247, 0.93);
+        --line: #dac8ad;
+        --gold: #b98222;
+        --green: #18633e;
+        --blue: #315f8f;
+        --violet: #6b4aa2;
+        --red: #9a2d2d;
+        --shadow: 0 18px 42px rgba(74, 38, 18, 0.14);
+        --shadow-soft: 0 8px 24px rgba(74, 38, 18, 0.1);
+        --radius: 22px;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        --sans:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue",
+          Arial, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+        --serif: ui-serif, Georgia, "Noto Serif TC", "Songti TC", serif;
+        --grid: color-mix(in srgb, var(--burgundy) 11%, transparent);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ink: #f4e9da;
+          --muted: #cbbcac;
+          --paper: #15100d;
+          --paper-2: #201713;
+          --paper-3: #2b211b;
+          --card: rgba(35, 26, 21, 0.94);
+          --line: #59483b;
+          --burgundy: #ff8f8f;
+          --burgundy-2: #f06f6f;
+          --burgundy-3: #c95b5b;
+          --gold: #e0b45f;
+          --green: #8dd7b0;
+          --blue: #9fc6f1;
+          --violet: #cab5ff;
+          --red: #ffaaaa;
+          --shadow: 0 18px 42px rgba(0, 0, 0, 0.35);
+          --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.28);
+          --grid: rgba(255, 143, 143, 0.1);
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background:
+          radial-gradient(
+            circle at 12% 8%,
+            color-mix(in srgb, var(--burgundy) 16%, transparent),
+            transparent 28rem
+          ),
+          radial-gradient(circle at 92% 2%, rgba(185, 130, 34, 0.18), transparent 25rem),
+          linear-gradient(135deg, var(--paper), var(--paper-2));
+        font-family: var(--sans);
+        line-height: 1.58;
+        overflow-x: hidden;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: -2;
+        background-image:
+          linear-gradient(var(--grid) 1px, transparent 1px),
+          linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+        background-size: 42px 42px;
+        mask-image: linear-gradient(
+          to bottom,
+          rgba(0, 0, 0, 0.55),
+          rgba(0, 0, 0, 0.12) 45%,
+          transparent 90%
+        );
+        pointer-events: none;
+      }
+
+      body::after {
+        content: "部首 · 音讀 · 筆順 · 搜尋";
+        position: fixed;
+        right: -9rem;
+        top: 6rem;
+        z-index: -1;
+        transform: rotate(90deg);
+        color: color-mix(in srgb, var(--burgundy) 12%, transparent);
+        font: 700 clamp(2rem, 7vw, 6rem)/1 var(--serif);
+        letter-spacing: 0.16em;
+        white-space: nowrap;
+        pointer-events: none;
+      }
+
+      a {
+        color: var(--burgundy);
+        text-decoration-thickness: 0.08em;
+        text-underline-offset: 0.18em;
+      }
+      a:hover {
+        color: var(--burgundy-2);
+      }
+      :focus-visible {
+        outline: 3px solid var(--gold);
+        outline-offset: 3px;
+        border-radius: 6px;
+      }
+      code,
+      .commit {
+        font-family: var(--mono);
+        font-size: 0.93em;
+      }
+      .commit {
+        white-space: nowrap;
+        color: color-mix(in srgb, var(--burgundy) 78%, var(--ink));
+        font-weight: 700;
+      }
+
+      .skip-link {
+        position: absolute;
+        left: 1rem;
+        top: 0.75rem;
+        z-index: 100;
+        transform: translateY(-170%);
+        padding: 0.65rem 1rem;
+        border-radius: 999px;
+        background: var(--ink);
+        color: var(--paper);
+        text-decoration: none;
+      }
+      .skip-link:focus {
+        transform: translateY(0);
+      }
+
+      header.hero {
+        padding: clamp(2rem, 6vw, 5rem) clamp(1rem, 4vw, 4rem) 2rem;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .hero-shell {
+        max-width: 1220px;
+        margin: 0 auto;
+        border: 1px solid var(--line);
+        border-radius: calc(var(--radius) + 8px);
+        background:
+          linear-gradient(
+            120deg,
+            color-mix(in srgb, var(--card) 88%, transparent),
+            color-mix(in srgb, var(--paper-2) 82%, transparent)
+          ),
+          radial-gradient(circle at 100% 0%, rgba(107, 0, 0, 0.12), transparent 22rem);
+        box-shadow: var(--shadow);
+        padding: clamp(1.25rem, 4vw, 3rem);
+        position: relative;
+      }
+
+      .hero-shell::before {
+        content: "萌";
+        position: absolute;
+        right: clamp(0.6rem, 4vw, 2rem);
+        bottom: -1rem;
+        color: color-mix(in srgb, var(--burgundy) 8%, transparent);
+        font: 900 clamp(8rem, 26vw, 21rem)/0.75 var(--serif);
+        pointer-events: none;
+      }
+
+      .kicker {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+        align-items: center;
+        margin-bottom: 1rem;
+      }
+      .pill,
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        border: 1px solid color-mix(in srgb, var(--burgundy) 24%, var(--line));
+        border-radius: 999px;
+        padding: 0.32rem 0.7rem;
+        background: color-mix(in srgb, var(--paper) 72%, transparent);
+        color: var(--ink);
+        font-size: 0.86rem;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+      .chip[data-tone="done"] {
+        border-color: color-mix(in srgb, var(--green) 55%, var(--line));
+        color: var(--green);
+      }
+      .chip[data-tone="verify"] {
+        border-color: color-mix(in srgb, var(--blue) 55%, var(--line));
+        color: var(--blue);
+      }
+      .chip[data-tone="partial"] {
+        border-color: color-mix(in srgb, var(--gold) 65%, var(--line));
+        color: var(--gold);
+      }
+      .chip[data-tone="caveat"] {
+        border-color: color-mix(in srgb, var(--red) 55%, var(--line));
+        color: var(--red);
+      }
+      .chip[data-tone="feature"] {
+        border-color: color-mix(in srgb, var(--violet) 55%, var(--line));
+        color: var(--violet);
+      }
+
+      h1,
+      h2,
+      h3,
+      h4 {
+        line-height: 1.15;
+        margin: 0 0 0.75rem;
+      }
+      h1 {
+        font-size: clamp(2.2rem, 6vw, 5.4rem);
+        letter-spacing: -0.045em;
+        max-width: 950px;
+      }
+      h1 .accent {
+        color: var(--burgundy);
+      }
+      .thesis {
+        max-width: 860px;
+        font-size: clamp(1.05rem, 2.3vw, 1.35rem);
+        color: var(--muted);
+        margin: 1rem 0 0;
+      }
+      .hero-meta {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.85rem;
+        margin-top: 2rem;
+        position: relative;
+        z-index: 1;
+      }
+      .metric {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: color-mix(in srgb, var(--card) 87%, transparent);
+        padding: 1rem;
+        min-width: 0;
+      }
+      .metric strong {
+        display: block;
+        font-size: clamp(1.4rem, 3.5vw, 2.35rem);
+        color: var(--burgundy);
+        line-height: 1.05;
+      }
+      .metric span {
+        display: block;
+        color: var(--muted);
+        font-size: 0.9rem;
+        overflow-wrap: anywhere;
+      }
+
+      nav.toc {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        backdrop-filter: blur(15px);
+        background: color-mix(in srgb, var(--paper) 84%, transparent);
+        border-block: 1px solid var(--line);
+        overflow-x: hidden;
+      }
+      .toc-inner {
+        width: 100%;
+        max-width: 1220px;
+        margin: 0 auto;
+        padding: 0.75rem 1rem;
+        display: flex;
+        gap: 0.6rem;
+        overflow-x: auto;
+        align-items: center;
+      }
+      .toc a,
+      .filter-button {
+        border: 1px solid var(--line);
+        background: var(--card);
+        border-radius: 999px;
+        padding: 0.48rem 0.8rem;
+        text-decoration: none;
+        color: var(--ink);
+        white-space: nowrap;
+        font-weight: 700;
+        font-size: 0.88rem;
+      }
+      .filter-button {
+        cursor: pointer;
+        font: inherit;
+      }
+      .filter-button[aria-pressed="true"],
+      .toc a:hover {
+        border-color: var(--burgundy);
+        color: var(--burgundy);
+      }
+
+      main {
+        max-width: 1220px;
+        margin: 0 auto;
+        padding: 2rem 1rem 5rem;
+      }
+      section {
+        scroll-margin-top: 5rem;
+        margin: 0 0 clamp(2rem, 5vw, 4rem);
+      }
+      .section-head {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 1rem;
+        margin: 0 0 1.2rem;
+      }
+      .section-head h2 {
+        font-size: clamp(1.65rem, 4vw, 3rem);
+        letter-spacing: -0.025em;
+      }
+      .section-head p {
+        max-width: 730px;
+        margin: 0.25rem 0 0;
+        color: var(--muted);
+      }
+
+      .panel,
+      .callout,
+      .issue-card,
+      .domain,
+      .verify-card,
+      .timeline-card {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--card);
+        box-shadow: var(--shadow-soft);
+      }
+      .panel {
+        padding: clamp(1rem, 3vw, 1.6rem);
+      }
+      .callout {
+        padding: 1rem 1.1rem;
+        border-left: 6px solid var(--burgundy);
+      }
+      .callout strong {
+        color: var(--burgundy);
+      }
+      .callout[data-tone="warning"] {
+        border-left-color: var(--gold);
+      }
+      .callout[data-tone="warning"] strong {
+        color: var(--gold);
+      }
+
+      .two-lane {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+        align-items: stretch;
+      }
+      .lane {
+        position: relative;
+        padding: 1.3rem;
+        overflow: hidden;
+      }
+      .lane h3 {
+        font-size: clamp(1.3rem, 3vw, 2.05rem);
+      }
+      .lane ul {
+        padding-left: 1.2rem;
+        margin: 0.75rem 0 0;
+      }
+      .lane::after {
+        content: attr(data-count);
+        position: absolute;
+        right: 0.75rem;
+        top: 0.4rem;
+        font: 900 clamp(4rem, 12vw, 8rem)/1 var(--serif);
+        color: color-mix(in srgb, var(--burgundy) 9%, transparent);
+      }
+
+      .method-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 1rem;
+      }
+      .method-grid .panel h3 {
+        font-size: 1.06rem;
+        color: var(--burgundy);
+      }
+      .method-grid .panel p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .filter-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+        align-items: center;
+        margin: 1rem 0 1.4rem;
+      }
+      .filter-bar .label {
+        font-weight: 800;
+        color: var(--muted);
+        margin-right: 0.25rem;
+      }
+      #result-count {
+        color: var(--muted);
+        font-weight: 700;
+        margin-left: auto;
+      }
+
+      .domain {
+        margin-bottom: 1rem;
+        overflow: clip;
+      }
+      .domain > header {
+        padding: 1rem 1.15rem;
+        background: linear-gradient(
+          90deg,
+          color-mix(in srgb, var(--burgundy) 10%, transparent),
+          transparent
+        );
+        border-bottom: 1px solid var(--line);
+      }
+      .domain > header h3 {
+        margin-bottom: 0.2rem;
+      }
+      .domain > header p {
+        color: var(--muted);
+        margin: 0;
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+        padding: 1rem;
+      }
+
+      .issue-card {
+        padding: 0;
+        overflow: hidden;
+        box-shadow: none;
+      }
+      .issue-card[hidden] {
+        display: none !important;
+      }
+      .issue-card summary {
+        cursor: pointer;
+        list-style: none;
+        padding: 1rem 1rem 0.9rem;
+        border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+      }
+      .issue-card summary::-webkit-details-marker {
+        display: none;
+      }
+      .issue-card summary::after {
+        content: "Open details";
+        float: right;
+        margin-left: 0.8rem;
+        font-size: 0.76rem;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 0.2rem 0.5rem;
+      }
+      .issue-card[open] summary::after {
+        content: "Close";
+      }
+      .issue-title {
+        display: block;
+        font-size: 1.05rem;
+        font-weight: 900;
+        padding-right: 5.5rem;
+      }
+      .issue-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin-top: 0.55rem;
+      }
+      .issue-body {
+        padding: 0.95rem 1rem 1.1rem;
+      }
+      .issue-body h4 {
+        color: var(--burgundy);
+        font-size: 0.93rem;
+        margin-top: 0.8rem;
+      }
+      .issue-body h4:first-child {
+        margin-top: 0;
+      }
+      .issue-body p {
+        margin: 0.25rem 0 0.65rem;
+      }
+      .issue-body ul {
+        margin: 0.25rem 0 0.75rem;
+        padding-left: 1.1rem;
+      }
+      .evidence-line {
+        border-top: 1px dashed var(--line);
+        padding-top: 0.7rem;
+        margin-top: 0.7rem;
+      }
+
+      .spotlight {
+        border-radius: calc(var(--radius) + 10px);
+        padding: clamp(1.1rem, 3vw, 2rem);
+        border: 1px solid color-mix(in srgb, var(--gold) 55%, var(--line));
+        background:
+          linear-gradient(145deg, color-mix(in srgb, var(--gold) 14%, var(--card)), var(--card)),
+          radial-gradient(circle at 90% 10%, rgba(107, 0, 0, 0.14), transparent 20rem);
+        box-shadow: var(--shadow);
+      }
+      .spotlight h2 {
+        font-size: clamp(1.9rem, 5vw, 3.6rem);
+        color: var(--burgundy);
+      }
+      .spot-grid {
+        display: grid;
+        grid-template-columns: 1.15fr 0.85fr;
+        gap: 1rem;
+        margin-top: 1rem;
+      }
+      .fact-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.75rem;
+        margin-top: 1rem;
+      }
+      .fact {
+        padding: 0.8rem;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: color-mix(in srgb, var(--paper) 62%, transparent);
+      }
+      .fact strong {
+        display: block;
+        color: var(--burgundy);
+      }
+
+      .quality-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+      }
+      .timeline-card {
+        padding: 1rem;
+      }
+      .timeline-card h3 {
+        color: var(--burgundy);
+        font-size: 1.05rem;
+      }
+      .timeline-card p {
+        margin: 0.35rem 0 0;
+        color: var(--muted);
+      }
+
+      .verify-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.85rem;
+      }
+      .verify-card {
+        padding: 1rem;
+      }
+      .verify-card strong {
+        display: block;
+        color: var(--burgundy);
+        font-size: 1.15rem;
+      }
+      .verify-card span {
+        display: block;
+        color: var(--muted);
+        margin-top: 0.15rem;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        text-align: left;
+        vertical-align: top;
+        padding: 0.75rem;
+        border-bottom: 1px solid var(--line);
+      }
+      th {
+        color: var(--burgundy);
+        font-size: 0.86rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      td {
+        overflow-wrap: anywhere;
+      }
+
+      .footer-note {
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      @media (max-width: 920px) {
+        .hero-meta,
+        .method-grid,
+        .verify-grid,
+        .fact-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .two-lane,
+        .cards,
+        .spot-grid,
+        .quality-grid {
+          grid-template-columns: 1fr;
+        }
+        .section-head {
+          display: block;
+        }
+        #result-count {
+          width: 100%;
+          margin-left: 0;
+        }
+      }
+
+      @media (max-width: 520px) {
+        header.hero {
+          padding-inline: 0.75rem;
+        }
+        main {
+          padding-inline: 0.75rem;
+        }
+        code,
+        .commit {
+          overflow-wrap: anywhere;
+          word-break: break-word;
+        }
+        .commit {
+          white-space: normal;
+        }
+        .pill {
+          max-width: 100%;
+          white-space: normal;
+        }
+        .hero-meta,
+        .method-grid,
+        .verify-grid,
+        .fact-grid {
+          grid-template-columns: 1fr;
+        }
+        .metric {
+          padding: 0.85rem;
+        }
+        .cards {
+          padding: 0.75rem;
+        }
+        .issue-title {
+          padding-right: 0;
+        }
+        .issue-card summary::after {
+          float: none;
+          display: inline-block;
+          margin: 0.6rem 0 0;
+        }
+        th,
+        td {
+          display: block;
+          padding: 0.6rem 0.2rem;
+        }
+        th {
+          border-bottom: 0;
+          padding-top: 0.9rem;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.001ms !important;
+          animation-iteration-count: 1 !important;
+          scroll-behavior: auto !important;
+          transition-duration: 0.001ms !important;
+        }
+      }
+
+      @media print {
+        body {
+          background: #fff;
+          color: #000;
+        }
+        body::before,
+        body::after,
+        nav.toc,
+        .filter-bar,
+        .skip-link {
+          display: none !important;
+        }
+        .hero-shell,
+        .panel,
+        .callout,
+        .issue-card,
+        .domain,
+        .verify-card,
+        .timeline-card,
+        .spotlight {
+          box-shadow: none;
+          background: #fff;
+          border-color: #999;
+        }
+        main,
+        header.hero {
+          max-width: none;
+          padding: 0;
+        }
+        a {
+          color: #000;
+          text-decoration: underline;
+        }
+        details.issue-card {
+          break-inside: avoid;
+        }
+        details.issue-card:not([open]) > .issue-body {
+          display: block;
+        }
+        details.issue-card:not([open]) summary::after {
+          content: "";
+          display: none;
+        }
+        details.issue-card[hidden] {
+          display: block !important;
+        }
+        .cards,
+        .quality-grid,
+        .verify-grid,
+        .method-grid,
+        .two-lane,
+        .spot-grid,
+        .fact-grid {
+          display: block;
+        }
+        .issue-card,
+        .panel,
+        .verify-card,
+        .timeline-card {
+          margin-bottom: 0.75rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">跳至報告內容</a>
+    <header class="hero" role="banner">
+      <div class="hero-shell">
+        <div class="kicker" aria-label="報告彙整資訊">
+          <span class="pill">2026-07-17 彙整報告</span>
+          <span class="pill">批次 1：21 個已實作</span>
+          <span class="pill">批次 2：5 個僅驗證完成</span>
+          <span class="pill">未推送・未部署正式環境・未寫入 GitHub</span>
+        </div>
+        <h1><span class="accent">moedict.tw</span> 議題處理批次</h1>
+        <p class="thesis">
+          <strong>主旨：</strong>可由本機程式碼處理、觀測並測試的契約，就整合修正；若
+          main、資料或執行環境已符合回報需求，就只記錄驗證結果。整合分支優先採用涵蓋既有修法的語意超集，不重複
+          cherry-pick；辭典釋義則視為資料原典，不任意改寫。
+        </p>
+        <div class="hero-meta" aria-label="分支現況">
+          <div class="metric"><strong>21</strong><span>整合分支已實作</span></div>
+          <div class="metric"><strong>5</strong><span>既有狀態已驗證完成</span></div>
+          <div class="metric">
+            <strong><span class="commit">5ea9fbf</span></strong
+            ><span>目前 HEAD</span>
+          </div>
+          <div class="metric">
+            <strong>65</strong
+            ><span>領先 <span class="commit">origin/main@d887339</span> 的提交數</span>
+          </div>
+        </div>
+        <p class="footer-note" style="position: relative; z-index: 1; margin-top: 1rem">
+          分支：<code>integration/all-resolved-issues-20260713</code>。合併基準：
+          <code>origin/main@d887339</code>。筆順整合提交 <code>58ffb8e</code> 已包含於目前分支。
+        </p>
+      </div>
+    </header>
+
+    <nav class="toc" aria-label="報告章節">
+      <div class="toc-inner">
+        <a href="#overview">總覽</a>
+        <a href="#methodology">方法與理由</a>
+        <a href="#batch-1">批次 1</a>
+        <a href="#spotlight-260">#260 重點說明</a>
+        <a href="#quality">整合品質</a>
+        <a href="#verification">驗證</a>
+        <a href="#batch-2">批次 2</a>
+        <a href="#boundaries">範圍界線</a>
+        <a href="#sources">來源</a>
+      </div>
+    </nav>
+
+    <main id="main" tabindex="-1">
+      <section id="overview" aria-labelledby="overview-title">
+        <div class="section-head">
+          <div>
+            <h2 id="overview-title">兩條處理路徑</h2>
+            <p>
+              兩個批次刻意採取不同路徑。批次 1
+              的每個項目都有現行且範圍明確的程式碼、資料或介面契約，因此納入整合分支。批次 2
+              已由既有 main、已部署的執行環境或資料行為解決，不應再加入重複程式碼。
+            </p>
+          </div>
+        </div>
+        <div class="two-lane">
+          <article class="panel lane" data-count="21" aria-labelledby="lane-1-title">
+            <h3 id="lane-1-title">批次 1：整合分支</h3>
+            <p>
+              <strong>處理路徑：</strong>將現行網站修正或範圍明確的功能整合至
+              <code>integration/all-resolved-issues-20260713</code
+              >；必要時以目前的完整修法取代過時的獨立 SHA。
+            </p>
+            <ul>
+              <li>路由、搜尋與探索：#3、#92、#102、#122、#131、#214、#260。</li>
+              <li>發音、ruby 與 TWBLG：#22、#96、#100、#165、#186、#233、#256、#281。</li>
+              <li>筆順系統：#76、#132、#227、#230、#265。</li>
+              <li>外觀與無障礙：#245。</li>
+            </ul>
+          </article>
+          <article class="panel lane" data-count="5" aria-labelledby="lane-2-title">
+            <h3 id="lane-2-title">批次 2：驗證完成</h3>
+            <p>
+              <strong>處理路徑：</strong
+              >不新增程式碼，只記錄現況證據。正式站、現行資料管線、行動版來源子模組或已部署的 R2
+              資產已符合回報需求。
+            </p>
+            <ul>
+              <li>
+                #173 的台語羅馬字整詞查詢與數字調號查詢已由 commit
+                <span class="commit">cc0ec62</span> 上線。
+              </li>
+              <li>#179 的台語 ruby 重疊問題已由後來的 hruby／注音架構消除。</li>
+              <li>#234 的「無義項」占位音讀已從上線 pack 資料排除。</li>
+              <li>#240 的長按選取文字已由 PR #118／#120 的程式碼實作。</li>
+              <li>
+                #270 指的是 <em>g0v/moedict-webkit issue #270</em>，不是不存在的 moedict.tw PR。
+              </li>
+            </ul>
+          </article>
+        </div>
+        <div class="callout" style="margin-top: 1rem">
+          <strong>編號釐清：</strong>使用者提供的 <code>pr://270</code> 並非真正的
+          <code>g0v/moedict.tw</code> pull request。本機權威紀錄
+          <code>logs/issues/270.json</code> 指向
+          <a
+            href="https://github.com/g0v/moedict-webkit/issues/270"
+            target="_blank"
+            rel="noopener noreferrer"
+            >g0v/moedict-webkit issue #270</a
+          >；該議題已由 <code>g0v/moedict.tw</code> PR #134／commit
+          <span class="commit">9b46099</span> 修正。本報告據此處理，不虛構 PR 270。
+        </div>
+      </section>
+
+      <section id="methodology" aria-labelledby="methodology-title">
+        <div class="section-head">
+          <div>
+            <h2 id="methodology-title">方法與理由</h2>
+            <p>
+              整合規則刻意保守：只修正現行服務所負責的部分；若回報需求已滿足，就驗證現況，不重做一份。
+            </p>
+          </div>
+        </div>
+        <div class="method-grid">
+          <article class="panel">
+            <h3>現行與凍結介面</h3>
+            <p>
+              <code>www.moedict.tw</code> 是現行的 React／Vite 與 Cloudflare Workers 網站。<code
+                >moedict-webkit</code
+              >
+              是凍結的舊版介面；其議題仍可能描述真實症狀，但若行為由現行程式碼負責，實作應放在
+              <code>moedict.tw</code>。
+            </p>
+          </article>
+          <article class="panel">
+            <h3>本機程式碼界線</h3>
+            <p>
+              若原始碼、R2 查詢行為、衍生索引、CSS
+              或前端互動可在本機修改並測試，就適合納入分支。上游資料或授權缺口只記錄，不猜測內容。
+            </p>
+          </article>
+          <article class="panel">
+            <h3>語意超集</h3>
+            <p>
+              整合分支沒有盲目 cherry-pick 每個獨立 commit。重複的 TWBLG 標記、筆順使用者體驗與 CNS
+              衍生輸出，均整合為保留可觀測契約的現行修法。
+            </p>
+          </article>
+          <article class="panel">
+            <h3>資料完整性</h3>
+            <p>
+              未修改任何辭典釋義。受 CC BY-ND
+              約束的辭典內容仍是資料原典；只有在資料管線契約允許時，才調整衍生或由原始碼管理的產物。
+            </p>
+          </article>
+        </div>
+        <div class="callout" data-tone="info" style="margin-top: 1rem">
+          <strong>2026-07-13 測試環境驗證快照：</strong>整合後曾部署測試環境（release
+          <code>32b717a-a6b99db654cf</code>，Worker
+          <code>cb955d0e-ad2a-4c52-8645-80f782d78d5e</code>），並將 128 個 ptck pack 上傳至
+          <code>moedict-dictionary-preview</code> R2 bucket。過程未推送分支，也未寫入
+          GitHub；正式環境當時未部署，仍為 <code>23b7e89-1d1f2400cb1d</code>。批次 1 的契約均已透過
+          build、API、unit／integration／e2e、衍生資料檢查、瀏覽器呈現與 dry-run
+          語料產生流程在本機驗證。
+        </div>
+      </section>
+
+      <section id="batch-1" aria-labelledby="batch-1-title">
+        <div class="section-head">
+          <div>
+            <h2 id="batch-1-title">批次 1：整合分支上的 21 個項目</h2>
+            <p>
+              可依領域篩選。每張卡片列出議題標題、分類、納入理由、變更內容、最終分支證據、測試或可觀測契約，以及必要的注意事項。
+            </p>
+          </div>
+        </div>
+        <div class="filter-bar" role="group" aria-label="篩選批次 1 議題卡片">
+          <span class="label">領域：</span>
+          <button class="filter-button" type="button" data-filter="all" aria-pressed="true">
+            全部
+          </button>
+          <button class="filter-button" type="button" data-filter="routing" aria-pressed="false">
+            路由、搜尋與探索
+          </button>
+          <button
+            class="filter-button"
+            type="button"
+            data-filter="pronunciation"
+            aria-pressed="false"
+          >
+            發音與 ruby
+          </button>
+          <button class="filter-button" type="button" data-filter="stroke" aria-pressed="false">
+            筆順
+          </button>
+          <button class="filter-button" type="button" data-filter="appearance" aria-pressed="false">
+            外觀
+          </button>
+          <span id="result-count" aria-live="polite">顯示 21 張議題卡片</span>
+        </div>
+        <noscript
+          ><p class="callout">
+            篩選功能需要 JavaScript。停用 JavaScript 時仍會顯示所有議題卡片。
+          </p></noscript
+        >
+
+        <article class="domain" id="domain-routing" data-domain-section="routing">
+          <header>
+            <h3>路由、搜尋與探索</h3>
+            <p>
+              現行網站可將使用者導向正確資源、恢復舊連結、增加搜尋模式，或提供屬性備援，且不改寫辭典釋義的項目。
+            </p>
+          </header>
+          <div class="cards">
+            <details class="issue-card" id="issue-3" data-domain="routing" open>
+              <summary>
+                <span class="issue-title">#3 — 連結至教育部異體字字典</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="feature">具本機修正的功能願望</span
+                  ><span class="chip" data-tone="partial">僅處理子項 1</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>為何納入整合分支</h4>
+                <p>
+                  舊的 educode 直連網址已失效，映射表也有授權風險；但 MOE
+                  現行搜尋端點可解析單一字元，無須重新散布資料，因此這是範圍明確的現行網站連結功能。
+                </p>
+                <h4>變更內容</h4>
+                <p>
+                  <code>src/pages/DictionaryPage.tsx</code> 新增單一字元外部
+                  “教育部《異體字字典》”連結，位於筆順／部首控制項旁；
+                  <code>tests/e2e/dictionary.spec.ts</code> 涵蓋連結存在與不存在的情況。
+                </p>
+                <p class="evidence-line">
+                  <strong>最終證據：</strong> <span class="commit">fcba9ab</span>。可觀測契約：`/萌`
+                  會顯示連結至
+                  <code>dict.variants.moe.edu.tw/search.jsp?QTP=0&amp;WORD=萌</code>，並具有
+                  <code>target="_blank"</code> 與 <code>rel="noopener noreferrer"</code>；
+                  多字詞條不顯示該連結。注意事項：列出所有異體字仍超出範圍，因為這需要另行授權的異體字資料。
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/3"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題來源</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-92" data-domain="routing" open>
+              <summary>
+                <span class="issue-title">#92 — 非漢字搜尋</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="feature">搜尋</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>為何納入整合分支</h4>
+                <p>
+                  羅馬字搜尋已經上線，但目前搜尋框仍會剝除純注音輸入。缺少的路徑可在本機以將注音轉為既有漢語查詢鍵的方式實作並測試。
+                </p>
+                <h4>變更內容</h4>
+                <p>
+                  新增 <code>src/utils/bopomofo-query-utils.ts</code>；更新
+                  <code>src/components/searchbox.tsx</code>，將純注音的國語與
+                  兩岸字典查詢導入既有拼音查詢管線，並加入單元 測試。
+                </p>
+                <p class="evidence-line">
+                  <strong>最終證據：</strong> <span class="commit">7e998d7</span>。契約：
+                  <code>ㄅㄚ</code> 會產生國語建議；<code>ㄌㄠˇ˙ㄕ</code> 可找到老實；
+                  <code>ㄓㄨㄥㄍㄨㄛˊ</code>
+                  在兩岸字典情境可找到中國。台語／客語與混合貼上清理均維持不變。
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/92"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題來源</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-102" data-domain="routing" open>
+              <summary>
+                <span class="issue-title">#102 — 按 back 希望能回到之前的 scrolling position</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="feature">導覽</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>為何納入整合分支</h4>
+                <p>
+                  目前的 SPA 可重現返回按鈕的捲動競態：原生還原在較短的項目 DOM
+                  掛載時執行，接著將儲存的清單偏移量截斷。這是現行前端狀態行為。
+                </p>
+                <h4>變更內容</h4>
+                <p>
+                  <code>src/App.tsx</code> 現在自行負責由 React Router
+                  歷史紀錄項目索引鍵控管的手動捲動還原；還原過程會持續輪詢， 直到目的地 DOM
+                  高度足以容納已儲存的偏移量， 並避免還原期間被過期的 scrollY 覆寫。
+                </p>
+                <p class="evidence-line">
+                  <strong>最終證據：</strong> <span class="commit">a79b041</span>。契約： 深層清單 →
+                  項目 → 瀏覽器返回會還原先前捲動位置；PUSH 導覽進入項目時從頂端開始。
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/102"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題來源</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-122" data-domain="routing" open>
+              <summary>
+                <span class="issue-title">#122 — 台語及客語萌典增加部首檢索</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="partial">分流</span
+                  ><span class="chip" data-tone="feature">部首</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>為何納入整合分支</h4>
+                <p>
+                  台語 pack 資料已有部首與剩餘筆畫欄位，客語 pack
+                  資料則沒有。因此台語部分是範圍明確的本機索引／路由缺口，客語仍受資料限制。
+                </p>
+                <h4>變更內容</h4>
+                <p>
+                  新增 <code>scripts/regenerate-t-taxonomy.mjs</code> 並產生
+                  <code>data/dictionary/t/@*.json</code>；擴充部首路由、提示、 DictionaryPage
+                  部首連結、StarredPage、SSR 標題、App 路由與導覽列， 以支援 <code>/'@</code>。
+                </p>
+                <p class="evidence-line">
+                  <strong>最終證據：</strong> <span class="commit">baf4f56</span>。契約：
+                  <code>/t/@子.json</code> 與 <code>/'@子.json</code>
+                  透過同一份真實的產生資料往返一致。注意事項：台語已實作；客語受阻，因為
+                  <code>phck</code> 有零 <code>r</code> 欄位。
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/122"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題來源</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-131" data-domain="routing" open>
+              <summary>
+                <span class="issue-title">#131 — 詞語連結帶有 '#'</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="feature">舊版路由</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>為何納入整合分支</h4>
+                <p>
+                  現行網站仍會產生舊版 <code>./#...</code> 連結。一般點擊
+                  會被攔截，但新分頁／複製／直接網址情境會在 HTTP 請求時遺失片段並解析到首頁。
+                </p>
+                <h4>變更內容</h4>
+                <p>
+                  <code>src/utils/dictionary-route.ts</code> 新增了
+                  <code>resolveLegacyHashRoute</code>；<code>src/main.tsx</code> 會在 React Router
+                  掛載前，以 <code>replaceState</code>
+                  重寫舊版雜湊路由連結。
+                </p>
+                <p class="evidence-line">
+                  <strong>最終證據：</strong> <span class="commit">265b974</span>。契約：
+                  複製／開啟的舊版雜湊連結可還原為真實路徑名稱，不另造第二個前綴解析器。
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/131"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題來源</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-214" data-domain="routing" open>
+              <summary>
+                <span class="issue-title"
+                  >#214 — 搜尋簡化字「广」(5e7f)時希望可以提示「⼴」(2f34)</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="feature">Unicode 備援</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>為何納入整合分支</h4>
+                <p>
+                  2017
+                  年的「广」情境目前已由資料滿足，但相同的正規化邊界仍會使貼上的康熙部首區塊字元，例如
+                  <code>⼴</code>，無法查得結果。這是本機查詢層的備援缺口問題。
+                </p>
+                <h4>變更內容</h4>
+                <p>
+                  <code>src/api/handleDictionaryAPI.ts</code> 新增了僅在查詢時觸發的 NFKC
+                  備援機制，於原始字元查無結果時重新計算封裝分桶；
+                  <code>tests/unit/api-dictionary-nfkc-fallback.test.ts</code> 鎖定此行為。
+                </p>
+                <p class="evidence-line">
+                  <strong>最終證據：</strong> <span class="commit">7e998d7</span>。契約：
+                  <code>/a/⼴.json</code>、<code>/uni/⼴.json</code>、原始／來源路徑
+                  皆透過正規化鍵解析，不必全域正規化 pack 資料。
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/214"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題來源</a
+                  >
+                </p>
+              </div>
+            </details>
+            <details class="issue-card" id="issue-260" data-domain="routing" open>
+              <summary>
+                <span class="issue-title">#260 — 許願：讓「全字庫」加入萌典的搜尋資料</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">已實作模型</span
+                  ><span class="chip" data-tone="feature">CNS 備援</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>為何納入整合分支</h4>
+                <p>
+                  原始調查將 CNS
+                  定義為可重新路由的產品功能，但整合分支實作了範圍明確的第一版模型：為未映射的標準
+                  CJK codepoint 提供屬性備援，不改變辭典原典語意。
+                </p>
+                <h4>變更內容</h4>
+                <p>
+                  新增專用的 CNS API／UI 備援路徑、快取標記、離線鏡像資料、黃金測試
+                  fixture、產生器／dry-run 防護、無遮蔽路由優先順序，以及區分 OGDL 授權 CNS 資料與
+                  OFL 字型資產的著作權標示。
+                </p>
+                <p class="evidence-line">
+                  <strong>最終證據：</strong> <span class="commit">3bdc4b0</span>、
+                  <span class="commit">2c6ecca</span>、<span class="commit">32b717a</span>。
+                  契約：辭典路由優先於此備援；未映射的標準 CJK 字元可顯示
+                  「全字庫屬性・無辭典釋義」後備卡片；ETag／304 行為與語料統計數字皆有測試涵蓋。
+                  注意事項：PUA 私人使用區字元刻意排除於第一版產生語料之外。
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/260"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題來源</a
+                  >
+                </p>
+              </div>
+            </details>
+          </div>
+        </article>
+
+        <article class="domain" id="domain-pronunciation" data-domain-section="pronunciation">
+          <header>
+            <h3>發音、注音標示與 TWBLG 標註</h3>
+            <p>
+              這些修正共同收斂於可讀、可選取、正確標註的發音顯示，
+              且不重複螢幕報讀文字，也不臆造上游辭典內容。
+            </p>
+          </header>
+          <div class="cards">
+            <details class="issue-card" id="issue-22" data-domain="pronunciation" open>
+              <summary>
+                <span class="issue-title"
+                  >#22 — TWBLG: 標註＜文＞＜白＞兩音，分別給出錄音檔播放鈕。</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="partial">合併議題</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>為何納入整合分支</h4>
+                <p>
+                  真正可修復的部分（呈現既有的 TWBLG 音讀分類）與 #96／#233
+                  屬於相同的顯示疏漏；獨立的錄音按鈕原本即正確運作；無釋義的佔位讀音則刻意維持排除。
+                </p>
+                <h4>變更內容</h4>
+                <p>
+                  共用的 TWBLG 徽章實作讀取台語詞目的 <code>heteronym.reading</code>， 並將
+                  <code>readingType</code> 傳遞給 <code>TitlePronunciation</code>，背後由
+                  <code>src/utils/reading-type-labels.ts</code> 與 CSS 徽章樣式支援。
+                </p>
+                <p class="evidence-line">
+                  <strong>最終證據：</strong> <span class="commit">3713405</span> 加上
+                  後續修正整合。可觀測契約：如「肉／平」等詞目會在對應讀音旁顯示 文／白／俗／替
+                  標籤；每個異讀音各自保有自身的錄音控制項。
+                  注意事項：不提供「空清單」佔位，否則將使 #234 退化。
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/22"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題來源</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-96" data-domain="pronunciation" open>
+              <summary>
+                <span class="issue-title">#96 — TWBLG: 增加「文」「白」「俗」</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="feature">重複實作</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>為何納入整合分支</h4>
+                <p>
+                  資料早已存在於 <code>ptck</code> 與 API 回傳內容中；前端只是從未加以呈現。
+                  這純粹是顯示層的疏漏。
+                </p>
+                <h4>變更內容</h4>
+                <p>
+                  <code>TitlePronunciation</code> 會渲染出附完整標籤的精簡音讀類型徽章；
+                  <code>DictionaryPage.tsx</code> 會從 <code>heteronym.reading</code> 中剝除自動連結
+                  HTML； 測試涵蓋標題子節點順序的保留。
+                </p>
+                <p class="evidence-line">
+                  <strong>最終證據：</strong> <span class="commit">3713405</span> 加上
+                  <span class="commit">dec4481</span>、<span class="commit">25f1774</span>、
+                  <span class="commit">aa7f206</span>、<span class="commit">913fdf1</span>、
+                  <span class="commit">b6cc8cb</span>。可觀測契約：TWBLG 音讀類型徽章 僅在
+                  <code>lang='t'</code> 時出現。注意事項：#22／#96／#233
+                  共用同一個解決重複問題的實作。
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/96"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題來源</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-100" data-domain="pronunciation" open>
+              <summary>
+                <span class="issue-title">#100 — &lt;ruby&gt;的後續工程</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="partial">歷史性合併議題</span
+                  ><span class="chip" data-tone="done">無障礙修正</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>為何納入整合分支</h4>
+                <p>
+                  這則 2013 年的議題捆綁了多項需求，多數早已上線或已被取代。
+                  經調查僅發現一項界限明確的當前無障礙缺陷：直角注音被輔助功能名稱重複讀出兩次。
+                </p>
+                <h4>變更內容</h4>
+                <p>
+                  <code>src/utils/ruby2hruby.ts</code> 為相容性
+                  <code>&lt;rt&gt;</code> 節點加上標記，使視覺上由 CSS 產生的標註
+                  不致造成輔助語音重複播報，同時維持複製行為不變。
+                </p>
+                <p class="evidence-line">
+                  <strong>最終證據：</strong> <span class="commit">2022bd3</span>。可觀測契約：
+                  螢幕報讀器的命名不再重複讀出標題／例句的注音發音。 注意事項：#100
+                  仍是一則歷史性的多項目合併議題；本分支僅處理 界限明確的當前缺陷，並非涵蓋 2013
+                  年願望清單中的每一項變體需求。
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/100"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題來源</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-165" data-domain="pronunciation" open>
+              <summary>
+                <span class="issue-title">#165 — 閩南語拼音切換和顯示</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="partial">已完成但留有殘留問題</span
+                  ><span class="chip" data-tone="feature">台語羅馬字</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>為何納入整合分支</h4>
+                <p>
+                  實機重現後，在現行 TL→POJ／DT 轉換中找到兩個範圍狹窄且可確認的錯誤：
+                  <code>--nnh</code>／<code>--nn</code> 的標點終止符， 以及 DT 聲調符號的擺放位置。
+                </p>
+                <h4>變更內容</h4>
+                <p>
+                  <code>src/utils/pinyin-preference-utils.ts</code> 擴充了終止符類別， 並新增與既有
+                  POJ 優先序相呼應的 DT 聲調重新定位； 測試涵蓋完整句子情境與
+                  <code>tsuí → zùi</code>。
+                </p>
+                <p class="evidence-line">
+                  <strong>最終證據：</strong> <span class="commit">5eadd12</span>。可觀測契約： POJ
+                  輕聲鼻化助詞會在句子標點之前完成轉換；DT 依其自身的元音優先序
+                  擺放聲調符號。注意事項：更廣泛的 DT 輕聲及詞首連讀變調問題仍有文獻記載的
+                  殘留待處理，需要語料庫／規範方面的決策。
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/165"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題來源</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-186" data-domain="pronunciation" open>
+              <summary>
+                <span class="issue-title">#186 — 讓台語萌典的主要拼音(注音)可選取複製</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="feature">複製／選取</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>為何納入整合分支</h4>
+                <p>
+                  畫面上可見的台語主要羅馬字是由 CSS 產生的內容，而真正的
+                  <code>&lt;rt&gt;</code> 文字卻被裁切隱藏，因此選取時會產生混雜的
+                  漢字／注音／羅馬字結果，且無法選到畫面上實際顯示的字形。
+                </p>
+                <h4>變更內容</h4>
+                <p>
+                  CSS 與 <code>ruby2hruby</code> 的變更會在產生的字形幾何位置上 疊加真正的 Unicode
+                  <code>&lt;rt&gt;</code> 文字，同時維持視覺上透明； DictionaryPage
+                  會在選取進行中時避免誤觸筆畫點擊行為。
+                </p>
+                <p class="evidence-line">
+                  <strong>最終證據：</strong> <span class="commit">e8ffe0e</span> 與
+                  <span class="commit">d447060</span>。可觀測契約：畫面上可見的主要羅馬字
+                  可乾淨地選取／複製；選取文字不會意外觸發筆畫動畫。
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/186"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題來源</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-233" data-domain="pronunciation" open>
+              <summary>
+                <span class="issue-title">#233 — TWBLG: 標注「文」「白」「俗」「替」屬性</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">重複但已修正</span
+                  ><span class="chip" data-tone="partial">不含排序功能</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>為何納入整合分支</h4>
+                <p>
+                  #233 以介面示意圖重述了 #96。同樣的「資料已存在／前端未呈現」診斷成立，
+                  重複的實作需要整併為單一最終分支設計。
+                </p>
+                <h4>變更內容</h4>
+                <p>
+                  整合後的 TWBLG 徽章路徑透過
+                  <code>TitlePronunciation</code> 涵蓋了 #233 提出的標註位置需求，
+                  同時避免與另一份本機差異互相競爭。
+                </p>
+                <p class="evidence-line">
+                  <strong>最終證據：</strong> <span class="commit">3713405</span> 加上
+                  後續修正整合。可觀測契約：文／白／俗／替 標籤會顯示於台語讀音旁。 注意事項：#233
+                  所提出的自動音讀排序與讀音內部跳轉連結， 仍不在此共用修正的範圍內。
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/233"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題來源</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-256" data-domain="pronunciation" open>
+              <summary>
+                <span class="issue-title">#256 — 許願：可以直接複製羅馬拼音</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="feature">原生選取</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>為何納入整合分支</h4>
+                <p>
+                  網站原本在隱藏的
+                  <code>&lt;rt&gt;</code>
+                  元素中帶有真實的羅馬字文字（以提交
+                  <span class="commit">e8ffe0e</span> 為基準），但原生選取複製出來的卻是
+                  混雜錯亂的字串（漢字＋注音＋羅馬字）。#186 疊加方案已將可選取的 span
+                  定位在畫面可見字形處，已解決此問題；另設專屬按鈕反而是不必要的複雜度。
+                </p>
+                <h4>變更內容</h4>
+                <p>
+                  移除了專屬的 <code>複製羅馬拼音</code> 按鈕及其所有相關的 剪貼簿連結邏輯（<code
+                    >hasRomanization</code
+                  >
+                  屬性、 <code>collectRubyRomanization</code>、複製圖示、按鈕標記、
+                  <code>.copyBlock</code>／<code>.copyRomanization</code> CSS）。提交
+                  <span class="commit">523c7f9</span>。
+                </p>
+                <h4>Safari 修正（提交 <span class="commit">81d444b</span>）</h4>
+                <p>
+                  移除按鈕後，Safari／WebKit 出現版面錯亂：
+                  <code>h1.title</code> 被撐高至約 164 px，播放按鈕被推到詞目下方甚遠處，
+                  <code>huáng</code> 則出現在錄音按鈕下方。根本原因在於： WebKit 的排版引擎在其 ruby
+                  文字方塊生成過程中，強制將 <code>&lt;rt&gt;</code> 設為
+                  <code>position: static</code>，即使 CSS 與 JS 的 <code>setProperty</code> 皆設定了
+                  <code>position: absolute !important</code>，也仍會被覆寫。 這種靜態定位使
+                  <code>&lt;rt&gt;</code> 停留在正常的 ruby 排版流程中， 因而撐大 h1
+                  並將音檔區塊與羅馬字向下推移， <code>huáng</code> 於是出現在錄音按鈕之後。
+                </p>
+                <p>
+                  修正方式：<code>ruby2hruby.ts</code> 現在會在非注音的 rtc 轉換迴圈中， 直接從
+                  <code>rt.textContent</code> 建構一個
+                  <code>&lt;span class="romanization-selectable" aria-hidden="true"&gt;</code>，
+                  並由 <code>src/index.css</code> 套用
+                  <code>position: absolute; color: transparent; user-select: text</code>。 同一個
+                  <code>&lt;ru&gt;</code> 父層中的一般 <code>&lt;span&gt;</code>，
+                  在所有引擎上都能正確接受 <code>position: absolute</code>。原生的
+                  <code>&lt;rt&gt;</code> 絕<strong>不可</strong>再被還原承擔此角色： WebKit
+                  的限制屬於引擎層級，無法透過作者端 CSS 覆寫。
+                </p>
+                <p class="evidence-line">
+                  <strong>最終證據：</strong> <span class="commit">523c7f9</span>（移除按鈕）加上
+                  <span class="commit">81d444b</span>（Safari 安全的 span 架構）。 WebKit 與
+                  Chromium 各自 15/15 個
+                  <code>@romanization</code> 測試皆通過，包含真實的滑鼠拖曳選取
+                  （<code>huáng</code>、<code>tsia̍h</code>）、幾何不變性檢查 （疊加層位於 rb
+                  列之上、h1 高度／字級比例 &lt; 4、audioBlock 落於 h1
+                  邊界內）、語音偏好設定的抑制，以及無重複的輔助技術報讀。
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/256"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題來源</a
+                  >
+                </p>
+              </div>
+            </details>
+            <details class="issue-card" id="issue-281" data-domain="pronunciation" open>
+              <summary>
+                <span class="issue-title">#281 — 異用字請顯示治詞目頁</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">已完成</span>
+                  <span class="chip" data-tone="feature">異用字</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>為何納入整合分支</h4>
+                <p>
+                  台語異用字在前端顯示中缺漏。初步排查僅檢視了
+                  <code>g0v/moedict-data-twblg</code> 中的
+                  <code>uni/*.csv</code>，卻遺漏了儲存庫根目錄下的
+                  <code>x-異用字.json</code> 附屬檔案（提交
+                  <span class="commit">437588d</span>，blob SHA1 <code>860d76d</code>，SHA-256
+                  <code>aa5b0a4</code>，共 2110 個鍵／2780 筆字串，皆為 NFD 正規化， 授權為 CC BY-ND
+                  3.0 TW）。根本原因是資料匯入與介面之間的落差：
+                  官方附屬檔案確實存在，但強化封裝檔缺少 B 欄位， 前端／API 也缺乏對應的映射與渲染。
+                </p>
+                <h4>變更內容</h4>
+                <p>
+                  透過
+                  <code>scripts/inject-twblg-variants.py</code>
+                  將 B（異用字）欄位逐步注入 128 個 ptck 封裝檔（映射 2097 筆異讀音， 13 筆明確孤兒
+                  ID，共變更 2083 行）；並驗證位元組層級的冪等性。 在
+                  <code>handleDictionaryAPI.ts</code> 中新增 <code>B: "variants"</code> 映射， 於
+                  <code>DictionaryPage.tsx</code> 中新增介面渲染
+                  （<code>.twblg-variants</code>，僅限 lang=t 且非空時顯示）， 並於
+                  <code>tests/e2e/dictionary.spec.ts</code> 中新增 4/4 端對端測試 （你→汝、囝→子、蛇
+                  應缺席、萌 lang=a 應缺席）。提交： <span class="commit">aed8562</span>、
+                  <span class="commit">8ac28e9</span>、<span class="commit">e971c5c</span>、
+                  <span class="commit">32b717a</span>。
+                </p>
+                <p class="evidence-line">
+                  <strong>預備環境驗證證據：</strong>128 個 ptck 封裝已上傳至
+                  <code>moedict-dictionary-preview</code> R2 儲存桶；預備環境發布版本
+                  <code>32b717a-a6b99db654cf</code>（Worker
+                  <code>cb955d0e-ad2a-4c52-8645-80f782d78d5e</code>）。Playwright Chromium 3/3
+                  測試通過：「你」→<code>.twblg-variants</code> 含「汝」，
+                  「囝」→含「子」，「蛇」→count=0。API 的 B 欄位為 <code>['汝']</code>。預備環境 CDN
+                  邊緣快取（s-maxage=86400）對未加破快取參數的 URL 最多可能延遲 24
+                  小時才更新；已確認加上破快取參數的請求結果正確。
+                  正式環境未受影響（<code>23b7e89-1d1f2400cb1d</code>）。
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/281"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題來源</a
+                  >
+                </p>
+              </div>
+            </details>
+          </div>
+        </article>
+
+        <article class="domain" id="domain-stroke" data-domain-section="stroke">
+          <header>
+            <h3>筆順系統</h3>
+            <p>
+              筆順相關項目以分層模型整合：誠實的缺資料狀態體驗、對不可用項目停用觸發、
+              重播行為、更新後的教育部語料管線，以及由 R2 支援的執行期服務。
+            </p>
+          </header>
+          <div class="cards">
+            <details class="issue-card" id="issue-76" data-domain="stroke" open>
+              <summary>
+                <span class="issue-title">#76 — 若沒有筆順資料, 應更明確顯示 not found</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="feature">缺資料狀態體驗</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>為何納入整合分支</h4>
+                <p>
+                  舊版筆順渲染器至今仍隨現行資產一併發布，其 404 路徑過去仍只會產生一片
+                  空白的淡化格線。此缺資料狀態修正僅涉及現行 CSS／第三方 JS 行為， 屬於局部範圍。
+                </p>
+                <h4>變更內容</h4>
+                <p>
+                  <code>data/assets/js/jquery.strokeWords.js</code> 會渲染出一個可見的
+                  <code>?</code> ／「尚無筆順資料」徽章並附上 ARIA 標籤，
+                  取代原本空白淡化的畫布；<code>src/index.css</code> 為該徽章設定樣式。
+                </p>
+                <p class="evidence-line">
+                  <strong>最終證據：</strong> <span class="commit">463c137</span> 與
+                  <span class="commit">2ef24a6</span>。契約：缺少筆順 JSON 路徑時，
+                  在視覺與無障礙上皆能明確區別於載入中或發生錯誤的狀態。
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/76"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題來源</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-132" data-domain="stroke" open>
+              <summary>
+                <span class="issue-title">#132 — 筆順動畫功能不可用時應停用觸發項</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="feature">停用狀態</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>為何納入整合分支</h4>
+                <p>
+                  介面早已具備足夠資訊，可在啟用筆順觸發項之前以 HEAD 請求檢查筆順 JSON
+                  是否可用。此邏輯屬於現行 DictionaryPage 的運作行為範圍。
+                </p>
+                <h4>變更內容</h4>
+                <p>
+                  新增 <code>src/hooks/useStrokeAvailability.ts</code>；
+                  <code>DictionaryPage.tsx</code> 會在已知單一字元不可用時，
+                  停用鉛筆／標題觸發項；端對端測試涵蓋停用觸發項的行為。
+                </p>
+                <p class="evidence-line">
+                  <strong>最終證據：</strong> <span class="commit">b8ddc54</span>、
+                  <span class="commit">b7af3b9</span>、<span class="commit">0172365</span>。
+                  契約：不可用的單字筆順控制項會呈現停用語義與提示文字； 多字元的備援行為維持不變。
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/132"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題來源</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-227" data-domain="stroke" open>
+              <summary>
+                <span class="issue-title">#227 — 「町」字筆順錯誤</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="feature">教育部語料</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>為何納入整合分支</h4>
+                <p>
+                  原始「筆順錯誤」截圖已無法重現，但「町」仍缺乏筆順 JSON，
+                  原因是鏡像語料仍停留在舊有的 4,808 字快照， 而教育部目前已提供 6,063 字的資料。
+                </p>
+                <h4>變更內容</h4>
+                <p>
+                  <code>commands/fetch-moe-stroke.mjs</code> 與
+                  <code>commands/sync-moe-stroke-corpus.mjs</code> 會從改版後的 learningweb
+                  網站重新取得教育部 XML 資料、驗證結構描述， 並支援完整語料的上傳／驗證流程。
+                </p>
+                <p class="evidence-line">
+                  <strong>最終證據：</strong> <span class="commit">4692fcb</span>、
+                  <span class="commit">c2772e1</span>、<span class="commit">c23b820</span>。
+                  契約：「町」的 <code>753a.json</code> 為真正教育部來源的筆順資料；
+                  最終驗證在歷史部署證據中涵蓋了 6,063 字語料的驗證。
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/227"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題來源</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-230" data-domain="stroke" open>
+              <summary>
+                <span class="issue-title">#230 — 控制筆順動畫</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="feature">重播控制</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>為何納入整合分支</h4>
+                <p>
+                  使用者過去必須先關閉再重新開啟筆順面板才能重播動畫。
+                  此互動完全屬於現行前端狀態，並不依賴已淘汰的 webkit 工具鏈。
+                </p>
+                <h4>變更內容</h4>
+                <p>
+                  <code>StrokeAnimation.tsx</code> 將 <code>#strokes</code> 變為可用鍵盤／滑鼠操作的
+                  重播按鈕；後續的追加修正加上了事件阻止冒泡， 使重播動作不會連帶將外層面板關閉。
+                </p>
+                <p class="evidence-line">
+                  <strong>最終證據：</strong> <span class="commit">e0a3387</span> 與
+                  <span class="commit">4668e44</span>。契約：在筆順畫布上點擊／按下 Enter／Space
+                  鍵可重播動畫，且不會使面板隱藏。
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/230"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題來源</a
+                  >
+                </p>
+              </div>
+            </details>
+
+            <details class="issue-card" id="issue-265" data-domain="stroke" open>
+              <summary>
+                <span class="issue-title">#265 — 「汛」筆順示意圖破損</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="verify">正式環境驗證後整合</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>為何納入整合分支</h4>
+                <p>
+                  「汛」在完整教育部語料上線後，早已於正式環境驗證通過；
+                  但整合分支仍需將本機渲染備援方案， 以及讓該證據得以長久維持的 R2
+                  服務／執行期管線一併整併進來。
+                </p>
+                <h4>變更內容</h4>
+                <p>
+                  缺資料徽章的涵蓋範圍已擴及破損／缺漏的筆順體驗； 語料管線提供
+                  <code>6c5b.json</code>；<code>handleStrokeAPI</code> 透過 Worker 的
+                  <code>ASSETS</code> 綁定， 以快取／ETag 行為提供 <code>/api/stroke-json</code>。
+                </p>
+                <p class="evidence-line">
+                  <strong>最終證據：</strong> <span class="commit">463c137</span>、
+                  <span class="commit">c2772e1</span>、<span class="commit">c23b820</span>。
+                  契約：有資料時「汛」會渲染真實筆順資料；真正缺漏的字元則顯示徽章。
+                  注意事項：此項在正式環境已驗證通過，現改由整合後的分支程式碼一併呈現。
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/265"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題來源</a
+                  >
+                </p>
+              </div>
+            </details>
+          </div>
+        </article>
+
+        <article class="domain" id="domain-appearance" data-domain-section="appearance">
+          <header>
+            <h3>外觀與無障礙</h3>
+            <p>
+              範圍明確的前端偏好設定與 CSS 行為，能在不破壞舊版樣式表基準的前提下，
+              改善現行網站體驗。
+            </p>
+          </header>
+          <div class="cards">
+            <details class="issue-card" id="issue-245" data-domain="appearance" open>
+              <summary>
+                <span class="issue-title">#245 — CSS: 支援深色模式</span
+                ><span class="issue-meta"
+                  ><span class="chip" data-tone="done">已完成</span
+                  ><span class="chip" data-tone="feature">佈景主題</span></span
+                >
+              </summary>
+              <div class="issue-body">
+                <h4>為何納入整合分支</h4>
+                <p>
+                  現行網站原本沒有 <code>prefers-color-scheme: dark</code> 行為，
+                  也沒有手動的佈景主題偏好設定。這是一項範圍明確的現行 CSS／偏好設定功能，而非凍結中
+                  webkit 的變更。
+                </p>
+                <h4>變更內容</h4>
+                <p>
+                  <code>index.html</code> 會及早載入已儲存的佈景主題設定；
+                  <code>src/utils/theme-utils.ts</code> 負責驗證並套用
+                  系統／淺色／深色模式；使用者偏好設定介面提供原生下拉選單； CSS
+                  新增語義化的深色權杖與範圍限定的舊版樣式覆寫。 後續提交
+                  <span class="commit">849b1cc</span> 解決了深色模式下 短語卡片對比度不足的問題。
+                </p>
+                <p class="evidence-line">
+                  <strong>測試環境驗證證據：</strong>提交
+                  <span class="commit">849b1cc</span>（測試環境前身發布版本
+                  <code>849b1cc-ea42c6eedeba</code>，後續由
+                  <span class="commit">32b717a</span> 發布版本
+                  <code>32b717a-a6b99db654cf</code> 取代）。在該版本， 深色模式端對端測試 7/7
+                  通過，Chromium 端對端測試 133/133 通過； 最終的 32b717a 發布版本再加入 #281 的 4
+                  項端對端測試， 合計 137/137 通過。
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/g0v/moedict-webkit/issues/245"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題來源</a
+                  >
+                </p>
+              </div>
+            </details>
+          </div>
+        </article>
+      </section>
+
+      <section id="spotlight-260" aria-labelledby="spotlight-260-title">
+        <article class="spotlight">
+          <div class="kicker">
+            <span class="pill">批次 1 重點</span><span class="pill">首個完整實作的模型</span
+            ><span class="pill">CNS11643 後備方案</span>
+          </div>
+          <h2 id="spotlight-260-title">#260 — 許願：讓「全字庫」加入萌典的搜尋資料</h2>
+          <p>
+            <strong>為何重要：</strong>#260 原本只是產品重新導向／規格類項目，
+            但整合分支實作出第一個完整的模型：一套 CNS 屬性後備方案， 從不假裝 CNS
+            是第五本辭典，從不遮蔽真正的辭典詞條， 並持續保持出處／授權界線清楚可見。
+          </p>
+          <div class="spot-grid">
+            <div>
+              <h3>CNS 不遮蔽行為與路由分派</h3>
+              <p>
+                CNS 整合由兩條各自獨立的優先順序規則所支配。在<strong>介面</strong>端， 既有的
+                <code>a/t/h/c</code> 辭典查詢會先完成；只有在該查詢
+                <em>沒有</em>命中結果、<em>且</em>查詢字串恰好是 CNS 資料所涵蓋的 單一 Unicode
+                標量字元時，CNS 擷取與後備卡片才會渲染。 在 <strong>Worker</strong> 端，明確的
+                <code>/api/cns/{char}.json</code> 路由比對器 刻意被放置在通用的
+                <code>.json</code> 辭典萬用路由<em>之前</em>， 以確保其可作為獨立命名路徑被存取。CNS
+                並不擴充 <code>DictionaryLang</code>：它是獨立的屬性來源，而非第五本辭典。
+              </p>
+              <ul>
+                <li>為 CNS 資料設有專屬快取標籤，而非沿用辭典快取標籤。</li>
+                <li>設有離線 <code>/cns/</code> 鏡像，使後備卡片能以確定性的 本機測試素材運作。</li>
+                <li>在產生的第一版語料中排除 PUA（私人使用區）字元。</li>
+              </ul>
+            </div>
+            <div class="panel">
+              <h3>最終分支提交</h3>
+              <p>
+                <span class="commit">3bdc4b0</span> 為 CNS 資料所涵蓋的單一 Unicode 標量字元實作
+                CNS11643 屬性後備方案。
+              </p>
+              <p>
+                <span class="commit">2c6ecca</span> 將產生的 CNS 語料加入 gitignore，
+                僅保留黃金測試素材。
+              </p>
+              <p>
+                <span class="commit">3da9d99</span> 強化 CNS 語料產生與上傳流程，
+                使其在失敗時安全關閉（fail-closed）。
+              </p>
+            </div>
+          </div>
+          <div class="fact-grid" aria-label="CNS 相關數據">
+            <div class="fact">
+              <strong>語料試跑</strong><span>產出 77,208 個標準 Unicode 字元</span>
+            </div>
+            <div class="fact"><strong>PUA 政策</strong><span>跳過 20,152 個 PUA 字元</span></div>
+            <div class="fact"><strong>映射完整性</strong><span>0 筆無映射資料</span></div>
+            <div class="fact">
+              <strong>黃金樣本</strong><span>䴉 → ㄒㄩㄢˊ，24 畫，部首「鳥」，WVHAF</span>
+            </div>
+            <div class="fact">
+              <strong>HTTP 契約</strong><span>已涵蓋 ETag／If-None-Match → 304 行為</span>
+            </div>
+            <div class="fact">
+              <strong>出處標示</strong><span>OGDL 資料與 OFL 字型條款已分開標示</span>
+            </div>
+          </div>
+          <div class="callout" style="margin-top: 1rem">
+            <strong>來源界線：</strong>CNS 屬性資料不含釋義。後備卡片顯示
+            「全字庫屬性・無辭典釋義」，並呈現如注音讀音、部首、筆畫數、
+            倉頡碼、出處與字形圖片等屬性。它不會臆造釋義， 也不會將 CNS 併入正式辭典內容之中。
+          </div>
+        </article>
+      </section>
+
+      <section id="quality" aria-labelledby="quality-title">
+        <div class="section-head">
+          <div>
+            <h2 id="quality-title">整合品質：不是盲目合併</h2>
+            <p>
+              整合分支代表的是審查與協調的成果，而非一堆各自獨立的分支快照拼湊而成。
+              整體測試之所以重要，是因為各自獨立的修正即使在局部各自成立，
+              仍可能在共用的接合處互相衝突。
+            </p>
+          </div>
+        </div>
+        <div class="quality-grid">
+          <article class="timeline-card">
+            <h3>衝突標記與陳舊合併殘留</h3>
+            <p>
+              審查發現共用的讀音標籤／標題音讀測試中，存在未解決或殘留的衝突結構。 後續修正
+              <span class="commit">dec4481</span>、 <span class="commit">25f1774</span> 與
+              <span class="commit">b08365e</span> 恢復了語法完整性，
+              並保留了較完整的徽章／複製契約。
+            </p>
+          </article>
+          <article class="timeline-card">
+            <h3>重複的 JSDoc／屬性</h3>
+            <p>
+              整併後，TWBLG <code>reading</code> 標註出現重複或位置錯誤的情形。
+              <span class="commit">aa7f206</span> 與
+              <span class="commit">b6cc8cb</span> 去除了介面文件中的重複內容，
+              並保留該屬性於實際被讀取之處。
+            </p>
+          </article>
+          <article class="timeline-card">
+            <h3>#281 異用字整合</h3>
+            <p>
+              台語異用字功能（#281）已整合進整合分支（當時分支頂端為
+              <span class="commit">32b717a</span>）。初步排查遺漏了儲存庫根目錄下的
+              <code>x-異用字.json</code> 附屬檔案，並誤判為「不予規劃」；
+              後續更正找到了該附屬檔案（提交 <span class="commit">437588d</span>，2110 個 ID／2780
+              筆字串）， 將 B 欄位逐步注入 128 個封裝檔（2097 筆已映射，13 筆孤兒）， 並新增
+              API／介面渲染以及 4/4 端對端測試。已於測試環境驗證 （發布版本
+              <code>32b717a-a6b99db654cf</code>）；尚未部署至正式環境。
+            </p>
+          </article>
+          <article class="timeline-card">
+            <h3>脆弱的深色模式判斷式</h3>
+            <p>
+              深色模式測試原本使用一個脆弱的、與系統模式預設值偶然相依的精確 CSSOM
+              <code>colorScheme</code> 判斷式。最終強化提交
+              <span class="commit">849b1cc</span> 將其改為可見渲染結果的檢查，
+              同時對手動佈景主題覆寫路徑保留精確判斷式，
+              使該測試守護的是佈景主題契約本身，而非對實作細節拍照存證。
+            </p>
+          </article>
+          <article class="timeline-card">
+            <h3>外部 PNG／networkidle 端對端測試卡住</h3>
+            <p>
+              整體端對端測試執行時，發現無匹配結果的
+              <code>CharacterImageView</code> 頁面（直式注音與跨語言情境） 會卡在等待標準的
+              <code>www.moedict.tw/*.png</code> 請求與 <code>networkidle</code> 穩定狀態。
+              <span class="commit">1dc1cc4</span> 新增了確定性的外部字形路由替身 以及針對 DOM
+              的就緒條件，使測試套件不再受阻於即時網路資源；
+              最終執行採用了全新的伺服器（<code>CI=1</code>，停用重複使用）。 另外，<span
+                class="commit"
+                >0172365</span
+              >
+              強化了筆順端對端測試路徑所用的 本機筆順腳本測試素材（<code>840c.json</code>），
+              這與前述 PNG 逾時案例屬於不同層面的問題。
+            </p>
+          </article>
+          <article class="timeline-card">
+            <h3>陳舊伺服器造成的歧異</h3>
+            <p>
+              <span class="commit">1dc1cc4</span> 中的最終強化， 使整合後的
+              CNS／端對端測試契約具有確定性， 避免測試在陳舊的伺服器或陳舊的產生資料上誤判為通過。
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="verification" aria-labelledby="verification-title">
+        <div class="section-head">
+          <div>
+            <h2 id="verification-title">最終驗證儀表板</h2>
+            <p>以下為本報告提交前，程式碼分支頂端的最終整合證據， 擷取自 2026-07-13 的歷史快照。</p>
+          </div>
+        </div>
+        <div class="verify-grid">
+          <div class="verify-card">
+            <strong><code>vp check</code></strong
+            ><span>標準格式化／靜態檢查／型別感知檢查通過</span>
+          </div>
+          <div class="verify-card"><strong>check:data</strong><span>1414 / 1414</span></div>
+          <div class="verify-card"><strong>check:css-ids</strong><span>0 個不合規 ID</span></div>
+          <div class="verify-card">
+            <strong>CSS 靜態檢查基準</strong><span>與舊版基準完全一致，通過</span>
+          </div>
+          <div class="verify-card">
+            <strong>型別檢查／靜態檢查</strong><span>於最終驗證集合中通過</span>
+          </div>
+          <div class="verify-card"><strong>單元＋整合測試</strong><span>1941 項測試通過</span></div>
+          <div class="verify-card">
+            <strong>完整 Chromium 端對端測試</strong><span>137 項測試</span>
+          </div>
+          <div class="verify-card">
+            <strong><code>vp build</code></strong
+            ><span>通過</span>
+          </div>
+          <div class="verify-card">
+            <strong><code>bun run build</code></strong
+            ><span>通過</span>
+          </div>
+          <div class="verify-card">
+            <strong>CNS 試跑</strong><span>產出 77,208 筆／跳過 20,152 筆 PUA／0 筆無映射</span>
+          </div>
+          <div class="verify-card">
+            <strong>運作狀態</strong
+            ><span
+              >測試環境發布版本 32b717a-a6b99db654cf 已部署並經即時驗證；正式環境未變動
+              （23b7e89-1d1f2400cb1d）；未進行推送或 GitHub 寫入操作</span
+            >
+          </div>
+        </div>
+      </section>
+
+      <section id="batch-2" aria-labelledby="batch-2-title">
+        <div class="section-head">
+          <div>
+            <h2 id="batch-2-title">批次 2：既有修正已驗證</h2>
+            <p>
+              這五個項目刻意保持精簡：正確的作法是驗證並記錄現況，
+              而非再新增重複的分支程式碼。以下敘述僅限於議題附件中已有的證據。
+            </p>
+          </div>
+        </div>
+        <div class="panel" style="overflow-x: auto">
+          <table aria-label="批次 2 已驗證議題">
+            <thead>
+              <tr>
+                <th>議題</th>
+                <th>原始症狀</th>
+                <th>為何不新增分支程式碼</th>
+                <th>驗證證據</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr id="issue-173">
+                <td>
+                  <strong>#173 — 台語調號查詢功能</strong><br /><a
+                    href="https://github.com/g0v/moedict-webkit/issues/173"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題連結</a
+                  >
+                </td>
+                <td>
+                  數字調符的台羅／POJ 查詢，例如
+                  <code>huat4-inn2</code>，甚至連標調的整詞 <code>li̍k-sú</code>，過去都無法解析。
+                </td>
+                <td>
+                  提交 <span class="commit">cc0ec62</span> 早在此次驗證之前，
+                  就已透過附屬對照表與查詢聯集，實作出整詞的台語羅馬字查詢功能。
+                </td>
+                <td>
+                  附件記錄了實機 curl 與瀏覽器檢查：<code>huat4-inn2</code>、
+                  <code>huat-inn2</code>、<code>liksu</code>、大小寫／數字變體，
+                  以及三音節語料樣本皆能正確解析。專項單元測試：56/56 通過。
+                </td>
+              </tr>
+              <tr id="issue-179">
+                <td>
+                  <strong>#179 — 閩南語 不顯示注音 拼音會偏右/重疊</strong><br /><a
+                    href="https://github.com/g0v/moedict-webkit/issues/179"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題連結</a
+                  >
+                </td>
+                <td>舊版 Firefox 的截圖顯示台語詞目缺少注音，範例中的羅馬字則出現偏移／重疊。</td>
+                <td>
+                  現行前端架構（由提交
+                  <span class="commit">c7da00e</span> 引入）會合成台語注音， 並使用自訂的
+                  <code>hruby.rightangle</code> 版面配置， 取代原生 ruby 行為。
+                </td>
+                <td>
+                  附件記錄了桌機 1440×900 與行動裝置 375×812 的 DOM 座標檢查， 涵蓋
+                  <code>啥物</code>、<code>物</code>、<code>食</code>
+                  等詞目在各 ruby 偏好設定下的顯示；均無重疊，注音清晰可見。
+                </td>
+              </tr>
+              <tr id="issue-234">
+                <td>
+                  <strong>#234 — 閩南語：查單字時只查到單字不成詞者</strong><br /><a
+                    href="https://github.com/g0v/moedict-webkit/issues/234"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題連結</a
+                  >
+                </td>
+                <td>
+                  查詢台語單字時，只找到「單字不成詞者，無義項」的佔位讀音， 而非有意義的詞條。
+                </td>
+                <td>
+                  現行 <code>ptck</code> 封裝資料本身已排除佔位讀音。
+                  篩選邏輯的來源在於上游封裝檔的產生階段，而非現行前端程式碼，
+                  並未殘留任何本機缺陷。
+                </td>
+                <td>
+                  附件驗證了「臆」與「蛇」，透過教育部來源資料、正式環境 API、
+                  本機封裝檔、搜尋索引、瀏覽器搜尋，
+                  以及對「不成詞」／「無義項」的全資料搜尋，結果皆為零筆命中。
+                </td>
+              </tr>
+              <tr id="issue-240">
+                <td>
+                  <strong>#240 — app 長按 → 選取(複製)內文</strong><br /><a
+                    href="https://github.com/g0v/moedict-webkit/issues/240"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題連結</a
+                  >
+                </td>
+                <td>Android App 長按過去無法選取／複製辭典內文。</td>
+                <td>
+                  moedict.tw PR #118（<span class="commit">bb49d4d</span>）與 PR #120（<span
+                    class="commit"
+                    >421f738</span
+                  >）早已實作可選取內容以及選取狀態下抑制點擊事件的行為； App
+                  子模組隨後併入了這項變更。Play Store 上架流程屬於作業層面， 而非原始碼問題。
+                </td>
+                <td>
+                  附件記錄了正式環境的樣式檢查與行為：在有選取狀態時，
+                  點擊字元連結不會跳轉；清除選取後，同樣的點擊則會正常跳轉。
+                </td>
+              </tr>
+              <tr id="issue-270">
+                <td>
+                  <strong>#270 — 台語萌典『花眉』、『王梨酥』、『靴管』的音檔無效</strong><br /><a
+                    href="https://github.com/g0v/moedict-webkit/issues/270"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >議題連結</a
+                  >
+                </td>
+                <td>多個台語音檔按鈕失效，涉及舊版 Rackspace 音檔涵蓋範圍以外的 ID。</td>
+                <td>
+                  此項目對應的是 g0v/moedict-webkit 議題 #270。 該項已由 g0v/moedict.tw PR
+                  #134／提交
+                  <span class="commit">9b46099</span> 修復， 該提交將舊版音檔／筆順的 CDN 資產遷移至
+                  R2。
+                </td>
+                <td>
+                  附件記錄了全部六個回報的音檔 ID，皆從
+                  <code>r2-assets.moedict.tw/audio/t/{id}.ogg</code> 與 <code>.mp3</code> 回傳 HTTP
+                  200；先前的本機備援分支已被取代。
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="boundaries" aria-labelledby="boundaries-title">
+        <div class="section-head">
+          <div>
+            <h2 id="boundaries-title">範圍界線與非宣稱事項</h2>
+            <p>
+              本報告刻意保持範圍限縮：僅說明所要求的兩個批次以及整合分支的證據，
+              並非涵蓋全部歷史議題清單。
+            </p>
+          </div>
+        </div>
+        <div class="two-lane">
+          <div class="callout">
+            <strong>保留的範圍界線：</strong>舊有的獨立分支與工作樹可能仍以歷史記錄形式存在；
+            本報告描述的是整合分支，並非逐一交代每個陳舊的 SHA。 原本未提交的髒 main
+            檢出，曾作為未提交 B→異用字程式碼的歷史備份／搶救來源；
+            在經擁有者授權完成擷取並整合進整合分支之後， 該 main
+            檢出已被捨棄並清理，並未留下未清理的髒狀態。
+          </div>
+          <div class="callout">
+            <strong>未執行任何遠端操作：</strong>未進行推送， 也未新增任何 GitHub 留言、議題／PR
+            狀態變更，或任何 GitHub 寫入操作。 測試環境部署與 R2 上傳僅為驗證目的而執行 （發布版本
+            <code>32b717a-a6b99db654cf</code>）；正式環境未部署。
+          </div>
+          <div class="callout">
+            <strong>已識別的有限範圍／部分解決議題：</strong>#100 是一則歷史性的多項目合併議題；
+            #122 台語部分已實作／客語資料受阻；#165 有文獻記載的羅馬字轉換殘留問題； #22／#96／#233
+            共用同一個重複實作；#265 早已在正式環境驗證通過， 現已整併。
+          </div>
+          <div class="callout">
+            <strong>非全面性宣稱：</strong>本報告並非宣稱全部 40 則議題記錄皆可於本機解決，
+            也非宣稱每一則凍結中的 <code>moedict-webkit</code> 回報都應以程式碼處理。
+            每一則議題仍需個別進行原始碼／資料／執行環境歸屬分析。
+          </div>
+        </div>
+      </section>
+
+      <section id="sources" aria-labelledby="sources-title">
+        <div class="section-head">
+          <div>
+            <h2 id="sources-title">來源與追溯資料</h2>
+            <p>
+              本報告中的所有證據皆源自本機附件與最終整合工作樹；
+              本機路徑以程式碼文字形式呈現，並非可點擊的檔案系統連結。
+            </p>
+          </div>
+        </div>
+        <div class="panel">
+          <ul>
+            <li>
+              議題附件：
+              <code
+                >logs/issues/{3,22,76,92,96,100,102,122,131,132,165,173,179,186,214,227,230,233,234,240,245,256,260,265,270,281}.json</code
+              >。
+            </li>
+            <li>
+              最終整合工作樹：<code>moedict.tw-all-resolved</code>，分支
+              <code>integration/all-resolved-issues-20260713</code>。
+            </li>
+            <li>
+              報告產出前的最終程式碼 HEAD：
+              <span class="commit">32b717aa6b99db654cfa2280d96eb93a8d4239bb</span>。
+            </li>
+            <li>
+              基準／合併基準（merge-base）：
+              <span class="commit">0a2599b729049c4633f5554d03c97904972c95bd</span>。
+            </li>
+            <li>產出前已讀取的來源指引文件：<code>AGENTS.md</code>。</li>
+          </ul>
+          <p class="footer-note">
+            本文件為獨立產出的 HTML5 文件，內含行內 CSS 與一段極精簡的選用行內篩選腳本。
+            不使用任何遠端字型、CDN 腳本、圖片、分析工具或網路相依資源。
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      (() => {
+        const buttons = Array.from(document.querySelectorAll("[data-filter]"));
+        const cards = Array.from(document.querySelectorAll(".issue-card[data-domain]"));
+        const count = document.getElementById("result-count");
+        function apply(filter) {
+          let visible = 0;
+          for (const card of cards) {
+            const show = filter === "all" || card.dataset.domain === filter;
+            card.hidden = !show;
+            if (show) visible += 1;
+          }
+          for (const button of buttons)
+            button.setAttribute("aria-pressed", String(button.dataset.filter === filter));
+          if (count) count.textContent = `顯示 ${visible} 張議題卡片`;
+        }
+        for (const button of buttons)
+          button.addEventListener("click", () => apply(button.dataset.filter));
+      })();
+    </script>
+  </body>
+</html>

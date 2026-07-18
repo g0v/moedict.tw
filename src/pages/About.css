@@ -85,7 +85,7 @@
 }
 
 .about-page .content a {
-  color: #337ab7;
+  color: var(--moe-link, #337ab7);
   text-decoration: none;
 }
 
@@ -99,7 +99,7 @@
 }
 
 .about-page .content h2.cc0 a {
-  color: #337ab7;
+  color: var(--moe-link, #337ab7);
 }
 
 /* Logo 樣式 */
@@ -115,7 +115,8 @@
   text-decoration: none;
 }
 
-.about-page .how-to-use-link .btn-info:hover {
+.about-page .how-to-use-link .btn-info:hover,
+.about-page .how-to-use-link .btn-info:focus-visible {
   color: #fff;
   text-decoration: none;
 }
@@ -198,16 +199,24 @@
   border-color: #adadad;
 }
 
-.btn-info {
+/* #322：WCAG AA 對比修正——原 Bootstrap .btn-info 白字（#fff）在
+   #5bc0de/#46b8da 底色僅 2.09:1／2.30:1，兩個主題都不合格（按鈕底色不隨
+   主題變化，故不需 --moe-* 深色變數；直接沿同色相加深即可讓亮／暗色主題
+   同時達標）。改用 About-scoped 選擇器（.about-page .btn-info），不觸碰
+   全域 Bootstrap .btn-info（僅存在於本檔，供 About 頁 2 個按鈕共用：
+   使用說明導覽連結 .how-to-use-link .btn-info 與加入書籤按鈕
+   .btn.btn-default.btn-info）。 */
+.about-page .btn-info {
   color: #fff;
-  background-color: #5bc0de;
-  border-color: #46b8da;
+  background-color: #1c728c;
+  border-color: #175e73;
 }
 
-.btn-info:hover {
+.about-page .btn-info:hover,
+.about-page .btn-info:focus-visible {
   color: #fff;
-  background-color: #46b8da;
-  border-color: #269abc;
+  background-color: #175e73;
+  border-color: #124959;
 }
 
 /* 使用說明截圖縮圖（#95） */
@@ -253,7 +262,10 @@
 .about-page .guide-figure figcaption {
   margin-top: 4px;
   font-size: 0.8em;
-  color: #888;
+  /* #322：#888 對白底僅 3.54:1（亮色不合格）；改用既有
+     --moe-text-secondary（深色模式 #aaa，見 src/index.css），亮色 fallback
+     改為 #666（5.74:1），兩主題皆達 WCAG AA ≥4.5:1。 */
+  color: var(--moe-text-secondary, #666);
   text-align: center;
 }
 

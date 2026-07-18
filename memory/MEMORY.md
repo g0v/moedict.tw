@@ -81,3 +81,18 @@
 - 新增 `tests/e2e/legacy-styles-regression.spec.ts` 作為視覺零回歸驗證：用
   `page.route()` 讓 CSS 內容可控，比對改動前後的 `getComputedStyle`（逐一
   列舉屬性，不能用 `.cssText`——Chromium 對 computed style 一律回傳空字串）。
+
+## 2026-07-14–15 共用 checkout 髒狀態、備份、patch-id 與解除記錄
+
+**歷史紀錄（2026-07-14，髒狀態期間）：** 共用 checkout `/Users/au/w/moedict.tw`（branch `main`，HEAD `af42ebf`）曾為 `13 modified + 5 untracked`。blob-containment 掃描後 18 個路徑裡有 12 個 `NO_MATCH`，獨特內容包含 `src/api/handleDictionaryAPI.ts`（`KEY_MAP` 新增 `B: "variants"`）與 `src/pages/DictionaryPage.tsx`（`variants?: string[]`）。
+
+- 零變動 forensic backup 放在 `/Users/au/w/backups/moedict-main-dirty-20260714/`：`tracked.patch`（`git diff --binary`）、`untracked/` 五個檔案 byte-exact 副本、`MANIFEST.json`（HEAD sha、porcelain status、每檔 sha256、12 個 `NO_MATCH` 路徑清單）、`README.md`。
+- `main` 本地 ahead-1 commit `af42ebf` 與 integration 內容 patch-id 等價（`git cherry` 以 `-` 前綴確認）。
+- `#281` 獨特有價值的內容已手術式 rescue 到 `wip/281-variants-forward-compat` commit `356b652`，涵蓋四個檔案：（1）`src/api/handleDictionaryAPI.ts`：`KEY_MAP` 新增 `B: "variants"` entry、regex 擴充、export 更新；（2）`tests/unit/api-dictionary-parsers.test.ts`：四個 B-field unit tests；（3）`src/pages/DictionaryPage.tsx`：Heteronym 型別新增 `variants?: string[]`、異用字 render 邏輯；（4）`src/index.css`：一條 `.twblg-variants` CSS rule。此 commit **刻意排除於本次 release**，因為 issue not_planned、ptck 目前無 B field 資料。
+
+**2026-07-15 owner 授權放棄並清理完畢：**
+
+- Owner 授權放棄 13 tracked 修改（整批 CNS11643 dirty WD）。RC audit 時 tracked tree 已是乾淨狀態，但此次清理作業開始時發現兩個 e2e 檔案出現 ` M`（working-tree modified，兩者皆在 audit 之後）。**逐檔事實：**（1）`tests/e2e/console-load-errors.spec.ts`：屬於原始 13 個（MANIFEST.json `status_porcelain` 與 `no_match_paths` 均有列），audit 時已乾淨、此次重新出現；其原始 diff 已保存於 backup `tracked.patch`。（2）`tests/e2e/legacy-styles-regression.spec.ts`：**不在**原始 13 個內，為 audit 後才新增的修改；restore 前未對 `0de2bcf` 做 byte 驗證，pre-restore 位元組依 ship-e2e-fix 的說明放棄（該修改內容與 `0de2bcf` 相符，但未經直接確認）。兩者均以 `git restore` 還原至 HEAD，tracked tree 乾淨。
+- 5 個殘餘 untracked CNS 路徑在刪除前完成雙向驗證：`diff -r --brief`（directory）+ `shasum -a 256`（4 單檔）全部比對吻合 backup，無方向性差異或額外檔案。
+- 已刪除：`data/dictionary/cns/`、`scripts/generate-cns-data.mjs`、`src/api/handleCnsAPI.ts`、`tests/integration/api-cns.test.ts`、`tests/unit/api-cns.test.ts`。
+- `git status --porcelain` 輸出為空，main 現為 porcelain-clean，HEAD 仍為 `af42ebf`（未 reset/checkout/merge）。main behind origin/main 狀態不變（`af42ebf` 比 `d887339` 落後），待 integration PR merge 後一併更新。

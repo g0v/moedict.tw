@@ -151,9 +151,28 @@ describe("decorateRuby", () => {
     expect(result.ruby.match(/<rb/g) || []).toHaveLength(14);
 
     const rendered = rightAngle(result.ruby);
-    expect(rendered).toMatch(
-      /<rb><a href=".\/#%E8%B3%8A">賊<\/a><\/rb>[\s\S]*<rt[^>]*>tsha̍t<\/rt>[\s\S]*；[\s\S]*annotation="giâm"[\s\S]*<rb><a href=".\/#%E5%9A%B4">嚴<\/a><\/rb>/,
-    );
+    // After rightAngle, every <rt> is replaced with a .romanization-selectable <span>.
+    // Verify ordering: 賊 rb → tsha̍t span → annotation giâm → second 嚴 rb.
+    // Using indexOf ordering to preserve the structural invariant while avoiding
+    // a single regex that embeds the U+030D combining mark (OXC regex parser issue).
+    const iZeik = rendered.indexOf('<rb><a href="./#%E8%B3%8A">'); // 賊 rb
+    const iTshat = rendered.indexOf(">tsha\u030dt</span>"); // tsha̍t span (U+030D)
+    // The trs input uses NFD â (a+U+0302); normalizeAnnotation does not remap U+0302,
+    // so the annotation attribute retains NFD form in the rendered string.
+    const iAnnotGiam = rendered.indexOf('annotation="gia\u0302m"'); // lowercase giâm (NFD)
+    // The title has TWO 嚴 chars: first is Giâm (index < iZeik), second is giâm
+    // (after the semicolon, index > iAnnotGiam).  lastIndexOf gives the later one.
+    const iYanSecond = rendered.lastIndexOf('<rb><a href="./#%E5%9A%B4">');
+    expect(iZeik).toBeGreaterThan(-1);
+    expect(iTshat).toBeGreaterThan(-1);
+    expect(iAnnotGiam).toBeGreaterThan(-1);
+    expect(iYanSecond).toBeGreaterThan(-1);
+    // Ordering: 賊 < tsha̍t span < annotation giâm < second 嚴 rb
+    expect(iZeik).toBeLessThan(iTshat);
+    expect(iTshat).toBeLessThan(iAnnotGiam);
+    expect(iAnnotGiam).toBeLessThan(iYanSecond);
+    // No bare <rt> survives — only .romanization-selectable spans.
+    expect(rendered).not.toMatch(/<rt[\s>]/);
   });
 });
 

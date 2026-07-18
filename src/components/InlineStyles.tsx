@@ -252,7 +252,19 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 		.ui-autocomplete.search-results .ui-menu-item {
 			padding: 1px;
 			cursor: pointer;
-			border-bottom: 1px solid #eee;
+			border-bottom: 1px solid var(--moe-border, #eee);
+		}
+
+		/* 覆蓋 data/assets/styles.css 的 .query-box li a { background-color:
+		   rgba(255,255,255,.8) }：淺色模式維持原半透明白底不變（fallback
+		   byte-identical），深色模式改用 --moe-surface，否則列項在深色模式下
+		   會呈現「淺灰底、近白字」的可讀性錯誤（見 tests/e2e/dark-mode.spec.ts /
+		   searchbox-mobile.spec.ts 的斷言）。此規則的 specificity
+		   （3 class + 1 type）高於 legacy .query-box li a（1 class + 2
+		   type），順序無關也會贏。 */
+		.ui-autocomplete.search-results .ui-menu-item a {
+			background: var(--moe-surface, rgba(255,255,255,.8));
+			background-image: none;
 		}
 
 		.ui-autocomplete.search-results .ui-menu-item:hover a,
@@ -260,14 +272,15 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 			outline: none;
 			margin: -1px;
 			border: 1px solid #74b2e2;
-			background: #e4f1fb;
-			color: #0070a3;
+			background: var(--moe-surface-alt, #e4f1fb);
+			background-image: none;
+			color: var(--moe-link, #0070a3);
 		}
 
 		.ui-autocomplete.search-results .ui-menu-item a,
 		.ui-autocomplete.search-results .ui-menu-item span {
 			display: block;
-			color: #333;
+			color: var(--moe-text, #333);
 			text-decoration: none;
 			font-weight: 400;
 			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Biaodian Pro Serif CNS", sans-serif;
@@ -275,11 +288,11 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 
 		.ui-autocomplete.search-results .ui-menu-item.is-status {
 			cursor: default;
-			color: #666;
+			color: var(--moe-text-secondary, #666);
 		}
 
 		.ui-autocomplete.search-results .ui-menu-item:not(.is-status):hover {
-			background: #f0f0f0;
+			background: var(--moe-surface-alt, #f0f0f0);
 		}
 
 		@media only screen and (min-width: 768px) {
@@ -361,8 +374,8 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 		.query-box .mobile-search-back-chevron {
 			width: 14px;
 			height: 14px;
-			border-left: 5px solid #990012;
-			border-bottom: 5px solid #990012;
+			border-left: 5px solid var(--moe-audio-accent, #990012);
+			border-bottom: 5px solid var(--moe-audio-accent, #990012);
 			border-radius: 2px;
 			transform: rotate(45deg);
 		}
@@ -379,7 +392,7 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 			padding: 0;
 			border: 0;
 			border-radius: 50%;
-			background: #bfc0c2;
+			background: var(--moe-surface-alt, #bfc0c2);
 			color: #fff;
 			font-size: 21px;
 			font-weight: 700;
@@ -391,10 +404,10 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 			display: none;
 			width: 100%;
 			text-align: left;
-			border: 1px solid #d6d6d8;
+			border: 1px solid var(--moe-border, #d6d6d8);
 			border-radius: 8px;
-			background: #f3f3f5;
-			color: #3b3140;
+			background: var(--moe-surface-alt, #f3f3f5);
+			color: var(--moe-text, #3b3140);
 			padding: 8px 12px;
 			line-height: 1.3;
 			align-items: center;
@@ -428,8 +441,8 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 			.query-box .mobile-search-back-chevron {
 				width: 20px;
 				height: 20px;
-				border-left: 7px solid #990012;
-				border-bottom: 7px solid #990012;
+				border-left: 7px solid var(--moe-audio-accent, #990012);
+				border-bottom: 7px solid var(--moe-audio-accent, #990012);
 				border-radius: 3px;
 				transform: rotate(45deg);
 			}
@@ -487,7 +500,7 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 
 		/* 字典發音按鈕（複刻原專案） */
 		.part-of-speech.playAudio {
-			color: #6B0000;
+			color: var(--moe-audio-accent, #6B0000);
 			background: transparent;
 			font-size: 90%;
 			padding: 0;
@@ -502,7 +515,7 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 		}
 		.playAudio {
 			margin-left: 5px;
-			color: #6B0000;
+			color: var(--moe-audio-accent, #6B0000);
 			font-size: 70%;
 			padding-left: 5px;
 			display: inline-block !important;
@@ -523,7 +536,7 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 		}
 		.reading-only-note {
 			margin: .5em 0 1.5em;
-			color: #666;
+			color: var(--moe-text-secondary, #666);
 			font-size: 90%;
 		}
 
@@ -576,7 +589,7 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 				margin: -0.25em 0 0.5em !important;
 				padding-bottom: 0.3em !important;
 				border-bottom: none !important;
-				color: #000 !important;
+				color: var(--moe-text, #000) !important;
 			}
 			.ui-tooltip .title .h1 a,
 			.ui-tooltip .title h1 a,
@@ -584,7 +597,7 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 				font-family: inherit !important;
 				font-size: inherit !important;
 				text-decoration: none !important;
-				color: #000 !important;
+				color: var(--moe-text, #000) !important;
 			}
 		.ui-tooltip .title .h1 a:hover,
 		.ui-tooltip .title h1 a:hover,

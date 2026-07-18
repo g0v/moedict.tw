@@ -53,6 +53,22 @@ export default defineConfig({
         viewport: { width: 1280, height: 800 },
       },
     },
+    {
+      // Focused WebKit project for romanization overlay selection/geometry tests.
+      // Runs all test.describe blocks whose title starts with "@romanization" in
+      // dictionary.spec.ts — Taigi, Mandarin, and geometry regression describes.
+      // Activate locally: E2E_SKIP_BUILD=1 vp exec playwright test --project=webkit-romanization
+      name: "webkit-romanization",
+      testMatch: ["**/dictionary.spec.ts"],
+      grep: /@romanization/,
+      use: {
+        ...devices["Desktop Safari"],
+        viewport: { width: 1280, height: 800 },
+        video: "off",
+        trace: "retain-on-failure",
+        screenshot: "only-on-failure",
+      },
+    },
   ],
   webServer: {
     // CI pre-builds once (see .github/workflows/ci.yml) and sets E2E_SKIP_BUILD=1;

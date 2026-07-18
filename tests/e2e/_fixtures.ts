@@ -34,6 +34,13 @@ export const test = base.extend({
         body: "",
       });
     });
+    await page.route(/^https?:\/\/www\.moedict\.tw\/.*\.png(?:\?.*)?$/, (route) => {
+      return route.fulfill({
+        status: 404,
+        contentType: "image/png",
+        body: "",
+      });
+    });
 
     if (COVERAGE_ENABLED) {
       // resetOnNavigation:false keeps entries across client-side routes;

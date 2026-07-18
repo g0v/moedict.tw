@@ -3,6 +3,7 @@ import {
   escapeHtml,
   fetchJsonByToken,
   fetchRadicalRows,
+  getRadicalLangPrefix,
   normalizeRadicalVariant,
   normalizeRows,
   normalizeTooltipId,
@@ -47,9 +48,18 @@ describe("normalizeRadicalVariant", () => {
 });
 
 describe("getTokenByLang", () => {
-  it("prefixes ~ for c lang, leaves a lang as-is", () => {
+  it("prefixes ~ for c lang, ' for t lang, leaves a lang as-is", () => {
     expect(getTokenByLang("a", "@木")).toBe("@木");
     expect(getTokenByLang("c", "@木")).toBe("~@木");
+    expect(getTokenByLang("t", "@木")).toBe("'@木");
+  });
+});
+
+describe("getRadicalLangPrefix", () => {
+  it("returns the canonical prefix per lang", () => {
+    expect(getRadicalLangPrefix("a")).toBe("");
+    expect(getRadicalLangPrefix("c")).toBe("~");
+    expect(getRadicalLangPrefix("t")).toBe("'");
   });
 });
 
@@ -90,12 +100,23 @@ describe("normalizeRows", () => {
     expect(normalizeRows(["a", "b", "c"])).toEqual([["a", "b", "c"]]);
   });
 
-  it("maps 靑 → 青 inside rows", () => {
-    expect(normalizeRows([["靑", "青"]])).toEqual([["青", "青"]]);
+  it("maps 靑 → 青 inside rows and dedupes the resulting collision", () => {
+    expect(normalizeRows([["靑", "青"]])).toEqual([["青"]]);
+    expect(normalizeRows([["靑", "木"]])).toEqual([["青", "木"]]);
   });
 
   it("drops falsy entries from rows", () => {
     expect(normalizeRows([["a", "", null as unknown as string, "b"]])).toEqual([["a", "b"]]);
+  });
+
+  it("dedupes repeated values within a row while preserving order (radical appearing in its own stroke-0 row, g0v/moedict-webkit#口-radical-key)", () => {
+    expect(normalizeRows([["口", "口"]])).toEqual([["口"]]);
+    expect(normalizeRows({ 0: ["口", "口"], 2: ["古", "句", "古"] })).toEqual([
+      ["口"],
+      [],
+      ["古", "句"],
+    ]);
+    expect(normalizeRows(["a", "b", "a", "c", "b"])).toEqual([["a", "b", "c"]]);
   });
 
   it("returns [] on unexpected input (string)", () => {

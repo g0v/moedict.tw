@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
 import { fetchFromServer, fetchJson } from "./_harness";
 
-describe("/api/stroke-json/{codepoint}.json (proxy)", () => {
+/**
+ * Integration coverage for /api/stroke-json/{codepoint}.json against the real
+ * Miniflare ASSETS binding. fixtures.ts seeds stroke-json/840c.json (萌) into
+ * the ASSETS bucket; the handler must read that key directly (not the public
+ * CDN URL) so staging can validate preview-bucket uploads.
+ */
+describe("/api/stroke-json/{codepoint}.json (R2 ASSETS)", () => {
   it("returns 400 for invalid codepoint format", async () => {
     const { status, body } = await fetchJson<{ error: string }>("/api/stroke-json/zzz.json");
     expect(status).toBe(400);
@@ -19,8 +25,58 @@ describe("/api/stroke-json/{codepoint}.json (proxy)", () => {
     expect(res.status).toBeGreaterThanOrEqual(400);
   });
 
-  // We deliberately do NOT test real Rackspace CDN proxying here (external
-  // dependency). Unit tests in tests/unit/api-stroke.test.ts mock that path.
+  it("serves the seeded 840c.json (萌) from ASSETS with stroke cache headers", async () => {
+    const res = await fetchFromServer("/api/stroke-json/840c.json");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toMatch(/json/);
+    expect(res.headers.get("cache-control")).toContain("s-maxage=86400");
+    expect(res.headers.get("cache-tag")).toBe("stroke");
+    expect(res.headers.get("etag")).toBeTruthy();
+    const body = await res.json();
+    // Real stroke-json schema: array of {outline, track}
+    expect(Array.isArray(body)).toBe(true);
+    expect(body.length).toBeGreaterThan(0);
+    expect(body[0]).toHaveProperty("outline");
+    expect(body[0]).toHaveProperty("track");
+  });
+
+  it("supports HEAD for the seeded object (useStrokeAvailability probe)", async () => {
+    const res = await fetchFromServer("/api/stroke-json/840c.json", { method: "HEAD" });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("etag")).toBeTruthy();
+    expect(res.headers.get("cache-tag")).toBe("stroke");
+    expect(await res.text()).toBe("");
+  });
+
+  it("returns 404 for a codepoint not seeded in ASSETS", async () => {
+    // ffff is outside the CJK range and is never in the 6,063 corpus.
+    const { status, body } = await fetchJson<{ error: string }>("/api/stroke-json/ffff.json");
+    expect(status).toBe(404);
+    expect(body.error).toBe("Not Found");
+  });
+
+  it("returns 304 when If-None-Match matches the live ETag", async () => {
+    const first = await fetchFromServer("/api/stroke-json/840c.json");
+    expect(first.status).toBe(200);
+    const etag = first.headers.get("etag");
+    expect(etag).toBeTruthy();
+    // Drain body so the connection is free for the conditional request.
+    await first.arrayBuffer();
+
+    const second = await fetchFromServer("/api/stroke-json/840c.json", {
+      headers: { "If-None-Match": etag! },
+    });
+    // Miniflare R2 may or may not honour onlyIf depending on version; accept
+    // either a correct 304 or a full 200 with the same ETag (still correct
+    // content). The unit test locks the 304 branch with an injected double.
+    if (second.status === 304) {
+      expect(second.headers.get("etag")).toBe(etag);
+      expect(await second.text()).toBe("");
+    } else {
+      expect(second.status).toBe(200);
+      expect(second.headers.get("etag")).toBe(etag);
+    }
+  });
 });
 
 describe("/api/lookup/pinyin/{lang}/{type}/{term}.json", () => {

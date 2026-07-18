@@ -66,6 +66,27 @@ body {
     U+FDFB1, U+FFBAB, U+FFBAE, U+FFBBB, U+FFC82, U+FFD36, U+FFD70, U+FFD9B, U+FFDD0, U+FFF46;
 }
 
+/* "MOEDICT Same-Origin" — same-origin alias for the MOEDICT title font.
+   The app serves /assets/fonts/MOEDICT.woff2 (and .otf/.woff) through the
+   same Worker origin, so these requests never require cross-origin R2 CORS
+   headers.  When r2-assets.moedict.tw CORS edge-cache contains a stale
+   pre-CORS HIT without Access-Control-Allow-Origin, staging loads fall back
+   to system glyphs and break title/Zhuyin geometry.  Placing this alias
+   *before* the bare MOEDICT family in critical font stacks ensures the
+   title font is resolved same-origin and is immune to that CORS cache state.
+   The ?v=20260713-cors query suffix busts any old edge cache key for these
+   paths; it does not affect font bytes. */
+@font-face {
+  font-family: "MOEDICT Same-Origin";
+  src:
+    url("/assets/fonts/MOEDICT.woff2?v=20260713-cors") format("woff2"),
+    url("/assets/fonts/MOEDICT.otf?v=20260713-cors") format("opentype"),
+    url("/assets/fonts/MOEDICT.woff?v=20260713-cors") format("woff");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -189,7 +210,7 @@ html.moe-capacitor .fulltext-search-input {
 
 .fulltext-search-status {
   padding: 14px 16px;
-  color: #666;
+  color: var(--moe-text-secondary, #666);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -235,7 +256,7 @@ html.moe-capacitor .fulltext-search-input {
 .fulltext-search-result-snippet {
   display: block;
   margin-top: 4px;
-  color: #666;
+  color: var(--moe-text-secondary, #666);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -261,11 +282,6 @@ html.moe-capacitor .fulltext-search-input {
   /* Always show the settings (gear) button on mobile */
   body #btn-pref {
     display: block !important;
-  }
-
-  body .iconic-color.star {
-    right: 22px;
-    top: 151px;
   }
 
   /* Search bar: position between gear and bookmark.
@@ -348,17 +364,210 @@ button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
+/*
+ * Dark mode (g0v/moedict-webkit#245).
+ *
+ * `--moe-*` custom properties are only ever *defined* inside an active dark
+ * scope:
+ *   - `@media (prefers-color-scheme: dark)` guarded by `:not([data-theme=
+ *     "light"])`, for anyone who never opens 偏好設定 — pure OS-level
+ *     support, works even before src/main.tsx runs.
+ *   - `html[data-theme="dark"]`, set by src/utils/theme-utils.ts (driven by
+ *     the "外觀模式" control in #user-pref) and mirrored by the inline
+ *     bootstrap script in index.html to avoid a flash of the wrong theme.
+ * Every consuming rule below reads through `var(--moe-x, <original light
+ * value>)`, so light mode (system light, or an explicit "light" override)
+ * renders byte-identical to before — nothing here edits the legacy
+ * stylesheet or InlineStyles.tsx. The `html …` prefixes exist only to
+ * out-specificity the legacy `data/assets/styles.css` / InlineStyles.tsx
+ * rules being re-themed (both are loaded after this stylesheet), matching
+ * the `html.moe-capacitor …` / `body[data-ruby-pref] …` convention already
+ * used elsewhere in this file.
+ */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) {
+    --moe-bg: #121212;
+    --moe-surface: #1c1c1c;
+    --moe-surface-alt: #2a2a2a;
+    --moe-text: #e6e3df;
+    --moe-text-secondary: #aaa;
+    --moe-border: #3d3d3d;
+    --moe-link: #7fd0ff;
+    --moe-input-bg: #232323;
+    --moe-input-border: #4d4d4d;
+    --moe-panel-bg: #2a231d;
+    --moe-panel-border: #4a3c30;
+    --moe-panel-heading: #e7cdb0;
+    --moe-query-a: #241616;
+    --moe-query-t: #261414;
+    --moe-query-h: #142614;
+    --moe-query-c: #141426;
+    --moe-example-bg: #252525;
+    --moe-example-border: #444;
+    --moe-mark-bg: #3d3200;
+    --moe-zhuyin-secondary: #aaa;
+    --moe-audio-accent: #ffa8a8;
+    color-scheme: dark;
   }
-  a:hover {
-    color: #747bff;
+}
+
+html[data-theme="dark"] {
+  --moe-bg: #121212;
+  --moe-surface: #1c1c1c;
+  --moe-surface-alt: #2a2a2a;
+  --moe-text: #e6e3df;
+  --moe-text-secondary: #aaa;
+  --moe-border: #3d3d3d;
+  --moe-link: #7fd0ff;
+  --moe-input-bg: #232323;
+  --moe-input-border: #4d4d4d;
+  --moe-panel-bg: #2a231d;
+  --moe-panel-border: #4a3c30;
+  --moe-panel-heading: #e7cdb0;
+  --moe-query-a: #241616;
+  --moe-query-t: #261414;
+  --moe-query-h: #142614;
+  --moe-query-c: #141426;
+  --moe-example-bg: #252525;
+  --moe-example-border: #444;
+  --moe-mark-bg: #3d3200;
+  --moe-zhuyin-secondary: #aaa;
+  --moe-audio-accent: #ffa8a8;
+  color-scheme: dark;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+}
+
+/* Page chrome */
+html body {
+  background-color: var(--moe-bg, #fff);
+  color: var(--moe-text, #333);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) body {
+    background-image: none;
   }
-  button {
-    background-color: #f9f9f9;
-  }
+}
+html[data-theme="dark"] body {
+  background-image: none;
+}
+
+/* Sidebar search box: .query-box's own background lives in InlineStyles.tsx;
+   the per-language tint is a higher-specificity legacy `body.lang-X
+   #query-box` id rule, so it needs its own override to actually win. */
+html .query-box {
+  background-color: var(--moe-input-bg, hsl(0, 0%, 97%));
+}
+html body.lang-a #query-box {
+  background-color: var(--moe-query-a, #f3f0f0);
+}
+html body.lang-t #query-box {
+  background-color: var(--moe-query-t, #fbefef);
+}
+html body.lang-h #query-box {
+  background-color: var(--moe-query-h, #effbef);
+}
+html body.lang-c #query-box {
+  background-color: var(--moe-query-c, #efeffb);
+}
+
+/* Navbar full-text search (rules defined earlier in this same file) */
+.fulltext-search-input {
+  background: var(--moe-input-bg, #fff);
+  color: var(--moe-text, #333);
+  border-color: var(--moe-input-border, #cfcfd4);
+}
+.fulltext-search-panel {
+  background: var(--moe-surface, #fff);
+  border-color: var(--moe-border, #ddd);
+}
+.fulltext-search-result-title {
+  color: var(--moe-text, inherit);
+}
+.fulltext-search-result:hover,
+.fulltext-search-result.is-active {
+  background: var(--moe-surface-alt, #f4f8fc);
+}
+
+/* jquery-ui (cupertino theme) autocomplete panel backing the sidebar search */
+html .ui-widget-content {
+  background: var(--moe-surface, #f2f5f7);
+  color: var(--moe-text, #362b36);
+  border-color: var(--moe-border, #dddddd);
+}
+html .ui-widget-content a {
+  color: var(--moe-text, #362b36);
+}
+html .ui-menu-item {
+  border-bottom-color: var(--moe-border, #ddd);
+}
+
+/* Dictionary entry cards (legacy `.result { background: #fff }` / `.result
+   a { color: #000 }`) */
+html .result {
+  background: var(--moe-surface, #fff);
+  border-color: var(--moe-border, #d4d3d3);
+  color: var(--moe-text, #333);
+}
+html .result a {
+  color: var(--moe-link, #000);
+}
+/* audit-dark-contrast J：legacy `.result a:hover, .result a:focus` /
+   `.result h1 a:hover` （data/assets/styles.css）把 hover/focus 態文字設為
+   #0070a3 疊在 #ddd 底色，只有 4.02:1（未達 4.5）。兩主題底色/字色皆固定
+   不隨主題變化，故不需 --moe-* 深色變數，直接沿同色相加深即可讓亮／暗色
+   主題同時達標。`.part-of-speech a:hover` / `.specific a:hover` 已有更高
+   specificity 的專屬規則（background:none!important 或 #aaf），不受影響。 */
+html .result a:hover,
+html .result a:focus {
+  color: #005f8c;
+}
+html .result h1 a:hover,
+html .result h1 a.hovered,
+html .result .h1 a:hover,
+html .result .h1 a.hovered {
+  color: #005f8c;
+}
+
+/* Settings panel (#user-pref) */
+html #user-pref {
+  background-color: var(--moe-panel-bg, #d6cbbc);
+  border-right-color: var(--moe-panel-border, #c8baa6);
+}
+html #user-pref h4 {
+  color: var(--moe-panel-heading, #634f3c);
+}
+/* audit-dark-contrast C：#user-pref 底部「關閉」按鈕沿用全域 Bootstrap
+   .btn-primary（白字 #fff 疊 #428bca），僅 3.63:1，兩主題皆不合格（按鈕
+   底色不隨主題變化，不需 --moe-* 深色變數）。Scope 到 #user-pref，不動
+   全域 .btn-primary（其他頁面/元件可能仍依賴原色）。id selector 天然勝過
+   legacy 的 class-only 規則，順序無關也會贏。 */
+html #user-pref .btn-primary {
+  background-color: #2f6da3;
+  border-color: #285d8b;
+}
+html #user-pref .btn-primary:hover,
+html #user-pref .btn-primary:focus,
+html #user-pref .btn-primary:active {
+  background-color: #285d8b;
+  border-color: #204a70;
+}
+html .form-control {
+  background-color: var(--moe-input-bg, #fff);
+  border-color: var(--moe-input-border, #ccc);
+  color: var(--moe-text, #555);
+}
+html .btn-default {
+  background-color: var(--moe-surface-alt, #fff);
+  border-color: var(--moe-input-border, #ccc);
+  color: var(--moe-text, #333);
+}
+
+/* About page content card (legacy `.about .content { background: white }`) */
+html body.about .content {
+  background: var(--moe-surface, #fff);
 }
 
 /* 原 styles.css: `.nav, .dropdown, #query-box { font-size: 19px }`
@@ -412,6 +621,18 @@ button:focus-visible {
 .radical .sym {
   margin-left: 0.2em;
   padding-right: 0.2em;
+}
+/* #322/audit-dark-contrast D：部首交叉參照連結（RadicalGlyph, inline
+   `style="color:white"` 用來蓋過全域 `a{color:#428bca}`，讓字形疊在紅底
+   徽章上可讀）。hover 時 legacy `.result a:hover,.result a:focus{
+   background:#ddd}` 會把徽章背景整個蓋成淺灰，但 inline style 仍讓文字維持
+   白色——白字疊淺灰僅 1.36:1。inline style 無法被一般 CSS 蓋過，改用
+   !important 讓 hover/focus 態的背景維持原本徽章紅（#6b0000，呼應既有
+   `.radical .glyph b:hover`），兩主題皆為固定品牌色、不隨主題變化。 */
+.radical .glyph a.xref:hover,
+.radical .glyph a.xref:focus {
+  background: #6b0000 !important;
+  color: #fff !important;
 }
 body .ui-tooltip .radical {
   display: none;
@@ -472,6 +693,15 @@ a.iconic-circle:active {
   background: #888 !important;
 }
 
+/* issue #132：已知缺筆順資料時停用（見 DictionaryPage.tsx strokeAnimationDisabled） */
+.iconic-circle.stroke[aria-disabled="true"] {
+  cursor: not-allowed !important;
+  opacity: 0.45;
+}
+.iconic-circle.stroke[aria-disabled="true"]:hover {
+  background: black !important;
+}
+
 /* 語言別顏色（原 _theme.scss: body.lang-* .iconic-circle）*/
 body.lang-a .iconic-circle {
   background: #400;
@@ -498,11 +728,19 @@ body.lang-t .iconic-color {
   color: #744;
 }
 
+/* legacy styles.css（後載入）仍對 `.iconic-color.star` 設
+   `position:absolute; right:42px; top:113px`（且行動版另有 `right:22px;
+   top:151px`／`body.cordova` 158px !important 覆寫）——那是舊版把星號浮在
+   標題右上角的版型。星號現在改為 `.entry-actions` 動作列內的行內元素，
+   用較高特異性（`.result .entry-actions .iconic-color.star`）把 position
+   收回 static、offset 歸零，蓋過 legacy 的絕對定位規則。 */
+.result .entry-actions .iconic-color.star {
+  position: static;
+  top: auto;
+  right: auto;
+}
 .iconic-color.star {
   background: white;
-  position: absolute;
-  right: 0;
-  top: 50px;
   /* 原 FontAwesome [class^="icon-"] { margin-right: .3em }：保留與 moedict.tw 相同的 4.8px 右邊距 */
   margin-right: 0.3em;
 }
@@ -514,6 +752,29 @@ body.lang-t .iconic-color {
 
 .iconic-color.star:hover {
   background: #ccc !important;
+}
+.entry-actions .entry-copy-button,
+.entry-actions .variants-link,
+.entry-actions .star {
+  box-sizing: border-box;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .result .entry-actions .iconic-color.star {
+    background: var(--moe-surface-alt);
+    color: var(--moe-text);
+  }
+  html:not([data-theme="light"]) .result .entry-actions .iconic-color.star:hover {
+    background: var(--moe-surface-alt) !important;
+    color: var(--moe-text);
+  }
+}
+html[data-theme="dark"] .result .entry-actions .iconic-color.star {
+  background: var(--moe-surface-alt);
+  color: var(--moe-text);
+}
+html[data-theme="dark"] .result .entry-actions .iconic-color.star:hover {
+  background: var(--moe-surface-alt) !important;
+  color: var(--moe-text);
 }
 
 /* 單字詞條 hover 高亮，點擊觸發筆順動畫 */
@@ -537,6 +798,166 @@ body.lang-t .iconic-color {
   color: inherit;
   text-decoration: none;
   pointer-events: none;
+}
+
+.result .entry .title .single-char-stroke-trigger[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+.result .entry .title .single-char-stroke-trigger[aria-disabled="true"]:hover {
+  border-color: transparent;
+  background-color: transparent;
+}
+
+/* 星號收藏／複製解釋／異體字字典連結：單一動作列，取代原先各自散落的絕對
+   定位星號、逐條複製按鈕、標題旁的異體字連結圖示（UI 調整：見對應 issue）。
+   idx===0 時渲染一次；flex-wrap 讓窄螢幕自然換行，不需要另外的手機專屬版型。*/
+/* Float the controls in a BFC so the title keeps its legacy full-width
+   block/ruby geometry while the heading reserves the taller control stack. */
+.result .entry-heading {
+  display: flow-root;
+}
+
+.result .entry-control-stack {
+  float: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-start;
+  min-width: max-content;
+  margin-left: 1rem;
+}
+
+.result .entry-control-stack .radical {
+  float: none;
+  margin: 0;
+  padding-top: 5px;
+  text-align: right;
+}
+
+.result .entry-actions {
+  position: static;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 100%;
+  margin: 0;
+}
+.entry-copy-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 30px;
+  padding: 7px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.entry-copy-button:hover,
+.entry-copy-button:focus-visible {
+  background: var(--moe-surface-alt, #ccc);
+  color: var(--moe-text, inherit);
+}
+.entry-copy-button .moe-icon {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.143em;
+}
+.result .entry-actions button:focus-visible,
+.result .entry-actions a:focus-visible,
+.result .entry-actions [role="button"]:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.entry-actions button:active,
+.entry-actions a:active,
+.entry-actions [role="button"]:active {
+  transform: scale(0.94);
+  transition: transform 100ms ease-out;
+}
+.entry-copy-status {
+  font-size: 0.78rem;
+}
+@media (max-width: 767px) {
+  .entry-actions .entry-copy-button,
+  .entry-actions .variants-link,
+  .entry-actions .star {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .entry-actions button:active,
+  .entry-actions a:active,
+  .entry-actions [role="button"]:active {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* #88 cross-language 字詞紀錄簿 overview (StarredPage.tsx .all-langs-section) */
+.all-langs-section {
+  margin-bottom: 1em;
+}
+.all-langs-section .lang-group-heading {
+  font-weight: 600;
+  margin: 0.75em 0 0.25em;
+}
+.all-langs-section .lang-group-current {
+  font-weight: 400;
+  font-size: 0.8em;
+  /* audit-dark-contrast K: --moe-text-muted is never defined in either dark
+     scope, so it always fell back to the light #767676 value even in dark
+     mode (3.75:1 on --moe-surface #1c1c1c). --moe-text-secondary IS defined
+     (dark #aaa, 7.34:1); light fallback stays #767676, byte-identical. */
+  color: var(--moe-text-secondary, #767676);
+  margin-left: 0.4em;
+}
+
+/* #219 export/import panel (StarredPage.tsx .export-import-section) */
+.export-import-section {
+  margin-top: 0.75em;
+}
+.export-import-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.export-import-section textarea {
+  display: block;
+  width: 100%;
+  max-width: 32em;
+  min-height: 6em;
+  margin: 0.4em 0;
+  font-family: monospace;
+  box-sizing: border-box;
+}
+@media (max-width: 767px) {
+  .export-import-controls .btn-tiny,
+  #btn-toggle-all-langs {
+    min-height: 32px;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .export-import-section textarea {
+    background: var(--moe-surface, #1e1e1e);
+    color: var(--moe-text, #ddd);
+    border-color: var(--moe-border, #555);
+  }
+}
+html[data-theme="dark"] .export-import-section textarea {
+  background: var(--moe-surface, #1e1e1e);
+  color: var(--moe-text, #ddd);
+  border-color: var(--moe-border, #555);
 }
 
 /* Right-angle ruby preferences.  The legacy hruby CSS always lays out the
@@ -568,6 +989,7 @@ body[data-ruby-pref="zhuyin"] .result .entry .title {
   font-family:
     var(--title-leading-family),
     Numeral LF Serif,
+    "MOEDICT Same-Origin",
     MOEDICT,
     Fira Sans OT,
     Georgia,
@@ -612,33 +1034,91 @@ html.moe-ios .result .entry .title {
   --title-zhuyin-y-shift: -0.055em;
 }
 
-.result .entry .title hruby.rightangle ru[annotation] > rt {
+/* g0v/moedict-webkit#186: 主要拼音（羅馬拼音／注音）目前只靠
+   `ru[annotation]::before { content: attr(annotation) }` 畫出可見字形——
+   CSS generated content 在任何瀏覽器都不可選取、不可複製。真正可選取的
+   `.romanization-selectable` span 疊在跟 `::before` 完全相同的視覺座標上
+   （位置/尺寸/縮放皆對齊 `ru[annotation]:before` 與 `hruby[rightangle]`
+   規則），並保留 `color: transparent` 讓它本身不可見——畫面上看到的仍是
+   `::before` 畫出的字形，但滑鼠/觸控落在同一個位置時，選取到的是這個真
+   實、正確、可複製的 Unicode 文字（而非畫出來的 PUA 連字字形）。
+   注意：此處改用 `<span>` 而非原先的 `<rt>`——WebKit 的 layout engine 會把
+   所有 `<rt>` 強制設為 position:static（不論作者樣式或 !important 均無效），
+   導致 h1 高度暴增（164px）、播放按鈕被推離標題外。`<span>` 在同一個
+   `<ru>` 父元素下正確接受 position:absolute，與 Chromium 行為一致。*/
+.result .entry .title hruby.rightangle ru[annotation] > .romanization-selectable {
   position: absolute !important;
-  width: 1px !important;
-  height: 1px !important;
+  left: -250% !important;
+  top: -0.5em !important;
+  height: 1em !important;
+  width: 600% !important;
+  font-size: 1em !important;
+  font-family: inherit !important;
+  line-height: 1 !important;
+  text-align: center !important;
+  text-indent: 0 !important;
+  transform: scale(0.55) !important;
+  transform-origin: top !important;
   margin: 0 !important;
   padding: 0 !important;
   border: 0 !important;
-  overflow: hidden !important;
-  clip: rect(0, 0, 0, 0) !important;
-  clip-path: inset(50%) !important;
+  overflow: visible !important;
+  clip: auto !important;
+  clip-path: none !important;
   white-space: nowrap !important;
   color: transparent !important;
-  font-size: 0 !important;
-  line-height: 0 !important;
+  -webkit-user-select: text !important;
+  user-select: text !important;
+}
+
+/* When romanization is hidden (zhuyin-only or no-phonetics preference) the
+   ::before generated content is already suppressed by the ruby-pref rules
+   above. The zhuyin and none ruby-pref selectors below also hide the
+   transparent selection hit target so it cannot be accidentally selected or
+   announced when no visible glyph is present. */
+body[data-ruby-pref="zhuyin"]
+  .result
+  .entry
+  .title
+  hruby.rightangle
+  ru[annotation]
+  > .romanization-selectable,
+body[data-ruby-pref="none"]
+  .result
+  .entry
+  .title
+  hruby.rightangle
+  ru[annotation]
+  > .romanization-selectable {
+  display: none !important;
 }
 
 .result .entry .title hruby.rightangle ru[zhuyin] zhuyin,
 .result .entry .title hruby.rightangle ru[zhuyin] yin,
 .result .entry .title hruby.rightangle ru[zhuyin] diao {
-  font-family: MOEDICT, "Zhuyin Kaiti", cursive, serif !important;
+  font-family: "MOEDICT Same-Origin", MOEDICT, "Zhuyin Kaiti", cursive, serif !important;
+}
+/* audit-dark-contrast A：legacy `hruby ru[annotation]:before, hruby ru
+   zhuyin { color: #666 }`（data/assets/styles.css）套用在標題右角注音的
+   `<zhuyin>` 上，由 `<yin>`/`<diao>` 子元素繼承——兩者皆未自訂 color。
+   在 #1c1c1c 底色下僅 2.97:1（大字級需 ≥3.0）。維持相同 selector 深度
+   （4 class + attribute，優於 legacy 的 3 type），只加 html 前綴取得
+   足夠 specificity，改吃深色感知變數。 */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .result .entry .title hruby.rightangle ru[zhuyin] zhuyin {
+    color: var(--moe-zhuyin-secondary, #666);
+  }
+}
+html[data-theme="dark"] .result .entry .title hruby.rightangle ru[zhuyin] zhuyin {
+  color: var(--moe-zhuyin-secondary, #666);
 }
 
 /* Capacitor-only: prepend EduKai to zhuyin stack */
 html.moe-capacitor .result .entry .title hruby.rightangle ru[zhuyin] zhuyin,
 html.moe-capacitor .result .entry .title hruby.rightangle ru[zhuyin] yin,
 html.moe-capacitor .result .entry .title hruby.rightangle ru[zhuyin] diao {
-  font-family: "MOE EduKai Android", MOEDICT, "Zhuyin Kaiti", cursive, serif !important;
+  font-family:
+    "MOE EduKai Android", "MOEDICT Same-Origin", MOEDICT, "Zhuyin Kaiti", cursive, serif !important;
 }
 
 .result .entry .title hruby.rightangle ru[zhuyin] diao {
@@ -766,6 +1246,36 @@ body[data-ruby-pref="zhuyin"] .result .entry .title hruby.rightangle ru[zhuyin][
   box-shadow: hsl(0, 0%, 83%) 0 3px 3px;
 }
 
+/* #265/#76: 若字元無教育部標準字體筆順資料，明確顯示「？尚無筆順資料」徽章，
+   取代原本僅將空白 canvas 淡化至 50% 透明度的「破損」外觀 */
+#strokes .word.stroke-missing canvas {
+  visibility: hidden;
+}
+#strokes .stroke-missing-badge {
+  position: absolute;
+  top: 0;
+  left: 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  background: #f7f7f7;
+  border: 1px dashed #bbb;
+  box-shadow: hsl(0, 0%, 83%) 0 3px 3px;
+  color: #888;
+  text-align: center;
+}
+#strokes .stroke-missing-mark {
+  font-size: 2.5em;
+  line-height: 1;
+  font-weight: bold;
+}
+#strokes .stroke-missing-text {
+  font-size: 0.75em;
+  margin-top: 0.4em;
+}
+
 /* 歷代書體按鈕區 */
 #historical-scripts {
   display: inline-block;
@@ -784,12 +1294,13 @@ body[data-ruby-pref="zhuyin"] .result .entry .title hruby.rightangle ru[zhuyin][
 }
 
 /* 台語例句特殊卡片版型（對齊原案） */
-body.lang-t .result .entry-item .example {
+body.lang-t .result .entry-item .example,
+body.lang-h .result .entry-item .example {
   display: inline-block;
   clear: both;
   width: auto;
-  border: 1px solid #d7d7d7;
-  background: #eee;
+  border: 1px solid var(--moe-example-border, #d7d7d7);
+  background: var(--moe-example-bg, #eee);
   padding: 8px 10px;
   margin: 6px 10px 6px 0;
   vertical-align: top;
@@ -832,6 +1343,177 @@ body.lang-t .result .entry-item .example .mandarin::after {
   content: "）";
 }
 
+.twblg-variants {
+  margin: 4px 0;
+}
+/* audit-dark-contrast B：legacy `.bopomofo { color: #666 }`
+   （data/assets/styles.css）套用在客語多腔調發音區塊
+   （DictionaryPage.tsx `<div class="bopomofo"><span class="pinyin">…`），
+   由內層的音讀 span／聲調 sup 繼承——皆未自訂 color。在 #1c1c1c 底色下僅
+   2.97:1（小字級需 ≥4.5）。改吃 --moe-text-secondary（同一 var 已用於
+   .fulltext-search-status 等次要文字），light fallback 維持 #666 不變。 */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .bopomofo {
+    color: var(--moe-text-secondary, #666);
+  }
+}
+html[data-theme="dark"] .bopomofo {
+  color: var(--moe-text-secondary, #666);
+}
+
+/* audit-dark-contrast E：legacy `div.cn-specific { background: #eef }`
+   （data/assets/styles.css，兩岸詞典簡體字/異用字標籤底色）為固定亮色，
+   從未隨主題變化。內層 `<span class="xref">` 純靠繼承拿到 `.result` 的
+   `--moe-text`（深色模式 #e6e3df），疊在依舊亮白的 #eef 底色上僅
+   1.12:1。改吃既有 --moe-example-bg（深色 #252525，與其他強調卡片背景
+   一致），light fallback 維持 #eef 不變；巢狀 `div.cn-specific.bopomofo
+   .cn-specific` 的分隔線同步吃 --moe-border。 */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) div.cn-specific {
+    background: var(--moe-example-bg, #eef);
+  }
+  html:not([data-theme="light"]) div.cn-specific.bopomofo .cn-specific {
+    border-top-color: var(--moe-border, #eee);
+  }
+}
+html[data-theme="dark"] div.cn-specific {
+  background: var(--moe-example-bg, #eef);
+}
+html[data-theme="dark"] div.cn-specific.bopomofo .cn-specific {
+  border-top-color: var(--moe-border, #eee);
+}
+
+/* Dark mode: keyword highlight and tone marks inside phrase/example cards
+   (g0v/moedict-webkit#245 follow-up — white-on-white fix).
+   In light mode `b`/`a.mark` have a yellow (#ffd) highlight and `zhuyin`
+   is rendered at #666; both are hardcoded in legacy styles.css. In dark
+   mode the card background switches to --moe-example-bg (#252525), so these
+   light-only colours must be overridden here.  The zhuyin override is scoped
+   to `.result .example` so it never touches the .title rightangle ruby. */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .result .entry-item .example b,
+  html:not([data-theme="light"]) .result .entry-item .example a.mark {
+    background: var(--moe-mark-bg, #ffd);
+    border-radius: 5px;
+  }
+  html:not([data-theme="light"]) .result .example hruby ru zhuyin {
+    color: var(--moe-zhuyin-secondary, #666);
+  }
+}
+html[data-theme="dark"] .result .entry-item .example b,
+html[data-theme="dark"] .result .entry-item .example a.mark {
+  background: var(--moe-mark-bg, #ffd);
+  border-radius: 5px;
+}
+html[data-theme="dark"] .result .example hruby ru zhuyin {
+  color: var(--moe-zhuyin-secondary, #666);
+}
+
+/* 部首/交叉參照 hover tooltip（useRadicalTooltip.ts）— 深色模式。
+   legacy `body .ui-tooltip { background: #fffcfc !important }`
+   （data/assets/styles.css）在深色模式下維持亮白背景不變；InlineStyles.tsx
+   的 `.ui-tooltip .title … { color: #000 !important }` 也維持黑字——兩者
+   疊加後，內容區的 `.def`/`.entry` 文字改吃 `--moe-text`（亮色）疊在白底
+   上幾乎不可讀。這裡以 `!important` 蓋過 legacy 背景，並收斂
+   entry/definition/badge/dotted-separator 系列文字色，讓整個 tooltip 在
+   深色模式下維持可讀對比（見 tests/e2e/dark-mode.spec.ts 的 WCAG 斷言）。
+   標題連結／stroke-char 的黑字已改在 InlineStyles.tsx 讀
+   `var(--moe-text, #000)`，此處不重覆。 */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) body .ui-tooltip {
+    background: var(--moe-surface, #fffcfc) !important;
+    color: var(--moe-text, #333);
+  }
+  html:not([data-theme="light"]) body .ui-tooltip.bpmf {
+    background: var(--moe-surface-alt, #f0f0f0) !important;
+  }
+  html:not([data-theme="light"]) body .ui-tooltip h1[data-title],
+  html:not([data-theme="light"]) body .ui-tooltip .title {
+    border-bottom-color: var(--moe-border, #eee) !important;
+  }
+  html:not([data-theme="light"]) .ui-tooltip .def,
+  html:not([data-theme="light"]) .ui-tooltip .definition {
+    color: var(--moe-text, #333);
+  }
+  html:not([data-theme="light"]) .ui-tooltip h1 small.youyin,
+  html:not([data-theme="light"]) .ui-tooltip h1 small.alternative,
+  html:not([data-theme="light"]) .ui-tooltip h1 + div small.youyin,
+  html:not([data-theme="light"]) .ui-tooltip h1 + div small.alternative,
+  html:not([data-theme="light"]) .ui-tooltip .stroke-list-more {
+    color: var(--moe-zhuyin-secondary, #888);
+  }
+  html:not([data-theme="light"]) .ui-tooltip hruby ru[annotation]::before,
+  html:not([data-theme="light"]) .ui-tooltip hruby ru zhuyin {
+    color: var(--moe-zhuyin-secondary, #666);
+  }
+}
+html[data-theme="dark"] body .ui-tooltip {
+  background: var(--moe-surface, #fffcfc) !important;
+  color: var(--moe-text, #333);
+}
+html[data-theme="dark"] body .ui-tooltip.bpmf {
+  background: var(--moe-surface-alt, #f0f0f0) !important;
+}
+html[data-theme="dark"] body .ui-tooltip h1[data-title],
+html[data-theme="dark"] body .ui-tooltip .title {
+  border-bottom-color: var(--moe-border, #eee) !important;
+}
+html[data-theme="dark"] .ui-tooltip .def,
+html[data-theme="dark"] .ui-tooltip .definition {
+  color: var(--moe-text, #333);
+}
+html[data-theme="dark"] .ui-tooltip h1 small.youyin,
+html[data-theme="dark"] .ui-tooltip h1 small.alternative,
+html[data-theme="dark"] .ui-tooltip h1 + div small.youyin,
+html[data-theme="dark"] .ui-tooltip h1 + div small.alternative,
+html[data-theme="dark"] .ui-tooltip .stroke-list-more {
+  color: var(--moe-zhuyin-secondary, #888);
+}
+html[data-theme="dark"] .ui-tooltip hruby ru[annotation]::before,
+html[data-theme="dark"] .ui-tooltip hruby ru zhuyin {
+  color: var(--moe-zhuyin-secondary, #666);
+}
+
+/* Tooltip 拼音水平位移（g0v/moedict-webkit#245 追蹤）。
+   `.romanization-selectable`（見上方 g0v/moedict-webkit#186 註解，本檔
+   902 行起）原本只把 `position: absolute` 套在
+   `.result .entry .title hruby.rightangle ru[annotation] > .romanization-selectable`
+   ——tooltip 的標題（useRadicalTooltip.ts buildEntryTooltipHTML 用
+   rightAngle() 產生同一份 hruby.rightangle 結構）不在 `.result .entry
+   .title` 之下，落到 legacy `hruby ru { position: relative }` 預設值，是
+   in-flow 的一般行內元素，把 `<ru>` 的 box 撐寬到含 "shēng" 全形文字寬度
+   （量測：46.5px → 127.8px）。`hruby ru[annotation]:before` 的
+   `left`/`width` 是用百分比相對這個被撐寬的 `<ru>` box 計算，導致視覺上
+   的注音／拼音字形被推往右側，而非置中於字元正下方。修法：把同一條
+   position:absolute 規則的 selector 擴充到 tooltip 標題，讓
+   `.romanization-selectable` 脫離文件流，`<ru>` box 收斂回真實字元寬度，
+   `::before` 的置中基準隨之修正——不複製規則內容，只加一個
+   selector（見 tests/e2e/dark-mode.spec.ts 的幾何斷言）。*/
+.ui-tooltip .title hruby.rightangle ru[annotation] > .romanization-selectable {
+  position: absolute !important;
+  left: -250% !important;
+  top: -0.5em !important;
+  height: 1em !important;
+  width: 600% !important;
+  font-size: 1em !important;
+  font-family: inherit !important;
+  line-height: 1 !important;
+  text-align: center !important;
+  text-indent: 0 !important;
+  transform: scale(0.55) !important;
+  transform-origin: top !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  overflow: visible !important;
+  clip: auto !important;
+  clip-path: none !important;
+  white-space: nowrap !important;
+  color: transparent !important;
+  -webkit-user-select: text !important;
+  user-select: text !important;
+}
+
 /* 舊版 /word/N「指定義項」永久連結：對應該條目時的醒目樣式（同原 alert-success 效果） */
 .idx-permalink-target {
   background: #fff59b;
@@ -869,10 +1551,68 @@ body.lang-t .result .entry-item .example .mandarin::after {
 }
 
 .charimg-share-btn:hover {
-  background: #eee;
+  background: var(--moe-surface-alt, #eee);
+  color: var(--moe-text, inherit);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 .moetext td {
   vertical-align: top;
+}
+
+/* CNS11643 屬性後備卡 */
+.cns-attributes {
+  border-top: 2px solid #b8860b;
+  margin-top: 12px;
+}
+
+.cns-badge {
+  display: inline-block;
+  background: #b8860b;
+  color: #fff;
+  font-size: 12px;
+  font-weight: bold;
+  padding: 2px 8px;
+  border-radius: 3px;
+  margin-bottom: 8px;
+  letter-spacing: 0.05em;
+}
+
+.cns-attr-table {
+  border-collapse: collapse;
+  width: 100%;
+  max-width: 480px;
+  margin-bottom: 8px;
+}
+
+.cns-attr-table th {
+  text-align: left;
+  padding: 3px 12px 3px 0;
+  font-weight: bold;
+  color: var(--moe-text-secondary, #555);
+  width: 4em;
+  vertical-align: top;
+}
+
+.cns-attr-table td {
+  padding: 3px 0;
+  vertical-align: top;
+}
+
+.cns-meta {
+  font-size: 12px;
+  color: var(--moe-text-secondary, #888);
+  margin-left: 6px;
+}
+
+.cns-stroke-seq {
+  font-family: monospace;
+  letter-spacing: 0.12em;
+  color: var(--moe-text-secondary, #555);
+}
+
+.cns-attribution {
+  font-size: 12px;
+  color: var(--moe-text-secondary, #888);
+  margin-top: 8px;
 }

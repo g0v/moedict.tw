@@ -14,12 +14,33 @@
  *     (`s === s.normalize('NFD')`) — hard gate. The corpus was verified
  *     100% NFD (2026-07); any non-NFD segment is a regression, typically
  *     an NFC string merged from upstream CSV without normalize('NFD').
+ *  4. Every entry pinned in
+ *     `data/sources/twblg-overrides/pinned-no-definition.json` (see
+ *     scripts/inject-twblg-pinned-entries.py, g0v/moedict-webkit#271) must
+ *     be present in its ptck bucket with the EXACT expected value —
+ *     delegated to `inject-twblg-pinned-entries.py --check` (non-mutating)
+ *     so the expected-value derivation (NFD, title markup, bucket/key
+ *     encoding) has one implementation, not a second reimplementation here
+ *     that could silently drift from the injector.
+ *  5. `data/dictionary/{a,t,h,c}/xref-by-id.json` must all exist and parse
+ *     as a JSON object (not array). `commands/upload_dictionary.sh` rclone
+ *     **sync**s each `{lang}/` folder to R2, which deletes remote keys with
+ *     no local counterpart — a locally-absent sidecar would silently delete
+ *     the live R2 object. `t` must additionally be non-empty: production
+ *     ships real cross-lang by-heteronym-ID data there, recovered
+ *     byte-for-byte from `wrangler r2 object get
+ *     moedict-dictionary/t/xref-by-id.json --remote` and cross-checked
+ *     against the public API response (2026-07-18). `a/h/c` R2 keys are
+ *     confirmed ABSENT via the same command ("The specified key does not
+ *     exist"); their local `{}` pins the Worker's own missing-object API
+ *     fallback response (not a byte-for-byte R2 object).
  *
  * Run: `vp run check:data` / `vp node scripts/check-dictionary-data.mjs`
  * CI:  static job.
  */
 
-import { readdirSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -118,11 +139,114 @@ for (const { rel, data } of ptckData) {
   }
 }
 
+// --- Check 4: pinned no-definition entries (g0v/moedict-webkit#271) ---
+// Delegates to the injector's own --check mode (single source of truth for
+// how an expected pack entry is derived from a manifest row) rather than
+// re-deriving NFD/bucket/title-markup rules a second time in JS.
+const PINNED_MANIFEST = path.join(
+  REPO_ROOT,
+  "data",
+  "sources",
+  "twblg-overrides",
+  "pinned-no-definition.json",
+);
+const PTCK_DIR = path.join(DICT_DIR, "ptck");
+const INJECTOR = path.join(REPO_ROOT, "scripts", "inject-twblg-pinned-entries.py");
+let pinnedCheckedCount = 0;
+if (!existsSync(PINNED_MANIFEST)) {
+  fail(
+    `pinned no-definition manifest missing at ${path.relative(REPO_ROOT, PINNED_MANIFEST)} ` +
+      `— g0v/moedict-webkit#271 provenance would silently stop being verified`,
+  );
+} else {
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(PINNED_MANIFEST, "utf8"));
+  } catch (e) {
+    fail(`pinned no-definition manifest is not valid JSON: ${e.message}`);
+  }
+  if (manifest) {
+    pinnedCheckedCount = Array.isArray(manifest.entries) ? manifest.entries.length : 0;
+    if (pinnedCheckedCount === 0) {
+      fail(
+        "pinned no-definition manifest has zero entries — expected at least " +
+          "the 長褲 (g0v/moedict-webkit#271) pin shipped with this repo",
+      );
+    } else {
+      try {
+        execFileSync("python3", [INJECTOR, PINNED_MANIFEST, PTCK_DIR, "--check"], {
+          cwd: REPO_ROOT,
+          stdio: "pipe",
+          encoding: "utf8",
+        });
+      } catch (e) {
+        const output = [e.stdout, e.stderr].filter(Boolean).join("\n");
+        fail(`pinned no-definition manifest check failed:\n${output || e.message}`);
+      }
+    }
+  }
+}
+
+// --- Check 5: xref-by-id.json sidecars (a/t/h/c) must exist with a valid
+// shape. `commands/upload_dictionary.sh` rclone-**sync**s the `{lang}/`
+// folders to R2 — `sync` deletes any remote key with no local counterpart,
+// so a locally-absent `xref-by-id.json` would silently DELETE the live R2
+// sidecar. `t/xref-by-id.json` is recovered byte-for-byte from the real R2
+// object (confirmed via `wrangler r2 object get
+// moedict-dictionary/t/xref-by-id.json --remote`, cross-checked against the
+// public `/api/xref-by-id/t.json` API response, 2026-07-18). `a/h/c` R2
+// keys are confirmed ABSENT (same `wrangler r2 object get --remote` command
+// returns "The specified key does not exist") — their local `{}` pins the
+// Worker's own missing-object API fallback response (not a byte-for-byte R2
+// object), which prevents local-dev 404s and stops rclone sync from ever
+// having a key to delete. This check only enforces presence + shape (object,
+// not array) — it does NOT assert `t`'s exact content so future legitimate
+// re-uploads aren't blocked, but DOES require `t` stay non-empty so an
+// accidental overwrite with `{}` is caught before it reaches R2.
+const XREF_BY_ID_LANGS = ["a", "t", "h", "c"];
+let xrefByIdCheckedCount = 0;
+for (const lang of XREF_BY_ID_LANGS) {
+  const file = path.join(DICT_DIR, lang, "xref-by-id.json");
+  const rel = path.relative(REPO_ROOT, file);
+  if (!existsSync(file)) {
+    fail(
+      `${rel} is missing — commands/upload_dictionary.sh's rclone sync would ` +
+        `DELETE the live R2 sidecar at this key on next upload`,
+    );
+    continue;
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(file, "utf8"));
+  } catch (e) {
+    fail(`${rel} is not valid JSON: ${e.message}`);
+    continue;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    fail(
+      `${rel} must be a JSON object ({targetLang: {title: {id: [word...]}}}), ` +
+        `got ${Array.isArray(parsed) ? "array" : typeof parsed}`,
+    );
+    continue;
+  }
+  if (lang === "t" && Object.keys(parsed).length === 0) {
+    fail(
+      `${rel} is an empty object — production has real 台語→華語 xref-by-id ` +
+        `data (532,761 bytes as of 2026-07-18); an empty file here means the ` +
+        `real sidecar was lost and the next rclone sync would delete it from R2`,
+    );
+    continue;
+  }
+  xrefByIdCheckedCount++;
+}
+
 console.log(
   `[check-dictionary-data] ${totalParsed}/${totalFiles} files parsed, ` +
     `${heteronymsWithT} ptck heteronyms with T, ` +
     `${dupViolations} canonical-duplicate violation(s), ` +
-    `${nfdViolations} non-NFD segment(s)`,
+    `${nfdViolations} non-NFD segment(s), ` +
+    `${pinnedCheckedCount} pinned no-definition entr${pinnedCheckedCount === 1 ? "y" : "ies"} checked, ` +
+    `${xrefByIdCheckedCount}/${XREF_BY_ID_LANGS.length} xref-by-id sidecars valid`,
 );
 
 if (failures > 0) {

@@ -9,6 +9,7 @@
  */
 
 import { handleDictionaryAPI } from "./api/handleDictionaryAPI.ts";
+import { handleCnsAPI } from "./api/handleCnsAPI.ts";
 import { handleLookupAPI } from "./api/handleLookupAPI.ts";
 import { STROKE_JSON_BASE_URL } from "./utils/media-cdn.ts";
 
@@ -23,14 +24,29 @@ if (shouldUseOfflineApi) {
 
   const offlineDictionary = {
     async get(key: string): Promise<{ text(): Promise<string> } | null> {
-      try {
-        const response = await originalFetch(`/dictionary/${key}`);
-        if (!response.ok) return null;
-        const content = await response.text();
-        return { text: () => Promise.resolve(content) };
-      } catch {
-        return null;
+      const loadText = async (path: string): Promise<string | null> => {
+        try {
+          const response = await originalFetch(path);
+          if (!response.ok) return null;
+          return await response.text();
+        } catch {
+          return null;
+        }
+      };
+
+      if (key.startsWith("cns/")) {
+        const localPath = `/cns/${key.slice("cns/".length)}`;
+        const localText = await loadText(localPath);
+        if (localText !== null) {
+          return { text: () => Promise.resolve(localText) };
+        }
       }
+
+      const fallbackText = await loadText(`/dictionary/${key}`);
+      if (fallbackText !== null) {
+        return { text: () => Promise.resolve(fallbackText) };
+      }
+      return null;
     },
   };
 
@@ -93,6 +109,13 @@ if (shouldUseOfflineApi) {
           { status: 503 },
         );
       }
+    }
+
+    // CNS11643 属性後備（/api/cns/{char}.json）— 鏡射 Worker 路由；
+    // 終端 handleDictionaryAPI fallback 無法識別 cns 路徑，故須明確處理
+    if (pathname.startsWith("/api/cns/") && pathname.endsWith(".json")) {
+      const request = new Request(parsedUrl.href, init);
+      return handleCnsAPI(request, parsedUrl, offlineEnv);
     }
 
     const request = new Request(parsedUrl.href, init);

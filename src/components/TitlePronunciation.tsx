@@ -14,13 +14,21 @@ import { SvgIcon } from "./SvgIcon";
  *   …audioBlock（play button）…
  *   list ++= small { className: \alternative }, …
  *
+ * `small.reading-type` 是新增的元素（g0v/moedict-webkit#96、#233：TWBLG
+ * 單字文/白/俗/替讀音分類），legacy 沒有對應節點；為了不干擾既有三個
+ * 節點間已鎖定的相對順序，固定加在最後面。
+ *
  * `.alternative` 內的 `.pinyin`/`.bopomofo` 是 block-level（遠端 legacy CSS），
  * 插錯位置會把播放鍵擠下去——已踩過一次（commit 把 .alternative 插到
  * .audioBlock 之前，造成視覺回歸）。本元件把順序固化在唯一可測試的地方，
  * 並由 tests/unit/title-pronunciation.test.tsx 守住。
  *
  * `small.reading-type` 是 TWBLG 文/白/俗/替分類；legacy 沒有對應節點。
- * 固定放在最後，避免干擾前四個節點的既有相對順序。
+ * 固定放在最後，避免干擾前三個節點的既有相對順序。
+ *
+ * 羅馬拼音的複製方式已改為自然選取：#186 CSS 疊加層（index.css）讓
+ * 真實 `<rt>` 覆蓋在可見的 `::before` 拼音字形上，使用者直接拖曳即可
+ * 選取正確的 Unicode 文字，不再需要獨立按鈕。
  *
  * Props:
  * - children: ruby/title span（由 DictionaryPage 透傳，內容不變）
@@ -31,7 +39,7 @@ import { SvgIcon } from "./SvgIcon";
  * - pronunAudioId: 音檔 id（falsy 則不渲染 span.audioBlock）
  * - isPlaying: 是否正在播放此音檔（控制 play/stop 圖示與 aria-label/title）
  * - onToggleAudio: 點擊/鍵盤啟動時呼叫（播放或停止由上層邏輯決定）
- * - readingType: TWBLG 文/白/俗/替分類（falsy 則不渲染）
+ * - readingType: TWBLG 異讀分類純文字代碼（文/白/俗/替；falsy 則不渲染）
  */
 interface TitlePronunciationProps {
   children: ReactNode;

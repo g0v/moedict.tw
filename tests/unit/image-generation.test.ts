@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi, type Mock } from "vite-plus/test";
 import {
   parseTextFromUrl,
   getFontName,
   getCORSHeaders,
   generateTextSVGWithR2Fonts,
+  fetchWholeWordRomanization,
 } from "../../src/utils/image-generation";
 
 interface FakeFontsEnv {
@@ -180,5 +181,138 @@ describe("generateTextSVGWithR2Fonts", () => {
     const env = makeFontsEnv({}); // nothing resolves; only cell *count* matters here
     const { svg } = await generateTextSVGWithR2Fonts(word, "kai", env as never);
     expect((svg.match(/#F9F6F6/g) || []).length).toBe(chars.length);
+  });
+});
+
+describe("generateTextSVGWithR2Fonts — romanize caption (RESCOPE #169)", () => {
+  it("produces byte-identical output when the romanization arg is omitted vs. an explicit empty string", async () => {
+    const env = makeFontsEnv({ "TW-Kai/U+840C.svg": '<svg><path d="M0 0 L1 1"/></svg>' });
+    const omitted = await generateTextSVGWithR2Fonts("萌", "kai", env as never);
+    const explicitEmpty = await generateTextSVGWithR2Fonts("萌", "kai", env as never, "");
+    expect(omitted.svg).toBe(explicitEmpty.svg);
+    expect(omitted.hasCaption).toBe(false);
+    expect(explicitEmpty.hasCaption).toBe(false);
+    // No caption band: SVG stays square (height === width), matching the
+    // pre-#169 formula exactly — no <text> caption element anywhere.
+    const [, w, h] = omitted.svg.match(/width="(\d+)" height="(\d+)"/) ?? [];
+    expect(h).toBe(w);
+    expect((omitted.svg.match(/<text/g) || []).length).toBe(0);
+  });
+
+  it("adds exactly one caption <text> and a 120px height delta when romanization is non-empty", async () => {
+    const env = makeFontsEnv({ "TW-Kai/U+840C.svg": '<svg><path d="M0 0 L1 1"/></svg>' });
+    const bare = await generateTextSVGWithR2Fonts("萌", "kai", env as never);
+    const captioned = await generateTextSVGWithR2Fonts("萌", "kai", env as never, "méng");
+
+    expect(captioned.hasCaption).toBe(true);
+    const [, , bareHeight] = bare.svg.match(/width="(\d+)" height="(\d+)"/) ?? [];
+    const [, , captionedHeight] = captioned.svg.match(/width="(\d+)" height="(\d+)"/) ?? [];
+    expect(Number(captionedHeight) - Number(bareHeight)).toBe(120);
+
+    // Exactly one <text> element total: the per-glyph rendering used the R2
+    // path SVG (no fallback <text>), so the sole <text> is the caption.
+    expect((captioned.svg.match(/<text/g) || []).length).toBe(1);
+    expect(captioned.svg).toContain('font-family="Fira Sans OT, serif"');
+    expect(captioned.svg).toContain(">méng<");
+  });
+
+  it("caps the caption at 40 code points and appends an ellipsis", async () => {
+    const env = makeFontsEnv({ "TW-Kai/U+5B57.svg": '<svg><path d="M0 0 L1 1"/></svg>' });
+    const longReading = "a".repeat(45);
+    const { svg } = await generateTextSVGWithR2Fonts("字", "kai", env as never, longReading);
+    const match = svg.match(/font-family="Fira Sans OT, serif"[^>]*>([^<]*)<\/text>/);
+    expect(match?.[1]).toBe(`${"a".repeat(40)}…`);
+  });
+
+  it("does not truncate or append an ellipsis when romanization is exactly 40 code points", async () => {
+    const env = makeFontsEnv({ "TW-Kai/U+5B57.svg": '<svg><path d="M0 0 L1 1"/></svg>' });
+    const exactReading = "b".repeat(40);
+    const { svg } = await generateTextSVGWithR2Fonts("字", "kai", env as never, exactReading);
+    const match = svg.match(/font-family="Fira Sans OT, serif"[^>]*>([^<]*)<\/text>/);
+    expect(match?.[1]).toBe(exactReading);
+  });
+
+  it("XML-escapes special characters before SVG interpolation", async () => {
+    const env = makeFontsEnv({});
+    const { svg } = await generateTextSVGWithR2Fonts("字", "kai", env as never, `<a>&"'</a>`);
+    expect(svg).toContain("&lt;a&gt;&amp;&quot;&apos;&lt;/a&gt;");
+    expect(svg).not.toContain("<a>&\"'</a>");
+  });
+
+  it("whitespace-only romanization produces no caption (trimmed to empty)", async () => {
+    const env = makeFontsEnv({ "TW-Kai/U+5B57.svg": '<svg><path d="M0 0 L1 1"/></svg>' });
+    const { svg, hasCaption } = await generateTextSVGWithR2Fonts("字", "kai", env as never, "   ");
+    expect(hasCaption).toBe(false);
+    expect((svg.match(/<text/g) || []).length).toBe(0);
+  });
+});
+
+describe("fetchWholeWordRomanization (RESCOPE #169)", () => {
+  function makeDictionaryEnv(bucketBody: string | null): { DICTIONARY: { get: Mock } } {
+    const get = vi.fn(async () => (bucketBody === null ? null : { text: async () => bucketBody }));
+    return { DICTIONARY: { get } };
+  }
+
+  it("issues exactly one R2 GET per render for lang='a'", async () => {
+    const env = makeDictionaryEnv(JSON.stringify({ "%u840C": { h: [{ p: "méng" }] } }));
+    const result = await fetchWholeWordRomanization("萌", "a", env as never);
+    expect(result).toBe("méng");
+    expect(env.DICTIONARY.get).toHaveBeenCalledTimes(1);
+    expect(env.DICTIONARY.get).toHaveBeenCalledWith("pack/12.txt");
+  });
+
+  it("falls back from p to T when p is absent (Taiwanese lang='t')", async () => {
+    const env = makeDictionaryEnv(JSON.stringify({ "%u98DF": { h: [{ T: "tsia̍h" }] } }));
+    const result = await fetchWholeWordRomanization("食", "t", env as never);
+    expect(result).toBe("tsia̍h");
+    expect(env.DICTIONARY.get).toHaveBeenCalledTimes(1);
+  });
+
+  it("short-circuits to '' for lang='h' before any R2 fetch (documented Hakka exclusion)", async () => {
+    const env = makeDictionaryEnv(JSON.stringify({ "%u5B57": { h: [{ p: "whatever" }] } }));
+    const result = await fetchWholeWordRomanization("字", "h", env as never);
+    expect(result).toBe("");
+    expect(env.DICTIONARY.get).not.toHaveBeenCalled();
+  });
+
+  it("returns '' when DICTIONARY is not provided on env", async () => {
+    const result = await fetchWholeWordRomanization("萌", "a", {} as never);
+    expect(result).toBe("");
+  });
+
+  it("returns '' when the bucket lookup misses (null R2 object)", async () => {
+    const env = makeDictionaryEnv(null);
+    const result = await fetchWholeWordRomanization("萌", "a", env as never);
+    expect(result).toBe("");
+  });
+
+  it("returns '' when the word key is absent from the bucket", async () => {
+    const env = makeDictionaryEnv(JSON.stringify({ "%uOTHER": { h: [{ p: "x" }] } }));
+    const result = await fetchWholeWordRomanization("萌", "a", env as never);
+    expect(result).toBe("");
+  });
+
+  it("returns '' when the entry has no heteronyms", async () => {
+    const env = makeDictionaryEnv(JSON.stringify({ "%u840C": {} }));
+    const result = await fetchWholeWordRomanization("萌", "a", env as never);
+    expect(result).toBe("");
+  });
+
+  it("uses only the first heteronym even when later ones have romanization", async () => {
+    const env = makeDictionaryEnv(JSON.stringify({ "%u840C": { h: [{}, { p: "second" }] } }));
+    const result = await fetchWholeWordRomanization("萌", "a", env as never);
+    expect(result).toBe("");
+  });
+
+  it("returns '' when the R2 get throws", async () => {
+    const env = {
+      DICTIONARY: {
+        get: vi.fn(async () => {
+          throw new Error("boom");
+        }),
+      },
+    };
+    const result = await fetchWholeWordRomanization("萌", "a", env as never);
+    expect(result).toBe("");
   });
 });

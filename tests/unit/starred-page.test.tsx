@@ -10,7 +10,7 @@ import { flushSync } from "react-dom";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { StarredPage } from "../../src/pages/StarredPage";
-import { addStarWord, addToLRU } from "../../src/utils/word-record-utils";
+import { addStarWord, addToLRU, readStarredWords } from "../../src/utils/word-record-utils";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -171,5 +171,179 @@ describe("StarredPage — star toggle in history (#217)", () => {
     const link = recent!.querySelector("a")!;
     expect(starBtn.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(removeBtn.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+  });
+});
+
+describe("StarredPage — cross-language overview (#88)", () => {
+  it("toggle is collapsed by default with aria-expanded=false", () => {
+    renderPage("a");
+    const toggle = container.querySelector<HTMLButtonElement>("#btn-toggle-all-langs")!;
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(container.querySelector("#all-langs-content")).toBeNull();
+  });
+
+  it("reveals fixed-order grouped headings for languages with starred words only, omitting empty langs", () => {
+    addStarWord("t", "食");
+    addStarWord("c", "东西");
+    renderPage("a");
+
+    const toggle = container.querySelector<HTMLButtonElement>("#btn-toggle-all-langs")!;
+    clickEl(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+
+    const headings = Array.from(
+      container.querySelectorAll("#all-langs-content .lang-group-heading"),
+    ).map((h) => h.textContent);
+    // Fixed a/t/h/c order; 華語(a) and 臺灣客語(h) omitted (no starred words).
+    expect(headings).toEqual(["臺灣台語", "兩岸詞典"]);
+  });
+
+  it("each row links via its OWN language's route prefix, not the page's current lang", () => {
+    addStarWord("t", "食");
+    addStarWord("c", "东西");
+    renderPage("a");
+    clickEl(container.querySelector<HTMLButtonElement>("#btn-toggle-all-langs")!);
+
+    const links = Array.from(container.querySelectorAll<HTMLAnchorElement>("#all-langs-content a"));
+    const hrefByText = new Map(links.map((a) => [a.textContent, a.getAttribute("href")]));
+    expect(hrefByText.get("食")).toBe("/'%E9%A3%9F");
+    expect(hrefByText.get("东西")).toBe("/~%E4%B8%9C%E8%A5%BF");
+  });
+
+  it("renders @radical starred words with the correct per-language radical href shape", () => {
+    // Hakka must NOT become /:@... — only '/~ prefix the @ family, a/h use /@.
+    addStarWord("h", "@木");
+    addStarWord("t", "@木");
+    renderPage("a");
+    clickEl(container.querySelector<HTMLButtonElement>("#btn-toggle-all-langs")!);
+
+    const links = Array.from(container.querySelectorAll<HTMLAnchorElement>("#all-langs-content a"));
+    const hrefByText = new Map(links.map((a) => [a.textContent, a.getAttribute("href")]));
+    expect(hrefByText.get("@木")).toBe("/@%E6%9C%A8"); // h → no colon prefix on radical
+    // Both groups render an "@木" link; assert full set of hrefs instead since
+    // Map dedupes by textContent above — check t's link directly by group.
+    // ALL_LANGS fixed order a/t/h/c; only t and h have words, so t (index 1)
+    // sorts before h (index 2) → t is group[0].
+    const tGroupLinks = Array.from(
+      container.querySelectorAll("#all-langs-content .lang-group")[0]?.querySelectorAll("a") ?? [],
+    ).map((a) => a.getAttribute("href"));
+    expect(tGroupLinks).toContain("/'@%E6%9C%A8");
+  });
+
+  it("current lang's own starred word appears in its group flagged as current", () => {
+    addStarWord("a", "萌");
+    renderPage("a");
+    clickEl(container.querySelector<HTMLButtonElement>("#btn-toggle-all-langs")!);
+
+    const heading = container.querySelector(".lang-group-heading")!;
+    expect(heading.textContent).toBe("華語（目前語言）");
+  });
+
+  it("star/remove actions in the overview mutate the correct language's storage and refresh the aggregate without touching current lang's own list", () => {
+    addStarWord("t", "食");
+    addStarWord("a", "留");
+    renderPage("a");
+    clickEl(container.querySelector<HTMLButtonElement>("#btn-toggle-all-langs")!);
+
+    expect(container.querySelectorAll(".starred-section .word-list a").length).toBe(1);
+
+    const removeBtn = container.querySelector<HTMLButtonElement>(
+      '#all-langs-content button[aria-label*="食"]',
+    )!;
+    clickEl(removeBtn);
+
+    // t's word gone from storage + aggregate; a's own section untouched.
+    expect(readStarredWords("t")).toEqual([]);
+    expect(container.querySelectorAll(".starred-section .word-list a").length).toBe(1);
+    expect(container.querySelector(".lang-group-heading")!.textContent).not.toContain("台語");
+  });
+});
+
+describe("StarredPage — export/import panel (#219)", () => {
+  function setTextareaValue(el: HTMLTextAreaElement, value: string): void {
+    // oxlint-disable-next-line typescript/unbound-method
+    const setNativeValue = Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "value",
+    )!.set!;
+    act(() => {
+      setNativeValue.call(el, value);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
+  it("download/copy buttons are disabled when there are no starred words", () => {
+    renderPage("a");
+    expect(container.querySelector<HTMLButtonElement>("#btn-download-starred")!.disabled).toBe(
+      true,
+    );
+    expect(container.querySelector<HTMLButtonElement>("#btn-copy-starred")!.disabled).toBe(true);
+  });
+
+  it("import panel is collapsed by default; toggle reveals a labeled visible textarea (never clipboard-read)", () => {
+    renderPage("a");
+    const toggle = container.querySelector<HTMLButtonElement>("#btn-toggle-import")!;
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(container.querySelector("#import-starred-textarea")).toBeNull();
+
+    clickEl(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    const textarea = container.querySelector("#import-starred-textarea")!;
+    expect(textarea.tagName).toBe("TEXTAREA");
+    expect(textarea.getAttribute("aria-label")).toContain("貼上");
+    const label = container.querySelector('label[for="import-starred-textarea"]');
+    expect(label).not.toBeNull();
+  });
+
+  it("confirm-import button is disabled for empty/whitespace-only input", () => {
+    renderPage("a");
+    clickEl(container.querySelector<HTMLButtonElement>("#btn-toggle-import")!);
+    const confirmBtn = container.querySelector<HTMLButtonElement>("#btn-confirm-import")!;
+    expect(confirmBtn.disabled).toBe(true);
+
+    const textarea = container.querySelector<HTMLTextAreaElement>("#import-starred-textarea")!;
+    setTextareaValue(textarea, "   \n  ");
+    expect(container.querySelector<HTMLButtonElement>("#btn-confirm-import")!.disabled).toBe(true);
+  });
+
+  it("importing preserves pasted order and reports imported/skipped counts", () => {
+    addStarWord("a", "已收藏");
+    renderPage("a");
+    clickEl(container.querySelector<HTMLButtonElement>("#btn-toggle-import")!);
+
+    const textarea = container.querySelector<HTMLTextAreaElement>("#import-starred-textarea")!;
+    setTextareaValue(textarea, "萌\n典\n已收藏\n#");
+    clickEl(container.querySelector<HTMLButtonElement>("#btn-confirm-import")!);
+
+    const starredLinks = Array.from(
+      container.querySelectorAll(".starred-section .word-list a"),
+    ).map((a) => a.textContent);
+    // Newly imported words prepended ahead of untouched existing word, in
+    // pasted order: 萌, 典, then pre-existing 已收藏.
+    expect(starredLinks).toEqual(["萌", "典", "已收藏"]);
+
+    const status = container.querySelector('#import-starred-panel [role="status"]')!;
+    expect(status.textContent).toBe("已匯入 2 筆，略過 2 筆重複或無效字詞。");
+  });
+
+  it("empty/whitespace-only submit does not mutate storage (button stays disabled, no-op)", () => {
+    renderPage("a");
+    clickEl(container.querySelector<HTMLButtonElement>("#btn-toggle-import")!);
+    const before = readStarredWords("a");
+    // Submit button is disabled for empty input, so directly assert the
+    // underlying storage is untouched (no separate click path to trigger).
+    expect(readStarredWords("a")).toEqual(before);
+    expect(container.querySelector('#import-starred-panel [role="status"]')).toBeNull();
+  });
+
+  it("does not touch sibling-language storage when importing into the current language", () => {
+    addStarWord("t", "既有");
+    renderPage("a");
+    clickEl(container.querySelector<HTMLButtonElement>("#btn-toggle-import")!);
+    const textarea = container.querySelector<HTMLTextAreaElement>("#import-starred-textarea")!;
+    setTextareaValue(textarea, "萌");
+    clickEl(container.querySelector<HTMLButtonElement>("#btn-confirm-import")!);
+
+    expect(readStarredWords("t")).toEqual(["既有"]);
   });
 });

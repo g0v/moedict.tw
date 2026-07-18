@@ -37,6 +37,15 @@ function makeBucket(
   entries: Record<string, { body: string; contentType?: string }> = {},
 ): AnyEnv["DICTIONARY"] {
   return {
+    async head(key: string) {
+      const e = entries[key];
+      if (!e) return null;
+      return {
+        httpEtag: '"etag-stub"',
+        writeHttpMetadata: (headers: Headers) =>
+          headers.set("Content-Type", e.contentType ?? "application/octet-stream"),
+      };
+    },
     async get(key: string) {
       const e = entries[key];
       return e ? r2Obj(e.body, e.contentType) : null;
@@ -558,19 +567,47 @@ describe("dispatch — /translation-data/cfdict.*", () => {
   });
 });
 
-describe("dispatch — /api/stroke-json delegation", () => {
-  it("proxies 4-6 hex codepoint requests via fetch", async () => {
-    globalThis.fetch = vi.fn(
-      async () => new Response('{"strokes":[]}', { status: 200 }),
-    ) as typeof fetch;
-    const res = await dispatch(req("/api/stroke-json/840c.json"), makeEnv());
+describe("dispatch — /api/stroke-json R2 ASSETS", () => {
+  it("serves a seeded stroke-json object from env.ASSETS", async () => {
+    const env = makeEnv({
+      ASSETS: makeBucket({
+        "stroke-json/840c.json": {
+          body: '[{"outline":[],"track":[]}]',
+          contentType: "application/json",
+        },
+      }),
+    });
+    const res = await dispatch(req("/api/stroke-json/840c.json"), env);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toMatch(/json/);
+    expect(res.headers.get("cache-tag")).toBe("stroke");
+    expect(await res.json()).toEqual([{ outline: [], track: [] }]);
   });
 
   it("rejects a non-hex codepoint with 400 from handleStrokeAPI", async () => {
     const res = await dispatch(req("/api/stroke-json/xyz.json"), makeEnv());
     expect(res.status).toBe(400);
+  });
+
+  it("returns 404 when the stroke object is absent from ASSETS", async () => {
+    const res = await dispatch(req("/api/stroke-json/ffff.json"), makeEnv());
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("dispatch — /api/cns/{char}.json CNS11643 fallback", () => {
+  it("routes to handleCnsAPI before the generic .json catch-all and serves a seeded record", async () => {
+    const env = makeEnv({
+      DICTIONARY: makeBucket({
+        "cns/by-codepoint/4D/4D09.json": {
+          body: JSON.stringify({ char: "\u4D09", cns: "4-6C51" }),
+          contentType: "application/json",
+        },
+      }),
+    });
+    const res = await dispatch(req(`/api/cns/${encodeURIComponent("\u4D09")}.json`), env);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ char: "\u4D09", cns: "4-6C51" });
   });
 });
 

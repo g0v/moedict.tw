@@ -58,6 +58,27 @@ reports/mutation/
 # One-time legacy-CDN migration progress state (commands/migrate-legacy-cdn-to-r2.mjs)
 .migration-state/
 
+# MOE stroke corpus local fetch/convert output (commands/fetch-moe-stroke.mjs,
+# commands/sync-moe-stroke-corpus.mjs) — never commit generated stroke-json.
+.moe-stroke-fetch/
+.moe-stroke-corpus/
+
+# CNS11643 generated corpus (scripts/generate-cns-data.mjs) — never commit generated per-codepoint JSON files.
+# 77k generated per-codepoint JSON files; only the golden fixture (4D09.json)
+# and the generator script itself are tracked. Run the generator against the
+# OGDL-licensed Properties.zip + MapingTables.zip to populate data/dictionary/cns/
+# locally or in R2.
+data/dictionary/cns/by-codepoint/*
+!data/dictionary/cns/by-codepoint/4D/
+data/dictionary/cns/by-codepoint/4D/*
+!data/dictionary/cns/by-codepoint/4D/4D09.json
+# Temp and backup dirs created by generate-cns-data.mjs during atomic swap.
+# .cns-gen-tmp-* holds the in-progress corpus; .cns-gen-old-* holds the
+# previous corpus during the rename window. Both are cleaned up on success;
+# a crashed run leaves them here so they must be gitignored.
+data/dictionary/cns/.cns-gen-tmp-*
+data/dictionary/cns/.cns-gen-old-*
+
 # Visual-regression: commit only linux baselines; local runs generate darwin/win32 variants.
 # The `visual` Playwright project uses its own name (not the browser) in the snapshot filename.
 tests/e2e/**/*-visual-darwin.png

@@ -44,6 +44,7 @@ import {
   findVersionByTag,
   findVersionsByTag,
   validateVersionUuid,
+  findTagByVersionId,
   getCurrentDeployment,
   requireSingleVersion100,
 } from "./lib/wrangler-versions.mjs";
@@ -130,6 +131,9 @@ function errMessage(err) {
  *   nowIso?: () => string;
  *   soakIntervalMs?: number;
  *   soakDurationMs?: number;
+ *   propagationGraceMs?: number;
+ *   propagationRetryIntervalMs?: number;
+ *   log?: (message: string) => void;
  *   stateBaseDir?: string;
  *   stateFs?: import("./lib/deployment-state.mjs").FsAdapter;
  *   probeTimeoutMs?: number;
@@ -225,6 +229,7 @@ export async function runReleaseDeploy(opts = {}) {
   //    not unique, so a second upload with the same tag would make every
   //    future lookup permanently ambiguous. List BEFORE uploading.
   const preUploadVersions = await listVersions(configPath, workerName, { runner });
+  const oldReleaseTag = findTagByVersionId(preUploadVersions, oldVersionUuid);
   const preMatches = findVersionsByTag(preUploadVersions, releaseId);
   let newVersionUuid;
   if (preMatches.length > 1) {
@@ -324,9 +329,9 @@ export async function runReleaseDeploy(opts = {}) {
   );
 
   // 6b. Wait for global edge propagation before probing with version override.
-  //     Cloudflare documents a brief propagation window after `versions deploy`
-  //     before the override header reliably routes to the new version on all
-  //     edges. Default 30s; injectable for tests (set to 0 to skip).
+  //     The override smoke below also has a bounded, old-release-only
+  //     per-route retry window, so the default path covers roughly 90s total
+  //     before fail-closed rollback (30s initial + 6×10s retry sleeps).
   if (propagationSleepMs > 0) await sleepImpl(propagationSleepMs);
   // 7. Smoke the new version at 0% via version override. On failure, restore
   //    old@100 ALONE (not new@0/old@100) so the next run is not poisoned.
@@ -334,6 +339,11 @@ export async function runReleaseDeploy(opts = {}) {
     await smokeWithVersionOverride(baseUrl, workerName, newVersionUuid, routes, releaseId, {
       fetch: fetchImpl,
       ...probeTimeoutOpts,
+      priorReleaseTag: oldReleaseTag,
+      sleep: sleepImpl,
+      overrideRetryAttempts: opts.overrideRetryAttempts,
+      overrideRetryIntervalMs: opts.overrideRetryIntervalMs,
+      log: opts.log,
     });
   } catch (smokeErr) {
     let restoreErr;
@@ -410,12 +420,18 @@ export async function runReleaseDeploy(opts = {}) {
   };
 
   // 9. Continuous probe for >=120s against live traffic (now serving new@100).
+  //    The known prior release may appear only during one global settling
+  //    grace inside continuousProbe; each sighting resets the healthy soak.
   try {
     await continuousProbe(baseUrl, routes, releaseId, {
       fetch: fetchImpl,
       sleep: sleepImpl,
       intervalMs: soakIntervalMs,
       durationMs: soakDurationMs,
+      priorReleaseTag: oldReleaseTag,
+      propagationGraceMs: opts.propagationGraceMs,
+      propagationRetryIntervalMs: opts.propagationRetryIntervalMs,
+      log: opts.log,
       ...probeTimeoutOpts,
     });
   } catch (probeErr) {

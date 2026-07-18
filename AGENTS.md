@@ -54,7 +54,7 @@ data/
   dictionary/   # 字典資料（真實來源，上傳至 R2；見「字典資料格式」）
   assets/       # 舊版前端資產（styles.css、字型、JS；上傳至 R2）
 scripts/        # build-search-index、build-pinyin-lookup、merge-coverage 等
-commands/       # upload_dictionary.sh、upload_assets.sh
+commands/       # upload_dictionary.sh、upload_assets.sh、fetch-moe-stroke.mjs、sync-moe-stroke-corpus.mjs
 tests/          # unit / integration / e2e 三層
 memory/MEMORY.md  # 跨 session 的架構筆記（與本檔互補）
 ```
@@ -71,8 +71,8 @@ vp run typecheck              # canonical tsc -b --noEmit project build
 vp test                       # unit + integration 兩個 Vitest project
 vp run test:unit              # happy-dom unit tests
 vp run test:integration       # Miniflare 實體 Worker API 測試
-vp run test:e2e               # Playwright（chromium project）
-vp run test:e2e:visual        # 視覺回歸（baseline 僅 commit linux 版）
+vp run test:e2e               # Playwright：chromium project（全部）+ webkit-romanization project（@romanization 聚焦測試）
+vp run test:e2e:visual        # 視覺回歸（chromium only；baseline 僅 commit linux 版）
 vp run test                   # unit + integration + e2e 三層全跑
 vp run test:coverage          # 三層 coverage 合併至 coverage/combined/
 ```
@@ -105,9 +105,15 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
 [`notes/零停機部署筆記.md`](./notes/零停機部署筆記.md)。
 
 - **兩階段 rollout**：`release-deploy.mjs` 用 `wrangler versions upload/deploy`
-  做 new0%/old100% → override smoke → new100%/old0% → ≥120 秒 probe →
-  finalize new100%。任一階段失敗自動 rollback 回舊版本 100%，絕不留下
-  未 smoke 的新版一次切到 100%。
+  做 new0%/old100% → 30 秒初始 propagation sleep → override smoke（若只看見
+  已知舊版 release，逐路由最多再 poll 6 次、每次 10 秒；非 200、缺/異常標頭或
+  第三個 release 立即 fail-closed）→ new100%/old0% → 30 秒初始 propagation
+  sleep → ≥120 秒 continuous probe。continuous probe 只允許「已知舊版 release」在
+  單一 60 秒 settling grace 內短暫出現；任何舊版 sighting 都會把健康 soak 歸零，
+  之後仍必須重新累積完整 ≥120 秒新版健康結果。60 秒 grace 到期後仍看見舊版、或
+  遇到非 200、缺/空標頭、第三個 release、網路/timeout，皆立即 fail-closed 並自動
+  rollback 回舊版本 100%；通過後 finalize new100%。任一階段失敗絕不留下未 smoke
+  的新版一次切到 100%。
 - **`CF_VERSION_METADATA` binding**（`wrangler.jsonc` top-level 與
   `env.staging` 都要有、且都不可加 `"type"`）：`.id` 是 Cloudflare 產生的
   version UUID；`.tag` 才是我們自訂的 release ID（`<git-short-sha>-<manifest-digest 前12碼>`），
@@ -142,7 +148,12 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
 - Staging 是獨立 Worker（`cf-moedict-webkit-neo-staging`），只有 _.workers.dev
   網址、綁 `moedict-_-preview`R2 桶——**Worker 與 R2 bindings 隔離，但`vars.ASSET_BASE_URL`/`DICTIONARY_BASE_URL` 仍指向正式站公開網址**
 （`r2-assets.moedict.tw` 等；`/api/config`與`/assets/\*`fallback 會用到），
-所以 staging 無法驗證 preview-assets 桶的公開資產。設定在`wrangler.jsonc`的`env.staging` 區塊。
+所以 staging 無法驗證 preview-assets 桶的公開資產。設定在`wrangler.jsonc`的`env.staging`區塊。
+  但目前`moedict-assets`的 CORS 已將
+ `https://cf-moedict-webkit-neo-staging.audreyt.workers.dev` 納入白名單（見
+  `commands/r2-assets-cors.json`），以允許 staging 直接跨來源取用 `r2-assets.moedict.tw`
+  的舊版資產（styles.css 等）。關鍵 title 字型別名走 staging Worker 同源路徑（`/assets/*`
+  代理），與 R2 CORS 無關。
 - **環境選擇發生在建置期**：`@cloudflare/vite-plugin` 讀 `CLOUDFLARE_ENV`
   環境變數（build 時），不是 `wrangler deploy --env`。這也是為什麼
   `release-publish.mjs`／`release-deploy.mjs` 各自獨立讀
@@ -184,6 +195,60 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
 - `data/dictionary/lookup/pinyin/**` 與 `search-index/**` 是**衍生物**，
   由 `scripts/build-pinyin-lookup.mjs`、`build-search-index.mjs` 從 pack 檔重建
   （`predev`/`prebuild` 自動跑）。改 pack 資料後不要手改衍生檔，重建再一起上傳。
+- **`{a,t,h,c}/xref-by-id.json` 必須全部存在於本機**（2026-07-18
+  修復）：`upload_dictionary.sh` 對 `LANG_FOLDERS` 做 rclone **sync**，本機
+  缺檔會刪除 R2 上對應的物件。正式站目前只有
+  `t/xref-by-id.json`（532,761 bytes，`684d07ae74de9…`）非空——跨語言
+  by-heteronym-ID 參照索引（依 heteronym id 查詢的異語言對照，非
+  `異用字`／B 欄位那組資料）；`a/h/c` 三個在正式站確實不存在
+  （`wrangler r2 object get moedict-dictionary/{lang}/xref-by-id.json
+--remote` 回 `The specified key does not exist`），本機以 API 的 `{}`
+  fallback 內容原樣保存。四個語言各自獨立：每個檔案只補齊該語言資料夾在
+  本機的鏡像完整性、讓本機回應與 API fallback 一致，`a/h/c` 的 `{}`
+  並不會「保護」`t` 不被刪除——是 `t/xref-by-id.json` 自己存在於本機這件事
+  防止它被 sync 刪除（見 `scripts/check-dictionary-data.mjs` Check 5：
+  存在性 + JSON 物件 shape + `t` 非空的守門）。`t` 的 583 個（3.47%）id 在
+  目前 `data/dictionary/ptck/` 找不到對應 heteronym（多為地名／專有名詞，
+  執行期 `getCrossReferencesById` 單純 lookup miss、不會壞），這是正式站
+  既有資料特性，不是本次修復引入的落差，故意不在此 gate 內強制 id 完整性。
+
+## 筆順 JSON（`/api/stroke-json`）與 6,063 字語料管線
+
+- **Runtime 讀取**：`GET`/`HEAD` `/api/stroke-json/<cp>.json` 由
+  `src/api/handleStrokeAPI.ts` **直接**讀環境的 `ASSETS` R2 binding key
+  `stroke-json/<小寫 hex codepoint>.json`（4–6 碼，含 astral），**不再**代理
+  公開 CDN URL。支援 ETag／`If-None-Match` → 304。staging Worker 綁
+  `moedict-assets-preview`、production 綁 `moedict-assets`——preview 與 prod
+  資料隔離，不會被 `vars.ASSET_BASE_URL` 指到正式站公開網域的設定蓋掉。
+- **語料來源**：教育部《國字標準字體筆順學習網》2025 新版
+  （`stroke-order.learningweb.moe.edu.tw`）。權威字集是官方
+  `全字筆順提示下載` zip（`/download/6063png.zip`）——以 PNG 檔名為準得到
+  **恰好 6,063** 個不重複字元；**禁止**猜 ID／Big5 範圍。舊版
+  `provideStrokeInfo.do?big5=` 已退役。
+- **管線腳本**：
+  - `commands/fetch-moe-stroke.mjs` — 單字唯讀：`dictView.jsp?ID=<十進位碼位>`
+    → 內嵌 XML → moedict stroke-json schema。
+  - `commands/sync-moe-stroke-corpus.mjs` — 全量發現／轉換／manifest／上傳／驗證。
+    上傳前必須有對應環境的 flattened generated config
+    （`vp run build` 或 `CLOUDFLARE_ENV=staging vp run build` →
+    `dist/cf_moedict_webkit_neo/wrangler.json` 的 `ASSETS.bucket_name`）。
+- **上傳與驗證守門**：`--upload=staging|production` 時拒絕
+  `--limit`／`--allow-partial`／`--skip-verify`（full-only）；上傳後強制
+  authenticated re-GET + sha256／bytes 全量比對。並發 ≤4。
+  **upload** 暫態重試預設 `maxRetries=5`（`retryWithBackoff`）；**verify**
+  預設 `DEFAULT_VERIFY_MAX_RETRIES=8`（長時間 re-GET 較易遇網路 flake）。
+  目前**沒有** verify-only／checkpoint resume（建議後續 operator 優化）。
+- **本機產物**：`.moe-stroke-corpus/`、`.moe-stroke-fetch/` 已 gitignore，
+  **不可** commit 生成 JSON／zip／manifest。細節見 `README_CDN.md` §三。
+- **出貨順序**：先 staging 上傳 preview 桶 + `bun run deploy:staging` 驗證 →
+  再 production 上傳 `moedict-assets` + `bun run deploy`（approval gate：
+  同一 git SHA + client manifest digest）。
+- **現行已部署 runtime**（2026-07-13）：release `23b7e89-1d1f2400cb1d`，
+  source HEAD `23b7e89`；staging version `0f23b628-9373-45d5-8ee9-b7d20b14933b`
+  @100%、production version `2be488db-8ad7-4384-bc2a-c539b4196445` @100%；
+  兩桶皆有 6,063 筆 `stroke-json/*` 且全量 hash 驗證 OK。後續 **script-only**
+  pipeline 硬化（如 verify maxRetries=8）不需再佈 Worker；完整事實見
+  `notes/零停機部署筆記.md` 與 `README_CDN.md`。
 
 ## 邊緣快取（src/api/cache.ts）
 
@@ -291,7 +356,9 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
 - 欄位是單字母縮寫，對照表在 `src/api/handleDictionaryAPI.ts` 的 `KEY_MAP`：
   `t`=title、`h`=heteronyms、`T`=trs（羅馬字）、`_`=id、`=`=audio_id、
   `d`=definitions、`f`=def、`e`=example、`r`=radical、`c`=stroke_count、
-  `n`=non_radical_stroke_count、`D`=dialects（十地區方言音）、`s`/`a`=同/反義。
+  `n`=non_radical_stroke_count、`B`=variants（異用字，僅 lang=`t`；
+  來源 g0v/moedict-data-twblg `x-異用字.json`，以 heteronym `\_`/主編碼 對應）、
+  `D`=dialects（十地區方言音）、`s`/`a`=同/反義。
 - **`T` 欄的斜線慣例**：一個 heteronym 的多個讀音以 `/` 相連
   （如 `"tshi̍h/ji̍h"`、`"tsi̍t-ji̍t/tsi̍t-li̍t"`），前端 `decorateRuby()` 會拆出
   主讀音與又音（`bAlt`/`pAlt`）。
@@ -318,6 +385,32 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
   追加 `{T, d: [], reading?}` heteronym；`T` 寫成 NFD，不複製 `主編碼`（前端會把
   台語 `_` 當音檔 ID）。主站用文/白/俗/替 badge 標示，並顯示「本音讀無義項」；
   只有無義項、沒有既有 pack 條目的詞目仍只收入 `t/index.json`。
+- **無 pack 條目的無義項詞目（title 只在 `t/index.json`，ptck 完全沒有該
+  key）維持預設行為：只收入 `t/index.json`**，不自動建立 pack 條目——`詞目
+總檔.csv` 屬性 `2` 的整合只會「追加」heteronym 到已存在的 pack 條目，
+  絕不會為缺少 pack 條目的詞目憑空生出一筆。這類詞目目前約有 500-680 個
+  （g0v/moedict-webkit#271 稽核），大量回填需要逐筆核對官方來源，不在此
+  規則範圍內。
+- **例外：逐筆核實、來源標註的 pinned no-definition 記錄**（2026-07，
+  g0v/moedict-webkit#271 長褲）：若某詞目「同時」符合 (a) `t/index.json`
+  已列出、(b) ptck 完全沒有 pack 條目、(c) 有現行 sutian.moe.edu.tw 官方
+  頁面明確核實「詞目＋音讀＋無義項」且 `/tshiau/` 搜尋確認為唯一完全符合
+  結果，才可在 `data/sources/twblg-overrides/pinned-no-definition.json`
+  逐筆加入一條 pin（含 `source_entry_url`/`source_search_url`/
+  `source_note`），由 `scripts/inject-twblg-pinned-entries.py` 寫入對應
+  ptck bucket 的新 `{"T":"…","d":[]}` 單一 heteronym 記錄（NFD、無 `_`、
+  無 `reading`、無 audio）。**這不是政策改變，是一次一筆、需要官方核實
+  才能加入的窄例外**——嚴禁未逐筆核實就批次回填其餘 500+ 詞目。指令：
+  `vp run twblg-pins:inject`（寫入，冪等）、`vp run twblg-pins:check`
+  （唯讀驗證，已接入 `vp run check:data` 的第 4 項檢查；缺漏或內容不符
+  皆會讓 `check:data` fail-closed）。manifest 刻意放在
+  `data/sources/twblg-overrides/`（不在 `data/dictionary/` 底下）——
+  `commands/upload_dictionary.sh` 只同步固定白名單子目錄
+  （`pack/pcck/phck/ptck`、`a/c/h/t`、`search-index`、`translation-data`、
+  `lookup/pinyin`），未列在白名單的子目錄不會被上傳，把這份來源標註
+  manifest 放在 `data/dictionary/` 底下只會造成「看起來會同步、實際上
+  不會」的誤解；`data/sources/` 明確標示它是原始碼/建置期 metadata，
+  不是執行期字典物件。
 - `又音.csv` — **已整合**（以 `主編碼` 對 heteronym `_` id，append 進 `T` 斜線；
   1365 個 id 中 30 個在 pack 裡無對應詞條，為上游孤兒）。類型 2（俗唸作）、
   3（合音唸作）被扁平化為同一斜線格式，未保留類型標籤。
@@ -325,6 +418,13 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
   且 **`D`/dialects 目前沒有任何 UI 會渲染**（暗資料）。補完需要資料合併 + 新 UI。
 - `詞彙方言差.csv` — 未整合（整詞的地區替代詞，如 醫院→病院/醫生館，
   以 `詞目` 為鍵，是獨立的新功能）。
+- `x-異用字.json` — **已整合**（2026-07，g0v/moedict-webkit#281）：以 heteronym
+  `_`/主編碼 對應，注入 `B`（variants）陣列，前端在 lang=`t` 時顯示「異用字：…」。
+  來源：`g0v/moedict-data-twblg` repo root `x-異用字.json`，pinned to commit
+  `437588d`（blob SHA1 `860d76d`，SHA-256 `aa5b0a…`），2110 個鍵，全部 string→string[]。
+  以 `scripts/inject-twblg-variants.py` 增量注入既有 ptck packs（不重建），保留
+  一行一詞條格式與所有其他欄位/順序；2097 個 id 命中、13 個為上游孤兒（ptck 無對應）。
+  moedict-process 已有 `appendTwblgVariants`（`src/pack/special.ts`）與對應測試。
 
 ## 測試架構重點
 
@@ -373,6 +473,22 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
   src 內新增的 id 若撞上 legacy `#id` 選擇器且不在 allowlist 內會 fail；
   要沿用 legacy 樣式就有意識地把 id 加進 allowlist（附註解）。該檔案的完整
   背景（格式化、載入路徑、測試涵蓋範圍）見前面「舊版樣式」一節。
+- **標題羅馬拼音選取架構**：可見字形由 `ru[annotation]::before { content: attr(annotation) }`
+  以自訂字型繪製（CSS 生成內容，瀏覽器不納入文字選取）；正確 Unicode 文字放在
+  `<span class="romanization-selectable" aria-hidden="true">` 疊在同一位置，
+  `position: absolute; color: transparent; user-select: text`，讓使用者拖曳即可複製乾淨的
+  `huáng`/`tsia̍h`。**`<rt>` 絕對不能在這裡復原**：WebKit 的排版引擎在 ruby-text box
+  生成時強制將 `<rt>` 設為 `position: static`，即使作者標記 `!important` 也被覆蓋，
+  使 `<rt>` 留在正常 ruby 排版流中，導致 `h1` 高度撐至約 164px，音訊按鈕與羅馬拼音向下
+  位移，`huáng` 出現在音訊按鈕之後（Safari #186 regression）。
+  普通 `<span>` 則正確繼承 `position: absolute`。`複製羅馬拼音` 按鈕已故意移除（#256）；
+  `aria-hidden` 防止螢幕閱讀器重複播報（`ru[annotation]::before` 已被 AT 納入 accessible name 計算）。
+  zhuyin/none phonetics 偏好設定下以 CSS `display: none` 隱藏 span，防止不可見字形被意外選取。
+  守護測試：`tests/e2e/dictionary.spec.ts` 的三個 `@romanization` describe blocks
+  （Taigi selection/copy、Mandarin selection、overlay geometry regression）同時跑
+  Chromium（chromium project）與 WebKit（webkit-romanization project，
+  `playwright test --project=webkit-romanization`）；
+  包含真實指標拖曳、caretRangeFromPoint、ARIA 播報、幾何不變量與 phonetics 偏好測試。
 - 詞條頁資料流：client 打 `/api/{前綴}{詞}.json` → Worker `fillBucket` 讀
   R2 `p{lang}ck/{bucket}.txt` → 取單一 key 回傳。`/{a,t,h,c,raw,uni,pua}/<詞>.json`
   是對外公開 API（README 有文件），改格式要顧慮外部消費者。
@@ -437,5 +553,7 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
 
 - `memory/MEMORY.md` — 跨 session 架構筆記（新舊版對照、CDN 位址等）
 - `README.md` — 對外文件（公開 API 端點列表）
+- `README_CDN.md` — R2／CDN 版面、筆順 6,063 字語料管線與出貨現況
+- `notes/零停機部署筆記.md` — 零停機部署操作手冊與出貨 checklist
 - `~/w/moedict-webkit/view.ls` — 舊版 UI 行為的 ground truth
 - `台語羅馬拼音索引施工計畫.md` — pinyin lookup 索引的設計文件

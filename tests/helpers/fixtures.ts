@@ -14,6 +14,16 @@
  *   - 字 (U+5B57)  — lang=h, phck bucket 87
  *   - 上訴         — lang=c, pcck bucket 10 (first char 上 = U+4E0A)
  *   - 蛇 (U+86C7)  — lang=t, ptck bucket 71（文讀 siâ 無義項）
+ *   - 長褲          — lang=t, ptck bucket 119（pinned whole-record 無義項，
+ *     g0v/moedict-webkit#271; source-attributed manifest at
+ *     data/sources/twblg-overrides/pinned-no-definition.json）
+ *
+ * Extra explicit fixtures (geometry / font tests):
+ *   - 黃 (U+9EC3)  — lang=a, pack bucket 707; ㄏㄨㄤˊ length=3 tone-node geometry
+ *   - MOEDICT.woff2 — ASSETS key fonts/MOEDICT.woff2; same-origin font route test
+ *   - TauhuOo2005-Regular.otf / FiraSansOT-Regular.otf — ASSETS keys
+ *     fonts/TauhuOo2005-Regular.otf / fonts/FiraSansOT-Regular.otf; glyph
+ *     fallback + romanize=1 caption font render tests (RESCOPE #169)
  */
 
 import { readFileSync } from "node:fs";
@@ -103,6 +113,51 @@ export function collectDictionaryFixtures(): FixtureEntry[] {
     httpMetadata: { contentType: "text/plain; charset=utf-8" },
   });
 
+  // 長褲 (pinned no-definition entry, g0v/moedict-webkit#271): lang=t,
+  // ptck bucket 119. Whole-record no-definition (no `_`/audio id, no
+  // `reading` badge) — distinct fixture from 蛇's per-heteronym reading-only
+  // shape above. Source-attributed manifest:
+  // data/sources/twblg-overrides/pinned-no-definition.json.
+  const pinnedNoDefinitionWord = "長褲";
+  const pinnedNoDefinitionBucket = bucketOf(pinnedNoDefinitionWord, "t");
+  const pinnedNoDefinitionKey = `ptck/${pinnedNoDefinitionBucket}.txt`;
+  entries.push({
+    bucket: "DICTIONARY",
+    key: pinnedNoDefinitionKey,
+    body: required(
+      path.join(DATA_DICT, "ptck", `${pinnedNoDefinitionBucket}.txt`),
+      pinnedNoDefinitionKey,
+    ),
+    httpMetadata: { contentType: "text/plain; charset=utf-8" },
+  });
+
+  // 異用字 (alternate-character) test fixtures (g0v/moedict-webkit#281):
+  // 你 (U+4F60, bucket 96, heteronym id=2881 → variants 汝)
+  // 囝 (U+56DD, bucket 93, heteronym id=2134 → variants 子)
+  // Both ptck buckets must be seeded so e2e tests can verify the
+  // .twblg-variants UI against real generated pack data.
+  for (const variantWord of ["你", "囝"] as const) {
+    const variantBucket = bucketOf(variantWord, "t");
+    const variantKey = `ptck/${variantBucket}.txt`;
+    entries.push({
+      bucket: "DICTIONARY",
+      key: variantKey,
+      body: required(path.join(DATA_DICT, "ptck", `${variantBucket}.txt`), variantKey),
+      httpMetadata: { contentType: "text/plain; charset=utf-8" },
+    });
+  }
+
+  // 黃 (U+9EC3) — lang=a, pack bucket 707; ㄏㄨㄤˊ has length=3 zhuyin which
+  // exercises the length=3 tone-node geometry and the same-origin font route.
+  const huangBucket = bucketOf("黃", "a");
+  const huangKey = `pack/${huangBucket}.txt`;
+  entries.push({
+    bucket: "DICTIONARY",
+    key: huangKey,
+    body: required(path.join(DATA_DICT, "pack", `${huangBucket}.txt`), huangKey),
+    httpMetadata: { contentType: "text/plain; charset=utf-8" },
+  });
+
   for (const lang of ["a", "t", "h", "c"] as const) {
     for (const name of ["index.json", "xref.json", "xref-by-id.json"]) {
       const key = `${lang}/${name}`;
@@ -132,6 +187,24 @@ export function collectDictionaryFixtures(): FixtureEntry[] {
     }
   }
 
+  // @口.json — seeded for the /@口 duplicate-radical-key regression test
+  // (tests/e2e/dictionary.spec.ts "special routes"): 口's own stroke-0 row
+  // lists the radical character itself twice in the raw upstream data,
+  // exercising normalizeRows' per-row dedup (radical-page-utils.ts).
+  const radicalDupFixture = "@口.json";
+  for (const lang of ["a", "t", "h", "c"] as const) {
+    const key = `${lang}/${radicalDupFixture}`;
+    const body = optional(path.join(DATA_DICT, lang, radicalDupFixture), key);
+    if (body) {
+      entries.push({
+        bucket: "DICTIONARY",
+        key,
+        body,
+        httpMetadata: { contentType: "application/json; charset=utf-8" },
+      });
+    }
+  }
+
   const listFixture = "=近義詞.json";
   const listAPath = path.join(DATA_DICT, "a", listFixture);
   if (existsSync(listAPath)) {
@@ -146,6 +219,31 @@ export function collectDictionaryFixtures(): FixtureEntry[] {
       bucket: "DICTIONARY",
       key: `a/=近義詞.json`,
       body: new TextEncoder().encode(JSON.stringify(["一致", "相仿", "雷同"])),
+      httpMetadata: { contentType: "application/json; charset=utf-8" },
+    });
+  }
+
+  // =成語.json is needed by tests/e2e/scroll-restoration.spec.ts which scrolls
+  // to y=4200 on the list page — requires a large real entry array.
+  // Synthesise 200 fake entries when the real file is absent so the list page
+  // renders enough rows to reach that scroll depth.
+  const chengYuFixture = "=成語.json";
+  const chengYuPath = path.join(DATA_DICT, "a", chengYuFixture);
+  if (existsSync(chengYuPath)) {
+    entries.push({
+      bucket: "DICTIONARY",
+      key: `a/${chengYuFixture}`,
+      body: readFileSync(chengYuPath),
+      httpMetadata: { contentType: "application/json; charset=utf-8" },
+    });
+  } else {
+    // Synthesise 200 entries — enough rows to push document height past
+    // the 4200 px target the scroll-restoration test scrolls to.
+    const fakeChengYu = Array.from({ length: 200 }, (_, i) => `成語${String(i).padStart(3, "0")}`);
+    entries.push({
+      bucket: "DICTIONARY",
+      key: `a/${chengYuFixture}`,
+      body: new TextEncoder().encode(JSON.stringify(fakeChengYu)),
       httpMetadata: { contentType: "application/json; charset=utf-8" },
     });
   }
@@ -220,6 +318,61 @@ export function collectDictionaryFixtures(): FixtureEntry[] {
     }
   }
 
+  // 兩岸辭典 bucket 9 — contains 䴉 (U+4D09, 19721 % 128 = 9);
+  // seeded explicitly so /c/䴉.json returns a real dictionary entry
+  // and the CNS non-shadowing contract can be asserted definitively.
+  const ibisKey = "pcck/9.txt";
+  entries.push({
+    bucket: "DICTIONARY",
+    key: ibisKey,
+    body: required(path.join(DATA_DICT, "pcck", "9.txt"), ibisKey),
+    httpMetadata: { contentType: "text/plain; charset=utf-8" },
+  });
+
+  // CNS11643 golden fixture: 䴉 (U+4D09, CNS 4-6C51) — shard 4D, key 4D09.json
+  const cnsGoldenKey = "cns/by-codepoint/4D/4D09.json";
+  const cnsGoldenPath = path.join(DATA_DICT, "cns", "by-codepoint", "4D", "4D09.json");
+  if (existsSync(cnsGoldenPath)) {
+    entries.push({
+      bucket: "DICTIONARY",
+      key: cnsGoldenKey,
+      body: readFileSync(cnsGoldenPath),
+      httpMetadata: { contentType: "application/json; charset=utf-8" },
+    });
+  } else {
+    // Inline minimal golden record matching neuralese evidence
+    entries.push({
+      bucket: "DICTIONARY",
+      key: cnsGoldenKey,
+      body: new TextEncoder().encode(
+        JSON.stringify({
+          char: "䴉",
+          unicode: "U+4D09",
+          codepoint: 19721,
+          cns: "4-6C51",
+          plane: 4,
+          cell: "6C51",
+          pua: false,
+          attributes: {
+            phonetic: ["ㄒㄩㄢˊ"],
+            radical: { id: 196, char: "鳥" },
+            stroke: 24,
+            cangjie: ["WVHAF"],
+            strokeSequence: "252211251353432511154444",
+            source: "罕用國字標準字體表",
+          },
+          provenance: {
+            generator: "scripts/generate-cns-data.mjs",
+            sourceFiles: ["Properties.zip", "MapingTables.zip"],
+            license: "OGDL-1.0",
+            attribution:
+              "數位發展部，CNS11643中文標準交換碼全字庫網站，https://www.cns11643.gov.tw",
+          },
+        }),
+      ),
+      httpMetadata: { contentType: "application/json; charset=utf-8" },
+    });
+  }
   return entries;
 }
 
@@ -266,6 +419,62 @@ export function collectAssetFixtures(): FixtureEntry[] {
       key: "manifest.appcache",
       body: new TextEncoder().encode("CACHE MANIFEST\n# moedict test fixture\n"),
       httpMetadata: { contentType: "text/cache-manifest; charset=utf-8" },
+    });
+  }
+
+  // Real stroke-json for 萌 (U+840C) from tests/fixtures/stroke-json/840c.json.
+  // Serves two purposes: (1) useStrokeAvailability HEAD probe returns 200 so the
+  // pencil button stays enabled; (2) jquery.strokeWords.js can actually render
+  // 12 strokes in #strokes, giving the container non-zero width so Playwright's
+  // actionability check passes for the replay-click test.
+  const strokeJson840c = path.join(FIXTURES_DIR, "stroke-json", "840c.json");
+  if (existsSync(strokeJson840c)) {
+    entries.push({
+      bucket: "ASSETS",
+      key: "stroke-json/840c.json",
+      body: readFileSync(strokeJson840c),
+      httpMetadata: { contentType: "application/json; charset=utf-8" },
+    });
+  }
+
+  // Real MOEDICT.woff2 from data/assets/fonts/ — seeded under ASSETS key
+  // fonts/MOEDICT.woff2 so the Worker's same-origin font route (/assets/fonts/MOEDICT.woff2)
+  // returns 200 with real font bytes. This lets e2e tests assert the correct
+  // HTTP status, content-type, and FontFace load status for the "MOEDICT Same-Origin"
+  // @font-face alias added in src/index.css.
+  const moedictWoff2Path = path.join(DATA_ASSETS, "fonts", "MOEDICT.woff2");
+  if (existsSync(moedictWoff2Path)) {
+    entries.push({
+      bucket: "ASSETS",
+      key: "fonts/MOEDICT.woff2",
+      body: readFileSync(moedictWoff2Path),
+      httpMetadata: { contentType: "font/woff2" },
+    });
+  }
+
+  // Real Tauhu Oo 補完字型 and Fira Sans OT (romanize=1 caption font, RESCOPE
+  // #169) from data/assets/fonts/ — seeded under the ASSETS keys
+  // src/utils/image-generation.ts reads via loadFallbackFontBuffer /
+  // loadCaptionFontBuffer, so integration tests can exercise the real
+  // <text>-fallback and romanize=1 caption render paths (not just the
+  // 404/503 "font missing" arms).
+  const tauhuOoPath = path.join(DATA_ASSETS, "fonts", "TauhuOo2005-Regular.otf");
+  if (existsSync(tauhuOoPath)) {
+    entries.push({
+      bucket: "ASSETS",
+      key: "fonts/TauhuOo2005-Regular.otf",
+      body: readFileSync(tauhuOoPath),
+      httpMetadata: { contentType: "font/otf" },
+    });
+  }
+
+  const firaSansOtPath = path.join(DATA_ASSETS, "fonts", "FiraSansOT-Regular.otf");
+  if (existsSync(firaSansOtPath)) {
+    entries.push({
+      bucket: "ASSETS",
+      key: "fonts/FiraSansOT-Regular.otf",
+      body: readFileSync(firaSansOtPath),
+      httpMetadata: { contentType: "font/otf" },
     });
   }
 

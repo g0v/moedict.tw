@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { SvgIcon } from "./SvgIcon";
 import { fetchDictionaryEntry, type DictionaryLang } from "../utils/dictionary-cache";
+import { formatBopomofo, formatPinyin } from "../utils/bopomofo-pinyin-utils";
 
 interface FontGroup {
   label: string;
@@ -105,9 +106,34 @@ function setStoredFont(value: string): void {
   }
 }
 
-function charImgUrl(word: string, font: string): string {
+/** romanize=1 字圖標註 checkbox 的持久化（RESCOPE #169）；預設關閉，維持
+ *  既有字圖預設輸出不變（fail-open：讀取/寫入失敗一律視為未開啟）。 */
+function getStoredRomanize(): boolean {
+  try {
+    return window.localStorage.getItem("charimg-romanize") === "1";
+  } catch {
+    return false;
+  }
+}
+
+function setStoredRomanize(value: boolean): void {
+  try {
+    window.localStorage.setItem("charimg-romanize", value ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+}
+
+function charImgUrl(word: string, font: string, lang: DictionaryLang, romanize: boolean): string {
   const base = `https://www.moedict.tw/${encodeURIComponent(word)}.png`;
-  return font === "kai" ? base : `${base}?font=${font}`;
+  const params = new URLSearchParams();
+  if (font !== "kai") params.set("font", font);
+  if (romanize) {
+    params.set("romanize", "1");
+    params.set("lang", lang);
+  }
+  const query = params.toString();
+  return query ? `${base}?${query}` : base;
 }
 
 interface CharacterImageViewProps {
@@ -121,6 +147,11 @@ interface TermSegment {
   part: string;
   href: string | null;
   def: string;
+  /** 整詞羅馬拼音／台羅／拼音（第一個 heteronym；lang='h' 一律為空字串，
+   *  documented Hakka exclusion，同 fetchWholeWordRomanization）。 */
+  pinyin: string;
+  /** 注音符號（僅 lang='a'/'c' 有意義；t/h 一律為空字串）。 */
+  bopomofo: string;
 }
 
 interface DrawState {
@@ -250,6 +281,32 @@ function extractDef(data: unknown): string {
   return expandDef(result);
 }
 
+/** 第一個 heteronym 的整詞羅馬拼音（RESCOPE #169：與 src/utils/image-generation.ts
+ *  的 fetchWholeWordRomanization 相同慣例——lang='h' 一律回傳空字串；'pinyin'
+ *  欄位缺席時退回 'trs'，兩者皆由伺服端資料直接提供，不在前端推導）。 */
+function extractRomanization(data: unknown, lang: DictionaryLang): string {
+  if (lang === "h") return "";
+  if (!data || typeof data !== "object") return "";
+  const entry = data as Record<string, unknown>;
+  const heteronyms = entry.heteronyms as Array<Record<string, unknown>> | undefined;
+  if (!Array.isArray(heteronyms) || heteronyms.length === 0) return "";
+  const first = heteronyms[0];
+  const pinyin = first.pinyin;
+  if (typeof pinyin === "string" && pinyin) return pinyin;
+  const trs = first.trs;
+  return typeof trs === "string" ? trs : "";
+}
+
+/** 第一個 heteronym 的注音符號（僅 lang='a'/'c' 有意義）。 */
+function extractBopomofo(data: unknown): string {
+  if (!data || typeof data !== "object") return "";
+  const entry = data as Record<string, unknown>;
+  const heteronyms = entry.heteronyms as Array<Record<string, unknown>> | undefined;
+  if (!Array.isArray(heteronyms) || heteronyms.length === 0) return "";
+  const bopomofo = heteronyms[0].bopomofo;
+  return typeof bopomofo === "string" ? bopomofo : "";
+}
+
 export function CharacterImageView({
   queryWord,
   terms,
@@ -262,6 +319,7 @@ export function CharacterImageView({
   const [shareSupported] = useState(() => typeof navigator !== "undefined" && !!navigator.share);
   const [font, setFont] = useState(getStoredFont);
   const [hollowMode, setHollowMode] = useState(true);
+  const [romanize, setRomanize] = useState(getStoredRomanize);
   const canvasRefs = useRef<Record<string, HTMLCanvasElement>>({});
   const drawStates = useRef<Record<string, DrawState>>({});
   const mergedTerms = useMemo(() => mergeEnglishTerms(terms), [terms]);
@@ -271,6 +329,12 @@ export function CharacterImageView({
     const next = e.target.value;
     setFont(next);
     setStoredFont(next);
+  }, []);
+
+  const handleRomanizeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const next = e.target.checked;
+    setRomanize(next);
+    setStoredRomanize(next);
   }, []);
 
   useEffect(() => {
@@ -286,10 +350,12 @@ export function CharacterImageView({
           if (cancelled) return;
           const def = response.ok ? extractDef(response.data) : "";
           const href = response.ok ? `/${langTokenPrefix}${part}` : null;
-          results.push({ part, href, def });
+          const pinyin = response.ok ? extractRomanization(response.data, lang) : "";
+          const bopomofo = response.ok ? extractBopomofo(response.data) : "";
+          results.push({ part, href, def, pinyin, bopomofo });
         } catch {
           if (cancelled) return;
-          results.push({ part, href: null, def: "" });
+          results.push({ part, href: null, def: "", pinyin: "", bopomofo: "" });
         }
       }
       if (!cancelled) {
@@ -610,6 +676,17 @@ export function CharacterImageView({
             opacity: .32;
           }
 
+          .charimg-result .charimg-caption {
+            margin-top: 6px;
+            text-align: center;
+            font-size: 0.85em;
+            line-height: 1.3;
+          }
+
+          .charimg-result .charimg-caption .bopomofo {
+            display: inline-block;
+          }
+
           @media print {
             .charimg-result .charimg-controls {
               display: none !important;
@@ -655,7 +732,7 @@ export function CharacterImageView({
         >
           <img
             className="charimg-glyph charimg-glyph-main"
-            src={charImgUrl(queryWord, font)}
+            src={charImgUrl(queryWord, font, lang, romanize)}
             alt={queryWord}
             style={{ width: mainImageSize, height: mainImageSize }}
           />
@@ -718,6 +795,23 @@ export function CharacterImageView({
             />
             鏤空描寫模式
           </label>
+          <label
+            style={{
+              marginBottom: 0,
+              display: "inline-flex",
+              gap: 4,
+              alignItems: "center",
+              fontWeight: "normal",
+            }}
+          >
+            <input
+              id="charimg-romanize"
+              type="checkbox"
+              checked={romanize}
+              onChange={handleRomanizeChange}
+            />
+            顯示羅馬拼音
+          </label>
         </div>
 
         <table
@@ -756,8 +850,8 @@ export function CharacterImageView({
                     >
                       <img
                         className="charimg-glyph charimg-glyph-segment"
-                        src={charImgUrl(segment.part, font)}
-                        alt={segment.part}
+                        src={charImgUrl(segment.part, font, lang, romanize)}
+                        alt={segment.pinyin ? `${segment.part} ${segment.pinyin}` : segment.part}
                         style={{ width: SEGMENT_IMAGE_SIZE, height: SEGMENT_IMAGE_SIZE }}
                       />
                       {renderPracticeCanvas(
@@ -766,6 +860,24 @@ export function CharacterImageView({
                         SEGMENT_IMAGE_SIZE,
                       )}
                     </div>
+                    {romanize && (segment.pinyin || segment.bopomofo) && (
+                      <div className="charimg-caption">
+                        {segment.pinyin && (
+                          <span
+                            className="pinyin"
+                            dangerouslySetInnerHTML={{ __html: formatPinyin(segment.pinyin) }}
+                          />
+                        )}
+                        {segment.bopomofo && (
+                          <span
+                            className="bopomofo"
+                            dangerouslySetInnerHTML={{
+                              __html: formatBopomofo(segment.bopomofo),
+                            }}
+                          />
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td
                     style={{
@@ -787,7 +899,7 @@ export function CharacterImageView({
                         {segment.def || segment.part}
                       </a>
                     ) : (
-                      <span style={{ color: "#999" }}>{segment.part}</span>
+                      <span style={{ color: "#666" }}>{segment.part}</span>
                     )}
                   </td>
                 </tr>

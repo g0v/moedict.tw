@@ -26,7 +26,8 @@ const TYPESET = {
 
 /* v8 ignore start -- decodes numeric character references emitted by serializers
    that preserve &#x...;. happy-dom decodes them at parse time and never re-emits
-   them, so the regex on line 154 never matches under the unit-test DOMParser.
+   them, so the replacement callback in the innerHTML.replace call below is never
+   invoked under the unit-test DOMParser.
    Kept for environments whose serializer escapes supplementary-plane characters. */
 function toCodePointString(entity: string): string {
   const codePoint = Number.parseInt(entity, 16);
@@ -157,9 +158,37 @@ export function ruby2hruby(html: string): string {
         if (!firstBase) return;
 
         const ru = doc.createElement("ru");
-        const rtClone = rt.cloneNode(true) as Element;
+        // g0v/moedict-webkit#100 / #186: build the .romanization-selectable span
+        // directly from rt.textContent rather than cloning the <rt> and replacing
+        // it in a second pass.  This avoids the clone allocation and makes the
+        // <span>-not-<rt> cutover explicit at the point where the new ru is built.
+        //
+        // We use <span> rather than <rt> because WebKit's layout engine hard-forces
+        // <rt> to position:static in its ruby-text box generation — overriding even
+        // author `position:absolute !important` — which collapses the h1 geometry
+        // and displaces the play button far below the headword.  A plain <span> in
+        // the same <ru> parent receives position:absolute correctly from the CSS
+        // overlay rule in index.css.
+        //
+        // aria-hidden removes the span from the AT tree; without it screen readers
+        // announce the reading twice (e.g. "méng 萌 ㄇㄥ ˊ méng") because the
+        // ::before generated content (`ru[annotation]::before { content: attr(annotation) }`)
+        // is already included in accessible-name computation.
+        const sel = doc.createElement("span");
+        sel.className = "romanization-selectable";
+        // Clean Unicode text, not the PUA-normalised annotation attribute value.
+        // Element.textContent is always a string; `|| ''` guards non-DOM parsers.
+        /* v8 ignore start */
+        sel.textContent = rt.textContent || "";
+        /* v8 ignore stop */
+        // Defensive inline style: immediately overridden by `position:absolute
+        // !important` in index.css, but hides the span before the stylesheet
+        // applies (flash of unstyled content) and documents intent at DOM level.
+        sel.setAttribute("style", "text-indent: -9999px; color: transparent");
+        sel.setAttribute("aria-hidden", "true");
+
         ru.innerHTML = baseNodes.map((node) => node.outerHTML).join("");
-        ru.appendChild(rtClone);
+        ru.appendChild(sel);
         ru.setAttribute("span", String(span));
         ru.setAttribute("order", String(order));
         ru.setAttribute("class", originalClass);
@@ -174,10 +203,10 @@ export function ruby2hruby(html: string): string {
       });
     });
 
+    // Remove source rtcs now that every rt has been consumed above.
+    // No surviving <rt> elements remain in the DOM at this point — the
+    // non-zhuyin loop above built .romanization-selectable spans directly.
     ruby.querySelectorAll("rtc").forEach((rtc) => rtc.remove());
-    ruby.querySelectorAll("rt").forEach((rt) => {
-      rt.setAttribute("style", "text-indent: -9999px; color: transparent");
-    });
 
     return ruby.innerHTML.replace(
       /&#x([0-9a-fA-F]+);/g,

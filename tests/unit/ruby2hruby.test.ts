@@ -2,7 +2,13 @@
  * Coverage for src/utils/ruby2hruby.ts — exercises the DOMParser-based ruby
  * restructuring: zhuyin rtc becomes <ru zhuyin><zhuyin><yin>.../<diao>...</>,
  * ordered rtcs wrap preceding rbs with order/span/annotation attrs, and
- * leftover <rt>s get hidden via inline style.
+ * leftover <rt>s are replaced with <span class="romanization-selectable">
+ * (aria-hidden, g0v/moedict-webkit#100/#186).  CSS generated content already
+ * renders the same reading visibly/accessibly; the span node exists only to
+ * make the romanization selectable/copyable via mouse/touch drag.  <span> is
+ * used instead of <rt> because WebKit's layout engine hard-forces <rt> to
+ * position:static regardless of author !important rules, breaking the title
+ * geometry on Safari — a plain <span> receives position:absolute correctly.
  */
 
 import { describe, expect, it } from "vite-plus/test";
@@ -129,9 +135,66 @@ describe("ruby2hruby — ordered rtc (non-zhuyin)", () => {
     expect(out).toContain('order="0"');
     expect(out).toContain('span="1"');
     expect(out).toContain('annotation="meng"');
-    // The <rt> is hidden via inline style (visual ruby display is handled by
-    // the zhuyin <yin>/<diao> sub-elements, not the original <rt>).
-    expect(out).toMatch(/<rt[^>]*style="text-indent:[^"]*">meng<\/rt>/);
+    // The original <rt> is replaced with a <span class="romanization-selectable">
+    // (visual ruby display handled by zhuyin <yin>/<diao> sub-elements; the span
+    // exists only so the romanization is natively selectable/copyable).
+    // It carries a defensive inline style that index.css overrides with !important,
+    // and aria-hidden so AT doesn't announce the reading twice (#100).
+    expect(out).toMatch(
+      /<span[^>]*class="romanization-selectable"[^>]*style="text-indent:[^"]*"[^>]*aria-hidden="true"[^>]*>meng<\/span>/,
+    );
+    // No bare <rt> element with this text survives in the output.
+    expect(out).not.toMatch(/<rt[^>]*>meng<\/rt>/);
+  });
+
+  it("g0v/moedict-webkit#100/#186: .romanization-selectable span is aria-hidden so screen readers don't double-announce the reading", () => {
+    const out = ruby2hruby(
+      '<rb>萌</rb><rtc class="zhuyin"><rt>ㄇㄥˊ</rt></rtc><rtc class="romanization"><rt>meng</rt></rtc>',
+    );
+    // CSS (ru[annotation]::before { content: attr(annotation) }) already
+    // draws "meng" visibly and is exposed via the accessible-name
+    // computation, so the selectable span carrying the same text
+    // must be pulled out of the accessibility tree entirely.
+    expect(out).toContain('aria-hidden="true"');
+    // The element is a span with the specific class, not a bare rt.
+    expect(out).toContain('class="romanization-selectable"');
+  });
+});
+
+describe("ruby2hruby — no bare <rt> survives (WebKit regression guard)", () => {
+  it("emits zero bare <rt> elements for a realistic multi-character zhuyin+romanization title", () => {
+    // This is the actual pipeline output shape for Mandarin entries:
+    // one zhuyin rtc and one romanization rtc per word.
+    const out = rightAngle(
+      ruby2hruby(
+        "<rb>萌</rb><rb>典</rb>" +
+          '<rtc class="zhuyin"><rt>ㄇㄥˊ</rt><rt>ㄉㄧㄢˇ</rt></rtc>' +
+          '<rtc class="romanization"><rt>méng</rt><rt>diǎn</rt></rtc>',
+      ),
+    );
+    // No bare <rt> element may survive — only .romanization-selectable <span>s.
+    // A surviving <rt> means the WebKit position:static bug is back in the DOM.
+    expect(out).not.toMatch(/<rt[\s>]/);
+    // Each romanization IS present, just inside a span not an rt.
+    expect(out).toContain(">méng</span>");
+    expect(out).toContain(">diǎn</span>");
+  });
+
+  it("returns input unchanged (no rt emitted) when DOMParser is unavailable — fallback path", () => {
+    // On the DOMParser-missing path ruby2hruby returns the raw HTML unchanged.
+    // rightAngle also calls ruby2hruby, so no <rt> transformation occurs and
+    // the input passthrough must not inject phantom <rt> elements either.
+    const original = globalThis.DOMParser;
+    // @ts-expect-error — deliberately simulate a non-DOM environment.
+    delete globalThis.DOMParser;
+    try {
+      const html = '<rb>字</rb><rtc class="zhuyin"><rt>ㄗˋ</rt></rtc>';
+      // ruby2hruby returns the input unchanged; rightAngle in turn calls ruby2hruby.
+      const out = ruby2hruby(html);
+      expect(out).toBe(html);
+    } finally {
+      globalThis.DOMParser = original;
+    }
   });
 });
 

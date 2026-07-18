@@ -74,6 +74,7 @@ const KEY_MAP: Record<string, string> = {
   E: "english",
   T: "trs",
   A: "alt",
+  B: "variants",
   V: "vernacular",
   C: "combined",
   D: "dialects",
@@ -235,8 +236,7 @@ async function handleLanguageSubRoute(
     return jsonResponse(request, JSON.parse(listData), 200, false);
   }
 
-  const bucket = bucketOf(text, lang);
-  const bucketResult = await fillBucket(text, bucket, lang, env);
+  const bucketResult = await fillBucketWithCompatibilityFallback(text, lang, env);
   if (bucketResult.err || !bucketResult.data) {
     return jsonResponse(
       request,
@@ -297,8 +297,7 @@ async function handlePuaRoute(
 }
 
 async function lookupRawSource(text: string, env: DictionaryEnv): Promise<DictionaryEntry | null> {
-  const bucket = bucketOf(text, "a");
-  const bucketResult = await fillBucket(text, bucket, "a", env);
+  const bucketResult = await fillBucketWithCompatibilityFallback(text, "a", env);
   return bucketResult.err ? null : bucketResult.data;
 }
 
@@ -413,6 +412,47 @@ async function fillBucket(
   }
 }
 
+/**
+ * Wraps `fillBucket` with a Unicode-compatibility fallback for entry
+ * lookups. Many CJK compatibility characters — most notably the entire
+ * Kangxi Radicals block (U+2E80–U+2EFF, U+2F00–U+2FDF, e.g. ⼴ U+2F34) —
+ * carry a canonical NFKC/NFKD compatibility decomposition to their
+ * corresponding CJK Unified Ideograph (⼴ U+2F34 → 广 U+5E7F). MOE's
+ * dictionary data keys these entries under the plain ideograph, never the
+ * dedicated radical-block codepoint, so a user who pastes the literal
+ * radical-block character (from a Unicode radical chart, an IME's radical
+ * input mode, etc.) would otherwise hit a bare 404 even though the
+ * normalized spelling resolves to a real, on-topic entry. See issue #214.
+ *
+ * This is a lookup-time fallback only — it never touches stored pack data
+ * or mutates `text`/`id` keys, so it cannot break the exact-key
+ * correspondence AGENTS.md's "字典資料格式" section requires. Ordinary text
+ * is NFKC-idempotent, so the fallback is a no-op for the overwhelming
+ * majority of queries and only activates for the narrow class of
+ * compatibility characters.
+ */
+async function fillBucketWithCompatibilityFallback(
+  text: string,
+  lang: DictionaryLang,
+  env: DictionaryEnv,
+): Promise<{ data: DictionaryEntry | null; err: boolean; resolvedText: string }> {
+  const primary = await fillBucket(text, bucketOf(text, lang), lang, env);
+  if (!primary.err && primary.data) {
+    return { ...primary, resolvedText: text };
+  }
+
+  const normalized = text.normalize("NFKC");
+  if (normalized === text) {
+    return { data: null, err: true, resolvedText: text };
+  }
+
+  const fallback = await fillBucket(normalized, bucketOf(normalized, lang), lang, env);
+  if (fallback.err || !fallback.data) {
+    return { data: null, err: true, resolvedText: text };
+  }
+  return { data: fallback.data, err: false, resolvedText: normalized };
+}
+
 async function handleRadicalLookup(
   request: Request,
   text: string,
@@ -470,16 +510,19 @@ export async function lookupDictionaryEntry(
     return null;
   }
 
-  const bucket = bucketOf(text, lang);
-  const bucketResult = await fillBucket(text, bucket, lang, env);
+  const bucketResult = await fillBucketWithCompatibilityFallback(text, lang, env);
   if (bucketResult.err || !bucketResult.data) {
     return null;
   }
 
   const entry = bucketResult.data;
   const processedEntry = processDictionaryEntry(entry, lang);
-  processedEntry.xrefs = await getCrossReferences(text, lang, env);
-  processedEntry.xrefsByHeteronym = await getCrossReferencesById(text, lang, env);
+  processedEntry.xrefs = await getCrossReferences(bucketResult.resolvedText, lang, env);
+  processedEntry.xrefsByHeteronym = await getCrossReferencesById(
+    bucketResult.resolvedText,
+    lang,
+    env,
+  );
   return processedEntry;
 }
 
@@ -517,7 +560,7 @@ function decodeLangPart(lang: DictionaryLang, part = ""): string {
   }
 
   part = part.replace(/"`(.)~\u20DE"[^}]*},{"f":"([^（]+)[^"]*"/g, '"$1\u20DE $2"');
-  part = part.replace(/"([hbpdcnftrelsaqETAVCDS_=])":/g, (_m, k: string) => `"${KEY_MAP[k]}":`);
+  part = part.replace(/"([hbpdcnftrelsaqETAVBCDS_=])":/g, (_m, k: string) => `"${KEY_MAP[k]}":`);
 
   const HASH_OF: Record<DictionaryLang, string> = { a: "#", t: "#'", h: "#:", c: "#~" };
   const h = `./#${HASH_OF[lang]}`;
@@ -545,7 +588,7 @@ function decodeLangPart(lang: DictionaryLang, part = ""): string {
   return part;
 }
 
-function convertDictionaryStructure(entry: unknown): ConvertedDictionaryData {
+export function convertDictionaryStructure(entry: unknown): ConvertedDictionaryData {
   function convertObject(obj: unknown): unknown {
     if (Array.isArray(obj)) {
       return obj.map(convertObject);

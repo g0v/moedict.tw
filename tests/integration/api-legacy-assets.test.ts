@@ -38,6 +38,27 @@ describe("/assets/js/jquery.strokeWords.js", () => {
     expect(body).not.toMatch(/class=\\"icon-spinner/);
     expect(body).not.toMatch(/\bicon-spin\b/);
   });
+
+  // Issue #76: missing stroke-json data must render an explicit, accessible
+  // "not found" indicator instead of silently fading a blank canvas to 50%
+  // opacity (the old "opacity treatment" Audrey asked to replace with
+  // something clearer, e.g. a question mark).
+  it("ships the accessible stroke-missing badge (not the bare opacity fade)", async () => {
+    const res = await fetchFromServer("/assets/js/jquery.strokeWords.js");
+    const body = await res.text();
+    expect(body).toContain('class=\\"stroke-missing-badge\\"');
+    expect(body).toContain('class=\\"stroke-missing-mark\\"');
+    expect(body).toMatch(/aria-label/);
+    expect(body).toContain('role: "img"');
+  });
+
+  it("no longer resolves the fail path with an opacity-only fade as the sole indicator", async () => {
+    const res = await fetchFromServer("/assets/js/jquery.strokeWords.js");
+    const body = await res.text();
+    // The fadeTo("fast", 0.5, ...) call itself was removed from the fail
+    // branch — the canvas is hidden outright and replaced by the badge.
+    expect(body).not.toMatch(/fadeTo\("fast", 0\.5/);
+  });
 });
 
 // ── Task 1: R2 release fallback integration tests ─────────────────────

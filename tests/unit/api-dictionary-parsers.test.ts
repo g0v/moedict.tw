@@ -2,11 +2,13 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   addBopomofo2,
   bucketOf,
+  convertDictionaryStructure,
   convertPuaToCharCode,
   convertPuaToIDS,
   parseSubRoute,
   parseTextFromUrl,
   performFuzzySearch,
+  stripAudioIdAndShape,
 } from "../../src/api/handleDictionaryAPI";
 
 describe("parseSubRoute", () => {
@@ -202,5 +204,44 @@ describe("malformed percent-encoding fails safe (no throw)", () => {
     const sub = parseSubRoute("/a/%.json");
     expect(sub).not.toBeNull();
     expect(sub!.text).toBe("%");
+  });
+});
+
+describe("B (variants/異用字) field conversion", () => {
+  it("maps B to variants in heteronym objects", () => {
+    const converted = convertDictionaryStructure({
+      t: "你",
+      h: [{ _: "2881", T: "lí", B: ["汝"], d: [] }],
+    });
+    const result = stripAudioIdAndShape(converted);
+    expect(result.heteronyms[0]?.variants).toEqual(["汝"]);
+  });
+
+  it("preserves variants when no audio_id is present", () => {
+    const converted = convertDictionaryStructure({
+      t: "囝",
+      h: [{ _: "2134", T: "kiánn", B: ["子"], d: [] }],
+    });
+    const result = stripAudioIdAndShape(converted);
+    expect(result.heteronyms[0]?.variants).toEqual(["子"]);
+    expect(result.heteronyms[0]?.id).toBe("2134");
+  });
+
+  it("leaves heteronyms without B unchanged", () => {
+    const converted = convertDictionaryStructure({
+      t: "無異用字",
+      h: [{ _: "9999", T: "bô", d: [] }],
+    });
+    const result = stripAudioIdAndShape(converted);
+    expect(result.heteronyms[0]?.variants).toBeUndefined();
+  });
+
+  it("handles multiple variants (B array with >1 element)", () => {
+    const converted = convertDictionaryStructure({
+      t: "八字跤",
+      h: [{ _: "94", T: "pat-jī-kha", B: ["八字骹", "八字腳"], d: [] }],
+    });
+    const result = stripAudioIdAndShape(converted);
+    expect(result.heteronyms[0]?.variants).toEqual(["八字骹", "八字腳"]);
   });
 });

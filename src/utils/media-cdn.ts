@@ -6,12 +6,12 @@
  * 一次性遷移進 Cloudflare R2 moedict-assets 桶，由既有的 ASSET_BASE_URL 公開
  * 網域（見 wrangler.jsonc、README_CDN.md）提供服務。
  *
- * 音檔與筆畫 JSON 都是瀏覽器（或 dev-time Vite proxy）直接打這個公開網域，
- * 不經過 Worker 的 ASSETS R2 binding——維持遷移前「直連外部 CDN」的行為，
- * 只是把外部 CDN 換成我們自己的 R2。
- *
- * 若未來調整網域，這是唯一該改的地方；handleStrokeAPI.ts、audio-utils.ts、
- * DictionaryPage.tsx、offline-api.ts、vite.config.ts 都從這裡 import。
+ * 音檔仍是瀏覽器（或 dev-time Vite proxy）直接打這個公開網域。筆畫 JSON 的
+ * Worker 路由 `/api/stroke-json/*` 已改為直接讀 ASSETS R2 binding（見
+ * handleStrokeAPI.ts），以便 staging 的 preview 桶與 production 桶環境隔離；
+ * 前端 jquery.strokeWords.js / useStrokeAvailability 走的是 Worker 代理路徑，
+ * 不再依賴本常數。Capacitor 離線 fallback（offline-api.ts）與 dev Vite proxy
+ * 仍引用 STROKE_JSON_BASE_URL。
  */
 export const ASSET_CDN_BASE = "https://r2-assets.moedict.tw";
 

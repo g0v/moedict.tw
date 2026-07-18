@@ -9,7 +9,7 @@ import { classifyRoute, type DictionaryLang } from "./dictionary-route";
 export type MiddlePointTarget =
   | { page: "home" }
   | { page: "about" }
-  | { page: "radical"; lang: "a" | "c"; radical: string }
+  | { page: "radical"; lang: "a" | "c" | "t"; radical: string }
   | { page: "starred"; lang: DictionaryLang; entry?: string }
   | { page: "list"; lang: DictionaryLang; category: string }
   | { page: "dict"; lang: DictionaryLang; word: string; idx?: number };

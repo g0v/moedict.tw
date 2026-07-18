@@ -1,0 +1,24 @@
+{
+  "rules": [
+    {
+      "allowed": {
+        "origins": [
+          "http://localhost:3000",
+          "http://127.0.0.1:3000",
+          "http://localhost:5173",
+          "http://127.0.0.1:5173",
+          "http://localhost:8787",
+          "http://127.0.0.1:8787",
+          "https://dev.moedict.tw",
+          "https://www.moedict.tw",
+          "https://moedict.tw",
+          "https://cf-moedict-webkit-neo-staging.audreyt.workers.dev"
+        ],
+        "methods": ["GET", "HEAD"],
+        "headers": []
+      },
+      "exposeHeaders": [],
+      "maxAgeSeconds": 0
+    }
+  ]
+}

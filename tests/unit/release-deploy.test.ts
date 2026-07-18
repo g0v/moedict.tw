@@ -28,6 +28,7 @@ const NEW_UUID = "11111111-1111-4111-8111-111111111111";
 const OLD_UUID = "22222222-2222-4222-8222-222222222222";
 const OTHER_UUID = "33333333-3333-4333-8333-333333333333";
 const RELEASE_ID = "abc1234-def012345678";
+const OLD_RELEASE_ID = "old5678-abcdef123456";
 const GIT_SHA = "abc1234";
 const DIGEST = "def012345678";
 
@@ -72,7 +73,10 @@ const DEFAULT_RESPONSES: Record<string, { exitCode: number; stdout: string; stde
   upload: { exitCode: 0, stdout: `Worker Version ID: ${NEW_UUID}\n`, stderr: "" },
   "versions-list": {
     exitCode: 0,
-    stdout: JSON.stringify([{ id: NEW_UUID, annotations: { "workers/tag": RELEASE_ID } }]),
+    stdout: JSON.stringify([
+      { id: OLD_UUID, annotations: { "workers/tag": OLD_RELEASE_ID } },
+      { id: NEW_UUID, annotations: { "workers/tag": RELEASE_ID } },
+    ]),
     stderr: "",
   },
   "deploy-phase1": { exitCode: 0, stdout: "", stderr: "" },
@@ -125,7 +129,13 @@ function buildRunner(
       // LATER call is the post-upload confirm and finds the freshly
       // uploaded version, matching the pre-existing fixture.
       return versionsListCalls === 1
-        ? { exitCode: 0, stdout: "[]", stderr: "" }
+        ? {
+            exitCode: 0,
+            stdout: JSON.stringify([
+              { id: OLD_UUID, annotations: { "workers/tag": OLD_RELEASE_ID } },
+            ]),
+            stderr: "",
+          }
         : DEFAULT_RESPONSES["versions-list"];
     }
     const fallback = DEFAULT_RESPONSES[phase];
@@ -258,6 +268,19 @@ describe("runReleaseDeploy input validation and real-adapter defaults", () => {
     expect(parsed).toBeGreaterThanOrEqual(before);
   });
 
+  it("falls back to the real setTimeout-based sleep when no sleep is injected", async () => {
+    const { runner } = buildRunner();
+    const { fetchImpl } = buildFetch();
+    const result = await runReleaseDeploy({
+      ...baseOpts("staging", { runner, fetch: fetchImpl }),
+      sleep: undefined,
+      propagationSleepMs: 0,
+      soakIntervalMs: 1,
+      soakDurationMs: 1,
+    });
+    expect(result.releaseId).toBe(RELEASE_ID);
+  });
+
   it("falls back to a real buildReleaseManifest(distClientDir) call when no manifest is injected", async () => {
     const clientDir = mkdtempSync(join(dir, "client-"));
     mkdirSync(join(clientDir, "assets"), { recursive: true });
@@ -273,7 +296,10 @@ describe("runReleaseDeploy input validation and real-adapter defaults", () => {
       upload: { exitCode: 0, stdout: `Worker Version ID: ${NEW_UUID}\n`, stderr: "" },
       "versions-list": {
         exitCode: 0,
-        stdout: JSON.stringify([{ id: NEW_UUID, annotations: { "workers/tag": realManifest.id } }]),
+        stdout: JSON.stringify([
+          { id: OLD_UUID, annotations: { "workers/tag": OLD_RELEASE_ID } },
+          { id: NEW_UUID, annotations: { "workers/tag": realManifest.id } },
+        ]),
         stderr: "",
       },
     });
@@ -369,6 +395,16 @@ describe("production approval gate", () => {
 });
 
 describe("environment namespacing", () => {
+  it("reads deployment state from the default releases directory when no baseDir is provided", () => {
+    const prevCwd = process.cwd();
+    try {
+      process.chdir(dir);
+      expect(readCurrentDeployment()).toBeNull();
+    } finally {
+      process.chdir(prevCwd);
+    }
+  });
+
   it("keeps staging and production current/version-history state under separate <root>/<env>/ dirs", async () => {
     saveStagingApproval(
       { gitSha: GIT_SHA, clientManifestDigest: DIGEST, approvedAt: "2026-07-12T00:00:00Z" },
@@ -446,10 +482,17 @@ describe("upload confirmation (upload UUID vs versions-list tag lookup)", () => 
       "versions-list": () => {
         versionsListCall += 1;
         return versionsListCall === 1
-          ? { exitCode: 0, stdout: "[]", stderr: "" }
+          ? {
+              exitCode: 0,
+              stdout: JSON.stringify([
+                { id: OLD_UUID, annotations: { "workers/tag": OLD_RELEASE_ID } },
+              ]),
+              stderr: "",
+            }
           : {
               exitCode: 0,
               stdout: JSON.stringify([
+                { id: OLD_UUID, annotations: { "workers/tag": OLD_RELEASE_ID } },
                 { id: OTHER_UUID, annotations: { "workers/tag": RELEASE_ID } },
               ]),
               stderr: "",
@@ -499,7 +542,10 @@ describe("idempotent tag resolution", () => {
     const { runner, calls } = buildRunner({
       "versions-list": {
         exitCode: 0,
-        stdout: JSON.stringify([{ id: NEW_UUID, annotations: { "workers/tag": RELEASE_ID } }]),
+        stdout: JSON.stringify([
+          { id: OLD_UUID, annotations: { "workers/tag": OLD_RELEASE_ID } },
+          { id: NEW_UUID, annotations: { "workers/tag": RELEASE_ID } },
+        ]),
         stderr: "",
       },
     });
@@ -526,7 +572,10 @@ describe("idempotent tag resolution", () => {
     const { runner, calls } = buildRunner({
       "versions-list": {
         exitCode: 0,
-        stdout: JSON.stringify([{ id: NEW_UUID, annotations: { "workers/tag": RELEASE_ID } }]),
+        stdout: JSON.stringify([
+          { id: OLD_UUID, annotations: { "workers/tag": OLD_RELEASE_ID } },
+          { id: NEW_UUID, annotations: { "workers/tag": RELEASE_ID } },
+        ]),
         stderr: "",
       },
     });
@@ -645,6 +694,7 @@ describe("idempotent tag resolution", () => {
       "versions-list": {
         exitCode: 0,
         stdout: JSON.stringify([
+          { id: OLD_UUID, annotations: { "workers/tag": OLD_RELEASE_ID } },
           { id: NEW_UUID, annotations: { "workers/tag": RELEASE_ID } },
           { id: OTHER_UUID, annotations: { "workers/tag": RELEASE_ID } },
         ]),
@@ -676,11 +726,18 @@ describe("idempotent tag resolution", () => {
       "versions-list": () => {
         versionsListCall += 1;
         return versionsListCall === 1
-          ? { exitCode: 0, stdout: "[]", stderr: "" } // pre-check: still clear
+          ? {
+              exitCode: 0,
+              stdout: JSON.stringify([
+                { id: OLD_UUID, annotations: { "workers/tag": OLD_RELEASE_ID } },
+              ]),
+              stderr: "",
+            }
           : {
               // post-upload confirm: a concurrent run's upload landed too
               exitCode: 0,
               stdout: JSON.stringify([
+                { id: OLD_UUID, annotations: { "workers/tag": OLD_RELEASE_ID } },
                 { id: NEW_UUID, annotations: { "workers/tag": RELEASE_ID } },
                 { id: OTHER_UUID, annotations: { "workers/tag": RELEASE_ID } },
               ]),
@@ -726,6 +783,36 @@ describe("upload and phase 1", () => {
     for (const c of overrideCalls) {
       expect(c.override).toBe(`cf-moedict-webkit-neo-staging="${NEW_UUID}"`);
     }
+  });
+
+  it("passes the old release tag into override smoke so only prior-release propagation is retried", async () => {
+    const { runner, calls } = buildRunner();
+    let overrideFetches = 0;
+    const { fetchImpl } = buildFetch(({ override }) => {
+      if (!override) return undefined;
+      overrideFetches += 1;
+      return overrideFetches === 1
+        ? new Response("ok", { status: 200, headers: { "X-Moedict-Release": OLD_RELEASE_ID } })
+        : undefined;
+    });
+    const sleepCalls: number[] = [];
+    await runReleaseDeploy(
+      baseOpts("staging", {
+        runner,
+        fetch: fetchImpl,
+        sleep: async (ms: number) => {
+          sleepCalls.push(ms);
+        },
+        overrideRetryAttempts: 2,
+        overrideRetryIntervalMs: 13,
+        log: () => {},
+      }),
+    );
+
+    expect(overrideFetches).toBeGreaterThan(1);
+    expect(sleepCalls[0]).toBe(13);
+    expect(calls.some((c) => phaseOf(c) === "restore-old-alone")).toBe(false);
+    expect(calls.some((c) => phaseOf(c) === "deploy-promote")).toBe(true);
   });
 
   it("aborts promotion and restores old@100 alone (not new@0/old@100) when smoke fails", async () => {
@@ -787,6 +874,41 @@ describe("promote, probe, rollback, finalize", () => {
     await expect(
       runReleaseDeploy(baseOpts("staging", { runner, fetch: fetchImpl })),
     ).rejects.toThrow(/rolled back/);
+    const rollback = calls.find((c) => phaseOf(c) === "deploy-rollback");
+    expect(rollback).toContain(`${OLD_UUID}@100%`);
+    expect(rollback).toContain(`${NEW_UUID}@0%`);
+  });
+
+  it("passes old release settling options into continuous probe and rolls back when old responses exhaust grace", async () => {
+    let promoted = false;
+    const { runner, calls } = buildRunner({
+      "deploy-promote": () => {
+        promoted = true;
+        return { exitCode: 0, stdout: "", stderr: "" };
+      },
+    });
+    const { fetchImpl } = buildFetch(({ override }) => {
+      if (override || !promoted) return undefined;
+      return new Response("ok", { status: 200, headers: { "X-Moedict-Release": OLD_RELEASE_ID } });
+    });
+    const sleepCalls: number[] = [];
+
+    await expect(
+      runReleaseDeploy(
+        baseOpts("staging", {
+          runner,
+          fetch: fetchImpl,
+          sleep: async (ms: number) => {
+            sleepCalls.push(ms);
+          },
+          propagationGraceMs: 10,
+          propagationRetryIntervalMs: 5,
+          log: () => {},
+        }),
+      ),
+    ).rejects.toThrow(/still served prior release.*rolled back/s);
+
+    expect(sleepCalls).toEqual([5, 5]);
     const rollback = calls.find((c) => phaseOf(c) === "deploy-rollback");
     expect(rollback).toContain(`${OLD_UUID}@100%`);
     expect(rollback).toContain(`${NEW_UUID}@0%`);

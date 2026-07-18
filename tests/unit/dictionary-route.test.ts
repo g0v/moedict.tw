@@ -14,6 +14,7 @@ import {
   buildDictionaryPathname,
   classifyRoute,
   parseDictionaryRoute,
+  resolveLegacyHashRoute,
   stripLangPrefix,
   stripTags,
   tryDecodeURIComponent,
@@ -49,6 +50,7 @@ describe("parseDictionaryRoute", () => {
     expect(parseDictionaryRoute("/about.html")).toBeNull();
     expect(parseDictionaryRoute("/@部首")).toBeNull();
     expect(parseDictionaryRoute("/~@部首")).toBeNull();
+    expect(parseDictionaryRoute("/'@部首")).toBeNull();
     expect(parseDictionaryRoute("/=成語")).toBeNull();
     expect(parseDictionaryRoute("/'=諺語")).toBeNull();
     expect(parseDictionaryRoute("/:=諺語")).toBeNull();
@@ -226,6 +228,12 @@ describe("classifyRoute", () => {
     it("decodes percent-encoded radical", () => {
       expect(classifyRoute("/@%E6%9C%A8")).toEqual({ kind: "radical", lang: "a", radical: "木" });
     });
+    it("classifies /'@ as empty radical (t)", () => {
+      expect(classifyRoute("/'@")).toEqual({ kind: "radical", lang: "t", radical: "" });
+    });
+    it("classifies /'@木 as radical t with 木", () => {
+      expect(classifyRoute("/'@木")).toEqual({ kind: "radical", lang: "t", radical: "木" });
+    });
   });
 
   describe("starred", () => {
@@ -307,6 +315,7 @@ describe("classifyRoute", () => {
     });
     it("strips trailing /<digits> from radical route", () => {
       expect(classifyRoute("/@木/2")).toEqual({ kind: "radical", lang: "a", radical: "木" });
+      expect(classifyRoute("/'@木/2")).toEqual({ kind: "radical", lang: "t", radical: "木" });
     });
     it("strips trailing /<digits> from group route", () => {
       expect(classifyRoute("/=成語/2")).toEqual({ kind: "group", lang: "a", category: "成語" });
@@ -344,6 +353,10 @@ describe("classifyRoute", () => {
     });
     it("~@ exact match before ~@ prefix", () => {
       expect(classifyRoute("/~@")).toEqual({ kind: "radical", lang: "c", radical: "" });
+    });
+    it("'@ (radical t) takes precedence over ' (entry t)", () => {
+      expect(classifyRoute("/'@木")).toEqual({ kind: "radical", lang: "t", radical: "木" });
+      expect(classifyRoute("/'木")).toEqual({ kind: "entry", lang: "t", text: "木" });
     });
   });
 
@@ -401,5 +414,44 @@ describe("tryDecodeURIComponent", () => {
   it("returns null instead of throwing on malformed encoding", () => {
     expect(tryDecodeURIComponent("%")).toBeNull();
     expect(tryDecodeURIComponent("%E8%9")).toBeNull();
+  });
+});
+
+describe("resolveLegacyHashRoute (g0v/moedict-webkit#131)", () => {
+  it("converts a legacy Taiwanese-Hokkien hashbang word link into its real pathname", () => {
+    // The exact case from the issue: content links still emit `./#'word`,
+    // which the browser resolves to pathname "/" + hash "#'煏".
+    expect(resolveLegacyHashRoute("/", "#'煏")).toBe("/'煏");
+  });
+
+  it("handles all four language-prefix hash forms", () => {
+    expect(resolveLegacyHashRoute("/", "#萌")).toBe("/萌");
+    expect(resolveLegacyHashRoute("/", "#'食")).toBe("/'食");
+    expect(resolveLegacyHashRoute("/", "#:字")).toBe("/:字");
+    expect(resolveLegacyHashRoute("/", "#~萌")).toBe("/~萌");
+  });
+
+  it("decodes a percent-encoded hash token (bopomofo-pinyin-utils.ts's encodeURIComponent form)", () => {
+    expect(resolveLegacyHashRoute("/", "#%E8%B3%8A")).toBe("/賊");
+  });
+
+  it("converts radical-tag hash links (DictionaryPage.tsx's `./#@char` / `./#~@char`)", () => {
+    expect(resolveLegacyHashRoute("/", "#@木")).toBe("/@木");
+    expect(resolveLegacyHashRoute("/", "#~@木")).toBe("/~@木");
+  });
+
+  it("does nothing when the pathname is not the homepage — never touches a real page's own anchors", () => {
+    expect(resolveLegacyHashRoute("/'煏豬油", "#'煏")).toBeNull();
+    expect(resolveLegacyHashRoute("/about", "#how-to-use")).toBeNull();
+  });
+
+  it('does nothing for an empty or bare hash — leaves navbar `href="#"` toggles untouched', () => {
+    expect(resolveLegacyHashRoute("/", "")).toBeNull();
+    expect(resolveLegacyHashRoute("/", "#")).toBeNull();
+  });
+
+  it("fails closed to null on malformed percent-encoding instead of throwing", () => {
+    expect(resolveLegacyHashRoute("/", "#%")).toBeNull();
+    expect(resolveLegacyHashRoute("/", "#%E8%9")).toBeNull();
   });
 });

@@ -20,6 +20,7 @@ const BASE_URL = "https://cf-moedict-webkit-neo-staging.audreyt.workers.dev";
 const WORKER_NAME = "cf-moedict-webkit-neo-staging";
 const UUID = "11111111-1111-4111-8111-111111111111";
 const RELEASE_TAG = "abc1234-def012345678";
+const OLD_RELEASE_TAG = "old5678-abcdef123456";
 const ROUTES = [
   "/",
   "/api/config",
@@ -225,6 +226,150 @@ describe("smokeWithVersionOverride", () => {
     }
   });
 
+  it("retries a known prior release and succeeds on the second attempt", async () => {
+    let call = 0;
+    const { fetchImpl, calls } = mockFetch(() => {
+      call += 1;
+      return call === 1 ? okResponse({ "X-Moedict-Release": OLD_RELEASE_TAG }) : okResponse();
+    });
+    const sleepCalls: number[] = [];
+    const logCalls: string[] = [];
+    const result = await smokeWithVersionOverride(BASE_URL, WORKER_NAME, UUID, ["/"], RELEASE_TAG, {
+      fetch: fetchImpl,
+      priorReleaseTag: OLD_RELEASE_TAG,
+      sleep: async (ms) => {
+        sleepCalls.push(ms);
+      },
+      log: (message) => logCalls.push(message),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.results).toEqual([{ route: "/", status: 200, attempts: 2 }]);
+    expect(calls).toHaveLength(2);
+    expect(sleepCalls).toEqual([10000]);
+    expect(logCalls).toHaveLength(1);
+    expect(logCalls[0]).toContain("route / attempt 1/7");
+    expect(logCalls[0]).toContain(OLD_RELEASE_TAG);
+    const firstProbe = new URL(calls[0].url).searchParams.get("_probe");
+    const secondProbe = new URL(calls[1].url).searchParams.get("_probe");
+    expect(firstProbe).toBeTruthy();
+    expect(secondProbe).toBeTruthy();
+    expect(firstProbe).not.toBe(secondProbe);
+  });
+
+  it("does not retry when the expected release is returned immediately", async () => {
+    const { fetchImpl, calls } = mockFetch(() => okResponse());
+    const sleepCalls: number[] = [];
+    const result = await smokeWithVersionOverride(BASE_URL, WORKER_NAME, UUID, ["/"], RELEASE_TAG, {
+      fetch: fetchImpl,
+      priorReleaseTag: OLD_RELEASE_TAG,
+      sleep: async (ms) => {
+        sleepCalls.push(ms);
+      },
+      log: () => {},
+    });
+
+    expect(result.ok).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(sleepCalls).toHaveLength(0);
+  });
+
+  it("exhausts persistent prior-release responses with exact route, expected, and observed values", async () => {
+    const { fetchImpl, calls } = mockFetch(() =>
+      okResponse({ "X-Moedict-Release": OLD_RELEASE_TAG }),
+    );
+    const sleepCalls: number[] = [];
+    await expect(
+      smokeWithVersionOverride(BASE_URL, WORKER_NAME, UUID, ["/api/config"], RELEASE_TAG, {
+        fetch: fetchImpl,
+        priorReleaseTag: OLD_RELEASE_TAG,
+        overrideRetryAttempts: 3,
+        overrideRetryIntervalMs: 25,
+        sleep: async (ms) => {
+          sleepCalls.push(ms);
+        },
+        log: () => {},
+      }),
+    ).rejects.toThrow(
+      `Version-override smoke probe failed for route /api/config: X-Moedict-Release mismatch (expected ${JSON.stringify(RELEASE_TAG)}, got ${JSON.stringify(OLD_RELEASE_TAG)})`,
+    );
+    expect(calls).toHaveLength(3);
+    expect(sleepCalls).toEqual([25, 25]);
+  });
+
+  it("does not retry a non-200 response", async () => {
+    const { fetchImpl, calls } = mockFetch(() => new Response("missing", { status: 404 }));
+    const sleepCalls: number[] = [];
+    await expect(
+      smokeWithVersionOverride(BASE_URL, WORKER_NAME, UUID, ["/api/config"], RELEASE_TAG, {
+        fetch: fetchImpl,
+        priorReleaseTag: OLD_RELEASE_TAG,
+        sleep: async (ms) => {
+          sleepCalls.push(ms);
+        },
+        log: () => {},
+      }),
+    ).rejects.toThrow(/expected 200, got 404/);
+    expect(calls).toHaveLength(1);
+    expect(sleepCalls).toHaveLength(0);
+  });
+
+  it("does not retry missing, malformed, or unexpected third release headers", async () => {
+    const cases: Array<{ name: string; response: Response; observed: string }> = [
+      { name: "missing", response: new Response("ok", { status: 200 }), observed: "null" },
+      {
+        name: "malformed",
+        response: okResponse({ "X-Moedict-Release": "" }),
+        observed: JSON.stringify(""),
+      },
+      {
+        name: "third release",
+        response: okResponse({ "X-Moedict-Release": "third999-unexpected" }),
+        observed: JSON.stringify("third999-unexpected"),
+      },
+    ];
+
+    for (const testCase of cases) {
+      const { fetchImpl, calls } = mockFetch(() => testCase.response);
+      const sleepCalls: number[] = [];
+      await expect(
+        smokeWithVersionOverride(BASE_URL, WORKER_NAME, UUID, ["/"], RELEASE_TAG, {
+          fetch: fetchImpl,
+          priorReleaseTag: OLD_RELEASE_TAG,
+          sleep: async (ms) => {
+            sleepCalls.push(ms);
+          },
+          log: () => {},
+        }),
+      ).rejects.toThrow(
+        `Version-override smoke probe failed for route /: X-Moedict-Release mismatch (expected ${JSON.stringify(RELEASE_TAG)}, got ${testCase.observed})`,
+      );
+      expect(calls).toHaveLength(1);
+      expect(sleepCalls).toHaveLength(0);
+    }
+  });
+
+  it("sleeps exactly attempts - 1 times and never after the final failed attempt", async () => {
+    const { fetchImpl } = mockFetch(() => okResponse({ "X-Moedict-Release": OLD_RELEASE_TAG }));
+    const sleepCalls: number[] = [];
+    const logCalls: string[] = [];
+    await expect(
+      smokeWithVersionOverride(BASE_URL, WORKER_NAME, UUID, ["/"], RELEASE_TAG, {
+        fetch: fetchImpl,
+        priorReleaseTag: OLD_RELEASE_TAG,
+        overrideRetryAttempts: 4,
+        overrideRetryIntervalMs: 11,
+        sleep: async (ms) => {
+          sleepCalls.push(ms);
+        },
+        log: (message) => logCalls.push(message),
+      }),
+    ).rejects.toThrow(/X-Moedict-Release mismatch/);
+    expect(sleepCalls).toEqual([11, 11, 11]);
+    expect(logCalls).toHaveLength(3);
+    expect(logCalls.map((line) => line.match(/attempt (\d+)\/4/)?.[1])).toEqual(["1", "2", "3"]);
+  });
+
   it("rejects empty workerName/versionUuid/baseUrl/routes/releaseTag", async () => {
     const { fetchImpl } = mockFetch(() => okResponse());
     await expect(
@@ -249,6 +394,59 @@ describe("smokeWithVersionOverride", () => {
     await expect(
       smokeWithVersionOverride(BASE_URL, WORKER_NAME, UUID, ROUTES, "", { fetch: fetchImpl }),
     ).rejects.toThrow(/releaseTag must be a non-empty string/);
+  });
+
+  it("rejects invalid prior release tags for override propagation retry", async () => {
+    const { fetchImpl } = mockFetch(() => okResponse());
+    await expect(
+      smokeWithVersionOverride(BASE_URL, WORKER_NAME, UUID, ROUTES, "", {
+        fetch: fetchImpl,
+        priorReleaseTag: OLD_RELEASE_TAG,
+      }),
+    ).rejects.toThrow(/releaseTag must be a non-empty string/);
+    await expect(
+      smokeWithVersionOverride(BASE_URL, WORKER_NAME, UUID, ROUTES, RELEASE_TAG, {
+        fetch: fetchImpl,
+        priorReleaseTag: "",
+      }),
+    ).rejects.toThrow(/priorReleaseTag must be a non-empty string/);
+    await expect(
+      smokeWithVersionOverride(BASE_URL, WORKER_NAME, UUID, ROUTES, RELEASE_TAG, {
+        fetch: fetchImpl,
+        priorReleaseTag: RELEASE_TAG,
+      }),
+    ).rejects.toThrow(/priorReleaseTag must differ/);
+  });
+
+  it("uses default override retry sleep and log adapters", async () => {
+    let call = 0;
+    const { fetchImpl } = mockFetch(() => {
+      call += 1;
+      return call === 1 ? okResponse({ "X-Moedict-Release": OLD_RELEASE_TAG }) : okResponse();
+    });
+    const originalWarn = console.warn;
+    const warnings: unknown[] = [];
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args);
+    };
+    try {
+      const result = await smokeWithVersionOverride(
+        BASE_URL,
+        WORKER_NAME,
+        UUID,
+        ["/"],
+        RELEASE_TAG,
+        {
+          fetch: fetchImpl,
+          priorReleaseTag: OLD_RELEASE_TAG,
+          overrideRetryIntervalMs: 1,
+        },
+      );
+      expect(result.results).toEqual([{ route: "/", status: 200, attempts: 2 }]);
+      expect(warnings).toHaveLength(1);
+    } finally {
+      console.warn = originalWarn;
+    }
   });
 });
 
@@ -324,6 +522,148 @@ describe("continuousProbe", () => {
     expect(sleepCalls).toHaveLength(24);
   });
 
+  it("retries a known prior release on cycle 3, resets prior healthy soak, and then requires a full new-release duration", async () => {
+    const releases = [
+      RELEASE_TAG,
+      RELEASE_TAG,
+      OLD_RELEASE_TAG,
+      RELEASE_TAG,
+      RELEASE_TAG,
+      RELEASE_TAG,
+      RELEASE_TAG,
+      RELEASE_TAG,
+    ];
+    const { fetchImpl, calls } = mockFetch(() => {
+      const release = releases.shift() ?? RELEASE_TAG;
+      return okResponse({ "X-Moedict-Release": release });
+    });
+    const sleepCalls: number[] = [];
+    const logCalls: string[] = [];
+    const result = await continuousProbe(BASE_URL, ["/"], RELEASE_TAG, {
+      fetch: fetchImpl,
+      sleep: async (ms) => {
+        sleepCalls.push(ms);
+      },
+      intervalMs: 10,
+      durationMs: 30,
+      priorReleaseTag: OLD_RELEASE_TAG,
+      propagationGraceMs: 25,
+      propagationRetryIntervalMs: 5,
+      log: (message) => logCalls.push(message),
+    });
+
+    expect(result).toEqual({ ok: true, cycles: 4, elapsedMs: 30 });
+    expect(sleepCalls).toEqual([10, 10, 5, 10, 10, 10]);
+    expect(calls).toHaveLength(8);
+    expect(logCalls).toHaveLength(1);
+    expect(logCalls[0]).toContain("route /");
+    expect(logCalls[0]).toContain(OLD_RELEASE_TAG);
+    const probeTokens = calls.map((call) => new URL(call.url).searchParams.get("_probe"));
+    expect(new Set(probeTokens).size).toBe(probeTokens.length);
+  });
+
+  it("uses default continuous-probe settling grace, retry interval, and log adapter", async () => {
+    let call = 0;
+    const { fetchImpl } = mockFetch(() => {
+      call += 1;
+      return call === 1 ? okResponse({ "X-Moedict-Release": OLD_RELEASE_TAG }) : okResponse();
+    });
+    const originalWarn = console.warn;
+    const warnings: unknown[] = [];
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args);
+    };
+    try {
+      const result = await continuousProbe(BASE_URL, ["/"], RELEASE_TAG, {
+        fetch: fetchImpl,
+        sleep: async () => {},
+        intervalMs: 1,
+        durationMs: 1,
+        priorReleaseTag: OLD_RELEASE_TAG,
+      });
+      expect(result).toEqual({ ok: true, cycles: 2, elapsedMs: 1 });
+      expect(warnings).toHaveLength(1);
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+
+  it("allows an immediate known prior release within grace, then soaks the configured duration on the new release", async () => {
+    const releases = [OLD_RELEASE_TAG, RELEASE_TAG, RELEASE_TAG, RELEASE_TAG, RELEASE_TAG];
+    const { fetchImpl } = mockFetch(() => {
+      const release = releases.shift() ?? RELEASE_TAG;
+      return okResponse({ "X-Moedict-Release": release });
+    });
+    const sleepCalls: number[] = [];
+    const result = await continuousProbe(BASE_URL, ["/"], RELEASE_TAG, {
+      fetch: fetchImpl,
+      sleep: async (ms) => {
+        sleepCalls.push(ms);
+      },
+      intervalMs: 5,
+      durationMs: 10,
+      priorReleaseTag: OLD_RELEASE_TAG,
+      propagationGraceMs: 20,
+      propagationRetryIntervalMs: 5,
+      log: () => {},
+    });
+
+    expect(result).toEqual({ ok: true, cycles: 3, elapsedMs: 10 });
+    expect(sleepCalls).toEqual([5, 5, 5]);
+  });
+
+  it("exhausts one global settling grace across intermittent old responses without sleeping past the boundary", async () => {
+    const releases = [OLD_RELEASE_TAG, RELEASE_TAG, OLD_RELEASE_TAG, OLD_RELEASE_TAG];
+    const { fetchImpl, calls } = mockFetch(() => {
+      const release = releases.shift() ?? OLD_RELEASE_TAG;
+      return okResponse({ "X-Moedict-Release": release });
+    });
+    const sleepCalls: number[] = [];
+    await expect(
+      continuousProbe(BASE_URL, ["/api/config"], RELEASE_TAG, {
+        fetch: fetchImpl,
+        sleep: async (ms) => {
+          sleepCalls.push(ms);
+        },
+        intervalMs: 5,
+        durationMs: 10,
+        priorReleaseTag: OLD_RELEASE_TAG,
+        propagationGraceMs: 15,
+        propagationRetryIntervalMs: 10,
+        log: () => {},
+      }),
+    ).rejects.toThrow(
+      `continuousProbe failed for route /api/config: X-Moedict-Release still served prior release (expected ${JSON.stringify(RELEASE_TAG)}, got ${JSON.stringify(OLD_RELEASE_TAG)}, settling grace 15/15ms)`,
+    );
+    expect(calls).toHaveLength(4);
+    expect(sleepCalls).toEqual([10, 5]);
+  });
+
+  it("counts ordinary cycle intervals toward settling grace and fails an old response after grace without retrying", async () => {
+    const releases = [RELEASE_TAG, RELEASE_TAG, OLD_RELEASE_TAG];
+    const { fetchImpl, calls } = mockFetch(() => {
+      const release = releases.shift() ?? RELEASE_TAG;
+      return okResponse({ "X-Moedict-Release": release });
+    });
+    const sleepCalls: number[] = [];
+    await expect(
+      continuousProbe(BASE_URL, ["/"], RELEASE_TAG, {
+        fetch: fetchImpl,
+        sleep: async (ms) => {
+          sleepCalls.push(ms);
+        },
+        intervalMs: 5,
+        durationMs: 20,
+        priorReleaseTag: OLD_RELEASE_TAG,
+        propagationGraceMs: 10,
+        propagationRetryIntervalMs: 5,
+        log: () => {},
+      }),
+    ).rejects.toThrow(/settling grace 10\/10ms/);
+    expect(calls).toHaveLength(3);
+    expect(sleepCalls).toEqual([5, 5]);
+  });
+
   it("aborts on the first non-200 response without waiting for later routes/cycles", async () => {
     let call = 0;
     const { fetchImpl } = mockFetch(() => {
@@ -354,6 +694,49 @@ describe("continuousProbe", () => {
         durationMs: 120000,
       }),
     ).rejects.toThrow(/X-Moedict-Release/);
+  });
+
+  it("does not retry non-200, missing header, unexpected third release, or network errors even when prior release is allowed", async () => {
+    const cases: Array<{ name: string; fetchImpl: () => Promise<Response>; error: RegExp }> = [
+      {
+        name: "non-200",
+        fetchImpl: async () => new Response("missing", { status: 404 }),
+        error: /expected 200, got 404/,
+      },
+      {
+        name: "missing header",
+        fetchImpl: async () => new Response("ok", { status: 200 }),
+        error: /X-Moedict-Release mismatch/,
+      },
+      {
+        name: "unexpected third release",
+        fetchImpl: async () => okResponse({ "X-Moedict-Release": "third999-unexpected" }),
+        error: /third999-unexpected/,
+      },
+      {
+        name: "network error",
+        fetchImpl: async () => {
+          throw new Error("ECONNRESET");
+        },
+        error: /ECONNRESET/,
+      },
+    ];
+
+    for (const testCase of cases) {
+      const sleepCalls: number[] = [];
+      await expect(
+        continuousProbe(BASE_URL, ["/"], RELEASE_TAG, {
+          fetch: testCase.fetchImpl,
+          sleep: async (ms) => {
+            sleepCalls.push(ms);
+          },
+          priorReleaseTag: OLD_RELEASE_TAG,
+          propagationGraceMs: 20,
+          log: () => {},
+        }),
+      ).rejects.toThrow(testCase.error);
+      expect(sleepCalls, testCase.name).toHaveLength(0);
+    }
   });
 
   it("propagates a thrown fetch error immediately (network failure)", async () => {
@@ -393,6 +776,40 @@ describe("continuousProbe", () => {
     await expect(
       continuousProbe(BASE_URL, ROUTES, "", { fetch: fetchImpl, sleep: async () => {} }),
     ).rejects.toThrow(/releaseTag must be a non-empty string/);
+  });
+
+  it("rejects invalid prior-release settling options", async () => {
+    const { fetchImpl } = mockFetch(() => okResponse());
+    await expect(
+      continuousProbe(BASE_URL, ROUTES, RELEASE_TAG, {
+        fetch: fetchImpl,
+        sleep: async () => {},
+        priorReleaseTag: "",
+      }),
+    ).rejects.toThrow(/priorReleaseTag must be a non-empty string/);
+    await expect(
+      continuousProbe(BASE_URL, ROUTES, RELEASE_TAG, {
+        fetch: fetchImpl,
+        sleep: async () => {},
+        priorReleaseTag: RELEASE_TAG,
+      }),
+    ).rejects.toThrow(/priorReleaseTag must differ/);
+    await expect(
+      continuousProbe(BASE_URL, ROUTES, RELEASE_TAG, {
+        fetch: fetchImpl,
+        sleep: async () => {},
+        priorReleaseTag: OLD_RELEASE_TAG,
+        propagationGraceMs: -1,
+      }),
+    ).rejects.toThrow(/propagationGraceMs must be a non-negative integer/);
+    await expect(
+      continuousProbe(BASE_URL, ROUTES, RELEASE_TAG, {
+        fetch: fetchImpl,
+        sleep: async () => {},
+        priorReleaseTag: OLD_RELEASE_TAG,
+        propagationRetryIntervalMs: 0,
+      }),
+    ).rejects.toThrow(/propagationRetryIntervalMs must be a positive integer/);
   });
 
   it("rejects a non-positive-integer intervalMs or durationMs", async () => {
