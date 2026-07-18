@@ -6,7 +6,7 @@
     <meta name="color-scheme" content="light dark" />
     <meta name="robots" content="noindex, nofollow" />
     <title>
-      開放議題 RESCOPE：納入評估草稿 · Open Issue RESCOPE — Inclusion Evaluation · 2026-07-17
+      開放議題 RESCOPE：納入評估草稿 · Open Issue RESCOPE — Inclusion Evaluation · 2026-07-18
     </title>
     <style>
       :root {
@@ -805,14 +805,14 @@
         <h1>
           開放議題 RESCOPE：納入評估草稿
           <span class="sub"
-            >Open Issue RESCOPE — integration/all-resolved-issues-20260713 · 2026-07-17</span
+            >Open Issue RESCOPE — integration/all-resolved-issues-20260713 · 2026-07-18</span
           >
         </h1>
 
         <div class="safety-banner">
           <span class="dot" aria-hidden="true"></span>
-          未送出 / DRAFT — NOT SENT · 僅供本機審閱 · 僅評估，不代表已實作 · 完全離線 · 未對 GitHub
-          發出任何留言、推送或部署 · local-only, read-only, nothing posted
+          未送出 / DRAFT — NOT SENT · 尚未對 GitHub 發出任何議題留言或關閉操作 · integration
+          分支已推送 · 僅 staging 驗證，尚未部署 production
         </div>
 
         <div class="stat-grid">
@@ -852,23 +852,23 @@
           <div class="metadata-grid">
             <div class="metadata-item">
               <div class="k">產生日期 Generated</div>
-              <div class="v">2026-07-17</div>
+              <div class="v">2026-07-18</div>
             </div>
             <div class="metadata-item">
               <div class="k">整合分支 Branch</div>
               <div class="v">integration/all-resolved-issues-20260713</div>
             </div>
             <div class="metadata-item">
-              <div class="k">整合 HEAD</div>
-              <div class="v"><code>5ea9fbf</code></div>
+              <div class="k">最新產品實作 commit</div>
+              <div class="v"><code>7e64f095</code></div>
             </div>
             <div class="metadata-item">
               <div class="k">origin/main 基線</div>
               <div class="v"><code>d887339</code></div>
             </div>
             <div class="metadata-item">
-              <div class="k">領先 commits</div>
-              <div class="v">65</div>
+              <div class="k">領先 commits（2026-07-18 稽核快照）</div>
+              <div class="v">67</div>
             </div>
             <div class="metadata-item">
               <div class="k">工作樹 Worktree</div>
@@ -896,10 +896,10 @@
           </p>
           <p style="margin: 6px 0 0; font-size: 0.8rem">
             <strong>注意事項：</strong>所有
-            proposedResponse.posted=false，所有回覆草稿均未發佈；GitHub 狀態已於 2026-07-17 更新。
+            proposedResponse.posted=false，所有回覆草稿均未發佈；GitHub 狀態已於 2026-07-18 更新。
             #281 實作由 commits 8ac28e9、aed8562、e971c5c 完成；32b717a
-            僅為報告／文件提交；本報告不含 #281 卡片。 複製按鈕僅使用
-            navigator.clipboard，無任何網路請求。
+            僅為報告／文件提交；本報告不含 #281 卡片。複製按鈕使用 navigator.clipboard
+            加上安全後備方式，無任何網路請求。
           </p>
           <p style="margin: 6px 0 0; font-size: 0.8rem">
             <strong>整合處理報告：</strong>見
@@ -998,11 +998,11 @@
             <div class="impl-box">
               <div class="field-label">RESCOPE 納入評估</div>
               <div class="field-value">
-                <strong>已於 staging 部署並煙測通過，待維護者確認</strong>。已在 g0v/moedict.tw
-                的字詞紀錄簿頁面新增跨語言（華語／臺灣台語／臺灣客語／兩岸詞典）收藏總覽；staging
-                release <code>5ea9fbf-4b0b2c17d3e6</code>、version
-                <code>ab0958a5-d29a-4719-a2ac-f3adeaa4c83d</code>
-                已部署並完成煙測。仍未推送、未上正式站、未回覆 GitHub。
+                <strong>核心實作 commit 633d44c，待確認 staging live header</strong
+                >。此項功能已完成；live <code>X-Moedict-Release</code>／<code
+                  >X-Moedict-Version</code
+                >
+                才是部署權威，production 報告時仍為 <code>23b7e89</code>。
               </div>
             </div>
 
@@ -1108,8 +1108,8 @@
             <pre class="response-box" lang="zh-TW" id="draft-88">
 RESCOPE 回覆草稿／未送出
 
-已於 staging 完成跨語言（華語／臺灣台語／臺灣客語／兩岸詞典）字詞紀錄簿收藏總覽：新增可展開的「顯示全部語言」區塊，依固定 a／t／h／c 順序列出各語言已收藏字詞、略過無收藏語言，每筆沿用各自語言的路由連結與收藏／移除互動，並即時同步各語言變動；單一語言頁面與既有 localStorage 資料格式完全不變。staging 已部署並通過煙測（release <code>5ea9fbf-4b0b2c17d3e6</code>、version <code>ab0958a5-d29a-4719-a2ac-f3adeaa4c83d</code>），仍未推送、未上正式站、未回覆 GitHub。</pre
-            >
+已完成跨語言字詞紀錄簿收藏總覽：新增可展開的「顯示全部語言」區塊，依固定 a／t／h／c 順序列出各語言已收藏字詞、略過無收藏語言，每筆沿用各自語言路由連結與收藏／移除互動，並即時同步各語言變動；單一語言頁面與既有 localStorage 資料格式不變。核心實作 commit 633d44c；live X-Moedict-Release／X-Moedict-Version 才是部署權威，production 報告時仍為 23b7e89，尚未部署 production。
+            </pre>
             <div class="card-actions">
               <button
                 type="button"
@@ -1166,11 +1166,12 @@ RESCOPE 回覆草稿／未送出
               <div class="field-label">RESCOPE 納入評估</div>
               <div class="field-value">
                 <strong>已實作，待維護者確認</strong>。已在 g0v/moedict.tw
-                加入每個非空義項的「複製解釋」按鈕：保留原生選取、長按與短按查字，逐義項複製完整可讀釋義內容，優先使用
-                <code>navigator.clipboard</code
-                >，失敗時改用安全的後備方式，兩者均失敗才提示手動選取。路徑：<code>src/pages/DictionaryPage.tsx</code>、<code>src/utils/clipboard.ts</code>、<code>src/index.css</code>、<code>tests/e2e/dictionary.spec.ts</code>；已通過
-                <code>vp check</code>、1810 項單元測試、49 項 dictionary e2e
-                測試、build，以及桌面／觸控瀏覽器實測。尚未部署。
+                加入整個字詞項目唯一的「複製解釋」按鈕， 位於右側次要操作列並依序排列：複製
+                →（有變體時）變體 → 最右側收藏。按鈕會依畫面可見順序，
+                跨異體字／分組複製所有非空義項，包含例句／引文／連結／同義詞／反義詞；不含標題／發音、重複可選羅馬字、
+                metadata 徽章、僅供閱讀提示、操作與 xref。使用
+                <code>navigator.clipboard</code> 加上安全後備方式， 並保留成功／失敗公告。已由實作
+                commit <code>7e64f095</code> 完成；尚未部署。
               </div>
             </div>
 
@@ -1293,8 +1294,8 @@ RESCOPE 回覆草稿／未送出
             <pre class="response-box" lang="zh-TW" id="draft-258">
 RESCOPE 回覆草稿／未送出
 
-目前已在本地完成每個非空義項的「複製解釋」按鈕：只複製該義項的完整釋義內容，保留原生選取與短按查字跳轉；優先使用 navigator.clipboard，失敗時改用安全的後備方式，兩者均失敗才提示手動選取。已通過 vp check、1810 項單元測試、49 項 dictionary e2e 測試、build，以及桌面／觸控瀏覽器實測。本變更仍在本地，尚未張貼或部署。</pre
-            >
+目前已完成整個字詞項目唯一的「複製解釋」按鈕，位於右側次要操作列，順序為複製 →（有變體時）變體 → 最右側收藏。它會依畫面可見順序，跨異體字／分組複製所有非空義項，包含例句／引文／連結／同義詞／反義詞；不含標題／發音、重複可選羅馬字、metadata 徽章、僅供閱讀提示、操作與 xref。使用 navigator.clipboard 加上安全後備方式，並保留成功／失敗公告；實作 commit 為 7e64f095。發佈前請確認 staging live 的 X-Moedict-Release 是此 commit 或後續整合 descendant；production 仍未出貨。
+            </pre>
             <div class="card-actions">
               <button
                 type="button"
@@ -1350,11 +1351,11 @@ RESCOPE 回覆草稿／未送出
             <div class="impl-box">
               <div class="field-label">RESCOPE 納入評估</div>
               <div class="field-value">
-                <strong>已於 staging 部署並煙測通過，待維護者確認</strong>。已在 g0v/moedict.tw
-                的字詞紀錄簿頁面（單一語言）新增有界的手動匯出／匯入；staging release
-                <code>5ea9fbf-4b0b2c17d3e6</code>、version
-                <code>ab0958a5-d29a-4719-a2ac-f3adeaa4c83d</code>
-                已部署並完成煙測。仍未推送、未上正式站、未回覆 GitHub。
+                <strong>核心實作 commit 633d44c，待確認 staging live header</strong
+                >。此項功能已完成；live <code>X-Moedict-Release</code>／<code
+                  >X-Moedict-Version</code
+                >
+                才是部署權威，production 報告時仍為 <code>23b7e89</code>。
               </div>
             </div>
 
@@ -1504,8 +1505,8 @@ RESCOPE 回覆草稿／未送出
             <pre class="response-box" lang="zh-TW" id="draft-219">
 RESCOPE 回覆草稿／未送出
 
-已於 staging 完成縮小範圍後的手動搬移功能：不承諾雲端同步、也不做完整 Android App 備份，只在現行字詞紀錄簿新增手動剪貼簿搬移。匯出：下載 UTF-8 純文字檔或一鍵複製「目前語言」收藏清單；匯入：貼到可見文字框，逐行清理、去除空白與無效項目、去重並保留貼入順序，寫回同一語言分區，並顯示已匯入／略過筆數。staging 已部署並通過煙測（release <code>5ea9fbf-4b0b2c17d3e6</code>、version <code>ab0958a5-d29a-4719-a2ac-f3adeaa4c83d</code>），仍未推送、未上正式站、未回覆 GitHub。</pre
-            >
+已完成縮小範圍後的手動搬移功能：不承諾雲端同步、也不做完整 Android App 備份，只在現行字詞紀錄簿新增手動剪貼簿搬移。匯出：下載 UTF-8 純文字檔或一鍵複製「目前語言」收藏清單；匯入：貼到可見文字框，逐行清理、去除空白與無效項目、去重並保留貼入順序，寫回同一語言分區，並顯示已匯入／略過筆數。核心實作 commit 633d44c；live X-Moedict-Release／X-Moedict-Version 才是部署權威，production 報告時仍為 23b7e89，尚未部署 production。
+            </pre>
             <div class="card-actions">
               <button
                 type="button"
@@ -1601,8 +1602,10 @@ RESCOPE 回覆草稿／未送出
               <span class="draft-lang">語言: zh-TW</span>
             </div>
             <pre class="response-box" lang="zh-TW" id="draft-271">
-已在本地實作「長褲」來源釘選：官方讀音 tn̂g-khòo、無義項行為與相關資料已納入，API／搜尋與全新 Chromium 的「長褲」e2e 測試均通過。這是本地變更，尚未張貼、部署或上傳（沒有 R2 上傳）。</pre
-            >
+RESCOPE 回覆草稿／未送出
+
+已依教育部官方詞條（su/25638）核實「長褲」讀音為 tn̂g-khòo，且為無義項詞條；現已透過來源釘選 manifest 與冪等注入／檢查流程加入 ptck，API、資料檢查與 Chromium 詞條測試均通過。核心實作 commit 為 633d44c；部署狀態以 live X-Moedict-Release／X-Moedict-Version 為準，production 在本報告稽核時仍為 23b7e89，尚未出貨。
+            </pre>
             <div class="card-actions">
               <button
                 type="button"
@@ -1661,12 +1664,11 @@ RESCOPE 回覆草稿／未送出
             <div class="impl-box">
               <div class="field-label">RESCOPE 納入評估</div>
               <div class="field-value">
-                <strong
-                  >已於 staging 部署並煙測通過（release 5ea9fbf-9c5335a5ca0b；version
-                  ef58f8ac-8ed1-49d9-8d80-99930a5e9d11）</strong
-                >。已在本地實作三段筆順動畫速度（慢速／正常／快速，預設正常且與既有動畫逐位元相同）；偏好設定面板新增「筆順動畫速度」選項並持久化於
-                localStorage。已通過 vp check／typecheck、1902 項單元測試、筆順 e2e 10/10、全庫
-                coverage 100%。仍未推送、未上正式站、未回覆 GitHub。
+                <strong>核心實作 commit 633d44c，待確認 staging live header</strong
+                >。已完成三段筆順動畫速度與偏好設定； live <code>X-Moedict-Release</code>／<code
+                  >X-Moedict-Version</code
+                >
+                才是部署權威，production 報告時仍為 <code>23b7e89</code>，尚未部署 production。
               </div>
             </div>
 
@@ -1822,8 +1824,8 @@ RESCOPE 回覆草稿／未送出
             <pre class="response-box" lang="zh-TW" id="draft-98">
 RESCOPE 回覆草稿／未送出
 
-已於 staging 部署並煙測通過（release 5ea9fbf-9c5335a5ca0b；version ef58f8ac-8ed1-49d9-8d80-99930a5e9d11）。已在本地實作三段筆順動畫速度（慢速／正常／快速，預設正常且與既有動畫逐位元相同）、偏好設定面板新增「筆順動畫速度」選項並持久化於 localStorage，通過 vp check/typecheck、1902 項單元測試、筆順 e2e 10/10、全庫 coverage 100%；仍未推送、未上正式站、未回覆 GitHub。</pre
-            >
+核心實作 commit 633d44c；已完成三段筆順動畫速度與偏好設定。live X-Moedict-Release／X-Moedict-Version 才是部署權威，production 報告時仍為 23b7e89，尚未部署 production。
+            </pre>
             <div class="card-actions">
               <button
                 type="button"
@@ -1879,23 +1881,10 @@ RESCOPE 回覆草稿／未送出
             <div class="impl-box">
               <div class="field-label">RESCOPE 納入評估</div>
               <div class="field-value">
-                <strong
-                  >已於 staging 部署並煙測通過（release 5ea9fbf-9c5335a5ca0b；version
-                  ef58f8ac-8ed1-49d9-8d80-99930a5e9d11）</strong
-                >。已在本地實作字圖標註羅馬拼音：字圖 API 新增
-                <code>romanize=1&amp;lang=&lt;a|t|h|c&gt;</code>
-                參數（預設不帶、輸出與現行逐位元組相同；lang
-                需通過四本字典白名單驗證，缺失或不合法一律 fail-open 回退為純字形圖）；伺服端一次 R2
-                查詢取得整詞羅馬拼音（第一個 heteronym，客語 lang=h
-                依資料形態排除，一律不標註），非空時字圖下方加高 120px 顯示置中拼音／台羅文字（40
-                字元上限、超出截斷加刪節號、XML 跳脫）；獨立 Fira Sans OT
-                字型（fonts/FiraSansOT-Regular.otf）與既有 Tauhu Oo
-                補完字型並存不互相覆蓋，任一字型載入失敗回 503 + no-store（不快取殘缺結果）。前端
-                CharacterImageView 新增「顯示羅馬拼音」checkbox（localStorage 持久化），勾選時字圖
-                URL 帶 romanize/lang 參數、alt 文字附拼音、頁面上同時顯示重用既有 .pinyin/.bopomofo
-                樣式與格式化函式的羅馬拼音／注音註記；og:image／twitter:image 永不帶 romanize
-                參數。已通過 vp check／typecheck、1921 項單元測試、136 項整合測試、目標 e2e、全庫
-                coverage 100%、v8-ignore 上限（20）未增加。仍未推送、未上正式站、未回覆 GitHub。
+                <strong>核心實作 commit 633d44c，待確認 staging live header</strong
+                >。已完成字圖羅馬拼音標註功能與前端勾選框； live
+                <code>X-Moedict-Release</code>／<code>X-Moedict-Version</code>
+                才是部署權威，production 報告時仍為 <code>23b7e89</code>，尚未部署 production。
               </div>
             </div>
 
@@ -2034,8 +2023,8 @@ RESCOPE 回覆草稿／未送出
             <pre class="response-box" lang="zh-TW" id="draft-169">
 RESCOPE 回覆草稿／未送出
 
-已於 staging 部署並煙測通過（release 5ea9fbf-9c5335a5ca0b；version ef58f8ac-8ed1-49d9-8d80-99930a5e9d11）。已在本地實作字圖羅馬拼音標註功能：字圖 API 新增 romanize=1&amp;lang=&lt;a|t|h|c&gt; 參數（預設不帶、輸出與現行逐位元組相同），伺服端一次查詢取得整詞羅馬拼音並在字圖下方加高顯示（客語依資料形態排除、40 字元上限、失敗回退為純字形圖）；前端新增「顯示羅馬拼音」勾選框（localStorage 持久化），og:image／twitter:image 不受影響。已通過 vp check／typecheck、1921 項單元測試、136 項整合測試、目標 e2e 與全庫 coverage 100%。本稿仍為 DRAFT：仍未推送、未上正式站、未回覆 GitHub。</pre
-            >
+核心實作 commit 633d44c；已完成字圖羅馬拼音標註功能與前端勾選框。live X-Moedict-Release／X-Moedict-Version 才是部署權威，production 報告時仍為 23b7e89，尚未部署 production。
+            </pre>
             <div class="card-actions">
               <button
                 type="button"
@@ -2051,10 +2040,8 @@ RESCOPE 回覆草稿／未送出
       </main>
 
       <footer class="report-footer">
-        開放議題 RESCOPE：納入評估草稿 · 由本機查證產生 · 純本機檔案，無任何網路請求 ·
-        所有回覆草稿均未發佈至 GitHub<br />
-        Open Issue RESCOPE — Inclusion Evaluation · local-only, read-only, nothing posted ·
-        2026-07-17
+        開放議題 RESCOPE：納入評估草稿 · 所有回覆草稿均未發佈至 GitHub<br />
+        Open Issue RESCOPE — DRAFT NOT SENT · 2026-07-18
       </footer>
     </div>
 
