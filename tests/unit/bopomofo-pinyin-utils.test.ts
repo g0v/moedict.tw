@@ -571,11 +571,11 @@ describe("decorateRuby — hard-to-hit rbspan ternary branches", () => {
     const originalMatch = String.prototype.match;
     const calls: Record<string, number> = {};
 
-    String.prototype.match = function (pattern: RegExp) {
+    String.prototype.match = function (pattern: RegExp): RegExpMatchArray | null {
       const key = pattern.source;
       calls[key] = (calls[key] || 0) + 1;
       if (key === "[-\\u2011]" && calls[key] === 1) {
-        return ["-"];
+        return ["-"] as RegExpMatchArray;
       }
       if (key === "[-\\u2011]+" && calls[key] === 1) {
         return null;
@@ -601,11 +601,11 @@ describe("decorateRuby — hard-to-hit rbspan ternary branches", () => {
     const originalMatch = String.prototype.match;
     const calls: Record<string, number> = {};
 
-    String.prototype.match = function (pattern: RegExp) {
+    String.prototype.match = function (pattern: RegExp): RegExpMatchArray | null {
       const key = pattern.source;
       calls[key] = (calls[key] || 0) + 1;
       if (key === "[aāáǎàeēéěèiīíǐìoōóǒòuūúǔùüǖǘǚǜ]+" && calls[key] === 1) {
-        return ["é", "a"];
+        return ["é", "a"] as RegExpMatchArray;
       }
       if (key === "[aāáǎàeēéěèiīíǐìoōóǒòuūúǔùüǖǘǚǜ]+" && calls[key] === 2) {
         return null;

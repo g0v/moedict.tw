@@ -25,6 +25,7 @@ import {
   runAtomicCorpusUpload,
   verifyCorpusOnly,
   DEFAULT_VERIFY_MAX_RETRIES,
+  type ManifestEntry,
 } from "../../commands/sync-moe-stroke-corpus.mjs";
 import {
   STROKE_CORPUS_POINTER_KEY,
@@ -77,9 +78,9 @@ function makeFakeR2() {
 }
 
 /** Build a minimal N-entry set of ManifestEntry-shaped objects with local files written to outDir. */
-function buildEntries(outDir: string, n: number) {
+function buildEntries(outDir: string, n: number): ManifestEntry[] {
   mkdirSync(join(outDir, "stroke-json"), { recursive: true });
-  const entries = [];
+  const entries: ManifestEntry[] = [];
   for (let i = 0; i < n; i++) {
     const hex = (0x4e00 + i).toString(16);
     const body = JSON.stringify([{ outline: [{ type: "M", x: i, y: 0 }], track: [] }]);

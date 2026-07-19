@@ -267,6 +267,19 @@ test.describe("R6: ruby geometry — zero native <rt>, absolute overlay, bounded
         page,
       }) => {
         await page.setViewportSize({ width: viewportWidth, height: 900 });
+        // Ratio bound below is calibrated against the real cascade (prod-
+        // measured worst case 1.44 across the same 4 entries x 4 phonetics
+        // prefs x 2 widths matrix, byte-identical on prod/staging). Without
+        // it, .result and h1.title are unstyled (legacy data/assets/
+        // styles.css is 404'd by _fixtures.ts's blanket blocker per
+        // AGENTS.md's default e2e contract) and the ratio balloons to
+        // 2.1-2.8 on BOTH prod and staging — a harness miscalibration, not
+        // a regression. Route the real stylesheet so the oracle reflects
+        // production layout.
+        // Unlike R8, this doesn't call blockCssSubresources() — that only
+        // 404s background images and non-title fonts, neither of which
+        // affects the h1.title/ruby glyph metrics this oracle measures.
+        await routeStylesCss(page, readWorkingTreeStylesCss);
 
         const heights: number[] = [];
         for (const pref of PHONETICS_PREFS) {
