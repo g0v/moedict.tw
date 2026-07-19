@@ -689,15 +689,31 @@ export function CharacterImageView({
             opacity: .32;
           }
 
+          /* audit-dark-contrast: table background is a fixed light #eee
+             (never theme-aware — see the inline background: "#eee" style
+             on the .moetext table below), but .charimg-caption text has no
+             color override and inherits --moe-text, which is near-white
+             (#e6e3df) in dark mode — unreadable on the light tile. Pin an
+             explicit dark-safe color instead of following the theme var,
+             matching the fixed-background convention used for
+             div.cn-specific (index.css audit-dark-contrast E). */
           .charimg-result .charimg-caption {
             margin-top: 6px;
             text-align: center;
             font-size: 0.85em;
             line-height: 1.3;
+            color: #333;
           }
 
+          /* .bopomofo has its own global dark-mode override
+             (index.css html[data-theme="dark"] .bopomofo / the matching
+             @media block, audit-dark-contrast B) that targets the span
+             directly and would otherwise out-specificity the inherited
+             #333 above on this fixed-light tile. Pin it explicitly so the
+             caption stays readable in dark mode. */
           .charimg-result .charimg-caption .bopomofo {
             display: inline-block;
+            color: #333;
           }
 
           @media print {
