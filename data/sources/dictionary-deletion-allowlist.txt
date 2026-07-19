@@ -1,0 +1,4 @@
+# Reviewed R2 deletions: one exact destination-qualified key per line.
+# Format: <remote>:<bucket>/<scope>/<relative-object-path>
+# No globs, regexes, basenames, or wildcards are accepted by the guard.
+# Keep empty unless a human has reviewed the corresponding inventory update.

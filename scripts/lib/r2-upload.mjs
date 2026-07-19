@@ -54,8 +54,12 @@ import { spawn } from "node:child_process";
  * Wrangler reads CLOUDFLARE_ENV from the environment and maps it to --env,
  * which conflicts with the already-flattened generated configs (they have no
  * [env.*] sections). Always strip CLOUDFLARE_ENV from the child env so the
- * wrangler subprocess never sees it; callers already pass --config with the
- * correctly-flattened generated config for the target environment.
+ * wrangler subprocess never sees it. Some callers (wrangler-versions.mjs)
+ * pass --config with the flattened generated config for the target
+ * environment; the R2 object put/get callers in this file and in
+ * release-verify.mjs pass the target bucket name directly in the object
+ * path instead and rely on top-level wrangler.jsonc/account discovery, so
+ * they never pass --config.
  *
  * @param {string[]} argv
  * @param {(file: string, args: string[], opts: object) => object} [spawnImpl]

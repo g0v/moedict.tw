@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 """
 Inject TWBLG 異用字 (alternate character forms) B field into existing ptck packs.
 
@@ -195,16 +196,16 @@ def main():
     parser.add_argument('variants_json', help='Path to x-異用字.json')
     parser.add_argument('ptck_dir', help='Path to data/dictionary/ptck/')
     parser.add_argument('--dry-run', action='store_true', help='Report changes without writing')
+    parser.add_argument('--check', action='store_true', help='Verify exact B arrays and mapping counts without writing')
     args = parser.parse_args()
 
-    # Verify the variants file by SHA-256
+    # The vendored source is a release input, not an advisory hint.
     with open(args.variants_json, 'rb') as f:
         raw_bytes = f.read()
     sha256 = hashlib.sha256(raw_bytes).hexdigest()
-    EXPECTED_SHA256 = 'aa5b0a41823c7cf44dcf532716629f4db3228aa58c7428ddc0accb40f2c9997a'
-    if sha256 != EXPECTED_SHA256:
-        print(f'WARNING: SHA-256 mismatch. Got {sha256}, expected {EXPECTED_SHA256}', file=sys.stderr)
-        print('Proceeding anyway (pinned source may have been updated).', file=sys.stderr)
+    expected_sha256 = 'aa5b0a41823c7cf44dcf532716629f4db3228aa58c7428ddc0accb40f2c9997a'
+    if sha256 != expected_sha256:
+        raise SystemExit(f'FAIL: pinned variants SHA-256 mismatch: {sha256} != {expected_sha256}')
 
     variants_map = load_variants(args.variants_json)
     print(f'Loaded {len(variants_map)} variant entries from {args.variants_json}')
@@ -212,18 +213,34 @@ def main():
     all_mapped_ids: set[str] = set()
     total_heteronyms_changed = 0
     changed_files: list[str] = []
+    unexpected_b: list[str] = []
 
-    ptck_files = sorted(f for f in os.listdir(args.ptck_dir) if f not in SKIP_FILES)
+    ptck_files = sorted(f for f in os.listdir(args.ptck_dir) if f.endswith('.txt') and f not in SKIP_FILES)
     for fname in ptck_files:
         path = os.path.join(args.ptck_dir, fname)
-        stats = process_file(path, variants_map, args.dry_run)
+        stats = process_file(path, variants_map, args.dry_run or args.check)
         if stats['changed']:
             changed_files.append(fname)
             all_mapped_ids.update(stats['mapped_ids'])
             total_heteronyms_changed += stats['heteronyms_changed']
-            print(f'  {"[DRY]" if args.dry_run else "[MODIFIED]"} {fname}: '
-                  f'{stats["heteronyms_changed"]} heteronym(s) updated, '
-                  f'ids={stats["mapped_ids"]}')
+        if args.check:
+            with open(path, encoding='utf-8') as f:
+                for line_no, raw_line in enumerate(f, 1):
+                    s = raw_line.rstrip('\n')
+                    if s in ('{', '}', ''):
+                        continue
+                    obj = json.loads('{' + s.lstrip('{').rstrip(',') + '}')
+                    for entry in obj.values():
+                        for heteronym in (entry.get('h') or []):
+                            if not isinstance(heteronym, dict):
+                                continue
+                            ident = heteronym.get('_')
+                            if ident not in variants_map:
+                                continue
+                            all_mapped_ids.add(ident)
+                            expected = [unicodedata.normalize('NFD', v) for v in variants_map[ident]]
+                            if heteronym.get('B') != expected:
+                                unexpected_b.append(f'{fname}:{line_no}:{ident}')
 
     orphan_ids = set(variants_map.keys()) - all_mapped_ids
     print(f'\nSummary:')
@@ -232,10 +249,18 @@ def main():
     print(f'  Variant map entries:    {len(variants_map)}')
     print(f'  Mapped IDs (in ptck):   {len(all_mapped_ids)}')
     print(f'  Orphan IDs (not found): {len(orphan_ids)}')
-    if args.dry_run:
+    if args.check:
+        if unexpected_b or len(all_mapped_ids) != 2097 or len(orphan_ids) != 13:
+            raise SystemExit(
+                f'FAIL: variants check mismatch; unexpected B={unexpected_b[:5]}, '
+                f'mapped={len(all_mapped_ids)} (expected 2097), orphan={len(orphan_ids)} (expected 13)'
+            )
+        print('\n[CHECK OK — no files written]')
+    elif args.dry_run:
         print('\n[DRY RUN — no files written]')
     else:
         print(f'\nWrote {len(changed_files)} file(s).')
+
 
 
 if __name__ == '__main__':

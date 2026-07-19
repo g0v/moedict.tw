@@ -47,6 +47,32 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..");
 const DICT_DIR = path.join(REPO_ROOT, "data", "dictionary");
+const INVENTORY_CHECKER = path.join(REPO_ROOT, "scripts", "check-dictionary-inventory.mjs");
+try {
+  execFileSync(process.execPath, [INVENTORY_CHECKER], { cwd: REPO_ROOT, stdio: "inherit" });
+} catch {
+  process.exit(1);
+}
+const VARIANT_SOURCE = path.join(REPO_ROOT, "data", "sources", "twblg-overrides", "x-異用字.json");
+const VARIANT_INJECTOR = path.join(REPO_ROOT, "scripts", "inject-twblg-variants.py");
+try {
+  execFileSync(
+    "python3",
+    [VARIANT_INJECTOR, VARIANT_SOURCE, path.join(DICT_DIR, "ptck"), "--check"],
+    {
+      cwd: REPO_ROOT,
+      stdio: "inherit",
+    },
+  );
+} catch {
+  process.exit(1);
+}
+const DERIVED_CHECKER = path.join(REPO_ROOT, "scripts", "check-derived-data.mjs");
+try {
+  execFileSync(process.execPath, [DERIVED_CHECKER], { cwd: REPO_ROOT, stdio: "inherit" });
+} catch {
+  process.exit(1);
+}
 
 const SUBDIRS = ["pack", "pcck", "phck", "ptck"];
 
@@ -199,10 +225,13 @@ if (!existsSync(PINNED_MANIFEST)) {
 // returns "The specified key does not exist") — their local `{}` pins the
 // Worker's own missing-object API fallback response (not a byte-for-byte R2
 // object), which prevents local-dev 404s and stops rclone sync from ever
-// having a key to delete. This check only enforces presence + shape (object,
-// not array) — it does NOT assert `t`'s exact content so future legitimate
-// re-uploads aren't blocked, but DOES require `t` stay non-empty so an
-// accidental overwrite with `{}` is caught before it reaches R2.
+// having a key to delete. This check only enforces presence + that the
+// top level parses to a plain object (not array/null) — it does NOT walk
+// or assert the deeper `{sourceLang: {title: {id: [word...]}}}` nesting,
+// so a shape violation below the top level is not caught here. It also
+// does NOT assert `t`'s exact content so future legitimate re-uploads
+// aren't blocked, but DOES require `t` stay non-empty so an accidental
+// overwrite with `{}` is caught before it reaches R2.
 const XREF_BY_ID_LANGS = ["a", "t", "h", "c"];
 let xrefByIdCheckedCount = 0;
 for (const lang of XREF_BY_ID_LANGS) {
@@ -224,8 +253,9 @@ for (const lang of XREF_BY_ID_LANGS) {
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     fail(
-      `${rel} must be a JSON object ({targetLang: {title: {id: [word...]}}}), ` +
-        `got ${Array.isArray(parsed) ? "array" : typeof parsed}`,
+      `${rel} must be a JSON object at the top level (expected shape: ` +
+        `{sourceLang: {title: {id: [word...]}}}, not validated below the ` +
+        `top level here), got ${Array.isArray(parsed) ? "array" : typeof parsed}`,
     );
     continue;
   }

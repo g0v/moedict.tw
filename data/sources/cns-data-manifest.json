@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "source_urls": {
+    "properties": "https://www.cns11643.gov.tw/pageView.jsp?ID=59#Properties.zip",
+    "mapping": "https://www.cns11643.gov.tw/pageView.jsp?ID=59#MapingTables.zip"
+  },
+  "source_archive_names": {"properties": "Properties.zip", "mapping": "MapingTables.zip"},
+  "source_sha256": {},
+  "verification": {
+    "status": "unavailable",
+    "verification": "unavailable-unpinned",
+    "reason": "Exact Properties.zip and MapingTables.zip archives were not present in searched worktrees; the published CNS page exposes names and links but no upstream SHA-256.",
+    "searched_paths": ["<worktree>/**/Properties.zip", "<worktree>/**/MapingTables.zip"],
+    "source_version": "Published CNS11643 page at verification time; archive version/hash not independently confirmed."
+  },
+  "current_source_checksum": {"algorithm": "sha256", "status": "official archive bytes unavailable from published page at verification time", "verified_bytes": false},
+  "output_checksum": {"algorithm": "sha256", "method": "sha256 of sorted per-file sha256 lines", "sha256": "869e3f08d89821e22b03fbb911443b912aab270a2743960fa5e51b6c0778ee1f"},
+  "generator_options": {"exclude_pua": true, "shard_formula": "hex.length <= 4 ? hex.slice(0, 2) : hex.slice(0, 3)"},
+  "expected_emitted": 77208,
+  "expected_skipped_pua": 0,
+  "expected_skipped_nomap": 0
+}
