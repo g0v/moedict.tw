@@ -212,14 +212,28 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
   執行期 `getCrossReferencesById` 單純 lookup miss、不會壞），這是正式站
   既有資料特性，不是本次修復引入的落差，故意不在此 gate 內強制 id 完整性。
 
-## 筆順 JSON（`/api/stroke-json`）與 6,063 字語料管線
+- **R2 deletion allowlist**：`data/sources/dictionary-deletion-allowlist.txt` 每行必須是完整、精確的 destination-qualified key：`<remote>:<bucket>/<scope>/<relative-path>`。不支援 glob、regex、basename 或萬用字元；dry-run 只接受逐字完全相等的核准項目，其他 remote-only deletion 一律 fail-closed。修改 allowlist 前須先更新並審閱 PATH inventory。
+
+## 筆順 JSON（`/api/stroke-json`）與 6,063 字語料管線（atomic corpus model）
 
 - **Runtime 讀取**：`GET`/`HEAD` `/api/stroke-json/<cp>.json` 由
-  `src/api/handleStrokeAPI.ts` **直接**讀環境的 `ASSETS` R2 binding key
-  `stroke-json/<小寫 hex codepoint>.json`（4–6 碼，含 astral），**不再**代理
-  公開 CDN URL。支援 ETag／`If-None-Match` → 304。staging Worker 綁
-  `moedict-assets-preview`、production 綁 `moedict-assets`——preview 與 prod
-  資料隔離，不會被 `vars.ASSET_BASE_URL` 指到正式站公開網域的設定蓋掉。
+  `src/api/handleStrokeAPI.ts` 每請求先解析當前語料指標
+  `stroke-corpus/current.json`（`STROKE_CORPUS_POINTER_KEY`），再讀指標指向的
+  `stroke-corpora/<corpusDigest>/manifest.json`，驗證 schema／6,063 筆數／
+  pointer↔manifest digest 一致後，只允許 manifest 白名單內（含 sha256／bytes
+  校驗中繼資料）的 codepoint 通過，最後讀取
+  `stroke-corpora/<corpusDigest>/stroke-json/<小寫 hex>.json` 版本化物件並
+  串流回應——**不再**是扁平 `stroke-json/<hex>.json` key，也**不再**代理公開
+  CDN URL。指標／manifest 每個 isolate 快取 10 分鐘（WeakMap per ASSETS
+  binding，src/api/r2-json-cache.ts 同款模式），含 pointer/manifest
+  缺失或校驗失敗的 negative 結果，避免每次請求重複打 R2。支援
+  ETag／`If-None-Match` → 304，ETag 經 `Access-Control-Expose-Headers`
+  公開。pointer／manifest／物件缺失或校驗失敗一律 **503 no-store**
+  fail-closed（絕不回退扁平 key）；不在白名單內的 codepoint 有 bounded
+  per-isolate negative memo（512 筆／5 分鐘 TTL，只在 isolate 記憶體內，
+  不進 edge cache）。staging Worker 綁 `moedict-assets-preview`、production
+  綁 `moedict-assets`——preview 與 prod 資料隔離，不會被
+  `vars.ASSET_BASE_URL` 指到正式站公開網域的設定蓋掉。
 - **語料來源**：教育部《國字標準字體筆順學習網》2025 新版
   （`stroke-order.learningweb.moe.edu.tw`）。權威字集是官方
   `全字筆順提示下載` zip（`/download/6063png.zip`）——以 PNG 檔名為準得到
@@ -228,27 +242,109 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
 - **管線腳本**：
   - `commands/fetch-moe-stroke.mjs` — 單字唯讀：`dictView.jsp?ID=<十進位碼位>`
     → 內嵌 XML → moedict stroke-json schema。
-  - `commands/sync-moe-stroke-corpus.mjs` — 全量發現／轉換／manifest／上傳／驗證。
-    上傳前必須有對應環境的 flattened generated config
-    （`vp run build` 或 `CLOUDFLARE_ENV=staging vp run build` →
+  - `commands/sync-moe-stroke-corpus.mjs` — 全量發現／轉換／manifest／
+    atomic 上傳／驗證／pointer 推進／`--verify-only`。上傳前必須有對應環境
+    的 flattened generated config（`vp run build` 或
+    `CLOUDFLARE_ENV=staging vp run build` →
     `dist/cf_moedict_webkit_neo/wrangler.json` 的 `ASSETS.bucket_name`）。
-- **上傳與驗證守門**：`--upload=staging|production` 時拒絕
-  `--limit`／`--allow-partial`／`--skip-verify`（full-only）；上傳後強制
-  authenticated re-GET + sha256／bytes 全量比對。並發 ≤4。
-  **upload** 暫態重試預設 `maxRetries=5`（`retryWithBackoff`）；**verify**
-  預設 `DEFAULT_VERIFY_MAX_RETRIES=8`（長時間 re-GET 較易遇網路 flake）。
-  目前**沒有** verify-only／checkpoint resume（建議後續 operator 優化）。
+- **Atomic 上傳序列**（`runAtomicCorpusUpload`）：(1) 6,063 物件全數 PUT 到
+  `stroke-corpora/<corpusDigest>/stroke-json/<hex>.json`（corpusDigest =
+  全部 hex:sha256 pair 排序後的 sha256，內容或檔案集一變就換新 prefix，
+  **絕不覆寫**既有 digest prefix，無 GC）；(2) 物件全數成功後才寫
+  `manifest.json`；(3) authenticated re-GET + sha256／bytes 全量驗證
+  manifest 本身與每個物件；(4) 只有驗證通過才推進
+  `stroke-corpus/current.json` pointer——推進前先讀舊 pointer（如有）寫入
+  `scripts/lib/stroke-corpus-state.mjs` 的本機 rollback history（append-only、
+  atomic temp-then-rename、per-env namespaced，供人工 rollback 查詢舊
+  digest）。任何步驟失敗，pointer **絕不**被觸碰（fail-closed，孤立的半成品
+  digest prefix 不影響現行服務）。
+  `--upload=staging|production` 時拒絕 `--limit`／`--allow-partial`／
+  `--skip-verify`（full-only）。**upload** 暫態重試預設 `maxRetries=5`
+  （`retryWithBackoff`）；**verify** 預設 `DEFAULT_VERIFY_MAX_RETRIES=8`
+  （長時間 re-GET 較易遇網路 flake）。
+- **`--verify-only=staging|production`**（`verifyCorpusOnly`）：**唯一**做
+  全量 6,063 物件 authenticated 重新下載＋hash 驗證的唯讀路徑（連同上傳流程
+  內建的驗證步驟）；讀 pointer→manifest→全部物件，重試同上，**無任何寫入**，
+  可安全對正式站桶執行。無 built-in checkpoint／resume（如需大量重跑仍是從
+  頭開始）。約需 53 分鐘／6,063 物件，**只**在 operator 明確執行時跑，**絕不**
+  被部署自動觸發。
+- **部署前置閘門（`scripts/lib/stroke-corpus-preflight.mjs`，LIGHTWEIGHT）**：
+  `bun run deploy`／`deploy:staging` 鏈中，`scripts/release-publish.mjs`
+  （鏈中第一個會真正 mutate R2 的呼叫，`uploadReleaseToR2`）與
+  `scripts/release-deploy.mjs`（自己的 version upload/deploy 呼叫）在任何
+  mutating Wrangler 呼叫之前都會各自跑一次語料就緒檢查
+  （`verifyCorpusReadiness`）——**只** authenticated GET pointer＋manifest
+  兩個物件，**零**筆順物件（stroke-json body）讀取，整條 deploy 鏈
+  （publish + deploy）共 4 次讀取，取代舊版每次都跑全量 6,063 物件驗證
+  （53 分鐘 × 2 ≈ 106 分鐘／每次部署）的作法。驗證內容：pointer／manifest
+  schema、pointer↔manifest 的 `corpusDigest`／`fileCount`／`totalBytes`
+  一致、manifest 自身 `totalBytes` 與 `files[]` 逐筆 bytes 加總一致、
+  以及用 manifest 的 `files[]`（hex＋sha256）重新算一次 `corpusDigest`
+  （與 `computeCorpusDigest` 同演算法）確認自我一致（manifest 沒有獨立的
+  checksum／ETag 欄位，這個重算值就是它的 self-digest）。語料缺失或任何
+  一項校驗失敗直接 throw，兩個腳本內**任何** R2/Wrangler mutation 都尚未
+  執行——現行正式站/staging 保持原狀、安全，直到 operator 成功跑過語料
+  pipeline 為止。**這不是**物件層級完整性驗證的替代品——它證明
+  pointer/manifest 結構正確且自洽，不證明 R2 上每個 stroke-json 物件仍與
+  紀錄的 sha256/bytes 相符；物件層級完整性驗證只保留在兩處：(a) 上傳流程
+  本身（pointer 推進前，`verifyAtomicCorpusUploads`），(b) operator 明確
+  執行的 `--verify-only`。`scripts/release-rollback.mjs`（緊急回滾）刻意
+  **不**掛這道閘門，避免語料問題連帶卡住事故回滾。
 - **本機產物**：`.moe-stroke-corpus/`、`.moe-stroke-fetch/` 已 gitignore，
   **不可** commit 生成 JSON／zip／manifest。細節見 `README_CDN.md` §三。
-- **出貨順序**：先 staging 上傳 preview 桶 + `bun run deploy:staging` 驗證 →
-  再 production 上傳 `moedict-assets` + `bun run deploy`（approval gate：
-  同一 git SHA + client manifest digest）。
-- **現行已部署 runtime**（2026-07-13）：release `23b7e89-1d1f2400cb1d`，
-  source HEAD `23b7e89`；staging version `0f23b628-9373-45d5-8ee9-b7d20b14933b`
-  @100%、production version `2be488db-8ad7-4384-bc2a-c539b4196445` @100%；
-  兩桶皆有 6,063 筆 `stroke-json/*` 且全量 hash 驗證 OK。後續 **script-only**
-  pipeline 硬化（如 verify maxRetries=8）不需再佈 Worker；完整事實見
-  `notes/零停機部署筆記.md` 與 `README_CDN.md`。
+- **出貨順序（staging 先於 production 的資料順序）**：語料上傳與 Worker
+  部署都遵守「先 staging、驗證通過才 production」——這是兩條獨立、但都必須
+  各自遵守 staging→production 順序的管線：(1) 語料桶（ASSETS binding）：
+  `CLOUDFLARE_ENV=staging node commands/sync-moe-stroke-corpus.mjs
+--upload=staging` 上傳到 preview 桶（`moedict-assets-preview`）並完成
+  全量驗證＋pointer 推進，之後才對 production 桶（`moedict-assets`）跑
+  `node commands/sync-moe-stroke-corpus.mjs --upload=production`；
+  (2) Worker 版本部署：`bun run deploy:staging` 通過（含輕量語料
+  preflight）之後，才 `bun run deploy`（approval gate：同一 git SHA +
+  client manifest digest；deploy 本身也會先跑輕量語料 preflight，見上）。
+  兩條管線只要有一條在 production 先於 staging 完成，就會讓 staging 失去
+  作為正式環境事故前哨的意義，因此語料上傳與部署都不可跳過 staging 或
+  反過來執行。
+- **pointer 讀取重試**（`readCorpusPointer`）：與旁邊的 `readCorpusManifest`／
+  `verifyAtomicCorpusUploads` 物件下載共用同一套 `retryWithBackoff` ／
+  `DEFAULT_VERIFY_MAX_RETRIES=8` 預設——修復前只呼叫一次 `runner()`，
+  部署前置閘門（`verifyCorpusReadiness`）與 `promoteCorpusPointer`（緊接在
+  6,063 物件全量上傳之後）的 pointer 讀取單一次網路 flake 就會整個失敗，
+  與同一條路徑上其他讀取的重試耐受度不一致。真正的 NoSuchKey/404「不存在」
+  仍然零重試直接回傳 `null`（不是失敗，是合法穩定狀態）。
+- **edge cache 隔離**（`/api/stroke-json/*` 專用，`worker/index.ts`
+  `dispatch()`）：`CACHE_PURGE_TOKEN` 是 Worker secret，語料上傳 CLI
+  （`promoteCorpusPointer`）以本機 operator 指令執行，永遠拿不到它，也就
+  無法在 pointer 推進後主動清邊緣快取。改為在來源端固定快取身分：
+  `dispatch()` 對 `/api/stroke-json/*` 的 GET 用內部查詢參數
+  `__moedict_stroke_digest=<corpusDigest>` 命名快取 key（只存在於傳給
+  `caches.default.match`/`.put` 的合成 `Request`，從不出現在公開 URL、
+  回應內容或任何對外標頭），digest 透過 `peekStrokeCorpusDigest`（重用
+  `handleStrokeAPI` 自己的 per-isolate WeakMap resolver，同一次 dispatch
+  絕不重複讀 R2）取得。Pointer 推進換了新 digest 就等於換了新的快取
+  namespace——舊 bare-URL 快取項目在新版 Worker 上線後**永遠不會**再被讀到
+  （不需要清除，直接靠自己的 `s-maxage` 過期，從此無人讀取）。
+  Pointer/manifest 解析失敗（缺失、格式錯誤、雜湊不符）時 digest peek 回傳
+  `null`，`dispatch()` 直接整段略過邊緣快取（不讀也不寫），交給
+  `handleStrokeAPI` 走它自己 fail-closed 的 503（本來就是 no-store／非
+  200，不會被快取）。HEAD／`If-None-Match` 條件式語意完全不受影響——這層
+  只處理 GET，HEAD 從未進入快取路徑，走的仍是 `handleStrokeAPI` 既有邏輯。
+- **rollback history 上限**（`scripts/lib/stroke-corpus-state.mjs`
+  `MAX_POINTER_HISTORY = 20`）：`pointer-history.json` 曾經無上限、永久
+  append，改為只保留最新 20 筆（超出時砍最舊的），順序仍是 oldest-first／
+  newest-last，`readPriorCorpusPointer`（讀「上一筆」）語意不受影響。
+- **併發上傳殘留風險（誠實記錄，非 CAS）**：`wrangler r2 object put` 沒有
+  `--if-match` 或任何條件式寫入旗標，Cloudflare R2 的物件 PUT API 本身也
+  沒有對應能力，因此**上傳必須由 operator 自行序列化**——絕不能對同一個
+  環境／桶同時跑兩個 `--upload=<env>`。`runAtomicCorpusUpload` 現在會在
+  上傳物件開始「之前」先讀一次 pointer 當基準，`promoteCorpusPointer` 在
+  即將 PUT 新 pointer「之前」再讀一次並比對 `corpusDigest`；不一致代表
+  這次上傳進行期間有另一個流程搶先推進了 pointer，直接 throw 中止——**不
+  寫**任何 rollback history、**不 PUT** pointer，R2 與本機 state 完全不受
+  影響。這是**盡力而為的樂觀鎖**，不是真正的 compare-and-swap：它能抓到
+  「另一個推進在這次上傳期間已經完成」的情況，抓不到「再讀一次之後、PUT
+  之前」這極短窗口內發生的新推進——那個窗口仍是 last-writer-wins，與修復
+  前相同。不要把這個機制當成消除競態的保證。
 
 ## 邊緣快取（src/api/cache.ts）
 
