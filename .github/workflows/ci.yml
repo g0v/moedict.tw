@@ -116,6 +116,120 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  contrast:
+    name: Dark/light contrast audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: "24"
+          cache: true
+      - run: vp install --frozen-lockfile
+      - run: vp exec playwright install --with-deps chromium
+      - run: vp run build
+      - name: Run contrast audit against seeded Miniflare fixture server
+        env:
+          BASE_URL: http://127.0.0.1:8877
+          CONTRAST_AUDIT_OUTPUT: contrast-audit.json
+          E2E_PORT: "8877"
+        run: |
+          set -euo pipefail
+          # Real audit target: the same seeded Miniflare fixture server the
+          # Chromium e2e suite uses (tests/e2e/serve.ts), NOT `vp preview`
+          # (wrangler dev over the static dist/ build only — /api/* 404s
+          # there, which made every contrast-audit route 404 in CI). This
+          # server has R2 fixtures (dictionary entries, fonts, assets)
+          # seeded in-process, so every audited route hydrates for real.
+          #
+          # Launch `node` directly (not `vp run serve:e2e`) so `$!` is the
+          # actual server process, not an intermediate `vp` wrapper: `vp run
+          # <script> &` backgrounds the `vp` CLI itself, which does NOT
+          # forward SIGTERM to its own child process tree on exit -- killing
+          # that PID alone left tsx/node and the workerd child running and
+          # the port still accepting connections (reproduced locally: after
+          # `kill "$server_pid"` on a `vp run serve:e2e &` launch, `pgrep -f
+          # workerd` and `pgrep -f tests/e2e/serve.ts` both still matched,
+          # and curl still got a live response). `node --import tsx
+          # tests/e2e/serve.ts` runs the script directly under `node` with
+          # no wrapper layer, so `$!` is the exact PID whose SIGTERM handler
+          # (Miniflare registers its own SIGTERM listener during
+          # startTestServer() and disposes the workerd child + calls
+          # process.exit() from it before serve.ts's own handler even runs)
+          # actually tears down the workerd child. Verified locally: this
+          # exact invocation, SIGTERM'd after ready, leaves zero matches for
+          # `pgrep -f workerd` / `pgrep -f tests/e2e/serve.ts` and the port
+          # immediately refuses connections.
+          E2E_SKIP_BUILD=1 node --import tsx tests/e2e/serve.ts > serve.log 2>&1 &
+          server_pid=$!
+          # Bounded escalation, scoped to only this server's own process
+          # tree -- never a name-based `pkill -f`. This runner may be
+          # shared/concurrent (self-hosted or otherwise), and a broad `pkill
+          # -f tests/e2e/serve.ts` / `pkill -f "workerd serve"` would match
+          # (and kill) an unrelated job's identically-named process, not
+          # just this job's own. Enumerate the exact descendant PIDs (via
+          # recursive `pgrep -P`) up front, while the process is still
+          # alive, since a process's children can't be discovered anymore
+          # once it's gone. Send TERM to the server PID only (lets
+          # Miniflare/serve.ts dispose workerd and close the socket
+          # cleanly -- see the launch comment above), wait for it to
+          # actually exit, then KILL only the specific PIDs captured
+          # earlier that are still alive -- never a fresh pgrep/pkill scan
+          # at cleanup time, which could by then match a different,
+          # unrelated process that happens to reuse a freed PID or matches
+          # by name.
+          descendant_pids() {
+            local pid="$1" children child
+            children=$(pgrep -P "$pid" 2>/dev/null || true)
+            for child in $children; do
+              echo "$child"
+              descendant_pids "$child"
+            done
+          }
+          cleanup() {
+            local pid
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              return
+            fi
+            local tree_pids
+            tree_pids="$server_pid $(descendant_pids "$server_pid")"
+            kill -TERM "$server_pid" 2>/dev/null || true
+            for _ in $(seq 1 10); do
+              kill -0 "$server_pid" 2>/dev/null || break
+              sleep 1
+            done
+            for pid in $tree_pids; do
+              kill -0 "$pid" 2>/dev/null && kill -KILL "$pid" 2>/dev/null || true
+            done
+          }
+          trap cleanup EXIT
+          ready=false
+          # Poll a seeded ASSETS-bucket font, not /api/<word>.json: the
+          # dictionary API path is read through readR2JsonCached's
+          # per-isolate memo (src/api/r2-json-cache.ts), which caches a
+          # MISS as null for 10 minutes -- a probe hit landing before the
+          # DICTIONARY bucket finishes seeding would poison that key for
+          # the rest of the job, no matter how long seeding then takes.
+          # serveAssetWithFallback reads ASSETS directly with no such memo,
+          # so this only turns 200 once the fixture is genuinely seeded.
+          for i in $(seq 1 60); do
+            if curl -fsS "$BASE_URL/assets/fonts/MOEDICT.woff2" >/dev/null; then ready=true; break; fi
+            sleep 1
+          done
+          test "$ready" = true
+          vp run audit:contrast -- --ci
+      - name: Upload contrast audit report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: contrast-audit
+          path: |
+            contrast-audit.json
+            serve.log
+          if-no-files-found: ignore
+          retention-days: 14
+
   visual:
     name: Visual regression (playwright)
     runs-on: ubuntu-latest
