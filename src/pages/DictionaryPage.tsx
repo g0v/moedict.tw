@@ -20,6 +20,7 @@ import { convertPinyinByLang } from "../utils/pinyin-preference-utils";
 import {
   addStarWord,
   addToLRU,
+  getStarredStorageKey,
   hasStarWord,
   removeStarWord,
   writeLastLookup,
@@ -491,6 +492,39 @@ function CnsAttributesPanel({ record }: { record: CnsRecord }) {
     </div>
   );
 }
+function visibleText(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
+  if (!(node instanceof Element) || node.classList.contains("romanization-selectable")) return "";
+  return Array.from(node.childNodes)
+    .map((child) => {
+      const text = visibleText(child);
+      const isBlock =
+        child instanceof Element && ["P", "DIV", "UL", "OL", "LI"].includes(child.tagName);
+      return `${isBlock ? "\n" : ""}${text}`;
+    })
+    .join("");
+}
+
+function serializeDefinitionText(container: HTMLElement): string {
+  const groups = Array.from(container.querySelectorAll(":scope > .entry > .entry-item"));
+  return groups
+    .map((group) => {
+      const labels = Array.from(group.querySelectorAll(":scope > .part-of-speech"))
+        .map((node) => visibleText(node).replace(/\s+/g, " ").trim())
+        .filter(Boolean)
+        .join(" ");
+      const items = Array.from(group.querySelectorAll(":scope > ol > li")).map((item, index) => {
+        const body = visibleText(item)
+          .replace(/[ \t]+/g, " ")
+          .replace(/\n+/g, "\n")
+          .trim();
+        return `${index + 1}. ${body}`;
+      });
+      return [labels, ...items].filter(Boolean).join("\n");
+    })
+    .filter(Boolean)
+    .join("\n\n");
+}
 
 export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPageProps) {
   const navigate = useNavigate();
@@ -512,10 +546,18 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
     () => () => {
       if (copyStatusTimerRef.current != null) {
         window.clearTimeout(copyStatusTimerRef.current);
+        copyStatusTimerRef.current = null;
       }
     },
     [],
   );
+  useEffect(() => {
+    setCopyStatus(null);
+    if (copyStatusTimerRef.current != null) {
+      window.clearTimeout(copyStatusTimerRef.current);
+      copyStatusTimerRef.current = null;
+    }
+  }, [queryWord, lang]);
   const [isStarred, setIsStarred] = useState(false);
   const [strokesVisible, setStrokesVisible] = useState(false);
   const [cnsFallback, setCnsFallback] = useState<CnsFallbackState>({
@@ -692,6 +734,15 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
     }
     setIsStarred(hasStarWord(lang, storageWord));
   }, [state.entry, storageWord, lang]);
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === getStarredStorageKey(lang) && storageWord) {
+        setIsStarred(hasStarWord(lang, storageWord));
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [lang, storageWord]);
 
   const toggleStar = useCallback(() => {
     if (!storageWord) return;
@@ -725,30 +776,11 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
     event.stopPropagation();
     const container = resultRef.current;
     if (!container) return;
-    // `.entry-item` (one per part-of-speech group) is the only DOM unit that
-    // holds actual definition content (POS tag + <ol> of <li> def/example/
-    // quote/link/synonyms/antonyms). Querying `.entry > .entry-item` in DOM
-    // order — rather than whole `.entry` heteronym blocks — naturally
-    // excludes every non-definition sibling: the action row (star/copy/
-    // variants), the radical/stroke-order corner, the title/pronunciation
-    // heading, Hakka's multi-dialect `.bopomofo` reading block, `.cn-specific`
-    // / `.twblg-variants` metadata, the reading-only note, dialect synonyms,
-    // and cross-reference link lists — without having to strip each by name.
-    const entryItems = Array.from(container.querySelectorAll(":scope > .entry > .entry-item"));
-    const text = entryItems
-      .map((item) => {
-        const copy = item.cloneNode(true) as HTMLElement;
-        // Taiwanese example/quote/link lines route through the same #186
-        // ruby2hruby() decoration as the title, so .romanization-selectable
-        // overlay spans can appear inside .entry-item too — strip them here.
-        copy.querySelectorAll(".romanization-selectable").forEach((node) => node.remove());
-        return (copy.innerText || copy.textContent || "").replace(/\s+/g, " ").trim();
-      })
-      .filter(Boolean)
-      .join("\n");
+    const text = serializeDefinitionText(container);
     const ok = await writeTextToClipboard(text);
     if (copyStatusTimerRef.current != null) {
       window.clearTimeout(copyStatusTimerRef.current);
+      copyStatusTimerRef.current = null;
     }
     setCopyStatus({ ok });
     copyStatusTimerRef.current = window.setTimeout(() => {
@@ -956,15 +988,11 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                         <SvgIcon name="copy" size="1em" aria-hidden="true" />
                       </button>
                     )}
-                    {hasEntryDefinitions && copyStatus && (
-                      <span className="entry-copy-status" role="status" aria-live="polite">
-                        {copyStatus.ok ? "已複製" : "複製失敗，請手動選取文字"}
-                      </span>
-                    )}
                     {isSingleCharTitle && (
                       <a
                         className="iconic-circle stroke variants-link"
-                        title="教育部《異體字字典》"
+                        aria-label="查詢此單字的教育部《異體字字典》資料"
+                        title="查詢此單字的教育部《異體字字典》資料"
                         target="_blank"
                         rel="noopener noreferrer"
                         href={`https://dict.variants.moe.edu.tw/search.jsp?QTP=0&WORD=${encodeURIComponent(title)}`}
@@ -973,25 +1001,17 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                         <SvgIcon name="book" size="1em" aria-hidden="true" />
                       </a>
                     )}
-                    <span
+                    <button
+                      type="button"
                       className="star iconic-color"
                       title={isStarred ? "已加入記錄簿" : "加入字詞記錄簿"}
                       data-word={title}
                       data-lang={lang}
-                      role="button"
-                      tabIndex={0}
                       aria-label={isStarred ? "已加入記錄簿" : "加入字詞記錄簿"}
+                      aria-pressed={isStarred}
                       onClick={(event) => {
                         event.stopPropagation();
-                        event.preventDefault();
                         toggleStar();
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          toggleStar();
-                        }
                       }}
                     >
                       <SvgIcon
@@ -1000,6 +1020,18 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                         style={isStarred ? undefined : { transform: "scale(1.12)" }}
                         aria-hidden="true"
                       />
+                    </button>
+                    <span
+                      className="entry-copy-status"
+                      role="status"
+                      aria-live="polite"
+                      aria-atomic="true"
+                    >
+                      {hasEntryDefinitions && copyStatus
+                        ? copyStatus.ok
+                          ? "已複製"
+                          : "複製失敗，請手動選取文字"
+                        : "\u00a0"}
                     </span>
                   </div>
                 )}

@@ -844,6 +844,15 @@ html[data-theme="dark"] .result .entry-actions .iconic-color.star:hover {
   max-width: 100%;
   margin: 0;
 }
+.entry-actions .star {
+  border: 0;
+  min-width: 32px;
+  min-height: 30px;
+  padding: 7px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
 .entry-copy-button {
   display: inline-flex;
   align-items: center;
@@ -880,6 +889,19 @@ html[data-theme="dark"] .result .entry-actions .iconic-color.star:hover {
   transition: transform 100ms ease-out;
 }
 .entry-copy-status {
+  display: inline-flex;
+  align-items: center;
+  /* Reserve a fixed box (wide enough for the longest status string,
+     "複製失敗，請手動選取文字") so toggling between the nbsp placeholder and
+     either status message never changes this element's own width -- that
+     keeps the preceding icon buttons from shifting under flex's
+     justify-content: flex-end. Do NOT force a full-row wrap (no
+     flex-basis: 100%) -- that grew .entry-control-stack's height by a
+     fixed amount on every viewport, including narrow ones where it pushed
+     h1.title's line box down (RESCOPE Android ruby layout regression). */
+  min-width: 8rem;
+  min-height: 1.5rem;
+  white-space: nowrap;
   font-size: 0.78rem;
 }
 @media (max-width: 767px) {
