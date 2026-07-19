@@ -15,6 +15,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Page, Route } from "@playwright/test";
 import { expect, test } from "./_fixtures";
+import { waitForAppReady } from "./readiness";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
@@ -44,7 +45,7 @@ test.describe("stroke animation trigger", () => {
     page,
   }) => {
     await page.goto("/%E8%90%8C"); // /萌
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
 
     const strokeBtn = page.locator('a.iconic-circle.stroke[title="筆順動畫"]').first();
     await expect(strokeBtn).toBeVisible({ timeout: 15_000 });
@@ -62,7 +63,7 @@ test.describe("stroke animation trigger", () => {
 
   test('stroke overlay never injects <i class="icon-spinner"> webfont markup', async ({ page }) => {
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
 
     const strokeBtn = page.locator('a.iconic-circle.stroke[title="筆順動畫"]').first();
     await strokeBtn.click();
@@ -79,7 +80,7 @@ test.describe("stroke animation trigger", () => {
 
   test("clicking again toggles the stroke overlay off", async ({ page }) => {
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
 
     const strokeBtn = page.locator('a.iconic-circle.stroke[title="筆順動畫"]').first();
     await strokeBtn.click();
@@ -97,7 +98,7 @@ test.describe("stroke animation trigger", () => {
     page,
   }) => {
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
 
     const strokeBtn = page.locator('a.iconic-circle.stroke[title="筆順動畫"]').first();
     await strokeBtn.click();
@@ -119,7 +120,7 @@ test.describe("stroke animation trigger", () => {
     // Playwright's actionability check rejects the click.
     await routeStrokeScripts(page);
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
 
     const strokeBtn = page.locator('a.iconic-circle.stroke[title="筆順動畫"]').first();
     await strokeBtn.click();
@@ -154,7 +155,7 @@ test.describe("stroke animation trigger", () => {
       route.fulfill({ status: 404, contentType: "application/json", body: "{}" }),
     );
     await page.goto("/%E8%90%8C"); // /萌
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
 
     const strokeBtn = page.locator("a.iconic-circle.stroke").first();
     await expect(strokeBtn).toBeVisible({ timeout: 15_000 });
@@ -175,7 +176,7 @@ test.describe("stroke animation trigger", () => {
       route.fulfill({ status: 200, contentType: "application/json", body: '{"strokes":[]}' }),
     );
     await page.goto("/%E8%90%8C"); // /萌
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
 
     const strokeBtn = page.locator("a.iconic-circle.stroke").first();
     await expect(strokeBtn).toBeVisible({ timeout: 15_000 });
@@ -193,6 +194,12 @@ test.describe("stroke animation trigger", () => {
 // live without a page reload.
 test.describe("筆順動畫速度 preference (issue #98)", () => {
   async function openPrefPanel(page: Page): Promise<void> {
+    // #user-pref is a sibling of #nav-fulltext-search under Layout.tsx's
+    // chrome; readiness's `#nav-fulltext-search, #user-pref` OR-selector
+    // with `.first()` can resolve on whichever attaches first in DOM
+    // order, not necessarily #user-pref itself. Wait for the exact element
+    // this function needs before touching it.
+    await page.locator("#user-pref").waitFor({ state: "attached", timeout: 15_000 });
     await page.evaluate(() => {
       const panel = document.getElementById("user-pref");
       if (!panel) throw new Error("user-pref element not found in DOM");
@@ -208,7 +215,7 @@ test.describe("筆順動畫速度 preference (issue #98)", () => {
     page,
   }) => {
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
 
     await openPrefPanel(page);
 
@@ -234,7 +241,7 @@ test.describe("筆順動畫速度 preference (issue #98)", () => {
       window.localStorage.setItem("stroke-speed", "fast");
     });
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
 
     await openPrefPanel(page);
 
@@ -246,7 +253,7 @@ test.describe("筆順動畫速度 preference (issue #98)", () => {
     page,
   }) => {
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
 
     // Tag this specific document instance so a reload (which produces a brand
     // new document/window) would make the marker disappear.

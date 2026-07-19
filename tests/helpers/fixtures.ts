@@ -28,8 +28,14 @@
 
 import { readFileSync } from "node:fs";
 import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  STROKE_CORPUS_POINTER_KEY,
+  STROKE_CORPUS_PREFIX,
+  STROKE_CORPUS_EXPECTED_COUNT,
+} from "../../src/utils/stroke-corpus";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
@@ -177,6 +183,28 @@ export function collectDictionaryFixtures(): FixtureEntry[] {
   for (const lang of ["a", "t", "h", "c"] as const) {
     const key = `${lang}/${radicalFixture}`;
     const body = optional(path.join(DATA_DICT, lang, radicalFixture), key);
+    if (body) {
+      entries.push({
+        bucket: "DICTIONARY",
+        key,
+        body,
+        httpMetadata: { contentType: "application/json; charset=utf-8" },
+      });
+    }
+  }
+
+  // @.json — the bare radical-table index RadicalView (routes /@, /'@, /~@)
+  // fetches on mount. Without this, /api/@.json 404s in every e2e/audit
+  // fixture run and the radical page is permanently stuck in its loading/
+  // error state, never rendering a.stroke-char (tests/e2e/legacy-styles-
+  // regression.spec.ts's "radical" entry and any test that navigates to a
+  // bare radical route). h has no radical table upstream (see
+  // radical-page-utils.ts's RadicalLang -- Hakka isn't a supported radical-
+  // page language), so it's skipped like the other @-fixtures above.
+  const radicalIndexFixture = "@.json";
+  for (const lang of ["a", "t", "c"] as const) {
+    const key = `${lang}/${radicalIndexFixture}`;
+    const body = optional(path.join(DATA_DICT, lang, radicalIndexFixture), key);
     if (body) {
       entries.push({
         bucket: "DICTIONARY",
@@ -405,12 +433,12 @@ export function collectAssetFixtures(): FixtureEntry[] {
     });
   }
 
-  const manifest = path.join(FIXTURES_DIR, "manifest.appcache");
-  if (existsSync(manifest)) {
+  const appcacheManifestPath = path.join(FIXTURES_DIR, "manifest.appcache");
+  if (existsSync(appcacheManifestPath)) {
     entries.push({
       bucket: "ASSETS",
       key: "manifest.appcache",
-      body: readFileSync(manifest),
+      body: readFileSync(appcacheManifestPath),
       httpMetadata: { contentType: "text/cache-manifest; charset=utf-8" },
     });
   } else {
@@ -422,19 +450,70 @@ export function collectAssetFixtures(): FixtureEntry[] {
     });
   }
 
-  // Real stroke-json for 萌 (U+840C) from tests/fixtures/stroke-json/840c.json.
-  // Serves two purposes: (1) useStrokeAvailability HEAD probe returns 200 so the
-  // pencil button stays enabled; (2) jquery.strokeWords.js can actually render
-  // 12 strokes in #strokes, giving the container non-zero width so Playwright's
+  // Real stroke-json for 萌 (U+840C) from tests/fixtures/stroke-json/840c.json,
+  // seeded under the ATOMIC corpus model (src/utils/stroke-corpus.ts,
+  // commands/sync-moe-stroke-corpus.mjs): a pointer at
+  // `stroke-corpus/current.json`, a manifest at
+  // `stroke-corpora/<digest>/manifest.json` listing every allowlisted
+  // codepoint (real 840c padded with 6,062 synthetic empty-array entries so
+  // the 6,063-file count check in handleStrokeAPI.ts's resolveCorpus()
+  // passes), and the real object at
+  // `stroke-corpora/<digest>/stroke-json/840c.json`. Serves two purposes:
+  // (1) useStrokeAvailability HEAD probe returns 200 so the pencil button
+  // stays enabled; (2) jquery.strokeWords.js can actually render 12 strokes
+  // in #strokes, giving the container non-zero width so Playwright's
   // actionability check passes for the replay-click test.
   const strokeJson840c = path.join(FIXTURES_DIR, "stroke-json", "840c.json");
   if (existsSync(strokeJson840c)) {
+    const realBody = readFileSync(strokeJson840c);
+    const bodyByHex: Record<string, Uint8Array> = { "840c": realBody };
+    let synthetic = 0x4e00;
+    while (Object.keys(bodyByHex).length < STROKE_CORPUS_EXPECTED_COUNT) {
+      const hex = synthetic.toString(16);
+      synthetic++;
+      if (bodyByHex[hex]) continue;
+      bodyByHex[hex] = new TextEncoder().encode("[]");
+    }
+    const files = Object.entries(bodyByHex)
+      .map(([hex, body]) => ({
+        path: `stroke-json/${hex}.json`,
+        sha256: createHash("sha256").update(body).digest("hex"),
+        bytes: body.byteLength,
+      }))
+      .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+    const corpusDigest = createHash("sha256")
+      .update(files.map((f) => `${f.path}:${f.sha256}`).join("\n"))
+      .digest("hex");
+    const totalBytes = files.reduce((s, f) => s + f.bytes, 0);
+    const manifest = { schema: 1, corpusDigest, fileCount: files.length, totalBytes, files };
+    const manifestKey = `${STROKE_CORPUS_PREFIX}/${corpusDigest}/manifest.json`;
+    const pointer = {
+      schema: 1,
+      corpusDigest,
+      manifestKey,
+      fileCount: manifest.fileCount,
+      totalBytes: manifest.totalBytes,
+    };
     entries.push({
       bucket: "ASSETS",
-      key: "stroke-json/840c.json",
-      body: readFileSync(strokeJson840c),
+      key: STROKE_CORPUS_POINTER_KEY,
+      body: new TextEncoder().encode(JSON.stringify(pointer)),
       httpMetadata: { contentType: "application/json; charset=utf-8" },
     });
+    entries.push({
+      bucket: "ASSETS",
+      key: manifestKey,
+      body: new TextEncoder().encode(JSON.stringify(manifest)),
+      httpMetadata: { contentType: "application/json; charset=utf-8" },
+    });
+    for (const [hex, body] of Object.entries(bodyByHex)) {
+      entries.push({
+        bucket: "ASSETS",
+        key: `${STROKE_CORPUS_PREFIX}/${corpusDigest}/stroke-json/${hex}.json`,
+        body,
+        httpMetadata: { contentType: "application/json; charset=utf-8" },
+      });
+    }
   }
 
   // Real MOEDICT.woff2 from data/assets/fonts/ — seeded under ASSETS key
@@ -442,14 +521,20 @@ export function collectAssetFixtures(): FixtureEntry[] {
   // returns 200 with real font bytes. This lets e2e tests assert the correct
   // HTTP status, content-type, and FontFace load status for the "MOEDICT Same-Origin"
   // @font-face alias added in src/index.css.
-  const moedictWoff2Path = path.join(DATA_ASSETS, "fonts", "MOEDICT.woff2");
-  if (existsSync(moedictWoff2Path)) {
-    entries.push({
-      bucket: "ASSETS",
-      key: "fonts/MOEDICT.woff2",
-      body: readFileSync(moedictWoff2Path),
-      httpMetadata: { contentType: "font/woff2" },
-    });
+  for (const [ext, contentType] of [
+    ["woff2", "font/woff2"],
+    ["otf", "font/otf"],
+    ["woff", "font/woff"],
+  ] as const) {
+    const moedictPath = path.join(DATA_ASSETS, "fonts", `MOEDICT.${ext}`);
+    if (existsSync(moedictPath)) {
+      entries.push({
+        bucket: "ASSETS",
+        key: `fonts/MOEDICT.${ext}`,
+        body: readFileSync(moedictPath),
+        httpMetadata: { contentType },
+      });
+    }
   }
 
   // Real Tauhu Oo 補完字型 and Fira Sans OT (romanize=1 caption font, RESCOPE

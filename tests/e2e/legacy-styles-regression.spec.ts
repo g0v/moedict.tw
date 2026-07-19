@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Page, Route } from "@playwright/test";
 import { expect, test } from "./_fixtures";
+import { waitForAppReady, type ReadinessKind } from "./readiness";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
@@ -78,8 +79,8 @@ async function blockCssSubresources(page: Page): Promise<void> {
   await page.route("**/assets/images/subtle_stripes_x2.png", notFound);
 }
 
-async function settle(page: Page): Promise<void> {
-  await page.waitForLoadState("networkidle");
+async function settle(page: Page, readiness?: ReadinessKind): Promise<void> {
+  await waitForAppReady(page, readiness);
   await page.evaluate(() => document.fonts.ready);
   // Let any pending layout/RAF callbacks flush so back-to-back screenshots
   // of identical content are byte-identical.
@@ -135,42 +136,52 @@ async function computedStyleDigest(page: Page): Promise<string> {
   });
 }
 
-const PAGES: Array<{ name: string; goto: (page: Page) => Promise<void> }> = [
+const PAGES: Array<{
+  name: string;
+  goto: (page: Page) => Promise<void>;
+  readiness?: ReadinessKind;
+}> = [
   {
     name: "home",
     goto: async (p) => {
       await p.goto("/%E8%90%8C");
     },
+    readiness: "dictionary-lang",
   },
   {
     name: "dict-t",
     goto: async (p) => {
       await p.goto("/'%E9%A3%9F");
     },
+    readiness: "dictionary-lang",
   },
   {
     name: "dict-h",
     goto: async (p) => {
       await p.goto("/%3A%E5%AD%97");
     },
+    readiness: "dictionary-lang",
   },
   {
     name: "dict-c",
     goto: async (p) => {
       await p.goto("/~%E4%B8%8A%E8%A8%B4");
     },
+    readiness: "dictionary-lang",
   },
   {
     name: "radical",
     goto: async (p) => {
       await p.goto("/@");
     },
+    readiness: "radical",
   },
   {
     name: "about",
     goto: async (p) => {
       await p.goto("/about");
     },
+    readiness: "about",
   },
   {
     name: "starred",
@@ -182,6 +193,7 @@ const PAGES: Array<{ name: string; goto: (page: Page) => Promise<void> }> = [
       });
       await p.goto("/=*");
     },
+    readiness: "starred",
   },
 ];
 
@@ -197,7 +209,7 @@ test.describe("legacy styles.css \u2014 zero-regression differential", () => {
     });
   });
 
-  for (const { name, goto } of PAGES) {
+  for (const { name, goto, readiness } of PAGES) {
     test(`${name}: working tree styles.css renders identically to ${BASELINE_REF}`, async ({
       page,
     }) => {
@@ -205,7 +217,7 @@ test.describe("legacy styles.css \u2014 zero-regression differential", () => {
       let css = readGitStylesCss(BASELINE_REF);
       await routeStylesCss(page, () => css);
       await goto(page);
-      await settle(page);
+      await settle(page, readiness);
       const before = await computedStyleDigest(page);
       expect(
         before.length,
@@ -214,7 +226,7 @@ test.describe("legacy styles.css \u2014 zero-regression differential", () => {
 
       css = readWorkingTreeStylesCss();
       await goto(page); // fresh navigation forces re-fetch of the <link>
-      await settle(page);
+      await settle(page, readiness);
       const after = await computedStyleDigest(page);
 
       expect(

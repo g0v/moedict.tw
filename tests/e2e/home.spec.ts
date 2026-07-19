@@ -1,4 +1,5 @@
 import { expect, test } from "./_fixtures";
+import { waitForAppReady } from "./readiness";
 
 test.describe("home route", () => {
   test("/ serves the SPA shell with search box", async ({ page }) => {
@@ -12,7 +13,7 @@ test.describe("home route", () => {
 
   test("Chinese text renders without mojibake", async ({ page }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     const bodyText = await page.locator("body").innerText();
     // Chinese range sanity check: at least one CJK char rendered somewhere
     expect(/[\u4e00-\u9fff]/.test(bodyText)).toBe(true);

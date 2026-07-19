@@ -76,7 +76,21 @@ export default defineConfig({
     command: process.env.E2E_SKIP_BUILD
       ? `vp exec tsx tests/e2e/serve.ts`
       : `vp run build && vp exec tsx tests/e2e/serve.ts`,
-    port: PORT,
+    // `port` alone only proves the TCP socket is open -- Miniflare/workerd
+    // binds it before tests/helpers/miniflare-server.ts finishes seeding R2
+    // fixture data (DICTIONARY/ASSETS/FONTS), so a test could start
+    // navigating before fixtures exist. `url` makes Playwright poll a real
+    // hydrated endpoint instead. Deliberately NOT a /api/*.json dictionary
+    // route: those are read through readR2JsonCached's per-isolate memo
+    // (src/api/r2-json-cache.ts), which caches a MISS as `null` for 10
+    // minutes -- a single probe hit that lands before DICTIONARY finishes
+    // seeding poisons that key for the rest of the run, no matter how long
+    // seeding then takes. The seeded MOEDICT.woff2 asset path is served by
+    // serveAssetWithFallback (src/api/release-fallback.ts), which reads
+    // directly from the ASSETS R2 binding with no such memo, so repeated
+    // pre-seed probes are side-effect-free and it only turns 200 once the
+    // font is genuinely seeded.
+    url: `${BASE_URL}/assets/fonts/MOEDICT.woff2`,
     timeout: 180_000,
     // Decouple server reuse from CI: a stray CI=1 in a dev/agent shell must not
     // force reuseExistingServer:false (which causes port-conflict false failures).

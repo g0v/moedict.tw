@@ -1,4 +1,5 @@
 import { expect, test } from "./_fixtures";
+import { waitForAppReady } from "./readiness";
 
 // RESCOPE #88 (cross-language a/t/h/c record-book overview) and #219
 // (bounded manual UTF-8 plain-text export/import of favorites) on top of
@@ -13,13 +14,13 @@ test.describe("#88 cross-language record-book overview", () => {
     page,
   }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "shell");
     await page.evaluate(() => {
       window.localStorage.setItem("starred-t", '"食"\\n');
       window.localStorage.setItem("starred-c", '"东西"\\n');
     });
     await page.goto("/=*");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "starred");
 
     await page.getByRole("button", { name: "顯示全部語言" }).click();
 
@@ -40,13 +41,13 @@ test.describe("#88 cross-language record-book overview", () => {
     page,
   }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "shell");
     await page.evaluate(() => {
       window.localStorage.setItem("starred-a", '"萌"\\n');
       window.localStorage.setItem("starred-t", '"食"\\n');
     });
     await page.goto("/=*");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "starred");
 
     await page.getByRole("button", { name: "顯示全部語言" }).click();
     const content = page.locator("#all-langs-content");
@@ -67,12 +68,12 @@ test.describe("#219 export/import of favorites", () => {
     page,
   }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "shell");
     await page.evaluate(() => {
       window.localStorage.setItem("starred-a", '"萌"\\n"典"\\n');
     });
     await page.goto("/=*");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "starred");
 
     const downloadPromise = page.waitForEvent("download");
     await page.getByRole("button", { name: "下載文字檔" }).click();
@@ -89,12 +90,12 @@ test.describe("#219 export/import of favorites", () => {
   test("複製到剪貼簿 succeeds when clipboard-write is granted", async ({ page, context }) => {
     await context.grantPermissions(["clipboard-write", "clipboard-read"]);
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "shell");
     await page.evaluate(() => {
       window.localStorage.setItem("starred-a", '"萌"\\n');
     });
     await page.goto("/=*");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "starred");
 
     await page.getByRole("button", { name: "複製到剪貼簿" }).click();
     await expect(page.getByRole("status")).toContainText("已複製收藏字詞清單");
@@ -121,12 +122,12 @@ test.describe("#219 export/import of favorites", () => {
       document.execCommand = () => false;
     });
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "shell");
     await page.evaluate(() => {
       window.localStorage.setItem("starred-a", '"萌"\\n');
     });
     await page.goto("/=*");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "starred");
 
     await page.getByRole("button", { name: "複製到剪貼簿" }).click();
     await expect(page.getByRole("status")).toContainText("複製失敗");
@@ -136,13 +137,13 @@ test.describe("#219 export/import of favorites", () => {
     page,
   }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "shell");
     await page.evaluate(() => {
       window.localStorage.setItem("starred-a", '"已收藏"\\n');
       window.localStorage.setItem("starred-t", '"既有"\\n');
     });
     await page.goto("/=*");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "starred");
 
     await page.getByRole("button", { name: "匯入" }).click();
     const textarea = page.locator("#import-starred-textarea");
@@ -170,9 +171,9 @@ test.describe("#219 export/import of favorites", () => {
     page,
   }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "shell");
     await page.goto("/=*");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "starred");
 
     await page.getByRole("button", { name: "匯入" }).click();
     const textarea = page.locator("#import-starred-textarea");

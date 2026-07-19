@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Page, Route } from "@playwright/test";
 import { expect, test } from "./_fixtures";
+import { waitForAppReady } from "./readiness";
 
 interface RouteDictionaryDataOptions {
   forceCns404?: boolean;
@@ -215,7 +216,7 @@ test.describe("console load errors — EduKai 404 and BiauKai decode", () => {
     });
 
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await page.evaluate(() => document.fonts.ready);
 
     // Sanity: the intercepted legacy styles.css must have actually loaded —
@@ -307,7 +308,11 @@ test.describe("console load errors — EduKai 404 and BiauKai decode", () => {
     });
 
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    // This test reads .result .entry .title's computed font-family below --
+    // "shell" (default) only waits for `body` visible, which races
+    // DictionaryPage's async entry fetch that actually renders that
+    // element.
+    await waitForAppReady(page, "dictionary");
     await page.evaluate(() => document.fonts.ready);
 
     // moe-capacitor class must be present on <html>
@@ -383,7 +388,7 @@ test.describe("offline CNS fallback", () => {
     });
 
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await page.evaluate(() => document.fonts.ready);
 
     const apiResult = await page.evaluate(async () => {
@@ -441,7 +446,7 @@ test.describe("bare home URL — no unused font preload hints", () => {
     });
 
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await page.evaluate(() => document.fonts.ready);
 
     // Primary contract: AssetLoader must NOT insert any <link rel="preload"

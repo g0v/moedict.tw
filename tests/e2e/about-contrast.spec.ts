@@ -1,5 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./_fixtures";
+import { waitForAppReady } from "./readiness";
 
 // ---------------------------------------------------------------------------
 // About page (/about) WCAG AA contrast regression, three real failures found
@@ -94,7 +95,10 @@ async function ownColors(loc: Locator): Promise<{ color: string; backgroundColor
 async function gotoAbout(page: Page): Promise<void> {
   const response = await page.goto(ABOUT_PATH);
   expect(response?.status()).toBe(200);
-  await page.waitForLoadState("networkidle");
+  // "shell" (default) only waits for `body` visible, which can resolve
+  // before About.tsx's body-class effect / legacy-stylesheet loads settle
+  // -- see readiness.ts's "about" kind for the exact race this closes.
+  await waitForAppReady(page, "about");
 }
 
 // ---------------------------------------------------------------------------

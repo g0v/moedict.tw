@@ -1,4 +1,5 @@
 import { expect, test } from "./_fixtures";
+import { waitForAppReady } from "./readiness";
 
 // Regression test for #99 / PR #101: when the preferences panel is opened
 // on a short or narrow viewport, it must sit flush beneath the navbar and
@@ -15,6 +16,13 @@ const MOBILE_NAVBAR = 50;
 const SAFE_AREA = 0;
 
 async function openPrefPanel(page: import("@playwright/test").Page): Promise<void> {
+  // #user-pref is a sibling of #nav-fulltext-search under Layout.tsx's
+  // chrome; "preferences" readiness's `#nav-fulltext-search, #user-pref`
+  // OR-selector with `.first()` can resolve on whichever attaches first in
+  // DOM order, not necessarily #user-pref itself. Wait for the exact
+  // element this function needs before touching it, rather than relying on
+  // callers having used a readiness kind that happens to cover it.
+  await page.locator("#user-pref").waitFor({ state: "attached", timeout: 15_000 });
   // Bypass the slideToggle() animation path and just reveal the panel. The
   // CSS under test is independent of how the panel was shown.
   await page.evaluate(() => {
@@ -37,7 +45,10 @@ test.describe("#user-pref panel fits the viewport below the navbar", () => {
     // without max-height + overflow:auto.
     await page.setViewportSize({ width: 375, height: 568 });
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    // openPrefPanel throws if #user-pref isn't in the DOM yet -- "shell"
+    // (default) only waits for `body` visible, which races Layout.tsx's
+    // chrome mount. "preferences" explicitly waits for #user-pref attached.
+    await waitForAppReady(page, "preferences");
 
     await openPrefPanel(page);
 
@@ -71,7 +82,8 @@ test.describe("#user-pref panel fits the viewport below the navbar", () => {
   test("desktop viewport: panel pinned 45px below top", async ({ page }) => {
     await page.setViewportSize({ width: 1024, height: 768 });
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    // Same #user-pref mount race as the sibling test above.
+    await waitForAppReady(page, "preferences");
 
     await openPrefPanel(page);
 
