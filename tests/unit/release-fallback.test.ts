@@ -413,6 +413,43 @@ describe("serveAssetWithFallback", () => {
     expect(res!.headers.get("X-Moedict-Asset-Source")).toBe("site-assets");
   });
 
+  it("treats SITE_ASSETS 304 (conditional-GET cache revalidation) as a hit, not a miss -- serves it unchanged with zero R2/proxy fallback attempts", async () => {
+    // response.ok is false for 304, but a 304 means SITE_ASSETS validated the
+    // browser's cached copy via If-None-Match -- a hit that must short-circuit
+    // the same as a 200, never fall through to R2/legacy. R2 bucket has no
+    // matching key seeded at all, so any fallback attempt would itself 404/null
+    // and this test would only pass by accident if the code silently produced
+    // a 404 body instead of relaying the 304. Assert on both status AND that
+    // SITE_ASSETS.fetch was called exactly once (no fallback machinery ran).
+    // Build the mock function as a standalone local (not read back off
+    // `fetcher.fetch`) so the later assertion never references it as a
+    // member-expression -- `expect(fetcher.fetch)` is flagged by the
+    // unbound-method lint rule, which can't see that vi.fn()'s return value
+    // never reads `this`; asserting on the standalone spy sidesteps that
+    // entirely rather than just relocating the same bare property access.
+    const fetchSpy = vi.fn(
+      async () => new Response(null, { status: 304, headers: { ETag: '"abc123"' } }),
+    );
+    const fetcher: FetcherLike = { fetch: fetchSpy } as unknown as FetcherLike;
+    const env = {
+      SITE_ASSETS: fetcher,
+      ASSETS: makeBucket(),
+      CF_VERSION_METADATA: {
+        id: "uuid-1",
+        tag: "rel-1",
+        timestamp: "2026-07-12T00:00:00Z",
+      } as never,
+    };
+    const res = await serveAssetWithFallback(
+      req("/assets/index-BU7Lztf4.js", { headers: { "If-None-Match": '"abc123"' } }),
+      env as never,
+    );
+    expect(res!.status).toBe(304);
+    expect(res!.headers.get("X-Moedict-Asset-Source")).toBe("site-assets");
+    expect(res!.headers.get("etag")).toBe('"abc123"');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("falls back to R2 current release (source=r2-release)", async () => {
     const key = releaseKey("rel-1", "assets/index-BU7Lztf4.js");
     const fetcher = makeFetcher(new Response("", { status: 404 }));

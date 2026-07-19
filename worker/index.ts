@@ -2,7 +2,7 @@ import { handleDictionaryAPI } from "../src/api/handleDictionaryAPI";
 import { lookupDictionaryEntry } from "../src/api/handleDictionaryAPI";
 import { handleListAPI, isListPath } from "../src/api/handleListAPI";
 import { handleLookupAPI } from "../src/api/handleLookupAPI";
-import { handleStrokeAPI } from "../src/api/handleStrokeAPI";
+import { handleStrokeAPI, peekStrokeCorpusDigest } from "../src/api/handleStrokeAPI";
 import { handleOEmbedAPI } from "../src/oembed/handle-oembed-api";
 import { handleEmbedPage } from "../src/oembed/handle-embed-page";
 import { escapeHeadContent, resolveHeadByPath } from "../src/ssr/head";
@@ -660,6 +660,53 @@ export function isEdgeCacheable(request: Request, response: Response): boolean {
 }
 
 /**
+ * Internal query param namespacing the `/api/stroke-json/*` edge-cache key
+ * by the current atomic corpusDigest (src/utils/stroke-corpus.ts). Never
+ * appears on the public request URL, response body, or any client-visible
+ * header — it exists ONLY inside the synthetic `Request` object passed to
+ * `caches.default.match`/`.put`.
+ */
+const STROKE_EDGE_CACHE_DIGEST_PARAM = "__moedict_stroke_digest";
+
+/**
+ * Build the `caches.default` lookup/write key for a GET request.
+ *
+ * Every route except `/api/stroke-json/*.json` keeps the request itself as
+ * its cache key — unchanged from before this fix.
+ *
+ * For stroke-json, `CACHE_PURGE_TOKEN` (the only mechanism that could
+ * otherwise invalidate a stale edge entry) is a Worker secret that is not
+ * available to the corpus-upload pipeline (`promoteCorpusPointer` runs as
+ * a local operator CLI, never as the Worker), so cache identity is fixed
+ * at the source instead: this key carries the CURRENT atomic
+ * `corpusDigest`, resolved via {@link peekStrokeCorpusDigest} — the exact
+ * same per-isolate WeakMap-cached resolver `handleStrokeAPI` itself uses,
+ * so a warm request performs zero additional R2 reads here. A pointer
+ * promotion changes the digest, which changes this key, which means the
+ * OLD bare-URL cache entry can NEVER be read again by a post-promotion
+ * Worker — it simply ages out on its own `s-maxage` TTL, never served.
+ *
+ * Returns `null` when the pointer/manifest fails to resolve (missing,
+ * malformed, or hash-mismatched) — the caller MUST bypass the edge cache
+ * entirely in that case (no read, no write) and let the request fall
+ * through to `handleStrokeAPI`, which returns its own fail-closed 503
+ * (already `no-store` and non-200, so never edge-cacheable regardless).
+ * The only extra latency this adds on the cold/TTL-expired path is
+ * `resolveCorpus`'s own pointer+manifest reads — the same cost
+ * `handleStrokeAPI` already pays on every cold resolution, not a second
+ * one (see the shared WeakMap note above).
+ */
+async function deriveStrokeJsonEdgeCacheKey(request: Request, env: Env): Promise<Request | null> {
+  const bucket = getAssetsBucket(env);
+  if (!bucket) return null;
+  const digest = await peekStrokeCorpusDigest(bucket);
+  if (!digest) return null;
+  const keyUrl = new URL(request.url);
+  keyUrl.searchParams.set(STROKE_EDGE_CACHE_DIGEST_PARAM, digest);
+  return new Request(keyUrl.toString(), request);
+}
+
+/**
  * Dispatch boundary: edge-cache read-through, then version-header
  * decoration on every response (API, compatibility, and fallback routes all
  * expose the same metadata without per-route branching), then a best-effort
@@ -671,25 +718,44 @@ export async function dispatch(
   ctx?: ExecutionContext,
 ): Promise<Response> {
   // Serve straight from the edge cache when a previous dispatch stored this
-  // exact URL. Deploy/rollback probes always carry a unique `_probe`
+  // exact cache key. Deploy/rollback probes always carry a unique `_probe`
   // cache-buster, so rollout verification never reads a cached entry. The
   // `caches` global is absent in plain-Node unit tests — the layer degrades
   // to a no-op there (and on *.workers.dev, where cache.put is a no-op).
+  //
+  // `/api/stroke-json/*` uses a digest-namespaced cache key (see
+  // deriveStrokeJsonEdgeCacheKey) instead of the bare request — every other
+  // route's cache key is the request itself, unchanged. HEAD requests never
+  // enter this layer at all (method !== "GET"), so HEAD/If-None-Match
+  // conditional semantics are handled entirely by handleStrokeAPI on a
+  // cache miss, exactly as before this fix.
   const edgeCache = typeof caches !== "undefined" ? caches.default : undefined;
+  const url = new URL(request.url);
+  let cacheKey: Request | null = request;
   if (edgeCache && request.method === "GET") {
-    try {
-      const hit = await edgeCache.match(request);
-      if (hit) {
-        const headers = new Headers(hit.headers);
-        headers.set("X-Moedict-Edge-Cache", "hit");
-        return new Response(hit.body, {
-          status: hit.status,
-          statusText: hit.statusText,
-          headers,
-        });
+    if (url.pathname.startsWith("/api/stroke-json/")) {
+      // deriveStrokeJsonEdgeCacheKey's only internal R2 access
+      // (peekStrokeCorpusDigest -> resolveCorpus -> resolveCorpusUncached)
+      // already catches every failure itself and resolves to `null`
+      // rather than throwing — never wrap this in a try/catch here, it
+      // would be unreachable dead code.
+      cacheKey = await deriveStrokeJsonEdgeCacheKey(request, env);
+    }
+    if (cacheKey) {
+      try {
+        const hit = await edgeCache.match(cacheKey);
+        if (hit) {
+          const headers = new Headers(hit.headers);
+          headers.set("X-Moedict-Edge-Cache", "hit");
+          return new Response(hit.body, {
+            status: hit.status,
+            statusText: hit.statusText,
+            headers,
+          });
+        }
+      } catch {
+        // A cache lookup failure must never take down rendering.
       }
-    } catch {
-      // A cache lookup failure must never take down rendering.
     }
   }
   const response = await dispatchCore(request, env, ctx);
@@ -707,9 +773,9 @@ export async function dispatch(
     statusText: response.statusText,
     headers,
   });
-  if (edgeCache && isEdgeCacheable(request, decorated)) {
+  if (edgeCache && cacheKey && isEdgeCacheable(request, decorated)) {
     // Promise.resolve guards non-conformant Cache stubs (tests stub put as a plain spy).
-    const putPromise = Promise.resolve(edgeCache.put(request, decorated.clone())).catch(() => {
+    const putPromise = Promise.resolve(edgeCache.put(cacheKey, decorated.clone())).catch(() => {
       // Best-effort: a failed put only means the next request re-renders.
     });
     if (ctx) {

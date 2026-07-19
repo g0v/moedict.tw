@@ -235,7 +235,20 @@ export async function renderHtmlShellWithFallback<E extends FallbackEnv>(
   if (fetcher && typeof fetcher.fetch === "function") {
     try {
       const shellUrl = new URL("/", request.url);
-      const shellResponse = await fetcher.fetch(new Request(shellUrl.toString(), request));
+      // Strip conditional-request headers (If-None-Match/If-Modified-Since)
+      // before this internal fetch: the shell HTML is always rewritten with
+      // route-specific head metadata (title/og:*) via injectHead below, so a
+      // 304 (empty body) from SITE_ASSETS validating the CLIENT's cached copy
+      // of some earlier route's rewritten HTML against its own unmodified
+      // index.html ETag would leave nothing to inject into -- forwarding
+      // those headers made every conditional-GET for the SPA shell fall
+      // through the entire R2/legacy chain to 503 recovery instead of
+      // simply fetching the real body once and rewriting it, exactly like
+      // the browser never sent a conditional request at all.
+      const shellRequestInit = new Request(shellUrl.toString(), request);
+      shellRequestInit.headers.delete("If-None-Match");
+      shellRequestInit.headers.delete("If-Modified-Since");
+      const shellResponse = await fetcher.fetch(shellRequestInit);
       if (shellResponse.ok) {
         if (request.method === "HEAD") {
           const headers = new Headers(shellResponse.headers);
@@ -415,7 +428,13 @@ export async function serveAssetWithFallback(
   if (fetcher && typeof fetcher.fetch === "function") {
     try {
       const response = await fetcher.fetch(request);
-      if (response.ok) {
+      // response.ok is false for 304 (Not Modified) -- but a 304 means
+      // SITE_ASSETS successfully validated the browser's cached copy via
+      // If-None-Match/If-Modified-Since, which is a hit, not a miss.
+      // Treating it as non-ok sent every conditional-GET revalidation for
+      // hashed bundle assets down the entire R2/legacy fallback chain to
+      // the dead ASSET_BASE_URL proxy host on every repeat navigation.
+      if (response.ok || response.status === 304) {
         const headers = new Headers(response.headers);
         headers.set("X-Moedict-Asset-Source", "site-assets");
         for (const [k, v] of Object.entries(getVersionHeaders(meta))) {
