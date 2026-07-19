@@ -686,6 +686,97 @@ describe("serveAssetWithFallback", () => {
     expect(res!.headers.get("X-Moedict-Asset-Source")).toBe("r2-legacy");
     expect(await res!.text()).toBe("JS content");
   });
+
+  // ── CJK / percent-encoded path resolution (#153 staging repro) ────────
+  //
+  // scripts/lib/r2-upload.mjs enumerates dist/client/** with real
+  // filesystem paths (raw UTF-8, never percent-encoded) and uploads under
+  // releaseKey(tag, rel) -- so the R2-seeded key below deliberately uses
+  // the raw CJK filename, matching production upload behavior exactly.
+  // The incoming `Request` carries the percent-encoded form a browser
+  // actually sends. Before the fix, releaseKey/immutableKey/legacy derived
+  // their key straight from `url.pathname` (still percent-encoded), so
+  // this never matched the uploaded key -- guide images have no /assets/
+  // prefix, so they never reach the immutable/legacy stages either,
+  // leaving zero fallback for a SITE_ASSETS miss.
+  it("resolves a CJK asset via R2 release fallback when the request path is percent-encoded (#153)", async () => {
+    const rawRelPath = "images/guide/多重表記_resized.jpg";
+    const key = releaseKey("rel-1", rawRelPath);
+    const fetcher = makeFetcher(new Response("", { status: 404 }));
+    const env = {
+      SITE_ASSETS: fetcher,
+      ASSETS: makeBucket({ [key]: { body: "JPEG bytes", contentType: "image/jpeg" } }),
+      CF_VERSION_METADATA: {
+        id: "uuid-1",
+        tag: "rel-1",
+        timestamp: "2026-07-12T00:00:00Z",
+      } as never,
+    };
+    const res = await serveAssetWithFallback(
+      req(`/images/guide/${encodeURIComponent("多重表記_resized.jpg")}`),
+      env as never,
+    );
+    expect(res).not.toBe(null);
+    expect(res!.status).toBe(200);
+    expect(res!.headers.get("X-Moedict-Asset-Source")).toBe("r2-release");
+    expect(await res!.text()).toBe("JPEG bytes");
+  });
+
+  it("resolves the same CJK asset when the request path arrives as raw (unencoded) UTF-8", async () => {
+    const rawRelPath = "images/guide/多重表記_resized.jpg";
+    const key = releaseKey("rel-1", rawRelPath);
+    const fetcher = makeFetcher(new Response("", { status: 404 }));
+    const env = {
+      SITE_ASSETS: fetcher,
+      ASSETS: makeBucket({ [key]: { body: "JPEG bytes", contentType: "image/jpeg" } }),
+      CF_VERSION_METADATA: {
+        id: "uuid-1",
+        tag: "rel-1",
+        timestamp: "2026-07-12T00:00:00Z",
+      } as never,
+    };
+    // Raw UTF-8 in the request path (browsers/fetch() normalize this to the
+    // same percent-encoded URL under the hood, but assert it explicitly so
+    // a future URL-handling change can't silently diverge the two forms).
+    const res = await serveAssetWithFallback(
+      req("/images/guide/多重表記_resized.jpg"),
+      env as never,
+    );
+    expect(res).not.toBe(null);
+    expect(res!.status).toBe(200);
+    expect(res!.headers.get("X-Moedict-Asset-Source")).toBe("r2-release");
+  });
+
+  it("fails closed (returns null, never throws) on malformed percent-encoding", async () => {
+    const fetcher = makeFetcher(new Response("", { status: 404 }));
+    const env = {
+      SITE_ASSETS: fetcher,
+      ASSETS: makeBucket(),
+      CF_VERSION_METADATA: {
+        id: "uuid-1",
+        tag: "rel-1",
+        timestamp: "2026-07-12T00:00:00Z",
+      } as never,
+    };
+    // A bare trailing `%` is invalid percent-encoding -- decodeURIComponent
+    // throws URIError; tryDecodeURIComponent must convert that into a
+    // fail-closed `null` R2 skip instead of an unhandled 500.
+    const res = await serveAssetWithFallback(req("/images/guide/%"), env as never);
+    expect(res).toBe(null);
+  });
+
+  it("still resolves ASCII /assets/* hashed paths via immutable store after decode (regression guard)", async () => {
+    const imKey = immutableKey("/assets/index-BU7Lztf4.js");
+    const fetcher = makeFetcher(new Response("", { status: 404 }));
+    const env = {
+      SITE_ASSETS: fetcher,
+      ASSETS: makeBucket({ [imKey]: { body: "JS bytes", contentType: "application/javascript" } }),
+      CF_VERSION_METADATA: undefined,
+    };
+    const res = await serveAssetWithFallback(req("/assets/index-BU7Lztf4.js"), env as never);
+    expect(res!.status).toBe(200);
+    expect(res!.headers.get("X-Moedict-Asset-Source")).toBe("r2-immutable");
+  });
 });
 
 // ── Structured shell-miss logging ───────────────────────────────────────
