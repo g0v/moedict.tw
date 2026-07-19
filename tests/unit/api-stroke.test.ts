@@ -106,16 +106,23 @@ function buildCorpus(
 ): { pointer: StrokeCorpusPointer; manifest: StrokeCorpusManifest; digest: string } {
   const files: StrokeCorpusFile[] = [];
   const hexes = new Set(Object.keys(bodyByHex));
+  // Single shallow copy up front, then mutate in place per synthetic hex —
+  // the previous `bodyByHex = { ...bodyByHex, [hex]: "[]" }` inside this
+  // loop re-spread the ENTIRE accumulated object on every one of the ~6,063
+  // iterations (O(n^2), ~18M key-copies), which alone took ~2.5-2.9s per
+  // test locally and tipped over vitest's default 5000ms testTimeout on
+  // CI's slower runners. Never mutate the caller's own bodyByHex object.
+  const allBodies: Record<string, string> = { ...bodyByHex };
   let synthetic = 0x4e00;
   while (hexes.size < STROKE_CORPUS_EXPECTED_COUNT) {
     const hex = synthetic.toString(16);
     synthetic++;
     if (hexes.has(hex)) continue;
     hexes.add(hex);
-    bodyByHex = { ...bodyByHex, [hex]: "[]" };
+    allBodies[hex] = "[]";
   }
   for (const hex of hexes) {
-    const body = bodyByHex[hex];
+    const body = allBodies[hex];
     files.push({
       path: `stroke-json/${hex}.json`,
       sha256: createHash("sha256").update(body).digest("hex"),
@@ -148,7 +155,7 @@ function buildCorpus(
   for (const hex of hexes) {
     if (opts.skipObjectWrite?.has(hex)) continue;
     objects.set(strokeCorpusObjectKey(digest, hex), {
-      body: bodyByHex[hex],
+      body: allBodies[hex],
       httpEtag: `"obj-${hex}"`,
     });
   }
