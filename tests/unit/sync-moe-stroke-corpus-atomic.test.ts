@@ -501,6 +501,37 @@ describe("readCorpusPointer", () => {
     expect(attempts).toBe(1);
     expect(sleeps).toHaveLength(0);
   });
+
+  // Regression: first-ever real (non-fake-runner) staging upload against an
+  // empty bucket hit exactly this. Real, non-piped wrangler's actual R2
+  // not-found phrasing is "The specified key does not exist." (ANSI-wrapped
+  // [ERROR] banner) — it contains NEITHER "NoSuchKey" NOR "404" NOR the bare
+  // substring "not found", all three of which every other test/fake-runner
+  // in this suite happens to emit. The pre-fix inline regex
+  // /not found|NoSuchKey|404/i therefore matched none of it: the legitimate
+  // "no prior pointer yet" case fell through to the generic retry path,
+  // burned all DEFAULT_VERIFY_MAX_RETRIES=8 attempts, and threw fatally
+  // instead of resolving to `null`. This test uses the exact captured
+  // stderr bytes (ANSI included) and must see zero retries.
+  it("never retries wrangler's real ANSI-wrapped 'does not exist' not-found output — returns null after exactly 1 attempt", async () => {
+    let attempts = 0;
+    const sleeps: number[] = [];
+    const realStderr =
+      "\x1B[31m\u2718 \x1B[41;31m[\x1B[41;97mERROR\x1B[41;31m]\x1B[0m \x1B[1mThe specified key does not exist.\x1B[0m\n";
+    const runner = async () => {
+      attempts++;
+      return { exitCode: 1, stdout: "", stderr: realStderr };
+    };
+    const result = await readCorpusPointer("bucket", {
+      runner,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
+    });
+    expect(result).toBeNull();
+    expect(attempts).toBe(1);
+    expect(sleeps).toHaveLength(0);
+  });
 });
 
 describe("promoteCorpusPointer never overwrites the object prefix", () => {

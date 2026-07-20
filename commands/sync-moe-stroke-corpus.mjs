@@ -67,7 +67,12 @@ import {
   toHexCodepoint,
   toDecimalCodepoint,
 } from "./fetch-moe-stroke.mjs";
-import { uploadWithConcurrency, retryWithBackoff, runWrangler } from "../scripts/lib/r2-upload.mjs";
+import {
+  uploadWithConcurrency,
+  retryWithBackoff,
+  runWrangler,
+  isNotFoundStderr,
+} from "../scripts/lib/r2-upload.mjs";
 import { parseGeneratedConfig, getAssetsBucketName } from "../scripts/lib/generated-config.mjs";
 import {
   STROKE_CORPUS_POINTER_KEY,
@@ -614,7 +619,7 @@ export async function verifyCorpusUploads(entries, bucketName, opts = {}) {
             const result = await runner(argv);
             if (result.exitCode !== 0) {
               const stderr = result.stderr ?? "";
-              if (/not found|NoSuchKey|404/i.test(stderr)) {
+              if (isNotFoundStderr(stderr)) {
                 throw new Error(`Missing object after upload: ${entry.r2Key}`);
               }
               // surface 429/5xx/network as retryable via isRetryableError patterns
@@ -862,7 +867,7 @@ export async function verifyAtomicCorpusUploads(manifest, bucketName, opts = {})
           const result = await runner(argv);
           if (result.exitCode !== 0) {
             const stderr = result.stderr ?? "";
-            if (/not found|NoSuchKey|404/i.test(stderr)) {
+            if (isNotFoundStderr(stderr)) {
               throw new Error(`Missing object during verify: ${key}`);
             }
             const err = new Error(`Download failed: ${key} (exit ${result.exitCode}): ${stderr}`);
@@ -963,7 +968,7 @@ export async function readCorpusPointer(bucketName, opts = {}) {
           const attemptResult = await runner(argv);
           if (attemptResult.exitCode !== 0) {
             const stderr = attemptResult.stderr ?? "";
-            if (/not found|NoSuchKey|404/i.test(stderr)) {
+            if (isNotFoundStderr(stderr)) {
               // Not found is a legitimate, stable outcome — never retried,
               // never surfaced as a thrown failure to the caller. A
               // curated message (not raw stderr) so it can never

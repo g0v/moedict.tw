@@ -296,6 +296,35 @@ export function isRetryableError(err) {
   return false;
 }
 
+/** Matches ANSI CSI escape/color sequences wrangler emits for its `[ERROR]` banner. */
+const ANSI_ESCAPE_RE = /\x1B\[[0-9;]*[A-Za-z]/g;
+
+/**
+ * True when wrangler's stderr indicates the R2 object/key genuinely does
+ * not exist — a legitimate, stable "not found" outcome that MUST short
+ * circuit past `retryWithBackoff` (never retried, mapped to `null`/a
+ * curated "Missing object" error), as opposed to a transient/permanent
+ * failure that should be retried or fail loudly.
+ *
+ * Strips ANSI color codes before matching: real, non-piped wrangler wraps
+ * its `[ERROR]` banner in CSI escapes (observed:
+ * `\x1B[31m✘ \x1B[41;31m[\x1B[41;97mERROR\x1B[41;31m]\x1B[0m The specified
+ * key does not exist.`), and — separately from the ANSI wrapping — real
+ * wrangler's actual not-found phrasing is "The specified key does not
+ * exist.", which contains neither "not found" nor "NoSuchKey"/"404". A
+ * fake-runner unit test that only ever emits clean plain-text stubs never
+ * exercises either gap, so this single matcher (and its test) MUST cover
+ * both: the literal real phrase, ANSI-wrapped, verbatim.
+ *
+ * @param {string} stderr
+ * @returns {boolean}
+ */
+export function isNotFoundStderr(stderr) {
+  if (!stderr) return false;
+  const plain = stderr.replace(ANSI_ESCAPE_RE, "");
+  return /does not exist|NoSuchKey|not found|\b404\b/i.test(plain);
+}
+
 /**
  * Upload multiple files with bounded concurrency (default/max ≤4).
  * @param {UploadEntry[]} files
