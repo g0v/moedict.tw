@@ -17,6 +17,8 @@
  *   - 長褲          — lang=t, ptck bucket 119（pinned whole-record 無義項，
  *     g0v/moedict-webkit#271; source-attributed manifest at
  *     data/sources/twblg-overrides/pinned-no-definition.json）
+ *   - 一 (U+4E00)  — lang=t, ptck bucket 0（real multi-heteronym record:
+ *     tsi̍t + it, both with 數/形/副 groups — whole-entry copy payload test）
  *
  * Extra explicit fixtures (geometry / font tests):
  *   - 黃 (U+9EC3)  — lang=a, pack bucket 707; ㄏㄨㄤˊ length=3 tone-node geometry
@@ -152,6 +154,21 @@ export function collectDictionaryFixtures(): FixtureEntry[] {
       httpMetadata: { contentType: "text/plain; charset=utf-8" },
     });
   }
+
+  // 一 (U+4E00, ptck bucket 0): real multi-heteronym record — tsi̍t (數/形/副
+  // groups, with examples) and it (數/形/副 groups). Seeded for the
+  // whole-entry copy-payload e2e test, which needs a genuine multi-heteronym
+  // page to assert every heteronym's header/reading/groups/examples appear
+  // in the serialized clipboard text, not just the first.
+  const multiHeteronymWord = "一";
+  const multiHeteronymBucket = bucketOf(multiHeteronymWord, "t");
+  const multiHeteronymKey = `ptck/${multiHeteronymBucket}.txt`;
+  entries.push({
+    bucket: "DICTIONARY",
+    key: multiHeteronymKey,
+    body: required(path.join(DATA_DICT, "ptck", `${multiHeteronymBucket}.txt`), multiHeteronymKey),
+    httpMetadata: { contentType: "text/plain; charset=utf-8" },
+  });
 
   // 黃 (U+9EC3) — lang=a, pack bucket 707; ㄏㄨㄤˊ has length=3 zhuyin which
   // exercises the length=3 tone-node geometry and the same-origin font route.

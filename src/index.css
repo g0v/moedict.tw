@@ -1071,7 +1071,7 @@ html.moe-ios .result .entry .title {
   --title-zhuyin-y-shift: -0.055em;
 }
 
-/* g0v/moedict-webkit#186: 主要拼音（羅馬拼音／注音）目前只靠
+/* g0v/moedict-webkit#186 + #245: 主要拼音（羅馬拼音／注音）目前只靠
    `ru[annotation]::before { content: attr(annotation) }` 畫出可見字形——
    CSS generated content 在任何瀏覽器都不可選取、不可複製。真正可選取的
    `.romanization-selectable` span 疊在跟 `::before` 完全相同的視覺座標上
@@ -1082,8 +1082,26 @@ html.moe-ios .result .entry .title {
    注意：此處改用 `<span>` 而非原先的 `<rt>`——WebKit 的 layout engine 會把
    所有 `<rt>` 強制設為 position:static（不論作者樣式或 !important 均無效），
    導致 h1 高度暴增（164px）、播放按鈕被推離標題外。`<span>` 在同一個
-   `<ru>` 父元素下正確接受 position:absolute，與 Chromium 行為一致。*/
-.result .entry .title hruby.rightangle ru[annotation] > .romanization-selectable {
+   `<ru>` 父元素下正確接受 position:absolute，與 Chromium 行為一致。
+
+   UNIVERSAL scope (not `.result .entry .title`-only): every call site of
+   `rightAngle()` (ruby2hruby.ts) mounts the identical `hruby.rightangle
+   ru[annotation] > .romanization-selectable` structure — the entry title,
+   the cross-reference hover tooltip (useRadicalTooltip.ts
+   buildEntryTooltipHTML), and Taiwanese example/quote/link sentences
+   (DictionaryPage.tsx parseTaiwaneseRubyLine, `.entry-item .example`).
+   Originally this rule (and its zhuyin/none display:none pair below) was
+   scoped to `.result .entry .title` only; the tooltip mount point needed
+   an identical selector added separately for #245, and the example-
+   sentence mount point was left unscoped entirely — its
+   `.romanization-selectable` stayed `position: static` (in-flow),
+   ballooning `<ru>`/`.example` box widths (measured: ru 322px vs prod
+   160px, .example 896px vs prod 538px on /'一), and under
+   `data-ruby-pref="zhuyin"/"none"` stayed `display: inline` instead of
+   hidden — the same invisible-but-selectable-and-in-flow defect class
+   #186 fixed for the title, just at a different mount point. Any future
+   rightAngle() call site inherits this fix automatically. */
+hruby.rightangle ru[annotation] > .romanization-selectable {
   position: absolute !important;
   left: -250% !important;
   top: -0.5em !important;
@@ -1110,23 +1128,15 @@ html.moe-ios .result .entry .title {
 
 /* When romanization is hidden (zhuyin-only or no-phonetics preference) the
    ::before generated content is already suppressed by the ruby-pref rules
-   above. The zhuyin and none ruby-pref selectors below also hide the
-   transparent selection hit target so it cannot be accidentally selected or
-   announced when no visible glyph is present. */
-body[data-ruby-pref="zhuyin"]
-  .result
-  .entry
-  .title
-  hruby.rightangle
-  ru[annotation]
-  > .romanization-selectable,
-body[data-ruby-pref="none"]
-  .result
-  .entry
-  .title
-  hruby.rightangle
-  ru[annotation]
-  > .romanization-selectable {
+   above (title only) and by the legacy unscoped
+   `body[data-ruby-pref=none] hruby ru[annotation][order]:before`
+   (data/assets/styles.css, all mount points). The zhuyin and none
+   ruby-pref selectors below also hide the transparent selection hit
+   target so it cannot be accidentally selected or announced when no
+   visible glyph is present — universally, matching the position rule
+   above (see its comment for the full mount-point list). */
+body[data-ruby-pref="zhuyin"] hruby.rightangle ru[annotation] > .romanization-selectable,
+body[data-ruby-pref="none"] hruby.rightangle ru[annotation] > .romanization-selectable {
   display: none !important;
 }
 
@@ -1509,46 +1519,6 @@ html[data-theme="dark"] .ui-tooltip .stroke-list-more {
 html[data-theme="dark"] .ui-tooltip hruby ru[annotation]::before,
 html[data-theme="dark"] .ui-tooltip hruby ru zhuyin {
   color: var(--moe-zhuyin-secondary, #666);
-}
-
-/* Tooltip 拼音水平位移（g0v/moedict-webkit#245 追蹤）。
-   `.romanization-selectable`（見上方 g0v/moedict-webkit#186 註解，本檔
-   902 行起）原本只把 `position: absolute` 套在
-   `.result .entry .title hruby.rightangle ru[annotation] > .romanization-selectable`
-   ——tooltip 的標題（useRadicalTooltip.ts buildEntryTooltipHTML 用
-   rightAngle() 產生同一份 hruby.rightangle 結構）不在 `.result .entry
-   .title` 之下，落到 legacy `hruby ru { position: relative }` 預設值，是
-   in-flow 的一般行內元素，把 `<ru>` 的 box 撐寬到含 "shēng" 全形文字寬度
-   （量測：46.5px → 127.8px）。`hruby ru[annotation]:before` 的
-   `left`/`width` 是用百分比相對這個被撐寬的 `<ru>` box 計算，導致視覺上
-   的注音／拼音字形被推往右側，而非置中於字元正下方。修法：把同一條
-   position:absolute 規則的 selector 擴充到 tooltip 標題，讓
-   `.romanization-selectable` 脫離文件流，`<ru>` box 收斂回真實字元寬度，
-   `::before` 的置中基準隨之修正——不複製規則內容，只加一個
-   selector（見 tests/e2e/dark-mode.spec.ts 的幾何斷言）。*/
-.ui-tooltip .title hruby.rightangle ru[annotation] > .romanization-selectable {
-  position: absolute !important;
-  left: -250% !important;
-  top: -0.5em !important;
-  height: 1em !important;
-  width: 600% !important;
-  font-size: 1em !important;
-  font-family: inherit !important;
-  line-height: 1 !important;
-  text-align: center !important;
-  text-indent: 0 !important;
-  transform: scale(0.55) !important;
-  transform-origin: top !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  border: 0 !important;
-  overflow: visible !important;
-  clip: auto !important;
-  clip-path: none !important;
-  white-space: nowrap !important;
-  color: transparent !important;
-  -webkit-user-select: text !important;
-  user-select: text !important;
 }
 
 /* 舊版 /word/N「指定義項」永久連結：對應該條目時的醒目樣式（同原 alert-success 效果） */

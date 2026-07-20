@@ -1733,6 +1733,70 @@ test.describe("entry copy-explanation action (RESCOPE #258, single action-row bu
     expect(copied.split("\n").length).toBeGreaterThanOrEqual(entryCount);
   });
 
+  test("'一 (t): whole-entry copy labels BOTH heteronym sections, keeps group labels, and strips zhuyin from examples", async ({
+    page,
+  }) => {
+    // 一 (ptck bucket 0, seeded in tests/helpers/fixtures.ts): real
+    // multi-heteronym record, tsi̍t and it, each with 數/形/副 groups and
+    // taigi examples carrying real <zhuyin>/<yin>/<diao> text nodes (unlike
+    // the CSS-generated-content romanization overlay). User-reported
+    // regression: the payload looked like the `it` reading was entirely
+    // missing (it wasn't — both heteronyms' groups were already
+    // serialized, just with no label distinguishing which reading each
+    // section belonged to) and example sentences leaked raw zhuyin glyphs.
+    const response = await page.goto("/'%E4%B8%80");
+    expect(response?.status()).toBe(200);
+    await waitForEntryHydration(page, "一");
+
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async (value: string) =>
+            ((window as Window & { __copied?: string }).__copied = value),
+        },
+      });
+    });
+    await expect(page.getByRole("button", { name: "複製解釋" })).toHaveCount(1);
+    await page.getByRole("button", { name: "複製解釋" }).click();
+    await expect(page.locator(".entry-copy-status")).toHaveText("已複製");
+    const copied = await page.evaluate(
+      () => (window as Window & { __copied?: string }).__copied ?? "",
+    );
+
+    // Both heteronym sections are present and labeled with their actual
+    // displayed reading, in document order.
+    const tsitIdx = copied.indexOf("一（tsi̍t）");
+    const itIdx = copied.indexOf("一（it）");
+    expect(tsitIdx).toBeGreaterThanOrEqual(0);
+    expect(itIdx).toBeGreaterThan(tsitIdx);
+
+    // Group labels (part-of-speech badges) survive as their own lines,
+    // once per heteronym section (數/形/副 each appear in both).
+    expect(copied.match(/^數$/gm)?.length).toBe(2);
+    expect(copied.match(/^形$/gm)?.length).toBe(2);
+    expect(copied.match(/^副$/gm)?.length).toBe(2);
+
+    // No zhuyin glyphs anywhere in the payload — <zhuyin>/<yin>/<diao> text
+    // nodes must be fully stripped from every example, in both sections.
+    // eslint-disable-next-line no-control-regex -- Bopomofo/zhuyin block, not a control character.
+    const zhuyinPattern = /[\u3100-\u312F\u31A0-\u31BF]/;
+    expect(copied).not.toMatch(zhuyinPattern);
+    expect(copied).not.toContain("ㄐㄧㆵ̇");
+
+    // Example sentence + translation formatting: base taigi text, sentence-
+    // final punctuation kept before the paren, translation in parens.
+    expect(copied).toContain("例：一蕊花（一朵花）");
+    expect(copied).toContain("例：紅嬰仔哭甲一身軀汗。（小嬰兒哭得滿身大汗。）");
+    // No-translation example: no trailing empty parens.
+    expect(copied).toContain("例：一流");
+    expect(copied).not.toContain("一流（）");
+
+    // No UI chrome leaks into the payload.
+    expect(copied).not.toContain("複製解釋");
+    expect(copied).not.toContain("已複製");
+  });
+
   test("entry actions expose themed hover contrast and visible focus rings", async ({ page }) => {
     await page.goto("/%E8%90%8C");
     await waitForEntryHydration(page, "萌");

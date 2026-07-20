@@ -555,3 +555,105 @@ test.describe("R12: stroke-loader spinner respects prefers-reduced-motion", () =
     expect(style.animationDuration === "0s" || style.animationPlayState === "paused").toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// R13: .romanization-selectable is universally position:absolute (and
+// display:none under zhuyin/none prefs) at EVERY rightAngle() mount point —
+// title, examples — not just the entry title. Regression: example sentences
+// (.entry-item .example, via parseTaiwaneseRubyLine → rightAngle) had no
+// matching CSS rule at all, so the span stayed in-flow (position: static),
+// ballooning .example/ru box widths, and stayed visible+selectable even
+// when the user's phonetics preference hid all other romanization.
+// ---------------------------------------------------------------------------
+test.describe("R13: romanization-selectable universal position/pref invariant (title + examples)", () => {
+  // 一 (U+4E00, ptck bucket 0) has two heteronyms (tsi̍t/it) with multiple
+  // examples each — real multi-heteronym, multi-example fixture.
+  const MULTI_EXAMPLE_PATH = "/'%E4%B8%80";
+
+  test("rightangle/pinyin: every .romanization-selectable on the page is position:absolute", async ({
+    page,
+  }) => {
+    await routeStylesCss(page, readWorkingTreeStylesCss);
+    for (const pref of ["rightangle", "pinyin"] as const) {
+      await page.goto(MULTI_EXAMPLE_PATH);
+      await waitForAppReady(page, "dictionary-lang");
+      await page.evaluate((p) => window.localStorage.setItem("phonetics", p), pref);
+      await page.goto(MULTI_EXAMPLE_PATH);
+      await waitForAppReady(page, "dictionary-lang");
+      await page
+        .locator(".entry-item .example hruby.rightangle ru[annotation]")
+        .first()
+        .waitFor({ state: "visible", timeout: 15_000 });
+
+      const result = await page.evaluate(() => {
+        const selectables = Array.from(
+          document.querySelectorAll<HTMLElement>(
+            "hruby.rightangle ru[annotation] > .romanization-selectable",
+          ),
+        );
+        return {
+          count: selectables.length,
+          positions: selectables.map((el) => getComputedStyle(el).position),
+        };
+      });
+      // At least one from the title and several from the multi-heteronym
+      // multi-example page — confirms the selector actually matches
+      // real mount points, not vacuously passing on an empty list.
+      expect(result.count).toBeGreaterThan(5);
+      for (const position of result.positions) {
+        expect(position).toBe("absolute");
+      }
+    }
+  });
+
+  test("zhuyin/none: every .romanization-selectable on the page is display:none", async ({
+    page,
+  }) => {
+    await routeStylesCss(page, readWorkingTreeStylesCss);
+    for (const pref of ["zhuyin", "none"] as const) {
+      await page.goto(MULTI_EXAMPLE_PATH);
+      await waitForAppReady(page, "dictionary-lang");
+      await page.evaluate((p) => window.localStorage.setItem("phonetics", p), pref);
+      await page.goto(MULTI_EXAMPLE_PATH);
+      await waitForAppReady(page, "dictionary-lang");
+      await page
+        .locator(".entry-item .example hruby.rightangle ru[annotation]")
+        .first()
+        .waitFor({ state: "visible", timeout: 15_000 });
+
+      const result = await page.evaluate(() => {
+        const selectables = Array.from(
+          document.querySelectorAll<HTMLElement>(
+            "hruby.rightangle ru[annotation] > .romanization-selectable",
+          ),
+        );
+        return {
+          count: selectables.length,
+          displays: selectables.map((el) => getComputedStyle(el).display),
+        };
+      });
+      expect(result.count).toBeGreaterThan(5);
+      for (const display of result.displays) {
+        expect(display).toBe("none");
+      }
+    }
+  });
+
+  test("example sentence box width collapses to the character-only width, not the full romanization text width", async ({
+    page,
+  }) => {
+    await routeStylesCss(page, readWorkingTreeStylesCss);
+    await page.goto(MULTI_EXAMPLE_PATH);
+    await waitForAppReady(page, "dictionary-lang");
+
+    const ruWidth = await page
+      .locator(".entry-item .example hruby.rightangle ru[annotation]")
+      .first()
+      .evaluate((el) => el.getBoundingClientRect().width);
+    // Regression measured 188.9px (in-flow, inflated by "tsi̍t" romanization
+    // text) pre-fix vs 53.5px post-fix (character-only, matching prod's
+    // native-<rt> rendering exactly). Bound generously above the
+    // character-only width but well below the inflated regression.
+    expect(ruWidth).toBeLessThan(120);
+  });
+});

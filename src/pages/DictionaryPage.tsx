@@ -492,9 +492,56 @@ function CnsAttributesPanel({ record }: { record: CnsRecord }) {
     </div>
   );
 }
+/**
+ * Formats a `.example`/`.quote`/`.link` node whose taigi ruby line was
+ * successfully parsed by `parseTaiwaneseRubyLine` (DOM shape:
+ * `<div class="example"><span class="h1">…</span><span class="mandarin">…
+ * </span></div>`, see the render logic below). The `.h1` span carries the
+ * taigi hruby.rightangle structure (base characters + zhuyin/romanization
+ * annotations); `.mandarin`, when present, is the plain-text Chinese
+ * translation. `visibleText` already strips both `.romanization-selectable`
+ * and `<zhuyin>` from `.h1`, leaving only the base characters (plus any
+ * bare sentence-final punctuation, which lives as a text node directly
+ * inside `.h1`'s `<hruby>`, not inside any `<ru>` — so it's kept exactly
+ * where it appears, before the translation parenthesis).
+ * Only `.example` gets the "例：" prefix — `.quote`/`.link` text already
+ * carries its own citation/cross-reference framing in the source data.
+ */
+function formatExampleLikeNode(el: Element): string {
+  const h1 = el.querySelector(":scope > .h1");
+  if (!h1) return "";
+  const headText = visibleText(h1).replace(/\s+/g, " ").trim();
+  const mandarin = el.querySelector(":scope > .mandarin");
+  const prefix = el.classList.contains("example") ? "例：" : "";
+  if (!mandarin) return `${prefix}${headText}`;
+  const translationText = visibleText(mandarin).replace(/\s+/g, " ").trim();
+  return `${prefix}${headText}（${translationText}）`;
+}
+
 function visibleText(node: Node): string {
   if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
-  if (!(node instanceof Element) || node.classList.contains("romanization-selectable")) return "";
+  if (!(node instanceof Element)) return "";
+  if (node.classList.contains("romanization-selectable")) return "";
+  // <zhuyin> (wrapping <yin>/<diao>) carries real DOM text nodes for the
+  // CJK-native phonetic annotation overlay -- unlike .romanization-
+  // selectable (a CSS-generated-content stand-in with display:none
+  // available per phonetics pref), <zhuyin> has no such class to key off
+  // and always renders real text. Skip its subtree entirely; the sibling
+  // <rb> (base character) is untouched.
+  if (node.tagName === "ZHUYIN") return "";
+  // Taiwanese example/quote/link nodes whose ruby line was parsed (see
+  // parseTaiwaneseRubyLine below) get dedicated heading+translation
+  // formatting instead of the generic recursive walk -- otherwise the
+  // stripped .h1 taigi text and the separate .mandarin translation run
+  // together with no visual separation between the two languages.
+  if (
+    (node.classList.contains("example") ||
+      node.classList.contains("quote") ||
+      node.classList.contains("link")) &&
+    node.querySelector(":scope > .h1")
+  ) {
+    return `\n${formatExampleLikeNode(node)}`;
+  }
   return Array.from(node.childNodes)
     .map((child) => {
       const text = visibleText(child);
@@ -505,22 +552,54 @@ function visibleText(node: Node): string {
     .join("");
 }
 
+/**
+ * Whole-entry copy payload (#258 contract: ONE button, the whole visible
+ * entry -- not per-heteronym buttons). Serializes EVERY heteronym on the
+ * page (every `.entry` direct child of `.result`, e.g. tsi̍t AND it for
+ * /'一) -- both heteronyms' groups were already in the payload pre-fix,
+ * just unlabeled, which read as if the second reading were missing.
+ * A `headword（reading）` header line is added ONLY when the page has
+ * multiple heteronyms (ambiguous without one); a single-heteronym entry
+ * (e.g. /萌) omits it, keeping the existing "romanization never leaks into
+ * the copied Chinese definitions" contract intact for the common case
+ * (dictionary.spec.ts "excluding controls and title romanization").
+ */
 function serializeDefinitionText(container: HTMLElement): string {
-  const groups = Array.from(container.querySelectorAll(":scope > .entry > .entry-item"));
-  return groups
-    .map((group) => {
-      const labels = Array.from(group.querySelectorAll(":scope > .part-of-speech"))
-        .map((node) => visibleText(node).replace(/\s+/g, " ").trim())
+  const entries = Array.from(container.querySelectorAll(":scope > .entry"));
+  const isMultiHeteronym = entries.length > 1;
+  return entries
+    .map((entryEl) => {
+      const titleEl = entryEl.querySelector<HTMLElement>(
+        ":scope > .entry-heading h1.title[data-title]",
+      );
+      const headword = isMultiHeteronym ? titleEl?.dataset.title?.trim() || "" : "";
+      const reading = isMultiHeteronym
+        ? (entryEl as HTMLElement).dataset.reading?.trim() || ""
+        : "";
+      const header = headword ? (reading ? `${headword}（${reading}）` : headword) : "";
+
+      const groups = Array.from(entryEl.querySelectorAll(":scope > .entry-item"));
+      const body = groups
+        .map((group) => {
+          const labels = Array.from(group.querySelectorAll(":scope > .part-of-speech"))
+            .map((node) => visibleText(node).replace(/\s+/g, " ").trim())
+            .filter(Boolean)
+            .join(" ");
+          const items = Array.from(group.querySelectorAll(":scope > ol > li")).map(
+            (item, index) => {
+              const itemBody = visibleText(item)
+                .replace(/[ \t]+/g, " ")
+                .replace(/\n+/g, "\n")
+                .trim();
+              return `${index + 1}. ${itemBody}`;
+            },
+          );
+          return [labels, ...items].filter(Boolean).join("\n");
+        })
         .filter(Boolean)
-        .join(" ");
-      const items = Array.from(group.querySelectorAll(":scope > ol > li")).map((item, index) => {
-        const body = visibleText(item)
-          .replace(/[ \t]+/g, " ")
-          .replace(/\n+/g, "\n")
-          .trim();
-        return `${index + 1}. ${body}`;
-      });
-      return [labels, ...items].filter(Boolean).join("\n");
+        .join("\n\n");
+
+      return [header, body].filter(Boolean).join("\n\n");
     })
     .filter(Boolean)
     .join("\n\n");
@@ -935,9 +1014,20 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
         const readingType = lang === "t" ? untag(heteronym.reading ?? "").trim() : "";
         const isReadingOnly =
           lang === "t" && definitions.length === 0 && Boolean(heteronym.trs?.trim());
+        // Displayed reading for the whole-entry copy payload's per-heteronym
+        // header (see serializeDefinitionText below). rubyData.pinyin is
+        // already the exact processed/displayed reading text for a/t/c
+        // (decorateRuby strips HTML, handles the trs fallback, and the c-lang
+        // <br> split) — reusing it keeps this pref-independent (unlike
+        // scraping .romanization-selectable, which is display:none under
+        // zhuyin/none phonetics prefs) and avoids re-deriving format logic.
+        // lang=h has no single-string reading (decorateRuby is stubbed empty
+        // for h; the real display is the multi-dialect hakkaReadings stack
+        // below) — omitted rather than reconstructed.
+        const displayReading = lang === "h" ? "" : rubyData.pinyin;
 
         return (
-          <div key={`${title}-${idx}`} className="entry">
+          <div key={`${title}-${idx}`} className="entry" data-reading={displayReading || undefined}>
             <div className="entry-heading">
               <div className="entry-control-stack">
                 <div className="radical">
