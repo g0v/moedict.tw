@@ -588,6 +588,44 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
 - 詞條頁資料流：client 打 `/api/{前綴}{詞}.json` → Worker `fillBucket` 讀
   R2 `p{lang}ck/{bucket}.txt` → 取單一 key 回傳。`/{a,t,h,c,raw,uni,pua}/<詞>.json`
   是對外公開 API（README 有文件），改格式要顧慮外部消費者。
+- **差異化 prod-parity 幾何防護**（`tests/e2e/prod-parity-allowlist.json`）：
+  正向 allowlist——只收錄**已確認**與正式站 www.moedict.tw byte-identical 的
+  幾何量測（例：例句 `.example`/`ru[annotation]` 寬度、標題高度比值），而非
+  「除了 #152 已知變更以外全部」的反向排除清單（正式站是 #152 之前的版本，
+  反向清單第一次跑就會把每個 #152 合法新功能都誤判成回歸）。三個檔案：
+  `scripts/lib/prod-parity-measure.mjs`（共用量測模組——`refresh-prod-parity-
+baseline.mjs` 抓正式站基準值、`tests/e2e/prod-parity.spec.ts` 在 CI 量
+  staging，兩者呼叫同一個 `measureEntry()`/`compareEntry()`，避免兩份獨立
+  實作在 rounding、聚合順序、readiness 等地方悄悄分岔）、
+  `tests/e2e/prod-parity-allowlist.json`（committed 基準值 + entry schema：
+  id/page/viewport/selector/aggregate(first\|max\|nth\|count)/properties/
+  measurement(absolute-px\|ratio)/tolerance/recorded_value/justification）、
+  `tests/e2e/prod-parity.spec.ts`（CI e2e 一部分，跑在本地 Miniflare fixture
+  上，legacy CSS 透過 `routeStylesCss`/`blockCssSubresources` 注入——所有目
+  前收錄的量測面都吃 cascade，不注入就量到錯誤的未套版數字）。
+  **`refresh:prod-parity`**：`vp run refresh:prod-parity` 對 LIVE
+  https://www.moedict.tw 重新量測、就地改寫 `recorded_value`／
+  `recorded_ratio`，選擇器消失視為硬錯誤（需要維護者判斷，不會靜默過期）；
+  只改值，entry 的新增/刪除是人工、經 review 的 JSON 編輯。
+  **成長模型**：entry 新增＝某個面向被**確認**與正式站相符（透過
+  refresh 腳本量出來、PR 裡附上 justification）；entry 刪除＝**同一個** PR
+  刻意改變該面向時一併移除（連同理由）——條目的增減本身就是那個 PR 的
+  contract 一部分，不是事後補的清單維護。
+  **`provisional` 旗標**：本 PR 目前的 seed 值是在此 session 的沙盒環境（非
+  CI 用的 `ubuntu-latest` runner）以 `xd://browser`／Puppeteer 直接跑
+  `measureEntry()` 對正式站與本分支本地 fixture 量測而來，`.example`/
+  `ru[annotation]` 寬度屬於 in-flow CJK glyph 寬度加總，對字型可用性敏感
+  （見下一條 R6 字型落差）——所以整份 JSON 頂層標 `"provisional": true`，
+  spec 對其中的 mismatch 只記註記＋console.warn、不讓 CI fail；選擇器完全
+  消失則不論 `provisional` 一律 hard-fail。要轉成硬性把關（`provisional:
+false`），必須先在字型環境與 CI e2e job 相同的機器（`ubuntu-latest`或對應
+  容器）上重新跑一次 `refresh:prod-parity`。
+  **字型敏感面向**：CJK 字型在不同環境（CI 無裝、macOS 有 Apple 專有字型、
+  真實使用者第三種分佈）下可讓文字度量差 40%+（見
+  `tests/e2e/visual-invariants.spec.ts` R6 的第一手量測）。純幾何、與字型
+  無關的盒子（navbar/dropdown 固定尺寸）用 `absolute-px`；跟字型度量相關的
+  （標題高度）優先用 `ratio`（同頁不同 `phonetics` 偏好下的比值，自我正規
+  化掉字型替換的影響）。
 
 ## 開發慣例
 

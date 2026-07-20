@@ -19,6 +19,7 @@
     "typecheck": "tsc -b --noEmit",
     "typecheck:tsc": "tsc -b --noEmit",
     "audit:contrast": "node scripts/audit-dark-contrast.mjs",
+    "refresh:prod-parity": "node scripts/refresh-prod-parity-baseline.mjs",
     "smoke:sub-routes": "node scripts/smoke-sub-routes.mjs",
     "twblg-pins:inject": "python3 scripts/inject-twblg-pinned-entries.py data/sources/twblg-overrides/pinned-no-definition.json data/dictionary/ptck",
     "twblg-pins:check": "python3 scripts/inject-twblg-pinned-entries.py data/sources/twblg-overrides/pinned-no-definition.json data/dictionary/ptck --check",
