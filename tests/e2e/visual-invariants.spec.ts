@@ -606,11 +606,16 @@ test.describe("R13: romanization-selectable universal position/pref invariant (t
     }
   });
 
-  test("zhuyin/none: every .romanization-selectable on the page is display:none", async ({
+  test("bopomofo/none: every .romanization-selectable on the page is display:none", async ({
     page,
   }) => {
     await routeStylesCss(page, readWorkingTreeStylesCss);
-    for (const pref of ["zhuyin", "none"] as const) {
+    // "zhuyin" is data-ruby-pref's value, not a valid localStorage
+    // "phonetics" key -- the app's PrefList options are
+    // rightangle/bopomofo/pinyin/none (applyPhoneticsBodyAttr maps
+    // bopomofo -> data-ruby-pref="zhuyin"). Reuses R6's PHONETICS_PREFS
+    // naming for the same reason.
+    for (const pref of ["bopomofo", "none"] as const) {
       await page.goto(MULTI_EXAMPLE_PATH);
       await waitForAppReady(page, "dictionary-lang");
       await page.evaluate((p) => window.localStorage.setItem("phonetics", p), pref);
