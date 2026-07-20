@@ -102,14 +102,19 @@ test.describe("dictionary pages per language", () => {
     // 蛇 has TWO heteronyms: 白讀 tsuâ has a real definition, 文讀 siâ is
     // reading-only. hasEntryDefinitions is true for the word overall (at
     // least one heteronym has definitions), so the shared action row shows
-    // copy + variants-link + star (single-char) as usual.
+    // copy + variants-link + star (single-char) as usual. .entry-copy-status
+    // is the FIRST child (see the right-edge-alignment guard test below) so
+    // its min-width reservation sits left of the visible icons, not right.
     await expect(page.locator(".entry-actions .star")).toHaveCount(1);
     await expect(page.locator(".entry-actions a.variants-link")).toHaveCount(1);
     await expect(page.getByRole("button", { name: "複製解釋" })).toHaveCount(1);
     await expect(page.locator(".entry-actions").locator(":scope > :nth-child(1)")).toHaveClass(
-      /entry-copy-button/,
+      /entry-copy-status/,
     );
     await expect(page.locator(".entry-actions").locator(":scope > :nth-child(2)")).toHaveClass(
+      /entry-copy-button/,
+    );
+    await expect(page.locator(".entry-actions").locator(":scope > :nth-child(3)")).toHaveClass(
       /variants-link/,
     );
     await expect(page.locator(".entry-actions .star")).toHaveAttribute("aria-pressed", "false");
@@ -118,7 +123,7 @@ test.describe("dictionary pages per language", () => {
       "true",
     );
     await expect(
-      page.locator(".entry-actions").locator(":scope > :nth-child(1) svg"),
+      page.locator(".entry-actions").locator(":scope > :nth-child(2) svg"),
     ).toHaveAttribute("aria-hidden", "true");
   });
 
@@ -1963,6 +1968,44 @@ test.describe("copy accessibility and serialization contracts", () => {
     expect(boxesAfter).toEqual(boxesBefore);
     await page.goto("/'%E9%A3%9F");
     await expect(page.locator(".entry-copy-status")).toHaveText("\u00a0");
+  });
+
+  test("action row right edge aligns with the radical-box row above it (not shifted left by the reserved status placeholder)", async ({
+    page,
+  }) => {
+    // Regression guard: .entry-copy-status (min-width: 8rem reservation for
+    // the zero-layout-shift contract above) must be the FIRST child of
+    // .entry-actions, not the last -- under justify-content: flex-end, a
+    // trailing reservation occupies the rightmost slot and pushes every
+    // visible icon ~8rem+gap left of where the radical-box row above ends,
+    // breaking the visual right-alignment between the two stacked rows.
+    await page.goto("/%E8%90%8C");
+    await waitForEntryHydration(page, "萌");
+
+    const domOrder = await page
+      .locator(".entry-actions")
+      .evaluate((el) => Array.from(el.children).map((c) => c.className));
+    expect(domOrder[0]).toContain("entry-copy-status");
+
+    const stackRight = await page
+      .locator(".entry-control-stack")
+      .evaluate((el) => el.getBoundingClientRect().right);
+    const radicalRight = await page
+      .locator(".entry-control-stack .radical")
+      .evaluate((el) => el.getBoundingClientRect().right);
+    const starRight = await page
+      .locator(".entry-actions .star")
+      .evaluate((el) => el.getBoundingClientRect().right);
+    const pencilRight = await page
+      .locator(".entry-control-stack .radical .iconic-circle.stroke")
+      .evaluate((el) => el.getBoundingClientRect().right);
+
+    const tolerance = 1;
+    expect(Math.abs(stackRight - radicalRight)).toBeLessThanOrEqual(tolerance);
+    // The star (last visible action icon) must align with the pencil (last
+    // radical-row icon) -- the exact alignment the user-reported regression
+    // broke.
+    expect(Math.abs(starRight - pencilRight)).toBeLessThanOrEqual(tolerance);
   });
 
   test("ordered copy payload keeps numbering and definition separation", async ({ page }) => {

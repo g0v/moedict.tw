@@ -891,14 +891,29 @@ html[data-theme="dark"] .result .entry-actions .iconic-color.star:hover {
 .entry-copy-status {
   display: inline-flex;
   align-items: center;
-  /* Reserve a fixed box (wide enough for the longest status string,
-     "複製失敗，請手動選取文字") so toggling between the nbsp placeholder and
-     either status message never changes this element's own width -- that
-     keeps the preceding icon buttons from shifting under flex's
-     justify-content: flex-end. Do NOT force a full-row wrap (no
+  /* Fix for the entry-heading right-alignment regression: this reserved
+     box must sit BEFORE the visible icons in DOM order (see
+     DictionaryPage.tsx), not after. .entry-actions is `justify-content:
+     flex-end`; when this element was the LAST flex child, its own
+     reserved width occupied the rightmost slot, pushing the visible
+     copy/book/star icons ~8rem+gap left of the radical-box row above
+     them. With the reservation first, the icon group is what ends up
+     flush against the right edge.
+     justify-content: flex-end (not text-align, which flex containers
+     ignore) keeps the status text hugging the icons on its right edge
+     when a message replaces the nbsp placeholder, instead of drifting to
+     this box's own left edge.
+     Still reserves a fixed box (wide enough for the longest status
+     string, "複製失敗，請手動選取文字") so toggling between the nbsp
+     placeholder and either status message never changes this element's
+     own width -- that's what keeps the icon group's geometry stable
+     (dictionary.spec.ts "copy button activates with Space and keeps
+     status geometry stable"). Do NOT force a full-row wrap (no
      flex-basis: 100%) -- that grew .entry-control-stack's height by a
-     fixed amount on every viewport, including narrow ones where it pushed
-     h1.title's line box down (RESCOPE Android ruby layout regression). */
+     fixed amount on every viewport, including narrow ones where it
+     pushed h1.title's line box down (RESCOPE Android ruby layout
+     regression). */
+  justify-content: flex-end;
   min-width: 8rem;
   min-height: 1.5rem;
   white-space: nowrap;

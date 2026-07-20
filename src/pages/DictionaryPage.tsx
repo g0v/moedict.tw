@@ -975,6 +975,18 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                 </div>
                 {idx === 0 && (
                   <div className="entry-actions">
+                    <span
+                      className="entry-copy-status"
+                      role="status"
+                      aria-live="polite"
+                      aria-atomic="true"
+                    >
+                      {hasEntryDefinitions && copyStatus
+                        ? copyStatus.ok
+                          ? "已複製"
+                          : "複製失敗，請手動選取文字"
+                        : "\u00a0"}
+                    </span>
                     {hasEntryDefinitions && (
                       <button
                         type="button"
@@ -1021,18 +1033,6 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                         aria-hidden="true"
                       />
                     </button>
-                    <span
-                      className="entry-copy-status"
-                      role="status"
-                      aria-live="polite"
-                      aria-atomic="true"
-                    >
-                      {hasEntryDefinitions && copyStatus
-                        ? copyStatus.ok
-                          ? "已複製"
-                          : "複製失敗，請手動選取文字"
-                        : "\u00a0"}
-                    </span>
                   </div>
                 )}
               </div>
