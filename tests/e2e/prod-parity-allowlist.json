@@ -1,34 +1,44 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-20T15:47:21Z",
-  "generated_from": "https://www.moedict.tw (x-moedict-release: 00f47bd-3cd06b86b4ba, pre-#152)",
-  "provisional": true,
-  "provisional_note": "Every recorded_value/recorded_ratio below was captured this session via xd://browser (Puppeteer, macOS headless Chromium) running the SAME scripts/lib/prod-parity-measure.mjs measureEntry() the refresh script and this spec both use — not copy-pasted from an earlier session's report. This is NOT yet the canonical capture: it was run on a macOS box with real Apple CJK fonts (Songti/Hiragino/STKaiti), not the ubuntu-latest runner tests/e2e/prod-parity.spec.ts's own CI job runs on. Per R6 (visual-invariants.spec.ts), CJK font availability can shift text-metric-dependent geometry by 40%+ between environments; the .example/ru width entries below are in-flow CJK glyph-advance sums, so they are NOT provably font-independent despite being 'absolute-px' measurements. Treat every mismatch here as a soft signal until a canonical CI-environment refresh flips `provisional` to false.",
+  "generated_at": "2026-07-21T07:47:04.103Z",
+  "generated_from": "https://www.moedict.tw (x-moedict-release: 789c9f2-1adfac7514ff; post dictionary-data upload; Playwright chromium refresh)",
+  "provisional": false,
+  "provisional_note": "Baseline refreshed 2026-07-21 via `vp run refresh:prod-parity` (scripts/refresh-prod-parity-baseline.mjs → scripts/lib/prod-parity-measure.mjs measureEntry()) against LIVE https://www.moedict.tw at release 789c9f2-1adfac7514ff (same release on staging). Both seeded absolute-px entries re-measured byte-identical to prior values (example-container-width-taigi-desktop width=538.171875; example-ru-width-taigi-desktop width=160.546875); no selector errors; no beyond-tolerance moves. Dictionary data had just been updated (B-variants on lang=t, 長褲 present) but these entries measure /'一 example/ru geometry only and were unaffected. provisional flipped to false after the consuming spec passed under both soft and hard gate modes (`E2E_SKIP_BUILD=1 vp exec playwright test --project=chromium tests/e2e/prod-parity.spec.ts`). Note: capture host is macOS with Playwright Chromium 147; CI runs ubuntu-latest. These two surfaces have historically been byte-stable across that gap (same recorded_value since the 2026-07-20 seed), and the local Miniflare fixture comparison is the hard gate — not a cross-OS font oracle.",
   "entries": [
     {
       "id": "example-container-width-taigi-desktop",
       "page": "/'%E4%B8%80",
-      "viewport": { "width": 1280, "height": 800 },
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
       "selector": ".entry-item .example",
       "aggregate": "nth",
       "matchIndex": 5,
       "properties": ["width"],
       "measurement": "absolute-px",
       "tolerance_px": 2,
-      "recorded_value": { "width": 538.171875 },
+      "recorded_value": {
+        "width": 538.171875
+      },
       "justification": "R13 regression-fix verification (cc3b0b9-era .romanization-selectable position:absolute unscoping, tests/e2e/visual-invariants.spec.ts R13). Originally captured live via scripts/lib/prod-parity-measure.mjs measureEntry() against BOTH https://www.moedict.tw (Puppeteer/xd://browser) and this branch's local Miniflare fixture (Playwright/Puppeteer, with legacy data/assets/styles.css routed via routeStylesCss+blockCssSubresources) on 2026-07-20: byte-identical 538.171875px on both sides. matchIndex UPDATED to 5 by fix/heteronym-order-sutian (real-headword-first display reorder, src/utils/heteronym-order.ts — sutian.moe.edu.tw's own /tshiau/ query lists 一's real-headword reading `it` before its 替 substitution reading `tsi̍t`; presentation-only, no pack byte changes): the target example ('紅嬰仔哭甲一身軀汗', the ruby-example-spacing bug's original repro instance) is unchanged CONTENT but moved position in `.entry-item .example` document order — it now sits in the SECOND (tsi̍t/替) heteronym section, after the `it` heteronym section that now renders first. Verified live via xd://browser against the reordered fixture server on 2026-07-21: the '紅嬰仔哭甲一身軀汗' example is now the 6th `.entry-item .example` match (0-based index 5). No CSS on `.example`/`.entry-item` is nth-child/position-dependent (audited against data/assets/styles.css — plain flow/font rules only), so the geometry itself is unaffected by the reorder; recorded_value kept as-is pending the next canonical `vp run refresh:prod-parity` re-capture. CAVEAT: this width is an in-flow CJK glyph-advance sum, so it is NOT provably font-independent (see provisional_note)."
     },
     {
       "id": "example-ru-width-taigi-desktop",
       "page": "/'%E4%B8%80",
-      "viewport": { "width": 1280, "height": 800 },
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
       "selector": ".entry-item .example hruby.rightangle ru[annotation]",
       "aggregate": "nth",
       "matchIndex": 12,
       "properties": ["width"],
       "measurement": "absolute-px",
       "tolerance_px": 2,
-      "recorded_value": { "width": 160.546875 },
+      "recorded_value": {
+        "width": 160.546875
+      },
       "justification": "Same R13 fix/investigation as example-container-width-taigi-desktop — this is the '紅嬰仔' word-group `ru[annotation]` box INSIDE that example (the first `ru[annotation]` inside the target example). matchIndex UPDATED to 12 by fix/heteronym-order-sutian for the same real-headword-first reorder documented on the sibling entry above — the target ru is unchanged CONTENT, moved position only (verified live via xd://browser against the reordered fixture server on 2026-07-21: '紅嬰仔' is now the 13th `ru[annotation]` match page-wide, 0-based index 12). Originally captured byte-identical (160.546875px) on prod and this branch's local fixture via the same shared measureEntry() call, same session, same methodology, pre-reorder; recorded_value kept as-is (no position-dependent CSS on this selector, same audit as the sibling entry) pending the next canonical refresh. Pre-fix staging measured ~322.4px (~2x, from the invisible .romanization-selectable overlay staying in normal flow). Same font-sensitivity caveat as the container-width entry above applies."
     }
   ],
