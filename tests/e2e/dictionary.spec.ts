@@ -1592,7 +1592,7 @@ test.describe("entry copy-explanation action (RESCOPE #258, single action-row bu
     await expect(page.locator(".entry-actions .entry-copy-button")).toHaveCount(1);
   });
 
-  test("copies every visible definition in order, excluding controls and title romanization", async ({
+  test("copies every visible definition in order; header carries the romanization exactly once, body stays romanization-free", async ({
     page,
   }) => {
     await page.goto("/%E8%90%8C");
@@ -1619,9 +1619,27 @@ test.describe("entry copy-explanation action (RESCOPE #258, single action-row bu
       () => (window as Window & { __copied?: string }).__copied ?? "",
     );
 
+    // Header is unconditional (fix/heteronym-order-sutian): every
+    // heteronym section — even a single-heteronym page like /萌 — starts
+    // with an exact `headword（reading）` line. This is the ONE
+    // deliberate, intentional appearance of the romanization in the whole
+    // payload; it must be the literal first line, not embedded/duplicated
+    // elsewhere.
+    const lines = copied.split("\n");
+    expect(lines[0]).toBe("萌（méng）");
+    expect(lines[1]).toBe("");
+
+    // Everything AFTER the header line is the body: the pre-existing
+    // "romanization never leaks into the copied Chinese definitions"
+    // guard now applies there specifically, not to the whole payload —
+    // the header line is excluded by construction (checked separately
+    // above), so this scoped check can never trivially pass by accident.
+    const body = lines.slice(2).join("\n");
+    expect(body).not.toContain("méng");
+
     let cursor = -1;
     for (const text of defTexts) {
-      const idx = copied.indexOf(text.trim());
+      const idx = body.indexOf(text.trim());
       expect(idx).toBeGreaterThan(cursor);
       cursor = idx;
     }
@@ -1630,11 +1648,6 @@ test.describe("entry copy-explanation action (RESCOPE #258, single action-row bu
     expect(copied).not.toContain("複製解釋");
     expect(copied).not.toContain("已複製");
     expect(copied).not.toContain("加入字詞記錄簿");
-
-    // 萌's romanization ("méng") is never spelled out inside its Chinese
-    // definitions — it only exists as the #186 .romanization-selectable
-    // overlay inside the (stripped) title. Duplicate-pinyin regression guard.
-    expect(copied).not.toContain("méng");
   });
 
   test("keyboard Enter on the focused button copies and shows the success status", async ({
@@ -1733,6 +1746,51 @@ test.describe("entry copy-explanation action (RESCOPE #258, single action-row bu
     expect(copied.split("\n").length).toBeGreaterThanOrEqual(entryCount);
   });
 
+  test("'廿一 (t): single-heteronym entry still gets a `headword（reading）` header — untagged, no per-character autolink markup", async ({
+    page,
+  }) => {
+    // 廿一 (ptck bucket 127, seeded in tests/helpers/fixtures.ts):
+    // single-heteronym multi-character taigi record — the header is
+    // unconditional now (fix/heteronym-order-sutian scope addition), so
+    // even a single-heteronym page must carry it. Multi-character titles
+    // come back from the API as per-character `<a href="...">X</a>`
+    // autolink HTML (data-title on h1.title) — the header must be
+    // untag()-stripped plain text, not leak raw markup into the payload.
+    //
+    // NOTE: does not use waitForEntryHydration(page, "廿一") — for
+    // multi-char taigi (lang=t) titles the rendered ruby markup interleaves
+    // zhuyin/romanization glyphs BETWEEN each character in body.innerText
+    // (e.g. "廿ㆢㄧㄚㆴ̇一ㄧㆵ..."), so the literal contiguous substring
+    // "廿一" never appears there — the same reason the existing /'長褲
+    // test above waits on `h1.title` visibility instead of a body text
+    // match. Waiting on the copy button (definitions loaded + rendered)
+    // is an equally strong hydration signal for this test's purposes.
+    const response = await page.goto("/'%E5%BB%BF%E4%B8%80");
+    expect(response?.status()).toBe(200);
+    await page.locator("h1.title").waitFor({ state: "visible", timeout: 15_000 });
+
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async (value: string) =>
+            ((window as Window & { __copied?: string }).__copied = value),
+        },
+      });
+    });
+    await expect(page.getByRole("button", { name: "複製解釋" })).toHaveCount(1);
+    await page.getByRole("button", { name: "複製解釋" }).click();
+    await expect(page.locator(".entry-copy-status")).toHaveText("已複製");
+    const copied = await page.evaluate(
+      () => (window as Window & { __copied?: string }).__copied ?? "",
+    );
+
+    const lines = copied.split("\n");
+    expect(lines[0]).toBe("廿一（jia̍p-it/lia̍p-it）");
+    expect(copied).not.toContain("<a ");
+    expect(copied).not.toContain("href=");
+  });
+
   test("'一 (t): whole-entry copy labels BOTH heteronym sections, keeps group labels, and strips zhuyin from examples", async ({
     page,
   }) => {
@@ -1744,6 +1802,10 @@ test.describe("entry copy-explanation action (RESCOPE #258, single action-row bu
     // missing (it wasn't — both heteronyms' groups were already
     // serialized, just with no label distinguishing which reading each
     // section belonged to) and example sentences leaked raw zhuyin glyphs.
+    // Display order is it THEN tsi̍t (fix/heteronym-order-sutian):
+    // sutian.moe.edu.tw's own /tshiau/ lists the real-headword reading
+    // (it, 異用字 壹) before the 替字 substitution reading (tsi̍t, real
+    // char 蜀) — see src/utils/heteronym-order.ts.
     const response = await page.goto("/'%E4%B8%80");
     expect(response?.status()).toBe(200);
     await waitForEntryHydration(page, "一");
@@ -1765,11 +1827,12 @@ test.describe("entry copy-explanation action (RESCOPE #258, single action-row bu
     );
 
     // Both heteronym sections are present and labeled with their actual
-    // displayed reading, in document order.
-    const tsitIdx = copied.indexOf("一（tsi̍t）");
+    // displayed reading, in DISPLAY order: real headword (it) first, then
+    // the 替 substitution reading (tsi̍t) — see heteronym-order.ts.
     const itIdx = copied.indexOf("一（it）");
-    expect(tsitIdx).toBeGreaterThanOrEqual(0);
-    expect(itIdx).toBeGreaterThan(tsitIdx);
+    const tsitIdx = copied.indexOf("一（tsi̍t）");
+    expect(itIdx).toBeGreaterThanOrEqual(0);
+    expect(tsitIdx).toBeGreaterThan(itIdx);
 
     // Group labels (part-of-speech badges) survive as their own lines,
     // once per heteronym section (數/形/副 each appear in both).
@@ -1795,6 +1858,37 @@ test.describe("entry copy-explanation action (RESCOPE #258, single action-row bu
     // No UI chrome leaks into the payload.
     expect(copied).not.toContain("複製解釋");
     expect(copied).not.toContain("已複製");
+  });
+
+  test("'一 (t): heteronym sections render real-headword (it) before the 替 substitution reading (tsi̍t), matching sutian.moe.edu.tw /tshiau/ ordering", async ({
+    page,
+  }) => {
+    // sutian.moe.edu.tw's own 詞目查詢 (/zh-hant/tshiau/?lui=tai_su&tsha=一)
+    // lists 一's real-headword reading (it, 異用字 壹, https://sutian.moe.
+    // edu.tw/zh-hant/su/2/) before its 替字 substitution reading (tsi̍t,
+    // real character 蜀, 異用字 蜀, https://sutian.moe.edu.tw/zh-hant/su/1/).
+    // Our ptck pack stores heteronyms in su/N id order — [tsi̍t(id=1),
+    // it(id=2)] — the OPPOSITE of sutian's real-headword-first convention;
+    // this is display-order-only (src/utils/heteronym-order.ts), no pack
+    // byte changes.
+    const response = await page.goto("/'%E4%B8%80");
+    expect(response?.status()).toBe(200);
+    await waitForEntryHydration(page, "一");
+
+    const entries = page.locator(".entry");
+    await expect(entries).toHaveCount(2);
+    await expect(entries.nth(0)).toHaveAttribute("data-reading", "it");
+    await expect(entries.nth(1)).toHaveAttribute("data-reading", "tsi̍t");
+
+    // The 替 badge (g0v/moedict-webkit#96/#233) renders on the tsi̍t
+    // (substitution) section only — the real-headword (it) section has no
+    // reading-type classification in the pack, so no badge.
+    await expect(entries.nth(0).locator(".reading-type")).toHaveCount(0);
+    await expect(entries.nth(1).locator(".reading-type")).toHaveText("替");
+    await expect(entries.nth(1).locator(".reading-type")).toHaveAttribute(
+      "title",
+      "替代字讀音（訓用字）",
+    );
   });
 
   test("entry actions expose themed hover contrast and visible focus rings", async ({ page }) => {
