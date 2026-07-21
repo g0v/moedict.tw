@@ -676,9 +676,7 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
   // 計數與 definitionIndexMap 使用，兩者刻意不隨顯示順序改變。
   const displayHeteronyms = useMemo(() => {
     if (lang !== "t") return heteronyms;
-    return sortHeteronymsBySubstitutionReading(heteronyms, (h) =>
-      untag(h.reading ?? "").trim(),
-    );
+    return sortHeteronymsBySubstitutionReading(heteronyms, (h) => untag(h.reading ?? "").trim());
   }, [heteronyms, lang]);
   // groupDefinitions() keys by String(type||""), so any non-empty definitions
   // array always yields at least one group/.entry-item — this is equivalent

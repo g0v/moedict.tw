@@ -1756,9 +1756,18 @@ test.describe("entry copy-explanation action (RESCOPE #258, single action-row bu
     // come back from the API as per-character `<a href="...">X</a>`
     // autolink HTML (data-title on h1.title) — the header must be
     // untag()-stripped plain text, not leak raw markup into the payload.
+    //
+    // NOTE: does not use waitForEntryHydration(page, "廿一") — for
+    // multi-char taigi (lang=t) titles the rendered ruby markup interleaves
+    // zhuyin/romanization glyphs BETWEEN each character in body.innerText
+    // (e.g. "廿ㆢㄧㄚㆴ̇一ㄧㆵ..."), so the literal contiguous substring
+    // "廿一" never appears there — the same reason the existing /'長褲
+    // test above waits on `h1.title` visibility instead of a body text
+    // match. Waiting on the copy button (definitions loaded + rendered)
+    // is an equally strong hydration signal for this test's purposes.
     const response = await page.goto("/'%E5%BB%BF%E4%B8%80");
     expect(response?.status()).toBe(200);
-    await waitForEntryHydration(page, "廿一");
+    await page.locator("h1.title").waitFor({ state: "visible", timeout: 15_000 });
 
     await page.evaluate(() => {
       Object.defineProperty(navigator, "clipboard", {
