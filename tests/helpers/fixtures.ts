@@ -19,6 +19,9 @@
  *     data/sources/twblg-overrides/pinned-no-definition.json）
  *   - 一 (U+4E00)  — lang=t, ptck bucket 0（real multi-heteronym record:
  *     tsi̍t + it, both with 數/形/副 groups — whole-entry copy payload test）
+ *   - 廿一 (U+5EFF U+4E00) — lang=t, ptck bucket 127（single-heteronym
+ *     record — unconditional copy-payload header test: headword（reading）
+ *     must appear even with exactly one heteronym on the page）
  *
  * Extra explicit fixtures (geometry / font tests):
  *   - 黃 (U+9EC3)  — lang=a, pack bucket 707; ㄏㄨㄤˊ length=3 tone-node geometry
@@ -167,6 +170,23 @@ export function collectDictionaryFixtures(): FixtureEntry[] {
     bucket: "DICTIONARY",
     key: multiHeteronymKey,
     body: required(path.join(DATA_DICT, "ptck", `${multiHeteronymBucket}.txt`), multiHeteronymKey),
+    httpMetadata: { contentType: "text/plain; charset=utf-8" },
+  });
+
+  // 廿一 (ptck bucket 127): single-heteronym taigi record (jia̍p-it/lia̍p-it).
+  // Seeded for the unconditional whole-entry copy-payload header test —
+  // confirms `headword（reading）` renders even on a single-heteronym page
+  // (previously omitted; every heteronym section now always gets a header).
+  const singleHeteronymTaigiWord = "廿一";
+  const singleHeteronymTaigiBucket = bucketOf(singleHeteronymTaigiWord, "t");
+  const singleHeteronymTaigiKey = `ptck/${singleHeteronymTaigiBucket}.txt`;
+  entries.push({
+    bucket: "DICTIONARY",
+    key: singleHeteronymTaigiKey,
+    body: required(
+      path.join(DATA_DICT, "ptck", `${singleHeteronymTaigiBucket}.txt`),
+      singleHeteronymTaigiKey,
+    ),
     httpMetadata: { contentType: "text/plain; charset=utf-8" },
   });
 

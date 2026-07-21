@@ -34,6 +34,7 @@ import { CharacterImageView } from "../components/CharacterImageView";
 import { SvgIcon } from "../components/SvgIcon";
 import { TitlePronunciation } from "../components/TitlePronunciation";
 import { dedupeHeteronyms } from "../utils/heteronym-dedup";
+import { sortHeteronymsBySubstitutionReading } from "../utils/heteronym-order";
 
 export type DictionaryLang = "a" | "t" | "h" | "c";
 
@@ -555,27 +556,28 @@ function visibleText(node: Node): string {
 /**
  * Whole-entry copy payload (#258 contract: ONE button, the whole visible
  * entry -- not per-heteronym buttons). Serializes EVERY heteronym on the
- * page (every `.entry` direct child of `.result`, e.g. tsi̍t AND it for
+ * page (every `.entry` direct child of `.result`, e.g. it AND tsi̍t for
  * /'一) -- both heteronyms' groups were already in the payload pre-fix,
  * just unlabeled, which read as if the second reading were missing.
- * A `headword（reading）` header line is added ONLY when the page has
- * multiple heteronyms (ambiguous without one); a single-heteronym entry
- * (e.g. /萌) omits it, keeping the existing "romanization never leaks into
- * the copied Chinese definitions" contract intact for the common case
- * (dictionary.spec.ts "excluding controls and title romanization").
+ * A `headword（reading）` header line is added UNCONDITIONALLY, once per
+ * heteronym section -- single-heteronym entries (e.g. /萌 -> `萌（méng）`)
+ * get it too, not just multi-heteronym pages. This is a deliberate,
+ * single controlled leak of the romanization into the payload: it lives
+ * ONLY in the header line, never inside the body (`reading` is never
+ * read again below this point) -- the "romanization never leaks into the
+ * copied Chinese DEFINITION text" contract from dictionary.spec.ts
+ * "excluding controls and title romanization" still holds for the body,
+ * scoped past the header line.
  */
 function serializeDefinitionText(container: HTMLElement): string {
   const entries = Array.from(container.querySelectorAll(":scope > .entry"));
-  const isMultiHeteronym = entries.length > 1;
   return entries
     .map((entryEl) => {
       const titleEl = entryEl.querySelector<HTMLElement>(
         ":scope > .entry-heading h1.title[data-title]",
       );
-      const headword = isMultiHeteronym ? titleEl?.dataset.title?.trim() || "" : "";
-      const reading = isMultiHeteronym
-        ? (entryEl as HTMLElement).dataset.reading?.trim() || ""
-        : "";
+      const headword = untag(titleEl?.dataset.title?.trim() || "");
+      const reading = (entryEl as HTMLElement).dataset.reading?.trim() || "";
       const header = headword ? (reading ? `${headword}（${reading}）` : headword) : "";
 
       const groups = Array.from(entryEl.querySelectorAll(":scope > .entry-item"));
@@ -663,6 +665,21 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
     const raw = state.entry?.heteronyms;
     return dedupeHeteronyms(Array.isArray(raw) ? raw : []);
   }, [state.entry]);
+  // 顯示順序（僅 lang='t'）：sutian.moe.edu.tw 自己的 `/tshiau/` 詞目查詢把
+  // 真正的詞目（headword）音項排在「替」（替代字）音項之前 —— 例如「一」
+  // 的 it 音（真詞目，異用字壹）排在 tsi̍t 音（替字，本字蜀，異用字蜀）
+  // 之前。pack 內的 heteronym 順序跟隨 `詞目總檔.csv`/sutian su/N id
+  // （對「一」恰好是 [tsi̍t(id=1), it(id=2)]，跟 sutian 的「真詞目優先」
+  // 慣例相反）——這不是新的回歸，只是排序更明顯而已。純顯示層 stable
+  // partition（見 sortHeteronymsBySubstitutionReading 註解），完全不動
+  // pack 資料；`heteronyms`（pack 順序）保留給下面的 /word/N 永久連結
+  // 計數與 definitionIndexMap 使用，兩者刻意不隨顯示順序改變。
+  const displayHeteronyms = useMemo(() => {
+    if (lang !== "t") return heteronyms;
+    return sortHeteronymsBySubstitutionReading(heteronyms, (h) =>
+      untag(h.reading ?? "").trim(),
+    );
+  }, [heteronyms, lang]);
   // groupDefinitions() keys by String(type||""), so any non-empty definitions
   // array always yields at least one group/.entry-item — this is equivalent
   // to "does at least one heteronym have a rendered definition group" without
@@ -981,7 +998,7 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
       {/* 筆順動畫區域（同原 index.html #strokes 位於 .results 頂部） */}
       <StrokeAnimation title={title} visible={strokesVisible} lang={lang} />
 
-      {heteronyms.map((heteronym, idx) => {
+      {displayHeteronyms.map((heteronym, idx) => {
         const pronunAudioId = heteronym.audio_id || (lang === "t" ? heteronym.id : undefined);
         const rubyData =
           lang === "h"
