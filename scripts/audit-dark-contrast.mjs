@@ -27,8 +27,20 @@
  * /tmp/contrast-audit.json, plus a console summary grouped by severity.
  */
 
-import { chromium } from "playwright";
-import { writeFileSync } from "node:fs";
+import { chromium } from "@playwright/test";
+import {
+  WCAG_LARGE_RATIO,
+  WCAG_NORMAL_RATIO,
+  classifyActionFailure,
+  classifyUnknownBackground,
+} from "./lib/contrast-audit.mjs";
+import { writeFileSync, readFileSync, existsSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(__dirname, "..");
+const DATA_ASSETS = path.join(REPO_ROOT, "data", "assets");
 
 const BASE_URL = process.env.BASE_URL || "http://127.0.0.1:5173";
 const OUTPUT_PATH = process.env.CONTRAST_AUDIT_OUTPUT || "/tmp/contrast-audit.json";
@@ -42,11 +54,14 @@ const VIEWPORTS = [
 ];
 
 const THEMES = ["light", "dark"];
+const CI_MODE = process.argv.includes("--ci") || process.env.CI === "true";
+const AUDIT_ROUTES = CI_MODE ? ROUTES.slice(0, 5) : ROUTES;
+const AUDIT_VIEWPORTS = CI_MODE ? [VIEWPORTS[0], VIEWPORTS[1]] : VIEWPORTS;
 
 // WCAG 2.x contrast thresholds. "Large text" = >=24px, or >=18.66px (14pt)
 // and bold (per the spec's 18.66px/14pt bold large-text carve-out).
-const NORMAL_RATIO = 4.5;
-const LARGE_RATIO = 3.0;
+const NORMAL_RATIO = WCAG_NORMAL_RATIO;
+const LARGE_RATIO = WCAG_LARGE_RATIO;
 const LARGE_TEXT_PX = 24;
 const LARGE_BOLD_TEXT_PX = 18.66;
 const LARGE_BOLD_WEIGHT = 700;
@@ -342,11 +357,11 @@ async function setTheme(page, theme) {
 
 async function seedStarredWords(page) {
   // Seeds one starred word per dictionary language that StarredPage.tsx's
-  // ALL_LANGS actually walks (a/t/c — h has no seeded fixture data here),
-  // using the same on-disk format as word-record-utils.ts buildStarKey():
-  // `"${word}"\n` prepended to storage key `starred-<lang>`.
+  // ALL_LANGS actually walks (a/t/c — h has no seeded fixture data here).
+  // Each language stores quoted words followed by the literal `\n` marker
+  // under starred-<lang>, matching word-record-utils.ts buildStarKey().
   await page.evaluate(() => {
-    const STARRED_SUFFIX = "\n";
+    const STARRED_SUFFIX = "\\n";
     function buildStarKey(word) {
       return `"${word}"${STARRED_SUFFIX}`;
     }
@@ -361,6 +376,101 @@ async function seedStarredWords(page) {
 }
 
 /** Fresh context+page navigated to `route` with `theme` applied and (for /=*) starred seed data. Caller must close the context. */
+// Every audited route lands on one of these two container classes once
+// hydrated -- ".result" for dictionary/radical/starred pages, ".about-page"
+// for /about. Waiting on this observable DOM contract (rather than
+// Playwright's "networkidle") is what makes freshPage's navigation
+// deterministic.
+const READY_SELECTOR = ".result, .about-page";
+
+// AssetLoader.tsx gates the whole route's first paint on `criticalCssReady`,
+// which only flips once its two legacy `<link rel=stylesheet>` requests
+// each settle (load OR error). Their href points at the fixture's
+// ASSET_BASE_URL host (r2-assets.test.local -- unresolvable by design, see
+// miniflare-server.ts's outboundService comment), and Chromium's own DNS
+// failure for an unresolvable host takes ~10s to surface as a `requestfailed`
+// event -- confirmed via instrumented runs: every combo's first navigation
+// blocked on exactly that ~10s window before `.result`/`.about-page` ever
+// attached, before any readiness-selector or networkidle choice mattered.
+//
+// Rather than short-circuiting those requests to a synthetic 404 (which
+// would leave the audit running against a Bootstrap-less, unstyled page --
+// masking real click-target/overlap contrast findings that only exist once
+// the legacy navbar CSS actually applies), serve the REAL on-disk bytes for
+// every legacy CSS file and every asset (font/image) it references via
+// url(...), so the page renders exactly as production does. Only paths with
+// no on-disk counterpart 404 -- a bug in that asset's absence is a real
+// finding, not something to paper over.
+const CONTENT_TYPES = {
+  ".css": "text/css; charset=utf-8",
+  ".otf": "font/otf",
+  ".ttf": "font/ttf",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".eot": "application/vnd.ms-fontobject",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+};
+
+/** Resolve a request path (relative to /assets/ or r2-assets.test.local/) to a real file under data/assets/, if one exists. */
+function resolveLegacyAssetPath(pathname) {
+  // pathname is e.g. "/assets/styles.css", "/assets/css/cupertino/images/foo.png",
+  // or (for the r2-assets.test.local host) just "/styles.css", "/css/cupertino/...".
+  const relative = pathname.replace(/^\/assets\//, "").replace(/^\//, "");
+  const resolved = path.join(DATA_ASSETS, relative);
+  // Guard against path traversal escaping DATA_ASSETS.
+  if (!resolved.startsWith(DATA_ASSETS + path.sep)) return null;
+  return existsSync(resolved) ? resolved : null;
+}
+
+function serveFromDisk(route, filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  return route.fulfill({
+    status: 200,
+    contentType: CONTENT_TYPES[ext] ?? "application/octet-stream",
+    headers: { "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" },
+    body: readFileSync(filePath),
+  });
+}
+
+function serve404(route) {
+  return route.fulfill({ status: 404, contentType: "text/plain; charset=utf-8", body: "" });
+}
+
+async function serveRealLegacyAssets(page) {
+  // The fixture's ASSET_BASE_URL host is entirely fictional (see
+  // miniflare-server.ts's outboundService comment) -- nothing there is ever
+  // real, so intercept every request to it: real on-disk bytes if the path
+  // resolves under data/assets/, else a fast 404 for genuinely-absent
+  // resources (never real DNS resolution / a slow timeout).
+  await page.route("https://r2-assets.test.local/**", (route) => {
+    const url = new URL(route.request().url());
+    const filePath = resolveLegacyAssetPath(url.pathname);
+    return filePath ? serveFromDisk(route, filePath) : serve404(route);
+  });
+
+  // Same-origin /assets/* is a MIX of real resources the fixture Worker
+  // already serves correctly (the hashed Vite bundle from dist/client/assets
+  // via SITE_ASSETS, and fonts/MOEDICT.{woff2,otf,woff} seeded in the ASSETS
+  // R2 bucket -- see tests/helpers/fixtures.ts) and legacy paths the Worker
+  // has nothing for (styles.css, css/cupertino/**, and the non-MOEDICT
+  // legacy fonts/images those stylesheets reference via url(...), none of
+  // which are seeded). Only intercept the latter -- route.fallback() lets
+  // every other /assets/* request reach the real fixture server unchanged.
+  await page.route("**/assets/**", (route) => {
+    const url = new URL(route.request().url());
+    const filePath = resolveLegacyAssetPath(url.pathname);
+    if (!filePath) return route.fallback();
+    // fonts/MOEDICT.* is real ASSETS-bucket content the fixture server
+    // already serves; don't shadow it with the on-disk copy.
+    if (/\/fonts\/MOEDICT\.(woff2?|otf)(\?|$)/.test(url.pathname)) return route.fallback();
+    return serveFromDisk(route, filePath);
+  });
+}
+
 async function freshPage(browser, viewport, theme, route) {
   const context = await browser.newContext({
     viewport: { width: viewport.width, height: viewport.height },
@@ -368,15 +478,17 @@ async function freshPage(browser, viewport, theme, route) {
     locale: "zh-TW",
   });
   const page = await context.newPage();
+  await serveRealLegacyAssets(page);
   await page.goto(BASE_URL + "/", { waitUntil: "domcontentloaded", timeout: 20000 });
+  await page.locator(READY_SELECTOR).first().waitFor({ state: "visible", timeout: 15000 });
   await setTheme(page, theme);
   if (route === "/=*") await seedStarredWords(page);
   const response = await page.goto(BASE_URL + encodeURI(route), {
-    waitUntil: "networkidle",
+    waitUntil: "domcontentloaded",
     timeout: 20000,
   });
+  await page.locator(READY_SELECTOR).first().waitFor({ state: "visible", timeout: 15000 });
   await setTheme(page, theme);
-  await page.waitForTimeout(200);
   return { context, page, response };
 }
 
@@ -814,8 +926,8 @@ async function main() {
     largeBoldWeight: LARGE_BOLD_WEIGHT,
   };
 
-  for (const route of ROUTES) {
-    for (const viewport of VIEWPORTS) {
+  for (const route of AUDIT_ROUTES) {
+    for (const viewport of AUDIT_VIEWPORTS) {
       for (const theme of THEMES) {
         await auditCombo(
           browser,
@@ -831,43 +943,62 @@ async function main() {
   await browser.close();
 
   const byLocale = (a, b) => a.localeCompare(b);
+
   const allFindings = Array.from(findingStore.values()).map((f) => ({
     ...f,
     routes: Array.from(f.routes).sort(byLocale),
     viewports: Array.from(f.viewports).sort(byLocale),
     themes: Array.from(f.themes).sort(byLocale),
   }));
+  const classifiedActionFailures = actionFailures.map((failure) => ({
+    ...failure,
+    classification: classifyActionFailure(failure),
+  }));
+  const unexpectedActionFailures = classifiedActionFailures.filter(
+    (failure) => failure.classification === "unexpected",
+  );
 
   const contrastFailures = allFindings.filter((f) => f.category === "contrast-fail");
   const unknownBg = allFindings.filter((f) => f.category === "unknown-bg");
+  const classifiedUnknownBg = unknownBg.map((finding) => ({
+    ...finding,
+    classification: classifyUnknownBackground(finding),
+  }));
+  const unexpectedUnknownBg = classifiedUnknownBg.filter(
+    (finding) => finding.classification === "unexpected",
+  );
 
   const output = {
-    baseUrl: BASE_URL,
-    generatedAt: new Date().toISOString(),
-    routes: ROUTES,
-    viewports: VIEWPORTS.map((v) => v.name),
+    routes: AUDIT_ROUTES,
+    viewports: AUDIT_VIEWPORTS.map((v) => v.name),
     themes: THEMES,
     summary: {
       totalFindings: allFindings.length,
-      contrastFailures: contrastFailures.length,
-      unknownBg: unknownBg.length,
-      actionFailures: actionFailures.length,
+      unknownBg: classifiedUnknownBg.length,
+      unexpectedUnknownBg: unexpectedUnknownBg.length,
+      actionFailures: classifiedActionFailures.length,
+      unexpectedActionFailures: unexpectedActionFailures.length,
     },
     findings: allFindings,
-    actionFailures,
+    unknownBackgrounds: classifiedUnknownBg,
+    actionFailures: classifiedActionFailures,
   };
 
   writeFileSync(OUTPUT_PATH, JSON.stringify(output, null, 2), "utf-8");
 
   console.log(`\n=== Dark/Light Contrast Audit ===`);
-  console.log(`BASE_URL: ${BASE_URL}`);
-  console.log(`Routes: ${ROUTES.join(", ")}`);
+  console.log(`Routes: ${AUDIT_ROUTES.join(", ")}`);
   console.log(
-    `Viewports: ${VIEWPORTS.map((v) => v.name).join(", ")} | Themes: ${THEMES.join(", ")}`,
+    `Viewports: ${AUDIT_VIEWPORTS.map((v) => v.name).join(", ")} | Themes: ${THEMES.join(", ")}`,
   );
   console.log(`\nContrast failures (deduped by selector/colors/state): ${contrastFailures.length}`);
-  console.log(`Unknown-background elements (deduped): ${unknownBg.length}`);
-  console.log(`Action failures: ${actionFailures.length}`);
+  console.log(
+    `Unknown-background elements: ${classifiedUnknownBg.length} ` +
+      `(expected textured: ${classifiedUnknownBg.length - unexpectedUnknownBg.length}, unexpected: ${unexpectedUnknownBg.length})`,
+  );
+  console.log(
+    `Action failures: ${classifiedActionFailures.length} (unexpected: ${unexpectedActionFailures.length})`,
+  );
 
   if (contrastFailures.length > 0) {
     console.log(`\n--- Contrast failures ---`);
@@ -884,20 +1015,22 @@ async function main() {
       console.log(`[${f.state} | routes=${f.routes.join(",")}] ${f.selector} "${f.text}"`);
     }
   }
-  if (actionFailures.length > 0) {
+  if (classifiedActionFailures.length > 0) {
     console.log(`\n--- Action failures ---`);
-    for (const f of actionFailures) {
+    for (const f of classifiedActionFailures) {
       console.log(
-        `[${f.route} | ${f.viewport} | ${f.theme} | ${f.state}] ${f.kind}: ${f.selector || f.error || f.status}`,
+        `[${f.route} | ${f.viewport} | ${f.theme} | ${f.state}] ${f.classification} ${f.kind}: ${f.selector || f.error || f.status}`,
       );
     }
   }
 
   console.log(`\nFull report: ${OUTPUT_PATH}\n`);
-
-  // Non-zero exit when real contrast failures are found, so this can be
-  // wired into CI later without extra plumbing (not currently gated on).
-  if (contrastFailures.length > 0) process.exitCode = 1;
+  if (
+    contrastFailures.length > 0 ||
+    unexpectedActionFailures.length > 0 ||
+    unexpectedUnknownBg.length > 0
+  )
+    process.exitCode = 1;
 }
 
 main().catch((err) => {

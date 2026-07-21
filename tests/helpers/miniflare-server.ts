@@ -70,6 +70,16 @@ export async function startTestServer(options: StartOptions = {}): Promise<TestS
       DICTIONARY_BASE_URL: "https://r2-dictionary.test.local",
       ...(options.versionMetadata ? { CF_VERSION_METADATA: options.versionMetadata } : {}),
     },
+    // Every outbound `fetch()` the worker script issues (legacy ASSET_BASE_URL
+    // proxy misses, the Cloudflare zone-purge API, etc.) is dispatched
+    // in-process here instead of hitting real DNS. Without this, a request to
+    // the fake `r2-assets.test.local`/`r2-dictionary.test.local` hosts pays a
+    // real OS DNS-failure timeout (~5s) before the worker's own catch clause
+    // turns it into a 502 -- under concurrent test load this was the dominant
+    // source of intermittent /assets/* 502s. Immediate 404 here is
+    // indistinguishable from a real upstream miss from the worker's
+    // perspective (its existing catch/fallback logic already handles both).
+    outboundService: () => new MFResponse(null, { status: 404 }),
     verbose: false,
   };
 
@@ -95,12 +105,18 @@ export async function startTestServer(options: StartOptions = {}): Promise<TestS
 
   const url = await mf.ready;
 
+  // The TCP port is already open and accepting requests as soon as
+  // `mf.ready` resolves above -- workerd binds the socket before we get a
+  // chance to seed any R2 fixture data, so there is an inherent window
+  // where a request can race ahead of seeding. Playwright's webServer
+  // readiness probe (playwright.config.ts) polls `/api/<word>.json`, which
+  // only resolves once the DICTIONARY bucket is seeded -- so DICTIONARY is
+  // seeded LAST here, after ASSETS and FONTS, so that a 200 from the probe
+  // is a reliable proxy for "every fixture bucket is seeded", not just
+  // DICTIONARY. Do not reorder without updating the readiness probe target.
   const fixtures = collectAllFixtures();
-  await Promise.all([
-    seedBucket(mf, "DICTIONARY", fixtures),
-    seedBucket(mf, "ASSETS", fixtures),
-    seedBucket(mf, "FONTS", fixtures),
-  ]);
+  await Promise.all([seedBucket(mf, "ASSETS", fixtures), seedBucket(mf, "FONTS", fixtures)]);
+  await seedBucket(mf, "DICTIONARY", fixtures);
 
   const stop = async () => {
     await mf.dispose();

@@ -54,8 +54,12 @@ import { spawn } from "node:child_process";
  * Wrangler reads CLOUDFLARE_ENV from the environment and maps it to --env,
  * which conflicts with the already-flattened generated configs (they have no
  * [env.*] sections). Always strip CLOUDFLARE_ENV from the child env so the
- * wrangler subprocess never sees it; callers already pass --config with the
- * correctly-flattened generated config for the target environment.
+ * wrangler subprocess never sees it. Some callers (wrangler-versions.mjs)
+ * pass --config with the flattened generated config for the target
+ * environment; the R2 object put/get callers in this file and in
+ * release-verify.mjs pass the target bucket name directly in the object
+ * path instead and rely on top-level wrangler.jsonc/account discovery, so
+ * they never pass --config.
  *
  * @param {string[]} argv
  * @param {(file: string, args: string[], opts: object) => object} [spawnImpl]
@@ -290,6 +294,35 @@ export function isRetryableError(err) {
   }
 
   return false;
+}
+
+/** Matches ANSI CSI escape/color sequences wrangler emits for its `[ERROR]` banner. */
+const ANSI_ESCAPE_RE = /\x1B\[[0-9;]*[A-Za-z]/g;
+
+/**
+ * True when wrangler's stderr indicates the R2 object/key genuinely does
+ * not exist — a legitimate, stable "not found" outcome that MUST short
+ * circuit past `retryWithBackoff` (never retried, mapped to `null`/a
+ * curated "Missing object" error), as opposed to a transient/permanent
+ * failure that should be retried or fail loudly.
+ *
+ * Strips ANSI color codes before matching: real, non-piped wrangler wraps
+ * its `[ERROR]` banner in CSI escapes (observed:
+ * `\x1B[31m✘ \x1B[41;31m[\x1B[41;97mERROR\x1B[41;31m]\x1B[0m The specified
+ * key does not exist.`), and — separately from the ANSI wrapping — real
+ * wrangler's actual not-found phrasing is "The specified key does not
+ * exist.", which contains neither "not found" nor "NoSuchKey"/"404". A
+ * fake-runner unit test that only ever emits clean plain-text stubs never
+ * exercises either gap, so this single matcher (and its test) MUST cover
+ * both: the literal real phrase, ANSI-wrapped, verbatim.
+ *
+ * @param {string} stderr
+ * @returns {boolean}
+ */
+export function isNotFoundStderr(stderr) {
+  if (!stderr) return false;
+  const plain = stderr.replace(ANSI_ESCAPE_RE, "");
+  return /does not exist|NoSuchKey|not found|\b404\b/i.test(plain);
 }
 
 /**

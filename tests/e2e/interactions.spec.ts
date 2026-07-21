@@ -1,9 +1,10 @@
 import { expect, test } from "./_fixtures";
+import { waitForAppReady } from "./readiness";
 
 test.describe("search box interactions", () => {
   test("typing in nav search shows autocomplete suggestions", async ({ page }) => {
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     const input = page.locator("#nav-fulltext-search").first();
     await expect(input).toBeVisible({ timeout: 15_000 });
     await input.fill("萌");
@@ -15,7 +16,7 @@ test.describe("search box interactions", () => {
 
   test("ArrowDown + Enter selects first suggestion and navigates", async ({ page }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     const input = page.locator("#nav-fulltext-search").first();
     await expect(input).toBeVisible({ timeout: 15_000 });
     await input.fill("上訴");
@@ -30,7 +31,7 @@ test.describe("search box interactions", () => {
 
   test("clicking a suggestion navigates to that word", async ({ page }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     const input = page.locator("#nav-fulltext-search").first();
     await expect(input).toBeVisible({ timeout: 15_000 });
     await input.fill("上訴");
@@ -42,7 +43,7 @@ test.describe("search box interactions", () => {
 test.describe("star / unstar", () => {
   test("localStorage starred-a bucket is initialized", async ({ page }) => {
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     const starred = await page.evaluate(() => window.localStorage.getItem("starred-a"));
     // Either empty string (initialized) or null (not yet touched) is OK
     expect(starred === "" || starred === null || typeof starred === "string").toBe(true);
@@ -50,10 +51,10 @@ test.describe("star / unstar", () => {
 
   test("programmatic star toggles state", async ({ page }) => {
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await page.evaluate(() => window.localStorage.setItem("starred-a", '"萌"\\n'));
     await page.reload();
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     const raw = await page.evaluate(() => window.localStorage.getItem("starred-a"));
     expect(raw).toContain("萌");
   });
@@ -62,10 +63,10 @@ test.describe("star / unstar", () => {
 test.describe("LRU (last viewed) records", () => {
   test("visiting a word adds it to the LRU list", async ({ page }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await page.evaluate(() => window.localStorage.clear());
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     // Small wait for the effect
     await page.waitForTimeout(500);
     const lru = await page.evaluate(() => window.localStorage.getItem("lru-a"));
@@ -74,10 +75,10 @@ test.describe("LRU (last viewed) records", () => {
 
   test("last-lookup sets prev-id + lang", async ({ page }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await page.evaluate(() => window.localStorage.clear());
     await page.goto("/'%E9%A3%9F");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await page.waitForTimeout(500);
     const prevId = await page.evaluate(() => window.localStorage.getItem("prev-id"));
     const lang = await page.evaluate(() => window.localStorage.getItem("lang"));
@@ -110,12 +111,12 @@ test.describe("cross-language navigation", () => {
 test.describe("starred page", () => {
   test("/=* renders the starred landing (a)", async ({ page }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await page.evaluate(() => {
       window.localStorage.setItem("starred-a", '"萌"\\n"水"\\n');
     });
     await page.goto("/=*");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await expect(page).toHaveTitle(/字詞紀錄簿/);
   });
 
@@ -123,12 +124,12 @@ test.describe("starred page", () => {
     page,
   }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await page.evaluate(() => {
       window.localStorage.setItem("starred-a", '"萌"\\n"水"\\n');
     });
     await page.goto("/=*");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
 
     await page.getByRole("button", { name: "移除收藏「萌」" }).click();
 
@@ -142,7 +143,7 @@ test.describe("starred page", () => {
 test.describe("head metadata injection", () => {
   test("client-side applyHeadByPath updates <meta og:*> on navigation", async ({ page }) => {
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     const ogImage = await page.locator('meta[property="og:image"]').getAttribute("content");
     expect(ogImage).toMatch(/%E8%90%8C\.png$/);
     const ogTitle = await page.locator('meta[property="og:title"]').getAttribute("content");
@@ -151,10 +152,10 @@ test.describe("head metadata injection", () => {
 
   test("navigation updates the title tag", async ({ page }) => {
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await expect(page).toHaveTitle(/萌/);
     await page.goto("/'%E9%A3%9F");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await expect(page).toHaveTitle(/食/);
   });
 

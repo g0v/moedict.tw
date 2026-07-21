@@ -58,6 +58,7 @@ import {
   VERSION_STATUS,
   DEFAULT_BASE_DIR,
 } from "./lib/deployment-state.mjs";
+import { runStrokeCorpusPreflight } from "./lib/stroke-corpus-preflight.mjs";
 
 const DEFAULT_CONFIG_PATH = "dist/cf_moedict_webkit_neo/wrangler.json";
 const DEFAULT_DIST_CLIENT_DIR = "dist/client";
@@ -139,6 +140,7 @@ function errMessage(err) {
  *   probeTimeoutMs?: number;
  *   setTimeoutFn?: typeof setTimeout;
  *   clearTimeoutFn?: typeof clearTimeout;
+ *   strokeCorpusPreflight?: (env: "production" | "staging", opts?: Record<string, unknown>) => Promise<unknown>;
  * }} [opts]
  */
 export async function runReleaseDeploy(opts = {}) {
@@ -187,6 +189,24 @@ export async function runReleaseDeploy(opts = {}) {
   }
   const workerName = getWorkerName(config);
   getAssetsBucketName(config, env); // fail closed on env/config mismatch
+
+  // 1b. Stroke-corpus readiness preflight — BEFORE any mutating Wrangler
+  //     call (release-publish.mjs already gates the R2 upload step; this
+  //     covers the rollout orchestrator's own version upload/deploy calls
+  //     for direct invocation or a retried/resumed run). LIGHTWEIGHT:
+  //     authenticated pointer+manifest GET only, zero corpus-object
+  //     reads (see scripts/lib/stroke-corpus-preflight.mjs). Throws
+  //     uncaught on a missing/invalid/inconsistent corpus.
+  /* v8 ignore start -- default is the real authenticated corpus preflight; unit tests always inject a stub, never exercising a real R2 read */
+  const strokeCorpusPreflight = opts.strokeCorpusPreflight ?? runStrokeCorpusPreflight;
+  /* v8 ignore stop */
+  await strokeCorpusPreflight(env, {
+    configPath,
+    config: opts.config,
+    runner,
+    sleep: sleepImpl,
+    log: opts.log,
+  });
 
   // 2. Validate the release manifest — fail clearly if absent.
   let manifest;

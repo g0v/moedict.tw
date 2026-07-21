@@ -4,6 +4,18 @@ import { SvgIcon } from "./SvgIcon";
 import { fetchDictionaryEntry, type DictionaryLang } from "../utils/dictionary-cache";
 import { formatBopomofo, formatPinyin } from "../utils/bopomofo-pinyin-utils";
 
+// eslint-disable-next-line react-refresh/only-export-components
+export function renderFormattedPhonetics(markup: string) {
+  const parts = markup.split(/(<span class="tone">|<\/span>)/);
+  return parts.map((part, index) =>
+    part === '<span class="tone">' || part === "</span>" ? null : (
+      <span key={index} className={parts[index - 1] === '<span class="tone">' ? "tone" : undefined}>
+        {part}
+      </span>
+    ),
+  );
+}
+
 interface FontGroup {
   label: string;
   fonts: { value: string; label: string }[];
@@ -323,6 +335,7 @@ export function CharacterImageView({
   const canvasRefs = useRef<Record<string, HTMLCanvasElement>>({});
   const drawStates = useRef<Record<string, DrawState>>({});
   const mergedTerms = useMemo(() => mergeEnglishTerms(terms), [terms]);
+  const romanizeActive = romanize && lang !== "h";
   const mainImageSize = queryWord.length > 1 ? SEGMENT_IMAGE_SIZE : 240;
 
   const handleFontChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -676,15 +689,31 @@ export function CharacterImageView({
             opacity: .32;
           }
 
+          /* audit-dark-contrast: table background is a fixed light #eee
+             (never theme-aware — see the inline background: "#eee" style
+             on the .moetext table below), but .charimg-caption text has no
+             color override and inherits --moe-text, which is near-white
+             (#e6e3df) in dark mode — unreadable on the light tile. Pin an
+             explicit dark-safe color instead of following the theme var,
+             matching the fixed-background convention used for
+             div.cn-specific (index.css audit-dark-contrast E). */
           .charimg-result .charimg-caption {
             margin-top: 6px;
             text-align: center;
             font-size: 0.85em;
             line-height: 1.3;
+            color: #333;
           }
 
+          /* .bopomofo has its own global dark-mode override
+             (index.css html[data-theme="dark"] .bopomofo / the matching
+             @media block, audit-dark-contrast B) that targets the span
+             directly and would otherwise out-specificity the inherited
+             #333 above on this fixed-light tile. Pin it explicitly so the
+             caption stays readable in dark mode. */
           .charimg-result .charimg-caption .bopomofo {
             display: inline-block;
+            color: #333;
           }
 
           @media print {
@@ -732,7 +761,7 @@ export function CharacterImageView({
         >
           <img
             className="charimg-glyph charimg-glyph-main"
-            src={charImgUrl(queryWord, font, lang, romanize)}
+            src={charImgUrl(queryWord, font, lang, romanizeActive)}
             alt={queryWord}
             style={{ width: mainImageSize, height: mainImageSize }}
           />
@@ -808,9 +837,13 @@ export function CharacterImageView({
               id="charimg-romanize"
               type="checkbox"
               checked={romanize}
+              disabled={lang === "h"}
               onChange={handleRomanizeChange}
             />
-            顯示羅馬拼音
+            <span>
+              顯示羅馬拼音
+              {lang === "h" ? "（客語字圖目前不提供羅馬拼音）" : ""}
+            </span>
           </label>
         </div>
 
@@ -850,7 +883,7 @@ export function CharacterImageView({
                     >
                       <img
                         className="charimg-glyph charimg-glyph-segment"
-                        src={charImgUrl(segment.part, font, lang, romanize)}
+                        src={charImgUrl(segment.part, font, lang, romanizeActive)}
                         alt={segment.pinyin ? `${segment.part} ${segment.pinyin}` : segment.part}
                         style={{ width: SEGMENT_IMAGE_SIZE, height: SEGMENT_IMAGE_SIZE }}
                       />
@@ -860,21 +893,17 @@ export function CharacterImageView({
                         SEGMENT_IMAGE_SIZE,
                       )}
                     </div>
-                    {romanize && (segment.pinyin || segment.bopomofo) && (
+                    {romanizeActive && (segment.pinyin || segment.bopomofo) && (
                       <div className="charimg-caption">
                         {segment.pinyin && (
-                          <span
-                            className="pinyin"
-                            dangerouslySetInnerHTML={{ __html: formatPinyin(segment.pinyin) }}
-                          />
+                          <span className="pinyin">
+                            {renderFormattedPhonetics(formatPinyin(segment.pinyin))}
+                          </span>
                         )}
                         {segment.bopomofo && (
-                          <span
-                            className="bopomofo"
-                            dangerouslySetInnerHTML={{
-                              __html: formatBopomofo(segment.bopomofo),
-                            }}
-                          />
+                          <span className="bopomofo">
+                            {renderFormattedPhonetics(formatBopomofo(segment.bopomofo))}
+                          </span>
                         )}
                       </div>
                     )}

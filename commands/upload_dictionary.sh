@@ -14,6 +14,7 @@
 #   --transfers / --checkers 可用環境變數覆寫，但必須是 [1,8] 的整數，否則 fail-closed。
 
 set -e  # 遇到錯誤時退出
+set -o pipefail
 
 echo "🚀 開始上傳字典資料到 R2 Storage..."
 
@@ -61,6 +62,7 @@ if [ ! -d "$DICTIONARY_DIR" ]; then
     echo "❌ 錯誤: dictionary 資料夾不存在"
     exit 1
 fi
+
 
 # R2 Storage 配置 (override: R2_BUCKET=moedict-dictionary)
 R2_REMOTE="${R2_REMOTE:-r2}"
@@ -119,6 +121,31 @@ _rclone_sync_with_retry() {
     return 1
 }
 
+rclone_upload_dry_run() {
+    local src="$1" dst="$2" report deletion object_path rc
+    report="$(mktemp "${TMPDIR:-/tmp}/moedict-rclone-dry.XXXXXX")"
+    _rclone_sync_with_retry "$src" "$dst" "--dry-run" 2>&1 | tee "$report"
+    rc=${PIPESTATUS[0]}
+    if [ "$rc" -ne 0 ]; then
+        rm -f "$report"
+        return "$rc"
+    fi
+    deletion="$(grep -Ei 'NOTICE:.*\b(delete|deleted|deleting)\b' "$report" || true)"
+    if [ -n "$deletion" ]; then
+        while IFS= read -r line; do
+            object_path="$(printf '%s\n' "$line" | sed -E 's/.*NOTICE: //; s/: .*//')"
+            if ! grep -Fqx "$dst/$object_path" "$DICTIONARY_DIR/../sources/dictionary-deletion-allowlist.txt" 2>/dev/null; then
+                rm -f "$report"
+                echo "❌ 未核准 remote-only deletion: $dst/$object_path"
+                return 1
+            fi
+        done <<EOF
+$deletion
+EOF
+    fi
+    rm -f "$report"
+    return 0
+}
 # ── CNS-only scope ─────────────────────────────────────────────────────────────
 if [ "$UPLOAD_SCOPE" = "cns" ]; then
     echo "📦 UPLOAD_SCOPE=cns: 僅上傳 CNS11643 全字庫屬性後備"
@@ -142,6 +169,7 @@ if [ "$UPLOAD_SCOPE" = "cns" ]; then
         echo "   請確認 generate-cns-data.mjs 已成功完成完整生成（非 --limit / --dry-run）"
         exit 1
     fi
+    node scripts/verify-cns-manifest.mjs
     echo "✅ 檔案數驗證通過: $actual_count 個 JSON 檔案"
     echo ""
 
@@ -161,7 +189,7 @@ if [ "$UPLOAD_SCOPE" = "cns" ]; then
     show_cns_preflight
     echo ""
     echo "🧪 dry-run cns/..."
-    _rclone_sync_with_retry "$CNS_DATA_DIR" "$R2_REMOTE:$R2_BUCKET/cns" "--dry-run" || exit 1
+    rclone_upload_dry_run "$CNS_DATA_DIR" "$R2_REMOTE:$R2_BUCKET/cns" || exit 1
 
     echo ""
     read -r -p "⚠️ CNS dry-run 完成，是否繼續正式上傳？(y/N): " confirm_upload
@@ -244,6 +272,13 @@ if [ ! -d "$TRANSLATION_DATA_DIR" ]; then
     echo "❌ 錯誤: $TRANSLATION_DATA_DIR 資料夾不存在"
     exit 1
 fi
+# Ordinary uploads require the canonical data gate before any dry-run/mutation.
+if ! command -v vp >/dev/null 2>&1; then
+    echo "❌ 錯誤: vp 未安裝；拒絕 ordinary-scope 上傳"
+    exit 1
+fi
+echo "🔐 執行 canonical vp run check:data..."
+vp run check:data
 
 # 檢查台語羅馬拼音索引資料夾是否存在
 if [ ! -d "$PINYIN_LOOKUP_DIR" ]; then
@@ -286,20 +321,13 @@ show_preflight_checklist() {
     echo ""
     echo "🔎 dry-run 判讀重點"
     echo "  - 若看到 delete 且不是你預期要清掉的檔案：請按 n 取消"
-    echo "  - 若只看到預期新增/更新，且路徑正確：可按 y 繼續正式上傳"
 }
-
 rclone_upload() {
     local src="$1"
     local dst="$2"
     _rclone_sync_with_retry "$src" "$dst" ""
 }
 
-rclone_upload_dry_run() {
-    local src="$1"
-    local dst="$2"
-    _rclone_sync_with_retry "$src" "$dst" "--dry-run"
-}
 
 show_preflight_checklist
 echo ""
@@ -335,11 +363,6 @@ echo "🧪 dry-run lookup/pinyin/ (台語羅馬拼音索引)..."
 rclone_upload_dry_run "$PINYIN_LOOKUP_DIR" "$R2_REMOTE:$R2_BUCKET/lookup/pinyin"
 
 # dry-run：全字庫屬性後備（可選，僅當 cns/ 目錄存在時執行）
-if [ -d "$CNS_DATA_DIR" ]; then
-    echo ""
-    echo "🧪 dry-run cns/ (全字庫屬性後備)..."
-    rclone_upload_dry_run "$CNS_DATA_DIR" "$R2_REMOTE:$R2_BUCKET/cns"
-fi
 
 echo ""
 read -r -p "⚠️ 以上 dry-run 完成，是否繼續正式上傳？(y/N): " confirm_upload
@@ -387,13 +410,6 @@ echo "📤 正在上傳 lookup/pinyin/ (台語羅馬拼音索引)..."
 rclone_upload "$PINYIN_LOOKUP_DIR" "$R2_REMOTE:$R2_BUCKET/lookup/pinyin"
 echo "✅ lookup/pinyin/ 上傳完成"
 
-# 上傳全字庫屬性後備（可選，僅當 cns/ 目錄存在時執行）
-if [ -d "$CNS_DATA_DIR" ]; then
-    echo ""
-    echo "📤 正在上傳 cns/ (全字庫屬性後備)..."
-    rclone_upload "$CNS_DATA_DIR" "$R2_REMOTE:$R2_BUCKET/cns"
-    echo "✅ cns/ 上傳完成"
-fi
 
 echo ""
 echo "🎉 所有字典資料上傳完成！"

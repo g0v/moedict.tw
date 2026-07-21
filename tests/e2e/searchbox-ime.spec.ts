@@ -18,6 +18,7 @@
 
 import type { Page } from "@playwright/test";
 import { expect, test } from "./_fixtures";
+import { waitForAppReady } from "./readiness";
 
 async function typeQueryAndWaitForSuggestions(page: Page, value: string): Promise<void> {
   const input = page.locator("#query");
@@ -40,7 +41,7 @@ async function getActiveElementInfo(page: Page): Promise<{ id: string; tag: stri
 test.describe("searchbox IME navigation guards (#76)", () => {
   test("baseline: ArrowDown without IME moves focus onto first suggestion", async ({ page }) => {
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await typeQueryAndWaitForSuggestions(page, "萌");
 
     const before = await getActiveElementInfo(page);
@@ -58,7 +59,7 @@ test.describe("searchbox IME navigation guards (#76)", () => {
     page,
   }) => {
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await typeQueryAndWaitForSuggestions(page, "萌");
 
     // Flip the ref via a real React composition event.
@@ -83,7 +84,7 @@ test.describe("searchbox IME navigation guards (#76)", () => {
 
   test("guard 2 — nativeEvent.isComposing: synthetic event is ignored", async ({ page }) => {
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await typeQueryAndWaitForSuggestions(page, "萌");
 
     // Dispatch a KeyboardEvent with isComposing=true directly — the ref is
@@ -107,7 +108,7 @@ test.describe("searchbox IME navigation guards (#76)", () => {
 
   test("guard 3 — keyCode 229: synthetic event is ignored", async ({ page }) => {
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await typeQueryAndWaitForSuggestions(page, "萌");
 
     await page.locator("#query").evaluate((el) => {

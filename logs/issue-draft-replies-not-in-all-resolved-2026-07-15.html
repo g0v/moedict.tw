@@ -872,7 +872,7 @@
             </div>
             <div class="metadata-item">
               <div class="k">工作樹 Worktree</div>
-              <div class="v">/Users/au/w/moedict.tw-all-resolved</div>
+              <div class="v">&lt;worktree&gt;/moedict.tw-all-resolved</div>
             </div>
             <div class="metadata-item">
               <div class="k">A/B</div>
@@ -1047,15 +1047,16 @@
                   回覆『I like group-by better. Will experiment.』，此後無任何後續留言或連結的實作。
                 </li>
                 <li>
-                  現行原始碼 ~/w/moedict.tw/src/pages/StarredPage.tsx:22-27,53-63：`type Lang = "a"
-                  | "t" | "h" | "c"`；`interface StarredPageProps { lang: Lang; entry?: string
+                  現行原始碼
+                  &lt;worktree&gt;/moedict.tw/src/pages/StarredPage.tsx:22-27,53-63：`type Lang =
+                  "a" | "t" | "h" | "c"`；`interface StarredPageProps { lang: Lang; entry?: string
                   }`；`loadWords` 僅呼叫 `readStarredWords(lang)` 與
                   `readLRUWords(lang)`，元件從結構上就只服務單一語言，無分組視圖程式碼路徑。
                 </li>
                 <li>
                   現行原始碼
-                  ~/w/moedict.tw/src/utils/word-record-utils.ts:1-8,56-62：`STARRED_KEY_PREFIX =
-                  "starred-"`、`LRU_KEY_PREFIX = "lru-"`，`getStarredStorageKey(lang)` 回傳
+                  &lt;worktree&gt;/moedict.tw/src/utils/word-record-utils.ts:1-8,56-62：`STARRED_KEY_PREFIX
+                  = "starred-"`、`LRU_KEY_PREFIX = "lru-"`，`getStarredStorageKey(lang)` 回傳
                   `starred-${lang}`，四語言（a/t/h/c）各自獨立 localStorage
                   鍵，彼此無交集、無彙總結構。
                 </li>
@@ -1068,7 +1069,7 @@
                 </li>
                 <li>
                   導覽列連結
-                  ~/w/moedict.tw/src/components/navbar-normal.tsx:754-761：『字詞紀錄簿』按鈕
+                  &lt;worktree&gt;/moedict.tw/src/components/navbar-normal.tsx:754-761：『字詞紀錄簿』按鈕
                   `href={starredPath}` 隨目前語言決定單一語言路徑，非跨語言彙總入口。
                 </li>
                 <li>
@@ -1167,7 +1168,7 @@ RESCOPE 回覆草稿／未送出
               <div class="field-value">
                 <strong>已實作，待維護者確認</strong>。已在 g0v/moedict.tw
                 加入整個字詞項目唯一的「複製解釋」按鈕， 位於右側次要操作列並依序排列：複製
-                →（有變體時）變體 → 最右側收藏。按鈕會依畫面可見順序，
+                →（單字時）教育部《異體字字典》連結 → 最右側收藏。按鈕會依畫面可見順序，
                 跨異體字／分組複製所有非空義項，包含例句／引文／連結／同義詞／反義詞；不含標題／發音、重複可選羅馬字、
                 metadata 徽章、僅供閱讀提示、操作與 xref。使用
                 <code>navigator.clipboard</code> 加上安全後備方式， 並保留成功／失敗公告。已由實作
@@ -1294,7 +1295,7 @@ RESCOPE 回覆草稿／未送出
             <pre class="response-box" lang="zh-TW" id="draft-258">
 RESCOPE 回覆草稿／未送出
 
-目前已完成整個字詞項目唯一的「複製解釋」按鈕，位於右側次要操作列，順序為複製 →（有變體時）變體 → 最右側收藏。它會依畫面可見順序，跨異體字／分組複製所有非空義項，包含例句／引文／連結／同義詞／反義詞；不含標題／發音、重複可選羅馬字、metadata 徽章、僅供閱讀提示、操作與 xref。使用 navigator.clipboard 加上安全後備方式，並保留成功／失敗公告；實作 commit 為 7e64f095。發佈前請確認 staging live 的 X-Moedict-Release 是此 commit 或後續整合 descendant；production 仍未出貨。
+目前已完成整個字詞項目唯一的「複製解釋」按鈕，位於右側次要操作列，順序為複製 →（單字時）教育部《異體字字典》連結 → 最右側收藏。它會依畫面可見順序，跨異體字／分組複製所有非空義項，包含例句／引文／連結／同義詞／反義詞；不含標題／發音、重複可選羅馬字、metadata 徽章、僅供閱讀提示、操作與 xref。使用 navigator.clipboard 加上安全後備方式，並保留成功／失敗公告；實作 commit 為 7e64f095。發佈前請確認 staging live 的 X-Moedict-Release 是此 commit 或後續整合 descendant；production 仍未出貨。
             </pre>
             <div class="card-actions">
               <button
@@ -1404,12 +1405,13 @@ RESCOPE 回覆草稿／未送出
                   提出，零留言：『小弟在使用android版時常常會記錄不熟的字詞，但是每次手機重置都會遺失，希望未來可以新增相關功能或是同步到雲端硬碟的功能』。
                 </li>
                 <li>
-                  紀錄簿儲存層原始碼：~/w/moedict.tw/src/utils/word-record-utils.ts 全 243 行、16 個
-                  export 函式，僅含 localStorage 讀/寫/清除（safeGetItem/safeSetItem/safeRemoveItem
-                  包一層 try-catch），無任何匯出、匯入、序列化、下載或網路同步邏輯。
+                  紀錄簿儲存層原始碼：&lt;worktree&gt;/moedict.tw/src/utils/word-record-utils.ts 全
+                  243 行、16 個 export 函式，僅含 localStorage
+                  讀/寫/清除（safeGetItem/safeSetItem/safeRemoveItem 包一層
+                  try-catch），無任何匯出、匯入、序列化、下載或網路同步邏輯。
                 </li>
                 <li>
-                  紀錄簿頁面 UI：~/w/moedict.tw/src/pages/StarredPage.tsx 匯入
+                  紀錄簿頁面 UI：&lt;worktree&gt;/moedict.tw/src/pages/StarredPage.tsx 匯入
                   addStarWord/clearLRUWords/clearStarredWords
                   等既有函式，全文搜尋『匯出|匯入|export|import|download|Blob|share』無任何匹配（僅
                   import 陳述式本身）。
@@ -1436,8 +1438,8 @@ RESCOPE 回覆草稿／未送出
                   §0）。
                 </li>
                 <li>
-                  版本錨點：~/w/moedict.tw 本次查證時 HEAD 為 0fd3c49（2026-07-12 09:52:26
-                  +0800），確保『尚未實作』結論可被日後複查對照。
+                  版本錨點：&lt;worktree&gt;/moedict.tw 本次查證時 HEAD 為 0fd3c49（2026-07-12
+                  09:52:26 +0800），確保『尚未實作』結論可被日後複查對照。
                 </li>
                 <li>
                   addStarWord（word-record-utils.ts:85-92）以字串前置（prepend）寫入
@@ -1735,7 +1737,8 @@ RESCOPE 回覆草稿／未送出
                   `0.5`，`delays.word` 維持 `0.5` 不變，已合併，關閉 #274 為 completed。
                 </li>
                 <li>
-                  現行 ~/w/moedict.tw/data/assets/js/jquery.strokeWords.js:664-668：`updatesPerStep:
+                  現行
+                  &lt;worktree&gt;/moedict.tw/data/assets/js/jquery.strokeWords.js:664-668：`updatesPerStep:
                   10, delays: { stroke: 0.5, word: 0.5 }`，與 PR#275 合併後的值一致，證實 2020
                   年的數值修正沿用到現行 React 重寫版正式站。
                 </li>
@@ -1757,7 +1760,7 @@ RESCOPE 回覆草稿／未送出
                   檔速度』選項。
                 </li>
                 <li>
-                  ~/w/moedict.tw `git log --all --oneline --grep` 筆順/stroke speed
+                  &lt;worktree&gt;/moedict.tw `git log --all --oneline --grep` 筆順/stroke speed
                   相關關鍵字：僅命中既有筆順觸發/多字詞修復的舊提交（c4a9860, 868155e
                   等），皆與速度控制無關，證實現行程式庫也從未加過此功能。
                 </li>
@@ -1949,7 +1952,7 @@ RESCOPE 回覆草稿／未送出
                   行）：分享文字只用去除語言前綴的漢字（cleanWord），PNG URL 只帶 word 與 font
                   兩個參數，無羅馬字相關內容或 query。<br /><small
                     >本地檔案
-                    ~/w/moedict.tw/src/components/CharacterImageView.tsx:108-111,307-325</small
+                    &lt;worktree&gt;/moedict.tw/src/components/CharacterImageView.tsx:108-111,307-325</small
                   >
                 </li>
                 <li>
@@ -1957,7 +1960,8 @@ RESCOPE 回覆草稿／未送出
                   generateTextSVGWithR2Fonts()／generateSimpleTextSVG()（330-731 行）：九宮格
                   SVG/PNG 產生邏輯全程只處理 Array.from(text) 這個純漢字陣列，逐字去 R2 FONTS bucket
                   抓漢字字型 SVG，函式簽名與內部分支完全沒有羅馬字/拼音相關的參數或路徑。<br /><small
-                    >本地檔案 ~/w/moedict.tw/src/utils/image-generation.ts:330-638,643-720</small
+                    >本地檔案
+                    &lt;worktree&gt;/moedict.tw/src/utils/image-generation.ts:330-638,643-720</small
                   >
                 </li>
                 <li>
@@ -1965,7 +1969,8 @@ RESCOPE 回覆草稿／未送出
                   oEmbed 嵌入卡片會讀 heteronym.pinyin/heteronym.trs 並渲染成 &lt;span
                   class="pinyin"&gt;，證明 trs
                   欄位本來就存在，只是從未接到九宮格字圖分享這條路徑。<br /><small
-                    >本地檔案 ~/w/moedict.tw/src/oembed/render-embed-document.ts:53-59</small
+                    >本地檔案
+                    &lt;worktree&gt;/moedict.tw/src/oembed/render-embed-document.ts:53-59</small
                   >
                 </li>
                 <li>
@@ -1977,7 +1982,7 @@ RESCOPE 回覆草稿／未送出
                   fallback 用，非羅馬字疊加）相關的提交。<br /><small
                     >git log --oneline --all -- src/components/CharacterImageView.tsx
                     src/utils/image-generation.ts；git log --all --oneline -S'羅馬' -- 同二檔案（於
-                    ~/w/moedict.tw 執行）</small
+                    &lt;worktree&gt;/moedict.tw 執行）</small
                   >
                 </li>
                 <li>

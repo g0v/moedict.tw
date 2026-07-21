@@ -11,12 +11,9 @@
 import { handleDictionaryAPI } from "./api/handleDictionaryAPI.ts";
 import { handleCnsAPI } from "./api/handleCnsAPI.ts";
 import { handleLookupAPI } from "./api/handleLookupAPI.ts";
-import { STROKE_JSON_BASE_URL } from "./utils/media-cdn.ts";
 
 const shouldUseOfflineApi =
-  typeof window !== "undefined" &&
-  (Boolean((window as Window & { Capacitor?: unknown }).Capacitor) ||
-    (import.meta.env.DEV && !import.meta.env.VITE_CLOUDFLARE_REMOTE_DEV));
+  typeof window !== "undefined" && Boolean((window as Window & { Capacitor?: unknown }).Capacitor);
 
 if (shouldUseOfflineApi) {
   // Keep the original fetch for loading local files and external requests
@@ -94,15 +91,12 @@ if (shouldUseOfflineApi) {
       if (!cp || !/^[0-9a-f]{4,6}\.json$/i.test(cp)) {
         return Response.json({ error: "Bad Request" }, { status: 400 });
       }
+      // Capacitor apps have no same-origin Worker to proxy through, so they
+      // go straight to the production stroke-json API — no local-bundle
+      // probe (stroke-json/* is never bundled into the app) and no
+      // staging→production fallback (each build targets one environment).
       try {
-        const local = await originalFetch(`/stroke-json/${cp}`);
-        if (local.ok) return local;
-      } catch {
-        /* fall through to CDN */
-      }
-      try {
-        const cdnUrl = `${STROKE_JSON_BASE_URL}/${cp}`;
-        return await originalFetch(cdnUrl);
+        return await originalFetch(`https://www.moedict.tw/api/stroke-json/${cp}`);
       } catch {
         return Response.json(
           { error: "Offline", message: "Stroke data unavailable" },
@@ -135,11 +129,15 @@ if (shouldUseOfflineApi) {
   ) {
     const urlStr = typeof url === "string" ? url : url.href;
     if (urlStr.startsWith("/api/stroke-json/")) {
+      // Same routing as the fetch patch below: Capacitor has no
+      // same-origin Worker, so legacy jQuery.strokeWords $.ajax calls
+      // (which use XHR, not fetch) go straight to production — no local
+      // probe, no staging→prod fallback.
       const cp = urlStr.slice("/api/stroke-json/".length);
       return originalXHROpen.call(
         this,
         method,
-        `/stroke-json/${cp}`,
+        `https://www.moedict.tw/api/stroke-json/${cp}`,
         async_ ?? true,
         username,
         password,

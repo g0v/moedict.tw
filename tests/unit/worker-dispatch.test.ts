@@ -567,15 +567,63 @@ describe("dispatch — /translation-data/cfdict.*", () => {
   });
 });
 
-describe("dispatch — /api/stroke-json R2 ASSETS", () => {
-  it("serves a seeded stroke-json object from env.ASSETS", async () => {
+describe("dispatch — /api/stroke-json R2 ASSETS (atomic pointer/manifest)", () => {
+  function seedAtomicCorpus(
+    bodyByHex: Record<string, string>,
+  ): Record<string, { body: string; contentType?: string }> {
+    // Minimal but schema-valid corpus: pad to the required 6,063-file count
+    // with synthetic entries so pointer/manifest validation in
+    // handleStrokeAPI.ts's resolveCorpus() passes. Digest must be a 64-hex
+    // string per src/utils/stroke-corpus.ts's isStrokeCorpusPointer/Manifest.
+    const digest = "a".repeat(64);
+    const entries: Record<string, { body: string; contentType?: string }> = {};
+    const files: Array<{ path: string; sha256: string; bytes: number }> = [];
+    const hexes = new Set(Object.keys(bodyByHex));
+    let synthetic = 0x4e00;
+    const allBodies: Record<string, string> = { ...bodyByHex };
+    while (hexes.size < 6063) {
+      const hex = synthetic.toString(16);
+      synthetic++;
+      if (hexes.has(hex)) continue;
+      hexes.add(hex);
+      allBodies[hex] = "[]";
+    }
+    for (const hex of hexes) {
+      const body = allBodies[hex];
+      const bytes = new TextEncoder().encode(body).length;
+      // Simple deterministic stand-in hash (test doubles never verify real
+      // sha256 — see makeBucket's r2Obj — this only needs to be a stable
+      // 64-hex-char string for schema validation).
+      const sha256 = bytes.toString(16).padStart(64, "0");
+      files.push({ path: `stroke-json/${hex}.json`, sha256, bytes });
+      entries[`stroke-corpora/${digest}/stroke-json/${hex}.json`] = {
+        body,
+        contentType: "application/json",
+      };
+    }
+    const totalBytes = files.reduce((s, f) => s + f.bytes, 0);
+    const manifest = {
+      schema: 1,
+      corpusDigest: digest,
+      fileCount: files.length,
+      totalBytes,
+      files,
+    };
+    const pointer = {
+      schema: 1,
+      corpusDigest: digest,
+      manifestKey: `stroke-corpora/${digest}/manifest.json`,
+      fileCount: manifest.fileCount,
+      totalBytes: manifest.totalBytes,
+    };
+    entries["stroke-corpus/current.json"] = { body: JSON.stringify(pointer) };
+    entries[`stroke-corpora/${digest}/manifest.json`] = { body: JSON.stringify(manifest) };
+    return entries;
+  }
+
+  it("serves a seeded stroke-json object from env.ASSETS via pointer/manifest resolution", async () => {
     const env = makeEnv({
-      ASSETS: makeBucket({
-        "stroke-json/840c.json": {
-          body: '[{"outline":[],"track":[]}]',
-          contentType: "application/json",
-        },
-      }),
+      ASSETS: makeBucket(seedAtomicCorpus({ "840c": '[{"outline":[],"track":[]}]' })),
     });
     const res = await dispatch(req("/api/stroke-json/840c.json"), env);
     expect(res.status).toBe(200);
@@ -589,9 +637,16 @@ describe("dispatch — /api/stroke-json R2 ASSETS", () => {
     expect(res.status).toBe(400);
   });
 
-  it("returns 404 when the stroke object is absent from ASSETS", async () => {
-    const res = await dispatch(req("/api/stroke-json/ffff.json"), makeEnv());
+  it("returns 404 when the stroke codepoint is not allowlisted in a valid manifest", async () => {
+    const env = makeEnv({ ASSETS: makeBucket(seedAtomicCorpus({ "840c": "[]" })) });
+    const res = await dispatch(req("/api/stroke-json/ffff.json"), env);
     expect(res.status).toBe(404);
+  });
+
+  it("returns 503 no-store when there is no corpus pointer at all (unconfigured bucket)", async () => {
+    const res = await dispatch(req("/api/stroke-json/840c.json"), makeEnv());
+    expect(res.status).toBe(503);
+    expect(res.headers.get("cache-control")).toBe("no-store");
   });
 });
 

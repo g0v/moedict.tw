@@ -191,6 +191,15 @@ function baseOpts(env: "production" | "staging", overrides: Record<string, unkno
     soakIntervalMs: 1,
     soakDurationMs: 1,
     stateBaseDir: dir,
+    // Default: corpus is ready. Tests exercising the preflight gate itself
+    // override this with a rejecting stub (see "stroke-corpus preflight
+    // gate" describe block below).
+    strokeCorpusPreflight: async () => ({
+      ok: true,
+      bucketName: "stub-bucket",
+      corpusDigest: "a".repeat(64),
+      checkedKeys: 6063,
+    }),
     ...overrides,
   };
 }
@@ -469,6 +478,89 @@ describe("requires a safe old version before starting", () => {
       runReleaseDeploy(baseOpts("staging", { runner, fetch: fetchImpl })),
     ).rejects.toThrow(/split state/);
     expect(calls.some((c) => c.includes("upload"))).toBe(false);
+  });
+});
+describe("stroke-corpus readiness preflight (before any mutating call)", () => {
+  it("blocks with zero mutating wrangler calls when the corpus preflight rejects (staging)", async () => {
+    const { runner, calls } = buildRunner();
+    const { fetchImpl } = buildFetch();
+    const rejectingPreflight = async () => {
+      throw new Error("[stroke-corpus-preflight] FAILED: pointer missing");
+    };
+    await expect(
+      runReleaseDeploy(
+        baseOpts("staging", {
+          runner,
+          fetch: fetchImpl,
+          strokeCorpusPreflight: rejectingPreflight,
+        }),
+      ),
+    ).rejects.toThrow(/pointer missing/);
+    const mutatingPhases: Record<string, true> = {
+      upload: true,
+      "deploy-phase1": true,
+      "deploy-promote": true,
+      "deploy-rollback": true,
+      "restore-old-alone": true,
+      finalize: true,
+    };
+    expect(calls.some((c) => mutatingPhases[phaseOf(c)])).toBe(false);
+    // Not even the read-only current-deployment/versions-list queries ran —
+    // the preflight is checked before step 4, so calls is empty entirely.
+    expect(calls).toHaveLength(0);
+    expect(readCurrentDeployment({ baseDir: join(dir, "staging") })).toBeNull();
+    expect(readVersionHistory({ baseDir: join(dir, "staging") })).toHaveLength(0);
+  });
+
+  it("blocks with zero mutating wrangler calls when the corpus preflight rejects (production, even with a valid staging approval)", async () => {
+    saveStagingApproval(
+      { gitSha: GIT_SHA, clientManifestDigest: DIGEST, approvedAt: "2026-07-12T00:00:00Z" },
+      { baseDir: dir },
+    );
+    const { runner, calls } = buildRunner();
+    const { fetchImpl } = buildFetch();
+    const rejectingPreflight = async () => {
+      throw new Error("[stroke-corpus-preflight] FAILED: manifest hash mismatch");
+    };
+    await expect(
+      runReleaseDeploy(
+        baseOpts("production", {
+          runner,
+          fetch: fetchImpl,
+          strokeCorpusPreflight: rejectingPreflight,
+        }),
+      ),
+    ).rejects.toThrow(/manifest hash mismatch/);
+    expect(calls).toHaveLength(0);
+    expect(readCurrentDeployment({ baseDir: join(dir, "production") })).toBeNull();
+  });
+
+  it("passes bucket/env context through to the injected preflight function", async () => {
+    const { runner } = buildRunner();
+    const { fetchImpl } = buildFetch();
+    const seen: unknown[] = [];
+    const observingPreflight = async (env: string, opts: unknown) => {
+      seen.push({ env, opts });
+      return {
+        ok: true,
+        bucketName: "moedict-assets-preview",
+        corpusDigest: "a".repeat(64),
+        checkedKeys: 6063,
+      };
+    };
+    await runReleaseDeploy(
+      baseOpts("staging", { runner, fetch: fetchImpl, strokeCorpusPreflight: observingPreflight }),
+    );
+    expect(seen).toHaveLength(1);
+    expect((seen[0] as { env: string }).env).toBe("staging");
+  });
+
+  it("a passing preflight allows the deploy to proceed normally through to finalize", async () => {
+    const { runner, calls } = buildRunner();
+    const { fetchImpl } = buildFetch();
+    const result = await runReleaseDeploy(baseOpts("staging", { runner, fetch: fetchImpl }));
+    expect(result.releaseId).toBe(RELEASE_ID);
+    expect(calls.some((c) => phaseOf(c) === "finalize")).toBe(true);
   });
 });
 describe("upload confirmation (upload UUID vs versions-list tag lookup)", () => {

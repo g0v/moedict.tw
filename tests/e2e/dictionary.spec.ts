@@ -1,5 +1,6 @@
 import type { Page, Route } from "@playwright/test";
 import { expect, test } from "./_fixtures";
+import { waitForAppReady } from "./readiness";
 
 const ANDROID_WEBVIEW_UA =
   "Mozilla/5.0 (Linux; Android 15; sdk_gphone64_arm64) AppleWebKit/537.36 Chrome/124.0.0.0 Mobile Safari/537.36";
@@ -19,7 +20,7 @@ async function waitForEntryHydration(page: Page, titleFragment: string): Promise
   // DictionaryPage renders long-form definition text after /api/{word}.json resolves.
   // Wait for either definition text OR the "全文檢索" header (which always renders)
   // and then assert the body contains the word title.
-  await page.waitForLoadState("networkidle");
+  await waitForAppReady(page, "dictionary");
   await expect(page.locator("body")).toContainText(titleFragment, { timeout: 15_000 });
 }
 
@@ -30,7 +31,7 @@ async function gotoFirstTitleEntry(
   for (const candidate of candidates) {
     const response = await page.goto(candidate.path);
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "dictionary");
     await page.evaluate(() => document.fonts.ready);
     if ((await page.locator("h1.title").count()) > 0) {
       return candidate;
@@ -63,6 +64,22 @@ test.describe("dictionary pages per language", () => {
     expect(await page.evaluate(() => localStorage.getItem("starred-a"))).not.toContain("萌");
   });
 
+  test("star state follows a second page StorageEvent without reload", async ({
+    page,
+    context,
+  }) => {
+    await page.goto("/%E8%90%8C");
+    await waitForEntryHydration(page, "萌");
+    const otherPage = await context.newPage();
+    await otherPage.goto("/%E8%90%8C");
+    await waitForEntryHydration(otherPage, "萌");
+    const star = page.locator(".entry-actions .star");
+    await expect(star).toHaveAttribute("aria-pressed", "false");
+    await otherPage.locator(".entry-actions .star").click();
+    await expect(star).toHaveAttribute("aria-pressed", "true");
+    await otherPage.close();
+  });
+
   test("'食 (t) — 台語萌典", async ({ page }) => {
     const response = await page.goto("/'%E9%A3%9F");
     expect(response?.status()).toBe(200);
@@ -85,21 +102,28 @@ test.describe("dictionary pages per language", () => {
     // 蛇 has TWO heteronyms: 白讀 tsuâ has a real definition, 文讀 siâ is
     // reading-only. hasEntryDefinitions is true for the word overall (at
     // least one heteronym has definitions), so the shared action row shows
-    // copy + variants-link + star (single-char) as usual.
+    // copy + variants-link + star (single-char) as usual. .entry-copy-status
+    // is the FIRST child (see the right-edge-alignment guard test below) so
+    // its min-width reservation sits left of the visible icons, not right.
     await expect(page.locator(".entry-actions .star")).toHaveCount(1);
     await expect(page.locator(".entry-actions a.variants-link")).toHaveCount(1);
     await expect(page.getByRole("button", { name: "複製解釋" })).toHaveCount(1);
     await expect(page.locator(".entry-actions").locator(":scope > :nth-child(1)")).toHaveClass(
-      /entry-copy-button/,
+      /entry-copy-status/,
     );
     await expect(page.locator(".entry-actions").locator(":scope > :nth-child(2)")).toHaveClass(
+      /entry-copy-button/,
+    );
+    await expect(page.locator(".entry-actions").locator(":scope > :nth-child(3)")).toHaveClass(
       /variants-link/,
     );
-    await expect(page.locator(".entry-actions").locator(":scope > :last-child")).toHaveClass(
-      /star/,
+    await expect(page.locator(".entry-actions .star")).toHaveAttribute("aria-pressed", "false");
+    await expect(page.locator(".entry-actions .entry-copy-status")).toHaveAttribute(
+      "aria-atomic",
+      "true",
     );
     await expect(
-      page.locator(".entry-actions").locator(":scope > :nth-child(1) svg"),
+      page.locator(".entry-actions").locator(":scope > :nth-child(2) svg"),
     ).toHaveAttribute("aria-hidden", "true");
   });
 
@@ -130,13 +154,13 @@ test.describe("dictionary pages per language", () => {
     await expect(entry.locator(".audioBlock")).toHaveCount(0);
 
     // 長褲 is a genuinely no-definition pinned entry (single heteronym,
-    // reading-only) — the action row must still show the star toggle, must
-    // NOT show variants-link (2-char title), and must render ZERO copy
-    // buttons/status since there is no definition content to copy.
+    // reading-only) — the action row still reserves the copy-status region,
+    // while no copy button or variants link is rendered for this 2-char title.
     await expect(page.locator(".entry-actions .star")).toHaveCount(1);
     await expect(page.locator(".entry-actions a.variants-link")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "複製解釋" })).toHaveCount(0);
-    await expect(page.locator(".entry-copy-status")).toHaveCount(0);
+    await expect(page.locator(".entry-actions .entry-copy-button")).toHaveCount(0);
+    await expect(page.locator(".entry-copy-status")).toHaveCount(1);
+    await expect(page.locator(".entry-copy-status")).toHaveText("\u00a0");
   });
 
   test(":字 (h) — 客語萌典", async ({ page }) => {
@@ -180,6 +204,32 @@ test.describe("dictionary pages per language", () => {
     const response = await page.goto("/~%E4%B8%8A%E8%A8%B4");
     expect(response?.status()).toBe(200);
     await waitForEntryHydration(page, "上訴");
+  });
+  test("'食 copy excludes duplicate romanization-selectable overlay text", async ({ page }) => {
+    await page.goto("/'%E9%A3%9F");
+    await waitForEntryHydration(page, "食");
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async (value: string) =>
+            ((window as Window & { __copied?: string }).__copied = value),
+        },
+      });
+    });
+    const overlays = await page.locator(".entry-item .romanization-selectable").allInnerTexts();
+    await expect(page.getByRole("button", { name: "複製解釋" })).toHaveCount(1);
+    await page.getByRole("button", { name: "複製解釋" }).click();
+    const copied = await page.evaluate(
+      () => (window as Window & { __copied?: string }).__copied ?? "",
+    );
+    for (const overlay of overlays) {
+      const value = overlay.trim();
+      if (value)
+        expect(
+          copied.match(new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"))?.length ?? 0,
+        ).toBeLessThanOrEqual(1);
+    }
   });
 });
 
@@ -911,7 +961,7 @@ test.describe("mobile Android Taigi ruby layout", () => {
     for (const sample of TAIGI_TITLE_CANDIDATES) {
       const response = await page.goto(sample.path);
       expect(response?.status()).toBe(200);
-      await page.waitForLoadState("networkidle");
+      await waitForAppReady(page, "dictionary");
       await page.evaluate(() => document.fonts.ready);
       if ((await page.locator("h1.title").count()) === 0) {
         continue;
@@ -1337,7 +1387,7 @@ test.describe("special routes", () => {
   test("/@ radical view renders grid", async ({ page }) => {
     const response = await page.goto("/@");
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "static");
     // The radical view has a root container; look for any CJK chars in links/buttons
     await expect(page.locator("body")).toContainText(/[一二人入]/, { timeout: 10_000 });
   });
@@ -1345,13 +1395,13 @@ test.describe("special routes", () => {
   test("/~@ renders radical view with 兩岸 brand", async ({ page }) => {
     const response = await page.goto("/~@");
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "static");
   });
 
   test("/'@ renders radical view for 台語 (g0v/moedict-webkit#122)", async ({ page }) => {
     const response = await page.goto("/'@");
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "static");
     await expect(page).toHaveTitle(/台語萌典/);
     await expect(page.locator("body")).toContainText(/[一二人入]/, { timeout: 10_000 });
   });
@@ -1371,7 +1421,14 @@ test.describe("special routes", () => {
     // preview) is covered by one fix.
     const response = await page.goto("/@%E5%8F%A3");
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "static");
+    // RadicalDetailView fetches /api/@口.json and renders "載入中…" until it
+    // resolves -- "static" readiness only waits for `body` to be visible,
+    // which is true well before that fetch settles. Bridge the async gap by
+    // waiting for the first stroke-char link to actually mount (same pattern
+    // as the /@ and /'@ sibling tests' toContainText bridge below) before
+    // reading the full href list, so this doesn't race the fetch.
+    await expect(page.locator("a.stroke-char").first()).toBeVisible({ timeout: 10_000 });
 
     const hrefs = await page
       .locator("a.stroke-char")
@@ -1389,7 +1446,7 @@ test.describe("special routes", () => {
     const response = await page.goto("/about");
     expect(response?.status()).toBe(200);
     await expect(page).toHaveTitle(/關於本站/);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "static");
     await expect(page.locator("body")).toContainText(/萌典/, { timeout: 20_000 });
 
     // About.css must be loaded — .about-page has a distinctive computed style
@@ -1676,6 +1733,70 @@ test.describe("entry copy-explanation action (RESCOPE #258, single action-row bu
     expect(copied.split("\n").length).toBeGreaterThanOrEqual(entryCount);
   });
 
+  test("'一 (t): whole-entry copy labels BOTH heteronym sections, keeps group labels, and strips zhuyin from examples", async ({
+    page,
+  }) => {
+    // 一 (ptck bucket 0, seeded in tests/helpers/fixtures.ts): real
+    // multi-heteronym record, tsi̍t and it, each with 數/形/副 groups and
+    // taigi examples carrying real <zhuyin>/<yin>/<diao> text nodes (unlike
+    // the CSS-generated-content romanization overlay). User-reported
+    // regression: the payload looked like the `it` reading was entirely
+    // missing (it wasn't — both heteronyms' groups were already
+    // serialized, just with no label distinguishing which reading each
+    // section belonged to) and example sentences leaked raw zhuyin glyphs.
+    const response = await page.goto("/'%E4%B8%80");
+    expect(response?.status()).toBe(200);
+    await waitForEntryHydration(page, "一");
+
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async (value: string) =>
+            ((window as Window & { __copied?: string }).__copied = value),
+        },
+      });
+    });
+    await expect(page.getByRole("button", { name: "複製解釋" })).toHaveCount(1);
+    await page.getByRole("button", { name: "複製解釋" }).click();
+    await expect(page.locator(".entry-copy-status")).toHaveText("已複製");
+    const copied = await page.evaluate(
+      () => (window as Window & { __copied?: string }).__copied ?? "",
+    );
+
+    // Both heteronym sections are present and labeled with their actual
+    // displayed reading, in document order.
+    const tsitIdx = copied.indexOf("一（tsi̍t）");
+    const itIdx = copied.indexOf("一（it）");
+    expect(tsitIdx).toBeGreaterThanOrEqual(0);
+    expect(itIdx).toBeGreaterThan(tsitIdx);
+
+    // Group labels (part-of-speech badges) survive as their own lines,
+    // once per heteronym section (數/形/副 each appear in both).
+    expect(copied.match(/^數$/gm)?.length).toBe(2);
+    expect(copied.match(/^形$/gm)?.length).toBe(2);
+    expect(copied.match(/^副$/gm)?.length).toBe(2);
+
+    // No zhuyin glyphs anywhere in the payload — <zhuyin>/<yin>/<diao> text
+    // nodes must be fully stripped from every example, in both sections.
+    // eslint-disable-next-line no-control-regex -- Bopomofo/zhuyin block, not a control character.
+    const zhuyinPattern = /[\u3100-\u312F\u31A0-\u31BF]/;
+    expect(copied).not.toMatch(zhuyinPattern);
+    expect(copied).not.toContain("ㄐㄧㆵ̇");
+
+    // Example sentence + translation formatting: base taigi text, sentence-
+    // final punctuation kept before the paren, translation in parens.
+    expect(copied).toContain("例：一蕊花（一朵花）");
+    expect(copied).toContain("例：紅嬰仔哭甲一身軀汗。（小嬰兒哭得滿身大汗。）");
+    // No-translation example: no trailing empty parens.
+    expect(copied).toContain("例：一流");
+    expect(copied).not.toContain("一流（）");
+
+    // No UI chrome leaks into the payload.
+    expect(copied).not.toContain("複製解釋");
+    expect(copied).not.toContain("已複製");
+  });
+
   test("entry actions expose themed hover contrast and visible focus rings", async ({ page }) => {
     await page.goto("/%E8%90%8C");
     await waitForEntryHydration(page, "萌");
@@ -1872,8 +1993,151 @@ test.describe("entry copy-explanation action (RESCOPE #258, single action-row bu
   });
 });
 
+test.describe("copy accessibility and serialization contracts", () => {
+  test("copy button activates with Space and keeps status geometry stable", async ({ page }) => {
+    await page.goto("/%E8%90%8C");
+    await waitForEntryHydration(page, "萌");
+    const copy = page.getByRole("button", { name: "複製解釋" });
+    const status = page.locator(".entry-copy-status");
+    await expect(status).toHaveText("\u00a0");
+    const boxesBefore = await page
+      .locator(".entry-copy-button, .variants-link, .star")
+      .evaluateAll((els) =>
+        els.map((el) => {
+          const r = el.getBoundingClientRect();
+          return [r.x, r.y, r.width, r.height];
+        }),
+      );
+    await copy.focus();
+    await page.keyboard.press(" ");
+    await expect(status).toHaveText("已複製");
+    const boxesDuring = await page
+      .locator(".entry-copy-button, .variants-link, .star")
+      .evaluateAll((els) =>
+        els.map((el) => {
+          const r = el.getBoundingClientRect();
+          return [r.x, r.y, r.width, r.height];
+        }),
+      );
+    expect(boxesDuring).toEqual(boxesBefore);
+    await expect(status).toHaveText("\u00a0", { timeout: 4_000 });
+    const boxesAfter = await page
+      .locator(".entry-copy-button, .variants-link, .star")
+      .evaluateAll((els) =>
+        els.map((el) => {
+          const r = el.getBoundingClientRect();
+          return [r.x, r.y, r.width, r.height];
+        }),
+      );
+    expect(boxesAfter).toEqual(boxesBefore);
+    await page.goto("/'%E9%A3%9F");
+    await expect(page.locator(".entry-copy-status")).toHaveText("\u00a0");
+  });
+
+  test("action row right edge aligns with the radical-box row above it (not shifted left by the reserved status placeholder)", async ({
+    page,
+  }) => {
+    // Regression guard: .entry-copy-status (min-width: 8rem reservation for
+    // the zero-layout-shift contract above) must be the FIRST child of
+    // .entry-actions, not the last -- under justify-content: flex-end, a
+    // trailing reservation occupies the rightmost slot and pushes every
+    // visible icon ~8rem+gap left of where the radical-box row above ends,
+    // breaking the visual right-alignment between the two stacked rows.
+    await page.goto("/%E8%90%8C");
+    await waitForEntryHydration(page, "萌");
+
+    const domOrder = await page
+      .locator(".entry-actions")
+      .evaluate((el) => Array.from(el.children).map((c) => c.className));
+    expect(domOrder[0]).toContain("entry-copy-status");
+
+    const stackRight = await page
+      .locator(".entry-control-stack")
+      .evaluate((el) => el.getBoundingClientRect().right);
+    const radicalRight = await page
+      .locator(".entry-control-stack .radical")
+      .evaluate((el) => el.getBoundingClientRect().right);
+    const starRight = await page
+      .locator(".entry-actions .star")
+      .evaluate((el) => el.getBoundingClientRect().right);
+    const pencilRight = await page
+      .locator(".entry-control-stack .radical .iconic-circle.stroke")
+      .evaluate((el) => el.getBoundingClientRect().right);
+
+    const tolerance = 1;
+    expect(Math.abs(stackRight - radicalRight)).toBeLessThanOrEqual(tolerance);
+    // The star (last visible action icon) must align with the pencil (last
+    // radical-row icon) -- the exact alignment the user-reported regression
+    // broke.
+    expect(Math.abs(starRight - pencilRight)).toBeLessThanOrEqual(tolerance);
+  });
+
+  test("ordered copy payload keeps numbering and definition separation", async ({ page }) => {
+    await page.goto("/%E8%90%8C");
+    await waitForEntryHydration(page, "萌");
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async (value: string) =>
+            ((window as Window & { __copied?: string }).__copied = value),
+        },
+      });
+    });
+    const copy = page.getByRole("button", { name: "複製解釋" });
+    await expect(copy).toHaveCount(1);
+    await copy.click();
+    const copied = await page.evaluate(
+      () => (window as Window & { __copied?: string }).__copied ?? "",
+    );
+    expect(copied).toMatch(/1\./);
+    expect(copied).toMatch(/2\./);
+    expect(copied).toMatch(/1\.[\s\S]*\n[\s\S]*2\./);
+    expect(copied.indexOf("1.")).toBeLessThan(copied.indexOf("2."));
+  });
+  test("c-language copy excludes the visible 简 badge", async ({ page }) => {
+    await page.goto("/~%E4%B8%8A%E8%A8%B4");
+    await waitForEntryHydration(page, "上訴");
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async (value: string) =>
+            ((window as Window & { __copied?: string }).__copied = value),
+        },
+      });
+    });
+    await expect(page.getByRole("button", { name: "複製解釋" })).toHaveCount(1);
+    await page.getByRole("button", { name: "複製解釋" }).click();
+    const copied = await page.evaluate(
+      () => (window as Window & { __copied?: string }).__copied ?? "",
+    );
+    expect(copied).toContain(
+      (await page.locator(".entry .definition .def").first().innerText()).trim(),
+    );
+    expect(copied).not.toContain("简");
+  });
+});
+
 test.describe("charimg-result romanize checkbox (RESCOPE #169)", () => {
   // 萌黃 has no whole-word dictionary entry (confirmed: not a key in
+  test.describe("CharacterImage safety and Hakka no-op", () => {
+    test("Hakka romanize is disabled and never adds romanize URL parameters", async ({ page }) => {
+      await page.addInitScript(() => window.localStorage.setItem("charimg-romanize", "1"));
+      await page.goto("/:%E8%90%8C%E9%BB%83");
+      const result = page.locator(".charimg-result");
+      await result.waitFor({ state: "visible", timeout: 15_000 });
+      await expect(page.locator("#charimg-romanize")).toBeDisabled();
+      const srcs = await page
+        .locator("img.charimg-glyph")
+        .evaluateAll((els) => els.map((el) => (el as HTMLImageElement).src));
+      expect(srcs.every((src) => !src.includes("romanize=1"))).toBe(true);
+      await expect(page.locator("#charimg-romanize")).toHaveAttribute("disabled", "");
+      await expect(page.getByText("客語字圖目前不提供羅馬拼音")).toBeVisible();
+      await expect(result.locator("script, img[onerror], svg[onload]")).toHaveCount(0);
+    });
+  });
+
   // data/dictionary/pack/12.txt), so DictionaryPage's whole-word lookup 404s
   // and falls back to per-character fuzzy search (state.terms = ["萌","黃"]),
   // rendering CharacterImageView instead of the normal .result entry view.
@@ -1950,7 +2214,7 @@ test.describe("charimg-result romanize checkbox (RESCOPE #169)", () => {
     const response = await page.goto(FALLBACK_PATH);
     expect(response?.status()).toBe(200);
     await page.locator(".charimg-result").waitFor({ state: "visible", timeout: 15_000 });
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "dictionary");
 
     const ogImage = await page.locator('meta[property="og:image"]').getAttribute("content");
     const twitterImage = await page.locator('meta[name="twitter:image"]').getAttribute("content");

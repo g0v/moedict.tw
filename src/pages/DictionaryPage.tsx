@@ -20,6 +20,7 @@ import { convertPinyinByLang } from "../utils/pinyin-preference-utils";
 import {
   addStarWord,
   addToLRU,
+  getStarredStorageKey,
   hasStarWord,
   removeStarWord,
   writeLastLookup,
@@ -491,6 +492,118 @@ function CnsAttributesPanel({ record }: { record: CnsRecord }) {
     </div>
   );
 }
+/**
+ * Formats a `.example`/`.quote`/`.link` node whose taigi ruby line was
+ * successfully parsed by `parseTaiwaneseRubyLine` (DOM shape:
+ * `<div class="example"><span class="h1">…</span><span class="mandarin">…
+ * </span></div>`, see the render logic below). The `.h1` span carries the
+ * taigi hruby.rightangle structure (base characters + zhuyin/romanization
+ * annotations); `.mandarin`, when present, is the plain-text Chinese
+ * translation. `visibleText` already strips both `.romanization-selectable`
+ * and `<zhuyin>` from `.h1`, leaving only the base characters (plus any
+ * bare sentence-final punctuation, which lives as a text node directly
+ * inside `.h1`'s `<hruby>`, not inside any `<ru>` — so it's kept exactly
+ * where it appears, before the translation parenthesis).
+ * Only `.example` gets the "例：" prefix — `.quote`/`.link` text already
+ * carries its own citation/cross-reference framing in the source data.
+ */
+function formatExampleLikeNode(el: Element): string {
+  const h1 = el.querySelector(":scope > .h1");
+  if (!h1) return "";
+  const headText = visibleText(h1).replace(/\s+/g, " ").trim();
+  const mandarin = el.querySelector(":scope > .mandarin");
+  const prefix = el.classList.contains("example") ? "例：" : "";
+  if (!mandarin) return `${prefix}${headText}`;
+  const translationText = visibleText(mandarin).replace(/\s+/g, " ").trim();
+  return `${prefix}${headText}（${translationText}）`;
+}
+
+function visibleText(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
+  if (!(node instanceof Element)) return "";
+  if (node.classList.contains("romanization-selectable")) return "";
+  // <zhuyin> (wrapping <yin>/<diao>) carries real DOM text nodes for the
+  // CJK-native phonetic annotation overlay -- unlike .romanization-
+  // selectable (a CSS-generated-content stand-in with display:none
+  // available per phonetics pref), <zhuyin> has no such class to key off
+  // and always renders real text. Skip its subtree entirely; the sibling
+  // <rb> (base character) is untouched.
+  if (node.tagName === "ZHUYIN") return "";
+  // Taiwanese example/quote/link nodes whose ruby line was parsed (see
+  // parseTaiwaneseRubyLine below) get dedicated heading+translation
+  // formatting instead of the generic recursive walk -- otherwise the
+  // stripped .h1 taigi text and the separate .mandarin translation run
+  // together with no visual separation between the two languages.
+  if (
+    (node.classList.contains("example") ||
+      node.classList.contains("quote") ||
+      node.classList.contains("link")) &&
+    node.querySelector(":scope > .h1")
+  ) {
+    return `\n${formatExampleLikeNode(node)}`;
+  }
+  return Array.from(node.childNodes)
+    .map((child) => {
+      const text = visibleText(child);
+      const isBlock =
+        child instanceof Element && ["P", "DIV", "UL", "OL", "LI"].includes(child.tagName);
+      return `${isBlock ? "\n" : ""}${text}`;
+    })
+    .join("");
+}
+
+/**
+ * Whole-entry copy payload (#258 contract: ONE button, the whole visible
+ * entry -- not per-heteronym buttons). Serializes EVERY heteronym on the
+ * page (every `.entry` direct child of `.result`, e.g. tsi̍t AND it for
+ * /'一) -- both heteronyms' groups were already in the payload pre-fix,
+ * just unlabeled, which read as if the second reading were missing.
+ * A `headword（reading）` header line is added ONLY when the page has
+ * multiple heteronyms (ambiguous without one); a single-heteronym entry
+ * (e.g. /萌) omits it, keeping the existing "romanization never leaks into
+ * the copied Chinese definitions" contract intact for the common case
+ * (dictionary.spec.ts "excluding controls and title romanization").
+ */
+function serializeDefinitionText(container: HTMLElement): string {
+  const entries = Array.from(container.querySelectorAll(":scope > .entry"));
+  const isMultiHeteronym = entries.length > 1;
+  return entries
+    .map((entryEl) => {
+      const titleEl = entryEl.querySelector<HTMLElement>(
+        ":scope > .entry-heading h1.title[data-title]",
+      );
+      const headword = isMultiHeteronym ? titleEl?.dataset.title?.trim() || "" : "";
+      const reading = isMultiHeteronym
+        ? (entryEl as HTMLElement).dataset.reading?.trim() || ""
+        : "";
+      const header = headword ? (reading ? `${headword}（${reading}）` : headword) : "";
+
+      const groups = Array.from(entryEl.querySelectorAll(":scope > .entry-item"));
+      const body = groups
+        .map((group) => {
+          const labels = Array.from(group.querySelectorAll(":scope > .part-of-speech"))
+            .map((node) => visibleText(node).replace(/\s+/g, " ").trim())
+            .filter(Boolean)
+            .join(" ");
+          const items = Array.from(group.querySelectorAll(":scope > ol > li")).map(
+            (item, index) => {
+              const itemBody = visibleText(item)
+                .replace(/[ \t]+/g, " ")
+                .replace(/\n+/g, "\n")
+                .trim();
+              return `${index + 1}. ${itemBody}`;
+            },
+          );
+          return [labels, ...items].filter(Boolean).join("\n");
+        })
+        .filter(Boolean)
+        .join("\n\n");
+
+      return [header, body].filter(Boolean).join("\n\n");
+    })
+    .filter(Boolean)
+    .join("\n\n");
+}
 
 export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPageProps) {
   const navigate = useNavigate();
@@ -512,10 +625,18 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
     () => () => {
       if (copyStatusTimerRef.current != null) {
         window.clearTimeout(copyStatusTimerRef.current);
+        copyStatusTimerRef.current = null;
       }
     },
     [],
   );
+  useEffect(() => {
+    setCopyStatus(null);
+    if (copyStatusTimerRef.current != null) {
+      window.clearTimeout(copyStatusTimerRef.current);
+      copyStatusTimerRef.current = null;
+    }
+  }, [queryWord, lang]);
   const [isStarred, setIsStarred] = useState(false);
   const [strokesVisible, setStrokesVisible] = useState(false);
   const [cnsFallback, setCnsFallback] = useState<CnsFallbackState>({
@@ -692,6 +813,15 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
     }
     setIsStarred(hasStarWord(lang, storageWord));
   }, [state.entry, storageWord, lang]);
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === getStarredStorageKey(lang) && storageWord) {
+        setIsStarred(hasStarWord(lang, storageWord));
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [lang, storageWord]);
 
   const toggleStar = useCallback(() => {
     if (!storageWord) return;
@@ -725,30 +855,11 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
     event.stopPropagation();
     const container = resultRef.current;
     if (!container) return;
-    // `.entry-item` (one per part-of-speech group) is the only DOM unit that
-    // holds actual definition content (POS tag + <ol> of <li> def/example/
-    // quote/link/synonyms/antonyms). Querying `.entry > .entry-item` in DOM
-    // order — rather than whole `.entry` heteronym blocks — naturally
-    // excludes every non-definition sibling: the action row (star/copy/
-    // variants), the radical/stroke-order corner, the title/pronunciation
-    // heading, Hakka's multi-dialect `.bopomofo` reading block, `.cn-specific`
-    // / `.twblg-variants` metadata, the reading-only note, dialect synonyms,
-    // and cross-reference link lists — without having to strip each by name.
-    const entryItems = Array.from(container.querySelectorAll(":scope > .entry > .entry-item"));
-    const text = entryItems
-      .map((item) => {
-        const copy = item.cloneNode(true) as HTMLElement;
-        // Taiwanese example/quote/link lines route through the same #186
-        // ruby2hruby() decoration as the title, so .romanization-selectable
-        // overlay spans can appear inside .entry-item too — strip them here.
-        copy.querySelectorAll(".romanization-selectable").forEach((node) => node.remove());
-        return (copy.innerText || copy.textContent || "").replace(/\s+/g, " ").trim();
-      })
-      .filter(Boolean)
-      .join("\n");
+    const text = serializeDefinitionText(container);
     const ok = await writeTextToClipboard(text);
     if (copyStatusTimerRef.current != null) {
       window.clearTimeout(copyStatusTimerRef.current);
+      copyStatusTimerRef.current = null;
     }
     setCopyStatus({ ok });
     copyStatusTimerRef.current = window.setTimeout(() => {
@@ -903,9 +1014,20 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
         const readingType = lang === "t" ? untag(heteronym.reading ?? "").trim() : "";
         const isReadingOnly =
           lang === "t" && definitions.length === 0 && Boolean(heteronym.trs?.trim());
+        // Displayed reading for the whole-entry copy payload's per-heteronym
+        // header (see serializeDefinitionText below). rubyData.pinyin is
+        // already the exact processed/displayed reading text for a/t/c
+        // (decorateRuby strips HTML, handles the trs fallback, and the c-lang
+        // <br> split) — reusing it keeps this pref-independent (unlike
+        // scraping .romanization-selectable, which is display:none under
+        // zhuyin/none phonetics prefs) and avoids re-deriving format logic.
+        // lang=h has no single-string reading (decorateRuby is stubbed empty
+        // for h; the real display is the multi-dialect hakkaReadings stack
+        // below) — omitted rather than reconstructed.
+        const displayReading = lang === "h" ? "" : rubyData.pinyin;
 
         return (
-          <div key={`${title}-${idx}`} className="entry">
+          <div key={`${title}-${idx}`} className="entry" data-reading={displayReading || undefined}>
             <div className="entry-heading">
               <div className="entry-control-stack">
                 <div className="radical">
@@ -943,6 +1065,18 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                 </div>
                 {idx === 0 && (
                   <div className="entry-actions">
+                    <span
+                      className="entry-copy-status"
+                      role="status"
+                      aria-live="polite"
+                      aria-atomic="true"
+                    >
+                      {hasEntryDefinitions && copyStatus
+                        ? copyStatus.ok
+                          ? "已複製"
+                          : "複製失敗，請手動選取文字"
+                        : "\u00a0"}
+                    </span>
                     {hasEntryDefinitions && (
                       <button
                         type="button"
@@ -956,15 +1090,11 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                         <SvgIcon name="copy" size="1em" aria-hidden="true" />
                       </button>
                     )}
-                    {hasEntryDefinitions && copyStatus && (
-                      <span className="entry-copy-status" role="status" aria-live="polite">
-                        {copyStatus.ok ? "已複製" : "複製失敗，請手動選取文字"}
-                      </span>
-                    )}
                     {isSingleCharTitle && (
                       <a
                         className="iconic-circle stroke variants-link"
-                        title="教育部《異體字字典》"
+                        aria-label="查詢此單字的教育部《異體字字典》資料"
+                        title="查詢此單字的教育部《異體字字典》資料"
                         target="_blank"
                         rel="noopener noreferrer"
                         href={`https://dict.variants.moe.edu.tw/search.jsp?QTP=0&WORD=${encodeURIComponent(title)}`}
@@ -973,25 +1103,17 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                         <SvgIcon name="book" size="1em" aria-hidden="true" />
                       </a>
                     )}
-                    <span
+                    <button
+                      type="button"
                       className="star iconic-color"
                       title={isStarred ? "已加入記錄簿" : "加入字詞記錄簿"}
                       data-word={title}
                       data-lang={lang}
-                      role="button"
-                      tabIndex={0}
                       aria-label={isStarred ? "已加入記錄簿" : "加入字詞記錄簿"}
+                      aria-pressed={isStarred}
                       onClick={(event) => {
                         event.stopPropagation();
-                        event.preventDefault();
                         toggleStar();
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          toggleStar();
-                        }
                       }}
                     >
                       <SvgIcon
@@ -1000,7 +1122,7 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                         style={isStarred ? undefined : { transform: "scale(1.12)" }}
                         aria-hidden="true"
                       />
-                    </span>
+                    </button>
                   </div>
                 )}
               </div>

@@ -67,8 +67,22 @@ import {
   toHexCodepoint,
   toDecimalCodepoint,
 } from "./fetch-moe-stroke.mjs";
-import { uploadWithConcurrency, retryWithBackoff, runWrangler } from "../scripts/lib/r2-upload.mjs";
+import {
+  uploadWithConcurrency,
+  retryWithBackoff,
+  runWrangler,
+  isNotFoundStderr,
+} from "../scripts/lib/r2-upload.mjs";
 import { parseGeneratedConfig, getAssetsBucketName } from "../scripts/lib/generated-config.mjs";
+import {
+  STROKE_CORPUS_POINTER_KEY,
+  STROKE_CORPUS_EXPECTED_COUNT,
+  strokeCorpusManifestKey,
+  strokeCorpusObjectKey,
+  isStrokeCorpusPointer,
+  isStrokeCorpusManifest,
+} from "../src/utils/stroke-corpus.ts";
+import { appendCorpusPointerHistory } from "../scripts/lib/stroke-corpus-state.mjs";
 
 export const EXPECTED_CORPUS_SIZE = 6063;
 /**
@@ -605,7 +619,7 @@ export async function verifyCorpusUploads(entries, bucketName, opts = {}) {
             const result = await runner(argv);
             if (result.exitCode !== 0) {
               const stderr = result.stderr ?? "";
-              if (/not found|NoSuchKey|404/i.test(stderr)) {
+              if (isNotFoundStderr(stderr)) {
                 throw new Error(`Missing object after upload: ${entry.r2Key}`);
               }
               // surface 429/5xx/network as retryable via isRetryableError patterns
@@ -662,6 +676,692 @@ export function resolveAssetsBucket(target, configPath = DEFAULT_CONFIG) {
 }
 
 // ---------------------------------------------------------------------------
+// Atomic corpus model (immutable digest-scoped storage + pointer)
+// ---------------------------------------------------------------------------
+//
+// Layout:
+//   stroke-corpora/<corpusDigest>/stroke-json/<hex>.json  — immutable objects
+//   stroke-corpora/<corpusDigest>/manifest.json           — full per-file manifest
+//   stroke-corpus/current.json                            — pointer (promoted LAST)
+//
+// Sequencing (never violated):
+//   1. Upload all 6,063 objects under the digest-scoped prefix.
+//   2. Write the manifest AFTER every object succeeds.
+//   3. Authenticated re-GET + sha256/bytes verification of every object
+//      AND the manifest itself.
+//   4. Only then promote the pointer — and only after recording the prior
+//      pointer (if any) in local rollback state.
+// A digest prefix is NEVER overwritten: `corpusDigest` is a content hash of
+// every file's sha256, so a changed corpus always gets a new prefix. No GC —
+// old digest prefixes are left in place for rollback.
+
+/**
+ * Deterministic content-addressed digest for a full corpus: sha256 of the
+ * newline-joined `hex:sha256` pairs, sorted by hex. Any change to any
+ * file's content (or the file set) changes the digest, so a digest is
+ * never reused for different content and the prefix it names is safe to
+ * treat as immutable.
+ * @param {ManifestEntry[]} entries
+ * @returns {string}
+ */
+export function computeCorpusDigest(entries) {
+  const sorted = [...entries].sort((a, b) => (a.hex < b.hex ? -1 : a.hex > b.hex ? 1 : 0));
+  const material = sorted.map((e) => `${e.hex}:${e.sha256}`).join("\n");
+  return createHash("sha256").update(material).digest("hex");
+}
+
+/**
+ * Build the full per-file atomic manifest (src/utils/stroke-corpus.ts
+ * `StrokeCorpusManifest` shape) for a completed, digest-addressed corpus.
+ * @param {ManifestEntry[]} entries
+ * @param {string} corpusDigest
+ */
+export function buildAtomicCorpusManifest(entries, corpusDigest) {
+  if (entries.length !== STROKE_CORPUS_EXPECTED_COUNT) {
+    throw new Error(
+      `atomic manifest size mismatch: expected ${STROKE_CORPUS_EXPECTED_COUNT}, got ${entries.length}`,
+    );
+  }
+  const sorted = [...entries].sort((a, b) => (a.hex < b.hex ? -1 : a.hex > b.hex ? 1 : 0));
+  const files = sorted.map((e) => ({
+    path: `stroke-json/${e.hex}.json`,
+    sha256: e.sha256,
+    bytes: e.bytes,
+  }));
+  const totalBytes = files.reduce((sum, f) => sum + f.bytes, 0);
+  /** @type {import("../src/utils/stroke-corpus.ts").StrokeCorpusManifest} */
+  const manifest = {
+    schema: 1,
+    corpusDigest,
+    fileCount: files.length,
+    totalBytes,
+    files,
+  };
+  if (!isStrokeCorpusManifest(manifest)) {
+    throw new Error("built atomic manifest failed its own schema validation");
+  }
+  return manifest;
+}
+
+/**
+ * Build UploadEntry list for the digest-scoped immutable object prefix.
+ * Cache-Control is `immutable` — the digest prefix, once fully uploaded
+ * and verified, never changes.
+ * @param {ManifestEntry[]} entries
+ * @param {string} outDir
+ * @param {string} corpusDigest
+ */
+export function buildAtomicUploadEntries(entries, outDir, corpusDigest) {
+  return entries.map((e) => ({
+    key: strokeCorpusObjectKey(corpusDigest, e.hex),
+    filePath: join(outDir, "stroke-json", `${e.hex}.json`),
+    contentType: STROKE_CONTENT_TYPE,
+    cacheControl: "public, max-age=31536000, immutable",
+  }));
+}
+
+/**
+ * Upload every object under the digest-scoped prefix. Never touches the
+ * manifest or pointer keys — pure object PUTs, safe to retry.
+ * @param {ManifestEntry[]} entries
+ * @param {string} outDir
+ * @param {string} bucketName
+ * @param {string} corpusDigest
+ * @param {{ runner?: import("../scripts/lib/r2-upload.mjs").Runner, sleep?: (ms: number) => Promise<void>, maxConcurrent?: number }} [opts]
+ */
+export async function uploadAtomicCorpusObjects(
+  entries,
+  outDir,
+  bucketName,
+  corpusDigest,
+  opts = {},
+) {
+  const files = buildAtomicUploadEntries(entries, outDir, corpusDigest);
+  for (const f of files) {
+    if (!existsSync(f.filePath)) {
+      throw new Error(`missing local file for atomic upload: ${f.filePath}`);
+    }
+  }
+  await uploadWithConcurrency(files, bucketName, {
+    maxConcurrent: opts.maxConcurrent ?? 4,
+    runner: opts.runner,
+    sleep: opts.sleep,
+  });
+}
+
+/**
+ * Write the digest-scoped manifest.json to R2. Must only be called AFTER
+ * every object in the digest prefix has been uploaded — the manifest is
+ * the caller-visible "this digest is complete" signal.
+ * @param {import("../src/utils/stroke-corpus.ts").StrokeCorpusManifest} manifest
+ * @param {string} bucketName
+ * @param {{ runner?: import("../scripts/lib/r2-upload.mjs").Runner }} [opts]
+ */
+export async function uploadAtomicCorpusManifest(manifest, bucketName, opts = {}) {
+  const runner = opts.runner ?? runWrangler;
+  const tmpDir = mkdtempSync(join(tmpdir(), "stroke-manifest-"));
+  try {
+    const filePath = join(tmpDir, "manifest.json");
+    const body = JSON.stringify(manifest);
+    writeFileSync(filePath, body, "utf8");
+    const key = strokeCorpusManifestKey(manifest.corpusDigest);
+    const argv = [
+      "vp",
+      "exec",
+      "wrangler",
+      "r2",
+      "object",
+      "put",
+      `${bucketName}/${key}`,
+      `--file=${filePath}`,
+      "--remote",
+      "--content-type=application/json; charset=utf-8",
+      "--cache-control=public, max-age=31536000, immutable",
+    ];
+    await retryWithBackoff(async () => {
+      const result = await runner(argv);
+      if (result.exitCode !== 0) {
+        throw new Error(
+          `manifest upload failed for ${key} (exit ${result.exitCode}): ${result.stderr}`,
+        );
+      }
+    }, opts);
+    return { key, bytes: Buffer.byteLength(body) };
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Authenticated re-download + sha256/bytes verification of every object
+ * under a digest prefix AND the manifest.json itself. Read-only — never
+ * writes. Bounded concurrency (≤4) with the verify-specific retry default.
+ * @param {import("../src/utils/stroke-corpus.ts").StrokeCorpusManifest} manifest
+ * @param {string} bucketName
+ * @param {{ runner?: Function, sleep?: (ms: number) => Promise<void>, maxConcurrent?: number, maxRetries?: number }} [opts]
+ */
+export async function verifyAtomicCorpusUploads(manifest, bucketName, opts = {}) {
+  const runner = opts.runner ?? runWrangler;
+  const sleep = opts.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+  const maxConcurrent = Math.min(opts.maxConcurrent ?? 4, 4);
+  const maxRetries = opts.maxRetries ?? DEFAULT_VERIFY_MAX_RETRIES;
+
+  /** @param {string} key @param {string} expectedSha @param {number} expectedBytes */
+  async function downloadAndCheck(key, expectedSha, expectedBytes) {
+    const tmpDir = mkdtempSync(join(tmpdir(), "stroke-corpus-verify-"));
+    try {
+      const filePath = join(tmpDir, "object.bin");
+      const argv = [
+        "vp",
+        "exec",
+        "wrangler",
+        "r2",
+        "object",
+        "get",
+        `${bucketName}/${key}`,
+        "--remote",
+        `--file=${filePath}`,
+      ];
+      await retryWithBackoff(
+        async () => {
+          const result = await runner(argv);
+          if (result.exitCode !== 0) {
+            const stderr = result.stderr ?? "";
+            if (isNotFoundStderr(stderr)) {
+              throw new Error(`Missing object during verify: ${key}`);
+            }
+            const err = new Error(`Download failed: ${key} (exit ${result.exitCode}): ${stderr}`);
+            /** @type {any} */ (err).stderr = stderr;
+            throw err;
+          }
+        },
+        { sleep, maxRetries },
+      );
+      const bytes = readFileSync(filePath);
+      const sha = createHash("sha256").update(bytes).digest("hex");
+      if (sha !== expectedSha) {
+        throw new Error(`hash mismatch for ${key}: expected ${expectedSha}, got ${sha}`);
+      }
+      if (bytes.length !== expectedBytes) {
+        throw new Error(`size mismatch for ${key}: expected ${expectedBytes}, got ${bytes.length}`);
+      }
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  }
+
+  // Manifest itself first — fail fast if the digest prefix was never
+  // completed rather than spending time on 6,063 object downloads.
+  const manifestKey = strokeCorpusManifestKey(manifest.corpusDigest);
+  const manifestBody = JSON.stringify(manifest);
+  await downloadAndCheck(
+    manifestKey,
+    createHash("sha256").update(manifestBody).digest("hex"),
+    Buffer.byteLength(manifestBody),
+  );
+
+  /** @type {string[]} */
+  const checked = [];
+  let idx = 0;
+  async function worker() {
+    while (idx < manifest.files.length) {
+      const file = manifest.files[idx++];
+      const hex = file.path.replace(/^stroke-json\//, "").replace(/\.json$/, "");
+      const key = strokeCorpusObjectKey(manifest.corpusDigest, hex);
+      await downloadAndCheck(key, file.sha256, file.bytes);
+      checked.push(key);
+    }
+  }
+  const workers = Array.from(
+    { length: Math.min(maxConcurrent, Math.max(manifest.files.length, 1)) },
+    () => worker(),
+  );
+  await Promise.all(workers);
+  return { verified: true, checkedKeys: checked, manifestKey };
+}
+
+/**
+ * Sentinel thrown internally to distinguish "object genuinely absent"
+ * (never retried, mapped to `null`) from a transient/permanent download
+ * failure (retried per `isRetryableError`, then rethrown as-is). Never
+ * escapes {@link readCorpusPointer} itself.
+ */
+class CorpusPointerNotFoundError extends Error {}
+
+/**
+ * Authenticated read of the pointer object (`stroke-corpus/current.json`).
+ * Returns `null` when the pointer object does not exist (fresh bucket, no
+ * prior corpus). Throws on any other failure or on schema-invalid content
+ * — never silently treats a corrupt pointer as absent.
+ *
+ * Wrapped in the same `retryWithBackoff` used by {@link readCorpusManifest}
+ * and {@link verifyAtomicCorpusUploads} (verify-specific default
+ * `DEFAULT_VERIFY_MAX_RETRIES=8`) — a transient network blip on this read
+ * previously hard-failed the deploy preflight (`verifyCorpusReadiness`)
+ * and `promoteCorpusPointer`'s prior-pointer read (right after a
+ * multi-minute 6,063-object upload) with zero retries, unlike every other
+ * read on the same critical path.
+ * @param {string} bucketName
+ * @param {{ runner?: Function, sleep?: (ms: number) => Promise<void>, maxRetries?: number }} [opts]
+ * @returns {Promise<import("../src/utils/stroke-corpus.ts").StrokeCorpusPointer | null>}
+ */
+export async function readCorpusPointer(bucketName, opts = {}) {
+  const runner = opts.runner ?? runWrangler;
+  const tmpDir = mkdtempSync(join(tmpdir(), "stroke-pointer-"));
+  try {
+    const filePath = join(tmpDir, "current.json");
+    const argv = [
+      "vp",
+      "exec",
+      "wrangler",
+      "r2",
+      "object",
+      "get",
+      `${bucketName}/${STROKE_CORPUS_POINTER_KEY}`,
+      "--remote",
+      `--file=${filePath}`,
+    ];
+    let result;
+    try {
+      result = await retryWithBackoff(
+        async () => {
+          const attemptResult = await runner(argv);
+          if (attemptResult.exitCode !== 0) {
+            const stderr = attemptResult.stderr ?? "";
+            if (isNotFoundStderr(stderr)) {
+              // Not found is a legitimate, stable outcome — never retried,
+              // never surfaced as a thrown failure to the caller. A
+              // curated message (not raw stderr) so it can never
+              // coincidentally match isRetryableError's transient-pattern
+              // scan the way `verifyAtomicCorpusUploads`'s "Missing
+              // object" error is deliberately curated for the same reason.
+              throw new CorpusPointerNotFoundError("corpus pointer object not found");
+            }
+            const err = new Error(
+              `Failed to read corpus pointer (exit ${attemptResult.exitCode}): ${stderr}`,
+            );
+            /** @type {any} */ (err).stderr = stderr;
+            throw err;
+          }
+          return attemptResult;
+        },
+        { sleep: opts.sleep, maxRetries: opts.maxRetries ?? DEFAULT_VERIFY_MAX_RETRIES },
+      );
+    } catch (err) {
+      if (err instanceof CorpusPointerNotFoundError) return null;
+      throw err;
+    }
+    void result;
+    const raw = readFileSync(filePath, "utf8");
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new Error(
+        `Corpus pointer at ${bucketName}/${STROKE_CORPUS_POINTER_KEY} is not valid JSON`,
+      );
+    }
+    if (!isStrokeCorpusPointer(parsed)) {
+      throw new Error(
+        `Corpus pointer at ${bucketName}/${STROKE_CORPUS_POINTER_KEY} failed schema validation`,
+      );
+    }
+    return parsed;
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * P2 residual-risk note (read before touching pointer promotion):
+ * R2 has NO compare-and-swap / conditional PUT — `wrangler r2 object put
+ * --help` exposes no `--if-match`/ETag-conditional flag, and the
+ * Cloudflare R2 API itself has no equivalent for the plain object PUT
+ * operation used here. Uploads therefore MUST be operator-serialized:
+ * never run two concurrent `--upload=<env>` invocations against the same
+ * environment/bucket. {@link promoteCorpusPointer}'s optimistic re-read
+ * (below) narrows — but does NOT eliminate — the race window: it detects
+ * a concurrent promotion that completed BEFORE this process's own final
+ * pointer PUT, but a race landing in the gap between that re-read and the
+ * PUT itself is still possible and unprotected (last-writer-wins, same as
+ * before this fix). This is a best-effort mitigation, not a correctness
+ * guarantee — do not present it as one.
+ */
+
+/**
+ * Promote a new corpus pointer LAST — after every object and the manifest
+ * have been uploaded and authenticated-verified. Reads the prior pointer
+ * first (if any) and records it in local rollback state BEFORE writing
+ * the new one, so an operator can always recover the last-known-good
+ * digest even if this process crashes immediately after the R2 write.
+ *
+ * Optimistic concurrency check: when `opts.expectedPriorPointer` is
+ * provided (passed by {@link runAtomicCorpusUpload} from a pointer read
+ * taken BEFORE the — potentially multi-minute — object upload started),
+ * this re-read of the pointer (taken immediately before the PUT below) is
+ * compared against it by `corpusDigest`. A mismatch means a concurrent
+ * operator run promoted a DIFFERENT corpus while this process's own
+ * upload was in flight — the promotion is aborted (thrown) BEFORE any
+ * rollback-history write or pointer PUT, leaving R2 and local state
+ * completely untouched. See the residual-risk note above: this reduces
+ * but does not eliminate the race (no R2 CAS/conditional PUT exists).
+ * Callers that omit `expectedPriorPointer` (e.g. a direct/manual
+ * `promoteCorpusPointer` call, or the existing rollback-history unit
+ * tests) skip this check entirely — behavior is unchanged for them.
+ * @param {string} bucketName
+ * @param {"staging"|"production"} env
+ * @param {import("../src/utils/stroke-corpus.ts").StrokeCorpusManifest} manifest
+ * @param {{ runner?: Function, sleep?: (ms: number) => Promise<void>, maxRetries?: number, nowIso?: () => string, stateBaseDir?: string, stateFs?: object, expectedPriorPointer?: import("../src/utils/stroke-corpus.ts").StrokeCorpusPointer | null }} [opts]
+ */
+export async function promoteCorpusPointer(bucketName, env, manifest, opts = {}) {
+  const runner = opts.runner ?? runWrangler;
+  const nowIso = opts.nowIso ?? (() => new Date().toISOString());
+
+  // Record the prior pointer (if any) BEFORE mutating — rollback state
+  // must reflect what was live immediately before this promotion. This
+  // same read doubles as the optimistic re-read for the concurrency
+  // check just below (it happens right before pointer marshaling + PUT,
+  // with no R2 I/O in between).
+  const priorPointer = await readCorpusPointer(bucketName, {
+    runner,
+    sleep: opts.sleep,
+    maxRetries: opts.maxRetries,
+  });
+
+  if (opts.expectedPriorPointer !== undefined) {
+    const expectedDigest = opts.expectedPriorPointer
+      ? opts.expectedPriorPointer.corpusDigest
+      : null;
+    const actualDigest = priorPointer ? priorPointer.corpusDigest : null;
+    if (expectedDigest !== actualDigest) {
+      throw new Error(
+        `Aborting pointer promotion: corpus pointer changed since the pre-upload read ` +
+          `(expected corpusDigest=${expectedDigest ?? "<none>"}, found ${actualDigest ?? "<none>"}) — ` +
+          `a concurrent operator run likely promoted a different corpus while this upload was in flight. ` +
+          `Uploads must be operator-serialized (see the residual-risk note above this function); ` +
+          `re-run \`node commands/sync-moe-stroke-corpus.mjs --upload=${env}\` to promote against the current pointer.`,
+      );
+    }
+  }
+
+  if (priorPointer) {
+    appendCorpusPointerHistory(
+      env,
+      {
+        corpusDigest: priorPointer.corpusDigest,
+        manifestKey: priorPointer.manifestKey,
+        fileCount: priorPointer.fileCount,
+        totalBytes: priorPointer.totalBytes,
+        promotedAt: nowIso(),
+      },
+      { baseDir: opts.stateBaseDir, fs: opts.stateFs },
+    );
+  }
+
+  /** @type {import("../src/utils/stroke-corpus.ts").StrokeCorpusPointer} */
+  const pointer = {
+    schema: 1,
+    corpusDigest: manifest.corpusDigest,
+    manifestKey: strokeCorpusManifestKey(manifest.corpusDigest),
+    fileCount: manifest.fileCount,
+    totalBytes: manifest.totalBytes,
+  };
+  if (!isStrokeCorpusPointer(pointer)) {
+    throw new Error("built corpus pointer failed its own schema validation");
+  }
+
+  const tmpDir = mkdtempSync(join(tmpdir(), "stroke-pointer-promote-"));
+  try {
+    const filePath = join(tmpDir, "current.json");
+    const body = JSON.stringify(pointer);
+    writeFileSync(filePath, body, "utf8");
+    const argv = [
+      "vp",
+      "exec",
+      "wrangler",
+      "r2",
+      "object",
+      "put",
+      `${bucketName}/${STROKE_CORPUS_POINTER_KEY}`,
+      `--file=${filePath}`,
+      "--remote",
+      "--content-type=application/json; charset=utf-8",
+      "--cache-control=no-store",
+    ];
+    await retryWithBackoff(async () => {
+      const result = await runner(argv);
+      if (result.exitCode !== 0) {
+        throw new Error(`pointer promotion failed (exit ${result.exitCode}): ${result.stderr}`);
+      }
+    }, opts);
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+
+  // Record the NEW pointer too, so the next promotion's "prior" lookup
+  // (and any operator inspecting history) always has the full chain.
+  appendCorpusPointerHistory(
+    env,
+    { ...pointer, promotedAt: nowIso() },
+    { baseDir: opts.stateBaseDir, fs: opts.stateFs },
+  );
+
+  return pointer;
+}
+
+/**
+ * Full atomic upload pipeline: upload objects → write manifest → verify
+ * everything (authenticated) → promote pointer last. On any failure
+ * BEFORE promotion, the pointer is left untouched (fail-closed: a
+ * partially-uploaded digest prefix is orphaned but never made live).
+ *
+ * Captures the pointer BEFORE step 1 (object upload — potentially
+ * multi-minute for the full 6,063-object corpus) and passes it to
+ * `promoteCorpusPointer` as `expectedPriorPointer`, so promotion aborts
+ * (before any write) if a concurrent operator run promoted a different
+ * corpus while this upload was in flight. See `promoteCorpusPointer`'s
+ * doc comment for the residual-race caveat — this narrows, but does not
+ * eliminate, the window (R2 has no compare-and-swap / conditional PUT).
+ * @param {ManifestEntry[]} entries
+ * @param {string} outDir
+ * @param {string} bucketName
+ * @param {"staging"|"production"} env
+ * @param {{ runner?: Function, sleep?: (ms: number) => Promise<void>, maxConcurrent?: number, maxRetries?: number, nowIso?: () => string, stateBaseDir?: string, stateFs?: object }} [opts]
+ */
+export async function runAtomicCorpusUpload(entries, outDir, bucketName, env, opts = {}) {
+  const corpusDigest = computeCorpusDigest(entries);
+  const manifest = buildAtomicCorpusManifest(entries, corpusDigest);
+  const runner = opts.runner ?? runWrangler;
+
+  // 0. Baseline read BEFORE any upload work starts — the concurrency
+  // check's reference point (see promoteCorpusPointer's doc comment).
+  const preUploadPointer = await readCorpusPointer(bucketName, {
+    runner,
+    sleep: opts.sleep,
+    maxRetries: opts.maxRetries,
+  });
+
+  // 1. Upload every object under the digest-scoped immutable prefix.
+  await uploadAtomicCorpusObjects(entries, outDir, bucketName, corpusDigest, opts);
+
+  // 2. Manifest AFTER every object has landed.
+  await uploadAtomicCorpusManifest(manifest, bucketName, opts);
+
+  // 3. Authenticated re-GET + sha256/bytes verification of everything.
+  const verification = await verifyAtomicCorpusUploads(manifest, bucketName, opts);
+
+  // 4. Pointer promoted LAST, only after verification passes. Aborts
+  // (throws, no write) if the pointer changed since step 0.
+  const pointer = await promoteCorpusPointer(bucketName, env, manifest, {
+    ...opts,
+    expectedPriorPointer: preUploadPointer,
+  });
+
+  return { corpusDigest, manifest, verification, pointer };
+}
+
+/**
+ * Read + schema-validate the corpus manifest at `pointer.manifestKey`,
+ * cross-checked against the pointer's own `corpusDigest`/`fileCount`.
+ * Shared by `verifyCorpusOnly` (full re-download+hash verification of
+ * every object) and the lightweight deploy-preflight
+ * `verifyCorpusReadiness` (pointer+manifest only, zero object reads) so
+ * both apply IDENTICAL schema/consistency rules to the manifest bytes —
+ * one manifest-GET, one set of checks, two very different callers.
+ * @param {string} bucketName
+ * @param {import("../src/utils/stroke-corpus.ts").StrokeCorpusPointer} pointer
+ * @param {{ runner?: Function, sleep?: (ms: number) => Promise<void>, maxRetries?: number }} [opts]
+ * @returns {Promise<import("../src/utils/stroke-corpus.ts").StrokeCorpusManifest>}
+ */
+export async function readCorpusManifest(bucketName, pointer, opts = {}) {
+  const runner = opts.runner ?? runWrangler;
+  const tmpDir = mkdtempSync(join(tmpdir(), "stroke-corpus-manifest-"));
+  try {
+    const filePath = join(tmpDir, "manifest.json");
+    const argv = [
+      "vp",
+      "exec",
+      "wrangler",
+      "r2",
+      "object",
+      "get",
+      `${bucketName}/${pointer.manifestKey}`,
+      "--remote",
+      `--file=${filePath}`,
+    ];
+    const result = await retryWithBackoff(() => runner(argv), {
+      sleep: opts.sleep,
+      maxRetries: opts.maxRetries ?? DEFAULT_VERIFY_MAX_RETRIES,
+    });
+    if (result.exitCode !== 0) {
+      throw new Error(
+        `Failed to read manifest ${pointer.manifestKey} (exit ${result.exitCode}): ${result.stderr}`,
+      );
+    }
+    const raw = readFileSync(filePath, "utf8");
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new Error(`Manifest at ${pointer.manifestKey} is not valid JSON`);
+    }
+    if (!isStrokeCorpusManifest(parsed)) {
+      throw new Error(`Manifest at ${pointer.manifestKey} failed schema validation`);
+    }
+    if (parsed.corpusDigest !== pointer.corpusDigest) {
+      throw new Error(
+        `Manifest corpusDigest ${parsed.corpusDigest} does not match pointer corpusDigest ${pointer.corpusDigest}`,
+      );
+    }
+    if (parsed.fileCount !== STROKE_CORPUS_EXPECTED_COUNT) {
+      throw new Error(
+        `Manifest fileCount ${parsed.fileCount} does not match expected ${STROKE_CORPUS_EXPECTED_COUNT}`,
+      );
+    }
+    return parsed;
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * `--verify-only=staging|production`: read the pointer, read its manifest,
+ * authenticated re-GET + verify every object. No writes of any kind —
+ * safe to run anytime, including against a live production bucket.
+ * @param {string} bucketName
+ * @param {{ runner?: Function, sleep?: (ms: number) => Promise<void>, maxConcurrent?: number, maxRetries?: number }} [opts]
+ */
+export async function verifyCorpusOnly(bucketName, opts = {}) {
+  const runner = opts.runner ?? runWrangler;
+  const pointer = await readCorpusPointer(bucketName, { runner });
+  if (!pointer) {
+    throw new Error(`No corpus pointer found at ${bucketName}/${STROKE_CORPUS_POINTER_KEY}`);
+  }
+  const manifest = await readCorpusManifest(bucketName, pointer, opts);
+  const verification = await verifyAtomicCorpusUploads(manifest, bucketName, opts);
+  return { pointer, manifest, verification };
+}
+
+/**
+ * Lightweight deploy-time readiness check: authenticated GET of the
+ * pointer + manifest ONLY — never any corpus object (zero R2 Class B
+ * reads for the 6,063 stroke-json bodies). Used by
+ * `scripts/lib/stroke-corpus-preflight.mjs` before every mutating
+ * Wrangler call in `bun run deploy` / `deploy:staging` — running the full
+ * 6,063-object `verifyCorpusOnly` on EVERY publish+deploy invocation would
+ * cost ~53 minutes of Class B re-download+hash per run for a corpus that,
+ * once uploaded, is immutable and already fully verified before its
+ * pointer was ever promoted (see `runAtomicCorpusUpload`).
+ *
+ * Validates the same strict pointer/manifest schemas as the full
+ * pipeline (via {@link readCorpusManifest}), plus:
+ *   - pointer<->manifest `fileCount`/`totalBytes` agreement
+ *   - manifest `totalBytes` against the sum of its own per-file `bytes`
+ *     (catches a tampered/stale `totalBytes` field with zero extra reads)
+ *   - independently RECOMPUTES `corpusDigest` from the manifest's own
+ *     hex/sha256 pairs (same algorithm as {@link computeCorpusDigest}) to
+ *     confirm the digest is self-consistent with the manifest content it
+ *     claims to summarize — this schema has no separate stored
+ *     ETag/checksum field, so `corpusDigest` recomputed from `files[]` IS
+ *     the manifest's self-digest.
+ *
+ * NOT a substitute for full corpus integrity verification: it proves the
+ * pointer+manifest are well-formed and mutually self-consistent, not that
+ * every stroke-json body in R2 still matches its recorded sha256/bytes —
+ * a corrupted or missing object would NOT be caught here. Full
+ * byte-for-byte verification of every object remains exclusively:
+ *   (a) `verifyAtomicCorpusUploads`, inside the upload path, BEFORE the
+ *       pointer is promoted (see `runAtomicCorpusUpload`), and
+ *   (b) explicit operator `--verify-only=<env>` (`verifyCorpusOnly`).
+ *
+ * Fails closed (throws) before any mutation on a missing/malformed/
+ * mismatched pointer or manifest — never returns partial success.
+ * @param {string} bucketName
+ * @param {{ runner?: Function, sleep?: (ms: number) => Promise<void>, maxRetries?: number }} [opts]
+ * @returns {Promise<{ pointer: import("../src/utils/stroke-corpus.ts").StrokeCorpusPointer, manifest: import("../src/utils/stroke-corpus.ts").StrokeCorpusManifest }>}
+ */
+export async function verifyCorpusReadiness(bucketName, opts = {}) {
+  const runner = opts.runner ?? runWrangler;
+  const pointer = await readCorpusPointer(bucketName, { runner });
+  if (!pointer) {
+    throw new Error(`No corpus pointer found at ${bucketName}/${STROKE_CORPUS_POINTER_KEY}`);
+  }
+  const manifest = await readCorpusManifest(bucketName, pointer, opts);
+
+  if (pointer.fileCount !== manifest.fileCount) {
+    throw new Error(
+      `Pointer fileCount ${pointer.fileCount} does not match manifest fileCount ${manifest.fileCount}`,
+    );
+  }
+  if (pointer.totalBytes !== manifest.totalBytes) {
+    throw new Error(
+      `Pointer totalBytes ${pointer.totalBytes} does not match manifest totalBytes ${manifest.totalBytes}`,
+    );
+  }
+  const summedBytes = manifest.files.reduce((sum, f) => sum + f.bytes, 0);
+  if (summedBytes !== manifest.totalBytes) {
+    throw new Error(
+      `Manifest totalBytes ${manifest.totalBytes} does not match sum of its own file bytes ${summedBytes}`,
+    );
+  }
+
+  const recomputedDigest = computeCorpusDigest(
+    manifest.files.map((f) => ({
+      hex: f.path.replace(/^stroke-json\//, "").replace(/\.json$/i, ""),
+      sha256: f.sha256,
+    })),
+  );
+  if (recomputedDigest !== manifest.corpusDigest) {
+    throw new Error(
+      `Manifest content self-digest mismatch: recomputed ${recomputedDigest} from files[], ` +
+        `but manifest.corpusDigest is ${manifest.corpusDigest}`,
+    );
+  }
+
+  return { pointer, manifest };
+}
+
+// ---------------------------------------------------------------------------
 // CLI
 // ---------------------------------------------------------------------------
 
@@ -681,11 +1381,33 @@ export async function runCli(argv, deps = {}) {
 
   if (args.help) {
     log(`Usage: node commands/sync-moe-stroke-corpus.mjs [options]
-  --out <dir>  --dry-run  --upload=staging|production
+  --out <dir>  --dry-run  --upload=staging|production  --verify-only=staging|production
   --concurrency <n>  --zip-url <url>  --zip-path <path>  --chars-file <path>
   --checkpoint <path>  --config <path>
   (--limit, --allow-partial, --skip-verify are dry-run only)`);
     return { ok: true, mode: "help" };
+  }
+
+  // --verify-only: read pointer/manifest/all objects, retry, NO writes of
+  // any kind. Short-circuits before any discovery/conversion/upload logic.
+  if (args.verifyOnly) {
+    const bucketName = resolveAssetsBucket(args.verifyOnly, args.config);
+    log(`[verify-only] target=${args.verifyOnly} bucket=${bucketName}`);
+    const result = await verifyCorpusOnly(bucketName, {
+      runner: deps.runner,
+      sleep: deps.sleep,
+    });
+    log(
+      `[verify-only] ok — corpusDigest=${result.pointer.corpusDigest} ${result.verification.checkedKeys.length} keys match sha256`,
+    );
+    return {
+      ok: true,
+      mode: "verify-only",
+      target: args.verifyOnly,
+      bucketName,
+      corpusDigest: result.pointer.corpusDigest,
+      checkedKeys: result.verification.checkedKeys,
+    };
   }
 
   // Enforce safe defaults for upload mode.  --limit, --allow-partial, and
@@ -708,7 +1430,6 @@ export async function runCli(argv, deps = {}) {
       );
     }
   }
-
   const outDir = args.out ?? DEFAULT_OUT;
   mkdirSync(outDir, { recursive: true });
 
@@ -771,20 +1492,18 @@ export async function runCli(argv, deps = {}) {
   }
 
   const bucketName = resolveAssetsBucket(uploadTarget, args.config);
-  log(`[upload] target=${uploadTarget} bucket=${bucketName} objects=${results.length}`);
-  await uploadCorpus(results, outDir, bucketName, {
+  log(
+    `[upload] target=${uploadTarget} bucket=${bucketName} objects=${results.length} (atomic digest-scoped)`,
+  );
+  const atomicResult = await runAtomicCorpusUpload(results, outDir, bucketName, uploadTarget, {
     runner: deps.runner,
     sleep: deps.sleep,
   });
-  log(`[upload] complete`);
-
-  // 5. Verify — always runs in upload mode (--skip-verify rejected above)
-  log(`[verify] re-downloading and hashing ${results.length} objects …`);
-  const verification = await verifyCorpusUploads(results, bucketName, {
-    runner: deps.runner,
-    sleep: deps.sleep,
-  });
-  log(`[verify] ok — ${verification.checkedKeys.length} keys match sha256`);
+  log(`[upload] complete — corpusDigest=${atomicResult.corpusDigest}`);
+  log(
+    `[verify] ok — ${atomicResult.verification.checkedKeys.length} keys match sha256 (incl. manifest)`,
+  );
+  log(`[pointer] promoted stroke-corpus/current.json → ${atomicResult.corpusDigest}`);
 
   return {
     ok: true,
@@ -794,6 +1513,7 @@ export async function runCli(argv, deps = {}) {
     count: results.length,
     gaps,
     manifestPath,
+    corpusDigest: atomicResult.corpusDigest,
   };
 }
 
@@ -812,6 +1532,7 @@ export async function runCli(argv, deps = {}) {
  * @property {number} [limit]
  * @property {number} [concurrency]
  * @property {"staging"|"production"} [upload]
+ * @property {"staging"|"production"} [verifyOnly]
  */
 
 /**
@@ -846,12 +1567,24 @@ export function parseArgs(argv) {
     } else if (a === "--upload") {
       out.upload = /** @type {"staging"|"production"} */ (argv[++i]);
       out.dryRun = false;
+    } else if (a.startsWith("--verify-only=")) {
+      out.verifyOnly = /** @type {"staging"|"production"} */ (a.slice("--verify-only=".length));
+      out.dryRun = false;
+    } else if (a === "--verify-only") {
+      out.verifyOnly = /** @type {"staging"|"production"} */ (argv[++i]);
+      out.dryRun = false;
     } else {
       throw new Error(`unknown argument: ${a}`);
     }
   }
   if (out.upload && out.upload !== "staging" && out.upload !== "production") {
     throw new Error(`--upload must be staging or production, got ${String(out.upload)}`);
+  }
+  if (out.verifyOnly && out.verifyOnly !== "staging" && out.verifyOnly !== "production") {
+    throw new Error(`--verify-only must be staging or production, got ${String(out.verifyOnly)}`);
+  }
+  if (out.upload && out.verifyOnly) {
+    throw new Error("--upload and --verify-only are mutually exclusive");
   }
   if (out.concurrency != null) {
     const c = out.concurrency;

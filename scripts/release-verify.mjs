@@ -17,7 +17,7 @@ import { readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { releaseKey, immutableKey, isImmutableAsset } from "../src/utils/release-keys.ts";
-import { retryWithBackoff, runWrangler } from "./lib/r2-upload.mjs";
+import { retryWithBackoff, runWrangler, isNotFoundStderr } from "./lib/r2-upload.mjs";
 
 /**
  * @typedef {Object} RunnerResult
@@ -80,11 +80,7 @@ async function downloadR2Object(bucketName, key, opts = {}) {
         const result = await runner(argv);
         if (result.exitCode !== 0) {
           const stderr = result.stderr ?? "";
-          if (
-            stderr.includes("not found") ||
-            stderr.includes("NoSuchKey") ||
-            stderr.includes("404")
-          ) {
+          if (isNotFoundStderr(stderr)) {
             throw new Error(`Missing object: ${key} (exit ${result.exitCode}): ${stderr}`);
           }
           throw new Error(`Download failed: ${key} (exit ${result.exitCode}): ${stderr}`);

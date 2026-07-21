@@ -1,4 +1,5 @@
 import { expect, test } from "./_fixtures";
+import { waitForAppReady } from "./readiness";
 
 async function measureMobileLayout(page: import("@playwright/test").Page) {
   return page.evaluate(() => {
@@ -23,7 +24,12 @@ test.describe("mobile safe-area layout", () => {
   }) => {
     await page.setViewportSize({ width: 393, height: 852 });
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    // measureMobileLayout reads h1.title's geometry -- "shell" (default)
+    // only waits for `body` visible, which can resolve before the entry's
+    // async fetch has rendered h1.title, throwing "h1.title not found"
+    // inside the page.evaluate. Wait for the dictionary content contract
+    // instead of the generic shell.
+    await waitForAppReady(page, "dictionary");
 
     await page.evaluate(() => {
       document.documentElement.style.setProperty("--moe-safe-area-top", "59px");
@@ -43,7 +49,8 @@ test.describe("mobile safe-area layout", () => {
   }) => {
     await page.setViewportSize({ width: 393, height: 852 });
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    // Same h1.title race as the sibling test above.
+    await waitForAppReady(page, "dictionary");
 
     await page.evaluate(() => {
       document.documentElement.style.setProperty("--moe-safe-area-top", "59px");

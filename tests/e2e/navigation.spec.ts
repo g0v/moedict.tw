@@ -1,26 +1,27 @@
 import { expect, test } from "./_fixtures";
+import { waitForAppReady } from "./readiness";
 
 test.describe("navigation flows", () => {
   test("back/forward preserves route", async ({ page }) => {
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await page.goto("/'%E9%A3%9F");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await page.goBack();
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await expect(page).toHaveTitle(/萌/);
     await page.goForward();
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await expect(page).toHaveTitle(/食/);
   });
 
   test("clicking logo navigates to home (may redirect to LRU last-lookup)", async ({ page }) => {
     await page.goto("/%E8%90%8C");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     const homeLink = page.locator('a[href="/"]').first();
     if ((await homeLink.count()) === 0) return;
     await homeLink.click();
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     // HomeRoute redirects to formatWordPath(lastLookup). Since we just viewed 萌
     // (lang=a), / should redirect back to /萌. Either / or /萌 is acceptable.
     const pathname = new URL(page.url()).pathname;
@@ -37,7 +38,7 @@ test.describe("navigation flows", () => {
 
   test("direct navigation to radical page /@木", async ({ page }) => {
     await page.goto("/@%E6%9C%A8");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await expect(page).toHaveTitle(/木/);
   });
 
@@ -45,7 +46,7 @@ test.describe("navigation flows", () => {
     page,
   }) => {
     await page.goto("/'@%E6%9C%A8");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await expect(page).toHaveTitle(/木.*台語萌典/);
   });
 
@@ -60,7 +61,7 @@ test.describe("navigation flows", () => {
   test("category list (/=近義詞) renders list", async ({ page }) => {
     const response = await page.goto("/=%E8%BF%91%E7%BE%A9%E8%A9%9E");
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await expect(page).toHaveTitle(/近義詞|分類索引/);
   });
 
@@ -73,7 +74,7 @@ test.describe("navigation flows", () => {
     // must land on the real entry, not silently fall back to the homepage.
     const response = await page.goto("/#'%E9%A3%9F");
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await expect(page).toHaveTitle(/食/);
     const pathname = decodeURIComponent(new URL(page.url()).pathname);
     expect(pathname).toBe("/'食");
@@ -84,7 +85,7 @@ test.describe("navigation flows", () => {
   }) => {
     const response = await page.goto("/#@%E6%9C%A8");
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     await expect(page).toHaveTitle(/木/);
     const pathname = decodeURIComponent(new URL(page.url()).pathname);
     expect(pathname).toBe("/@木");

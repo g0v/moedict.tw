@@ -19,6 +19,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Page, Route } from "@playwright/test";
 import { expect, test } from "./_fixtures";
+import { waitForAppReady } from "./readiness";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
@@ -72,7 +73,7 @@ test.describe("missing stroke data (#76)", () => {
     await routeStrokeJsonNotFound(page);
 
     await page.goto("/%E8%90%8C"); // /萌
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
 
     const strokeBtn = page.locator('a.iconic-circle.stroke[title="筆順動畫"]').first();
     await expect(strokeBtn).toBeVisible({ timeout: 15_000 });

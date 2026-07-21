@@ -72,6 +72,14 @@ const TEST_VERSION_ID = "v-uuid-abc123";
 const SHELL_HTML =
   '<!doctype html><html><head><title>萌典</title></head><body><div id="app"></div></body></html>';
 const IMMUTABLE_JS = "console.log('immutable-bundle');";
+// scripts/lib/r2-upload.mjs enumerates dist/client/** with real filesystem
+// paths (raw UTF-8, never percent-encoded) -- seeded here under the same
+// raw-CJK relative path a real release publish would use, to exercise the
+// #153 decode-before-lookup fix end-to-end through the real Miniflare
+// dispatch (worker/index.ts → serveAssetWithFallback), not just the direct
+// unit-test call in tests/unit/release-fallback.test.ts.
+const GUIDE_IMAGE_REL_PATH = "images/guide/多重表記_resized.jpg";
+const GUIDE_IMAGE_BYTES = new TextEncoder().encode("fake-jpeg-bytes");
 
 let taggedServer: TestServer | null = null;
 
@@ -95,6 +103,11 @@ async function getTaggedServer(): Promise<TestServer> {
     "immutable/assets/index-AbCdEfGh.js",
     new TextEncoder().encode(IMMUTABLE_JS).buffer,
     { httpMetadata: { contentType: "application/javascript; charset=utf-8" } },
+  );
+  await bucket.put(
+    `releases/${TEST_TAG}/${GUIDE_IMAGE_REL_PATH}`,
+    GUIDE_IMAGE_BYTES.buffer as ArrayBuffer,
+    { httpMetadata: { contentType: "image/jpeg" } },
   );
   taggedServer = server;
   return server;
@@ -180,5 +193,34 @@ describe("R2 immutable asset fallback", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("X-Moedict-Asset-Source")).toBe("r2-immutable");
     expect(await res.text()).toBe("");
+  });
+});
+
+describe("R2 release fallback for CJK/percent-encoded asset paths (#153)", () => {
+  it("serves a percent-encoded CJK guide image from R2 release when SITE_ASSETS is unavailable", async () => {
+    const encodedPath = `/${GUIDE_IMAGE_REL_PATH.split("/").map(encodeURIComponent).join("/")}`;
+    const res = await fetchFromTaggedServer(encodedPath);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("X-Moedict-Asset-Source")).toBe("r2-release");
+    expect(res.headers.get("content-type")).toMatch(/image\/jpeg/);
+    const buf = new Uint8Array(await res.arrayBuffer());
+    expect(buf).toEqual(GUIDE_IMAGE_BYTES);
+  });
+
+  it("serves the same guide image when the request path arrives as raw UTF-8", async () => {
+    const res = await fetchFromTaggedServer(`/${GUIDE_IMAGE_REL_PATH}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("X-Moedict-Asset-Source")).toBe("r2-release");
+  });
+
+  it("resolves consistently under repeated concurrent requests (no per-isolate poisoning)", async () => {
+    const encodedPath = `/${GUIDE_IMAGE_REL_PATH.split("/").map(encodeURIComponent).join("/")}`;
+    const results = await Promise.all(
+      Array.from({ length: 20 }, () => fetchFromTaggedServer(encodedPath)),
+    );
+    for (const res of results) {
+      expect(res.status).toBe(200);
+      expect(res.headers.get("X-Moedict-Asset-Source")).toBe("r2-release");
+    }
   });
 });

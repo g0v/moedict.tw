@@ -16,6 +16,7 @@
  */
 
 import { CACHE_CONTROL } from "./cache";
+import { tryDecodeURIComponent } from "../utils/dictionary-route";
 import {
   immutableKey,
   isImmutableAsset,
@@ -235,7 +236,20 @@ export async function renderHtmlShellWithFallback<E extends FallbackEnv>(
   if (fetcher && typeof fetcher.fetch === "function") {
     try {
       const shellUrl = new URL("/", request.url);
-      const shellResponse = await fetcher.fetch(new Request(shellUrl.toString(), request));
+      // Strip conditional-request headers (If-None-Match/If-Modified-Since)
+      // before this internal fetch: the shell HTML is always rewritten with
+      // route-specific head metadata (title/og:*) via injectHead below, so a
+      // 304 (empty body) from SITE_ASSETS validating the CLIENT's cached copy
+      // of some earlier route's rewritten HTML against its own unmodified
+      // index.html ETag would leave nothing to inject into -- forwarding
+      // those headers made every conditional-GET for the SPA shell fall
+      // through the entire R2/legacy chain to 503 recovery instead of
+      // simply fetching the real body once and rewriting it, exactly like
+      // the browser never sent a conditional request at all.
+      const shellRequestInit = new Request(shellUrl.toString(), request);
+      shellRequestInit.headers.delete("If-None-Match");
+      shellRequestInit.headers.delete("If-Modified-Since");
+      const shellResponse = await fetcher.fetch(shellRequestInit);
       if (shellResponse.ok) {
         if (request.method === "HEAD") {
           const headers = new Headers(shellResponse.headers);
@@ -415,7 +429,13 @@ export async function serveAssetWithFallback(
   if (fetcher && typeof fetcher.fetch === "function") {
     try {
       const response = await fetcher.fetch(request);
-      if (response.ok) {
+      // response.ok is false for 304 (Not Modified) -- but a 304 means
+      // SITE_ASSETS successfully validated the browser's cached copy via
+      // If-None-Match/If-Modified-Since, which is a hit, not a miss.
+      // Treating it as non-ok sent every conditional-GET revalidation for
+      // hashed bundle assets down the entire R2/legacy fallback chain to
+      // the dead ASSET_BASE_URL proxy host on every repeat navigation.
+      if (response.ok || response.status === 304) {
         const headers = new Headers(response.headers);
         headers.set("X-Moedict-Asset-Source", "site-assets");
         for (const [k, v] of Object.entries(getVersionHeaders(meta))) {
@@ -433,11 +453,39 @@ export async function serveAssetWithFallback(
   }
 
   // ── R2 fallback ──────────────────────────────────────────────────────
+  //
+  // Every R2 key below MUST be derived from the SAME decoded form the
+  // publisher used when uploading (scripts/lib/r2-upload.mjs enumerates
+  // real filesystem paths -- raw UTF-8, never percent-encoded). `url.pathname`
+  // does NOT auto-decode non-ASCII percent-encoding, so a CJK asset request
+  // (e.g. /images/guide/%E5%A4%9A..._resized.jpg for 多重表記_resized.jpg)
+  // would derive `releases/<tag>/images/guide/%E5%A4%9A...` -- a key that
+  // never matches the uploaded `releases/<tag>/images/guide/多重表記...`
+  // object. Guide images have no /assets/ prefix, so they never reach the
+  // immutable/legacy stages either -- with the raw encoded pathname this
+  // entire R2 chain was permanently blind to every CJK asset, no matter
+  // what SITE_ASSETS did. That's why intermittent SITE_ASSETS misses for
+  // these paths surfaced as bare 404s in production instead of falling
+  // back: there was no safety net, only the illusion of one (#153 staging
+  // repro -- /images/guide/<CJK>_resized.jpg flaps 200/404 because
+  // SITE_ASSETS itself is flaky for these paths, but the R2 fallback chain
+  // could never have caught the miss regardless).
+  //
+  // Decode ONCE via tryDecodeURIComponent (fail-closed: malformed
+  // percent-encoding skips R2 entirely instead of deriving a garbage key
+  // or letting a raw URIError propagate -- see AGENTS.md's decode
+  // convention). ASCII paths (/assets/* hashed bundles, favicon.ico, etc.)
+  // round-trip through decode unchanged, so existing behavior for them is
+  // untouched.
+  const decodedPathname = tryDecodeURIComponent(pathname);
+  if (decodedPathname === null) {
+    return null;
+  }
 
   // 1. Current release key (if tag present)
   if (tag) {
     try {
-      const key = releaseKey(tag, pathname);
+      const key = releaseKey(tag, decodedPathname);
       const object = await env.ASSETS.get(key);
       if (object) {
         return serveR2Object(object, request, {
@@ -452,9 +500,9 @@ export async function serveAssetWithFallback(
   }
 
   // 2. Global immutable key (for /assets/* hashed paths only)
-  if (isImmutableAsset(pathname)) {
+  if (isImmutableAsset(decodedPathname)) {
     try {
-      const key = immutableKey(pathname);
+      const key = immutableKey(decodedPathname);
       const object = await env.ASSETS.get(key);
       if (object) {
         return serveR2Object(object, request, {
@@ -471,8 +519,11 @@ export async function serveAssetWithFallback(
   //    the ASSETS bucket may contain files under their stripped /assets/
   //    path (e.g. "js/jquery.strokeWords.js"). This is the original
   //    getAssetFromBucket path for non-hashed /assets/* files.
-  if (pathname.startsWith("/assets/") && (request.method === "GET" || request.method === "HEAD")) {
-    const legacyKey = pathname.replace(/^\/assets\//, "");
+  if (
+    decodedPathname.startsWith("/assets/") &&
+    (request.method === "GET" || request.method === "HEAD")
+  ) {
+    const legacyKey = decodedPathname.replace(/^\/assets\//, "");
     if (legacyKey) {
       try {
         const object = await env.ASSETS.get(legacyKey);

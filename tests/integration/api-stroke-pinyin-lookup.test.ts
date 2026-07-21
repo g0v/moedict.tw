@@ -3,9 +3,12 @@ import { fetchFromServer, fetchJson } from "./_harness";
 
 /**
  * Integration coverage for /api/stroke-json/{codepoint}.json against the real
- * Miniflare ASSETS binding. fixtures.ts seeds stroke-json/840c.json (萌) into
- * the ASSETS bucket; the handler must read that key directly (not the public
- * CDN URL) so staging can validate preview-bucket uploads.
+ * Miniflare ASSETS binding. fixtures.ts seeds a full atomic corpus (pointer
+ * at stroke-corpus/current.json, manifest listing 6,063 allowlisted
+ * codepoints, and the real digest-scoped object for 840c.json/萌) into the
+ * ASSETS bucket; the handler resolves pointer→manifest→versioned object on
+ * every request (src/api/handleStrokeAPI.ts) so staging can validate
+ * preview-bucket uploads end to end, not just read a flat legacy key.
  */
 describe("/api/stroke-json/{codepoint}.json (R2 ASSETS)", () => {
   it("returns 400 for invalid codepoint format", async () => {

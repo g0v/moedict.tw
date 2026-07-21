@@ -42,6 +42,7 @@ const SCRIPT = join(REPO_ROOT, "commands", "upload_dictionary.sh");
 
 let tempRoot: string;
 let fakeRcloneLog: string;
+let fakeVpLog: string;
 let fakeBin: string;
 
 beforeEach(() => {
@@ -89,11 +90,17 @@ exit 0
   writeFileSync(join(fakeBin, "rclone"), script, { mode: 0o755 });
 }
 
+function writeFakeVp(): void {
+  const script = `#!/bin/bash
+echo "$@" >> "${fakeVpLog}"
+if [ "\${VP_CHECK_FAIL:-0}" = "1" ]; then exit 1; fi
+exit 0
+`;
+  writeFileSync(join(fakeBin, "vp"), script, { mode: 0o755 });
+}
+
 /**
  * Run the upload script with a controlled environment.
- *
- * `cnsExpectedCount` patches the script's hardcoded CNS_EXPECTED_COUNT via sed
- * so tests can use small synthetic corpora instead of 77,208 real files.
  */
 function runScript(opts: {
   env?: Record<string, string>;
@@ -101,8 +108,15 @@ function runScript(opts: {
   input?: string;
   cnsExpectedCount?: number;
   failFirst?: number;
-}): { status: number | null; stdout: string; stderr: string; rcloneCalls: string[] } {
+}): {
+  status: number | null;
+  stdout: string;
+  stderr: string;
+  rcloneCalls: string[];
+  vpCalls: string[];
+} {
   const cwd = opts.cwd ?? tempRoot;
+  fakeVpLog = join(tempRoot, "vp-calls.log");
   const env: Record<string, string> = {
     PATH: `${fakeBin}:/usr/bin:/bin:/usr/local/bin`,
     HOME: tempRoot,
@@ -111,18 +125,22 @@ function runScript(opts: {
     R2_BUCKET: "fake-bucket",
     ...(opts.env ?? {}),
   };
-
   writeFakeRclone(opts.failFirst ?? 0);
-
+  writeFakeVp();
   const scriptSrc = readFileSync(SCRIPT, "utf-8");
   const patchedCount = opts.cnsExpectedCount ?? EXPECTED_EMITTED;
-  const patched = scriptSrc.replace(
-    /^CNS_EXPECTED_COUNT=\d+/m,
-    `CNS_EXPECTED_COUNT=${patchedCount}`,
-  );
+  const patched = scriptSrc
+    .replace(/^CNS_EXPECTED_COUNT=\d+/m, `CNS_EXPECTED_COUNT=${patchedCount}`)
+    .replaceAll(
+      "node scripts/verify-cns-manifest.mjs",
+      `node ${join(REPO_ROOT, "scripts/verify-cns-manifest.mjs")}`,
+    );
   const patchedScript = join(tempRoot, "upload_dictionary_patched.sh");
   writeFileSync(patchedScript, patched, { mode: 0o755 });
-
+  const cnsManifest = join(tempRoot, "cns-manifest.json");
+  writeFileSync(cnsManifest, JSON.stringify({ expected_emitted: patchedCount }));
+  env.CNS_MANIFEST = cnsManifest;
+  env.CNS_ROOT = join(cwd, "data", "dictionary", "cns", "by-codepoint");
   const result = spawnSync("bash", [patchedScript], {
     cwd,
     env,
@@ -130,19 +148,18 @@ function runScript(opts: {
     encoding: "utf-8",
     timeout: 15_000,
   });
-
-  let rcloneCalls: string[] = [];
-  if (existsSync(fakeRcloneLog)) {
-    rcloneCalls = readFileSync(fakeRcloneLog, "utf-8")
-      .split("\n")
-      .filter((l) => l.trim().length > 0);
-  }
-
+  const readLog = (p: string) =>
+    existsSync(p)
+      ? readFileSync(p, "utf-8")
+          .split("\n")
+          .filter((l) => l.trim().length > 0)
+      : [];
   return {
     status: result.status,
     stdout: result.stdout ?? "",
     stderr: result.stderr ?? "",
-    rcloneCalls,
+    rcloneCalls: readLog(fakeRcloneLog),
+    vpCalls: readLog(fakeVpLog),
   };
 }
 
@@ -252,6 +269,18 @@ describe("upload_dictionary.sh UPLOAD_SCOPE=cns — scope isolation", () => {
     });
     expect(stdout).toMatch(/✅.*5|5.*✅/);
   });
+  it("CNS scope omits canonical vp and uses only CNS manifest gate", () => {
+    const byCodepoint = join(tempRoot, "data", "dictionary", "cns", "by-codepoint");
+    buildCnsCorpus(byCodepoint, 2);
+    const result = runScript({
+      env: { UPLOAD_SCOPE: "cns", VP_CHECK_FAIL: "1" },
+      cnsExpectedCount: 2,
+      input: "N\n",
+    });
+    expect(result.status).toBe(0);
+    expect(result.vpCalls).toHaveLength(0);
+    expect(result.rcloneCalls.length).toBeGreaterThan(0);
+  });
 });
 
 // ── UPLOAD_SCOPE=all — preflight directory checks ────────────────────────────
@@ -264,6 +293,27 @@ describe("upload_dictionary.sh UPLOAD_SCOPE=all — preflight directory checks",
     });
     expect(status).toBe(1);
     expect(rcloneCalls).toHaveLength(0);
+  });
+  it("canonical vp check runs before all-scope preflight and blocks rclone on failure", () => {
+    for (const dir of [
+      "pack",
+      "pcck",
+      "phck",
+      "ptck",
+      "a",
+      "c",
+      "h",
+      "t",
+      "search-index",
+      "translation-data",
+      "lookup/pinyin",
+    ]) {
+      mkdirSync(join(tempRoot, "data", "dictionary", dir), { recursive: true });
+    }
+    const blocked = runScript({ env: { UPLOAD_SCOPE: "all", VP_CHECK_FAIL: "1" } });
+    expect(blocked.status).not.toBe(0);
+    expect(blocked.vpCalls.some((call) => call.includes("run check:data"))).toBe(true);
+    expect(blocked.rcloneCalls).toHaveLength(0);
   });
 
   it("exits 1 when pack/ dir is missing — no rclone invoked", () => {
@@ -394,18 +444,17 @@ describe("upload_dictionary.sh — exponential retry behavior", () => {
     expect(rcloneCalls.length).toBe(4);
   });
 
-  it("fake rclone failing all 5 attempts (dry-run): exit 1, exactly 5 invocations", () => {
+  it("fake rclone failing all 5 attempts (dry-run): exits before real upload", () => {
     const byCodepoint = join(tempRoot, "data", "dictionary", "cns", "by-codepoint");
     buildCnsCorpus(byCodepoint, 3);
     const { status, rcloneCalls } = runScript({
       env: { UPLOAD_SCOPE: "cns", RCLONE_RETRY_INITIAL_MS: "0" },
       input: "y\n",
       cnsExpectedCount: 3,
-      failFirst: 99, // every attempt fails
+      failFirst: 99,
     });
     expect(status).toBe(1);
-    // Dry-run exhausts 5 attempts then exits 1 before reaching real sync.
-    expect(rcloneCalls.length).toBe(5);
+    expect(rcloneCalls).toHaveLength(5);
   });
 });
 

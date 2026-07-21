@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./_fixtures";
+import { waitForAppReady } from "./readiness";
 
 // g0v/moedict-webkit#102 — 按 back 希望能回到之前的 scrolling position。
 //
@@ -10,8 +11,29 @@ import { expect, test } from "./_fixtures";
 // src/utils/scroll-position.ts）。
 
 async function scrollToAndWait(page: Page, y: number): Promise<void> {
-  await page.evaluate((targetY) => window.scrollTo(0, targetY), y);
-  await page.waitForFunction((targetY) => window.scrollY === targetY, y, { timeout: 5_000 });
+  // The document must actually be tall enough to reach targetY before
+  // scrollTo can succeed -- under heavy parallel CPU contention the list's
+  // full-height layout can still be settling a beat after networkidle.
+  // Wait for a reachable scrollHeight first so the scrollTo below isn't
+  // racing layout, then poll for the actual scroll position (a single
+  // scrollTo call can be coalesced/dropped by the browser under load, so
+  // retry it inside the poll rather than firing it once and hoping).
+  await page.waitForFunction(
+    (targetY) =>
+      document.scrollingElement != null &&
+      document.scrollingElement.scrollHeight - window.innerHeight >= targetY,
+    y,
+    { timeout: 10_000 },
+  );
+  await expect
+    .poll(
+      async () => {
+        await page.evaluate((targetY) => window.scrollTo(0, targetY), y);
+        return page.evaluate(() => window.scrollY);
+      },
+      { timeout: 10_000 },
+    )
+    .toBe(y);
 }
 
 async function clickFirstVisibleResultLink(page: Page): Promise<string> {
@@ -34,14 +56,14 @@ test.describe("back-navigation scroll restoration", () => {
     page,
   }) => {
     await page.goto("/=%E6%88%90%E8%AA%9E");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
 
     const targetY = 4200;
     await scrollToAndWait(page, targetY);
 
     const href = await clickFirstVisibleResultLink(page);
     await page.waitForURL((url) => decodeURIComponent(url.pathname) === decodeURIComponent(href));
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
     // Forward (PUSH) navigation into a new entry always resets to the top.
     await expect.poll(() => page.evaluate(() => window.scrollY), { timeout: 5_000 }).toBe(0);
 
@@ -57,13 +79,13 @@ test.describe("back-navigation scroll restoration", () => {
     page,
   }) => {
     await page.goto("/=%E6%88%90%E8%AA%9E");
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page);
 
     for (const targetY of [1500, 2700, 3900]) {
       await scrollToAndWait(page, targetY);
       const href = await clickFirstVisibleResultLink(page);
       await page.waitForURL((url) => decodeURIComponent(url.pathname) === decodeURIComponent(href));
-      await page.waitForLoadState("networkidle");
+      await waitForAppReady(page);
 
       await page.goBack();
       await page.waitForURL((url) => decodeURIComponent(url.pathname) === "/=成語");

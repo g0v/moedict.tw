@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Locator, Page, Route } from "@playwright/test";
 import { expect, test } from "./_fixtures";
+import { waitForAppReady } from "./readiness";
 
 // Regression coverage for g0v/moedict-webkit#245 ("CSS: 支援深色模式").
 //
@@ -129,7 +130,7 @@ test.describe("manual override wins over the OS preference", () => {
       window.localStorage.setItem("theme", "dark");
     });
     await page.goto(ENTRY_PATH);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "dictionary");
 
     expect(await colorScheme(page)).toBe("dark");
     expect(await resultBackground(page)).not.toBe("rgb(255, 255, 255)");
@@ -141,7 +142,7 @@ test.describe("manual override wins over the OS preference", () => {
       window.localStorage.setItem("theme", "light");
     });
     await page.goto(ENTRY_PATH);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "dictionary");
 
     expect(await colorScheme(page)).toBe("light");
     expect(await resultBackground(page)).toBe("rgb(255, 255, 255)");
@@ -151,7 +152,7 @@ test.describe("manual override wins over the OS preference", () => {
 test.describe("#user-pref 外觀模式 control", () => {
   test("switching to 深色 applies immediately, no reload, and persists", async ({ page }) => {
     await page.goto(ENTRY_PATH);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "dictionary");
     expect(await resultBackground(page)).toBe("rgb(255, 255, 255)");
 
     await openPrefPanel(page);
@@ -292,7 +293,7 @@ test.describe("phrase card contrast: Taiwanese example cards in dark mode", () =
 
     const response = await page.goto(TAIWAN_PATH);
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "dictionary");
 
     const hasLangT = await page.evaluate(() => document.body.classList.contains("lang-t"));
     expect(hasLangT).toBe(true);
@@ -353,7 +354,7 @@ test.describe("phrase card contrast: Taiwanese example cards in light mode (nega
   }) => {
     const response = await page.goto(TAIWAN_PATH);
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "dictionary");
 
     const exampleCount = await page.locator("body.lang-t .example").count();
     expect(exampleCount).toBeGreaterThan(0);
@@ -411,7 +412,7 @@ async function openRadicalHoverTooltip(page: Page): Promise<Locator> {
   await routeHoverTargetEntry(page);
   const response = await page.goto(HOVER_ENTRY_PATH);
   expect(response?.status()).toBe(200);
-  await page.waitForLoadState("networkidle");
+  await waitForAppReady(page, "dictionary");
 
   const target = page.locator(".result a[href]", { hasText: "生" }).first();
   await target.hover();
@@ -562,7 +563,7 @@ test.describe("audio play-button icon contrast (InlineStyles.tsx .playAudio)", (
     await page.emulateMedia({ colorScheme: "dark" });
     const response = await page.goto(ENTRY_PATH);
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "dictionary");
 
     const button = page.locator(".playAudio.part-of-speech").first();
     await expect(button).toHaveCount(1);
@@ -580,7 +581,7 @@ test.describe("audio play-button icon contrast (InlineStyles.tsx .playAudio)", (
     await page.emulateMedia({ colorScheme: "light" });
     const response = await page.goto(ENTRY_PATH);
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "dictionary");
 
     const button = page.locator(".playAudio.part-of-speech").first();
     await expect(button).toHaveCount(1);
@@ -599,7 +600,7 @@ test.describe("reading-only-note contrast (InlineStyles.tsx .reading-only-note)"
     await page.emulateMedia({ colorScheme: "dark" });
     const response = await page.goto(PINNED_NO_DEFINITION_PATH);
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "dictionary");
 
     const note = page.locator(".reading-only-note").first();
     await expect(note).toHaveCount(1);
@@ -617,7 +618,7 @@ test.describe("reading-only-note contrast (InlineStyles.tsx .reading-only-note)"
     await page.emulateMedia({ colorScheme: "light" });
     const response = await page.goto(PINNED_NO_DEFINITION_PATH);
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "dictionary");
 
     const note = page.locator(".reading-only-note").first();
     await expect(note).toHaveCount(1);
@@ -633,7 +634,7 @@ test.describe("full-text search status/snippet contrast (src/index.css)", () => 
     await page.emulateMedia({ colorScheme: "dark" });
     const response = await page.goto(ENTRY_PATH);
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "dictionary");
 
     const input = page.locator("#nav-fulltext-search").first();
     await expect(input).toBeVisible({ timeout: 15_000 });
@@ -661,7 +662,7 @@ test.describe("full-text search status/snippet contrast (src/index.css)", () => 
     await page.emulateMedia({ colorScheme: "light" });
     const response = await page.goto(ENTRY_PATH);
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "dictionary");
 
     const input = page.locator("#nav-fulltext-search").first();
     await expect(input).toBeVisible({ timeout: 15_000 });
@@ -682,7 +683,7 @@ test.describe("sidebar autocomplete dropdown contrast (InlineStyles.tsx .ui-auto
     await page.emulateMedia({ colorScheme: "dark" });
     const response = await page.goto(ENTRY_PATH);
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "dictionary");
 
     const input = page.locator("#query");
     await expect(input).toBeVisible({ timeout: 15_000 });
@@ -710,7 +711,7 @@ test.describe("sidebar autocomplete dropdown contrast (InlineStyles.tsx .ui-auto
     await page.emulateMedia({ colorScheme: "dark" });
     const response = await page.goto(ENTRY_PATH);
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "dictionary");
 
     const input = page.locator("#query");
     await expect(input).toBeVisible({ timeout: 15_000 });
@@ -734,7 +735,7 @@ test.describe("sidebar autocomplete dropdown contrast (InlineStyles.tsx .ui-auto
     await page.emulateMedia({ colorScheme: "light" });
     const response = await page.goto(ENTRY_PATH);
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "dictionary");
 
     const input = page.locator("#query");
     await expect(input).toBeVisible({ timeout: 15_000 });
@@ -775,7 +776,7 @@ test.describe("mobile dark-mode search results & controls (490×1376, real mobil
     await page.emulateMedia({ colorScheme: "dark" });
     const response = await page.goto("/");
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "shell");
 
     await openMobileResults(page, "萌");
 
@@ -816,7 +817,7 @@ test.describe("mobile dark-mode search results & controls (490×1376, real mobil
     await page.emulateMedia({ colorScheme: "dark" });
     const response = await page.goto("/");
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "shell");
 
     await openMobileResults(page, "萌");
 
@@ -850,7 +851,7 @@ test.describe("mobile dark-mode search results & controls (490×1376, real mobil
     await page.emulateMedia({ colorScheme: "dark" });
     const response = await page.goto(ENTRY_PATH);
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "dictionary");
 
     const input = page.locator("#query");
     await expect(input).toHaveValue("萌", { timeout: 15_000 });
@@ -902,7 +903,7 @@ test.describe("mobile dark-mode search results & controls (490×1376, real mobil
     await page.emulateMedia({ colorScheme: "light" });
     const response = await page.goto("/");
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "shell");
 
     await openMobileResults(page, "萌");
 
@@ -967,7 +968,7 @@ test.describe("audit-dark-contrast A: title zhuyin yin/diao (was #666 on #1c1c1c
     await blockCssSubresources(page);
     const response = await page.goto(ENTRY_PATH);
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "dictionary");
 
     const yin = page
       .locator(".result .entry .title hruby.rightangle ru[zhuyin] zhuyin yin")
@@ -995,7 +996,7 @@ test.describe("audit-dark-contrast A: title zhuyin yin/diao (was #666 on #1c1c1c
     await blockCssSubresources(page);
     const response = await page.goto(ENTRY_PATH);
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "dictionary");
 
     const yin = page
       .locator(".result .entry .title hruby.rightangle ru[zhuyin] zhuyin yin")
@@ -1014,7 +1015,7 @@ test.describe("audit-dark-contrast B: Hakka .bopomofo reading spans/sup (was #66
     await blockCssSubresources(page);
     const response = await page.goto(HAKKA_PATH);
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "dictionary");
 
     const readingSpans = page.locator("div.bopomofo span.pinyin > span > span:not(.audioBlock)");
     await expect(readingSpans.first()).toHaveCount(1);
@@ -1038,7 +1039,7 @@ test.describe("audit-dark-contrast B: Hakka .bopomofo reading spans/sup (was #66
     await blockCssSubresources(page);
     const response = await page.goto(HAKKA_PATH);
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "dictionary");
 
     const readingSpans = page.locator("div.bopomofo span.pinyin > span > span:not(.audioBlock)");
     const color = await readingSpans.first().evaluate((el) => getComputedStyle(el).color);
@@ -1056,7 +1057,7 @@ test.describe("audit-dark-contrast C: #user-pref close button (was white on Boot
       await blockCssSubresources(page);
       const response = await page.goto(ENTRY_PATH);
       expect(response?.status()).toBe(200);
-      await page.waitForLoadState("networkidle");
+      await waitForAppReady(page, "dictionary");
       await openPrefPanel(page);
 
       const btn = page.locator("#user-pref .btn.btn-primary.btn-block");
@@ -1083,7 +1084,7 @@ test.describe("audit-dark-contrast D: .radical .glyph a.xref hover (was white on
       await blockCssSubresources(page);
       const response = await page.goto(ENTRY_PATH);
       expect(response?.status()).toBe(200);
-      await page.waitForLoadState("networkidle");
+      await waitForAppReady(page, "dictionary");
 
       const link = page.locator(".radical .glyph a.xref").first();
       await expect(link).toHaveCount(1);
@@ -1109,7 +1110,7 @@ test.describe("audit-dark-contrast E: div.cn-specific xref label (was --moe-text
     await routeCnSpecificAlt(page);
     const response = await page.goto(CN_XREF_PATH);
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "dictionary");
 
     const label = page.locator("div.cn-specific span.xref").nth(1);
     await expect(label).toHaveCount(1);
@@ -1128,7 +1129,7 @@ test.describe("audit-dark-contrast E: div.cn-specific xref label (was --moe-text
     await routeCnSpecificAlt(page);
     const response = await page.goto(CN_XREF_PATH);
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "dictionary");
 
     const cn = page.locator("div.cn-specific").first();
     const bg = await cn.evaluate((el) => getComputedStyle(el).backgroundColor);
@@ -1146,7 +1147,7 @@ test.describe("audit-dark-contrast J: .result a:hover/:focus (was #0070a3 on #dd
       await blockCssSubresources(page);
       const response = await page.goto("/@%E5%8F%A3"); // radical detail page — has .result p > a.xref
       expect(response?.status()).toBe(200);
-      await page.waitForLoadState("networkidle");
+      await waitForAppReady(page, "static");
 
       const link = page.locator(".result p > a.xref").first();
       await expect(link).toHaveCount(1);
@@ -1178,7 +1179,7 @@ test.describe("audit-dark-contrast K: StarredPage .lang-group-current (was undef
     });
     const response = await page.goto("/=*");
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "starred");
 
     await page.locator("#btn-toggle-all-langs").click();
     const current = page.locator(".lang-group-current").first();
@@ -1199,7 +1200,7 @@ test.describe("audit-dark-contrast K: StarredPage .lang-group-current (was undef
     });
     const response = await page.goto("/=*");
     expect(response?.status()).toBe(200);
-    await page.waitForLoadState("networkidle");
+    await waitForAppReady(page, "starred");
 
     await page.locator("#btn-toggle-all-langs").click();
     const current = page.locator(".lang-group-current").first();

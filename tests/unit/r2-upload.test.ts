@@ -18,7 +18,52 @@ import {
   uploadWithConcurrency,
   retryWithBackoff,
   isRetryableError,
+  isNotFoundStderr,
 } from "../../scripts/lib/r2-upload.mjs";
+
+// ── isNotFoundStderr ─────────────────────────────────────────────────
+
+describe("isNotFoundStderr", () => {
+  it("matches real, non-piped wrangler's ANSI-wrapped 'does not exist' banner verbatim", () => {
+    // Captured live from `wrangler r2 object get <bucket>/<missing-key> --remote`
+    // run in a real (non-piped) TTY -- this is the exact byte sequence that
+    // broke the first staging corpus upload: readCorpusPointer's old
+    // /not found|NoSuchKey|404/i regex matched none of it (ANSI codes
+    // between every token, and the phrase itself contains none of those
+    // three substrings), so a legitimate empty-bucket "no prior pointer"
+    // was retried 8x and thrown as fatal instead of returning null.
+    // Deliberately contains NEITHER "NoSuchKey" NOR "404" NOR the bare
+    // phrase "not found" -- only the real "does not exist" wording -- so
+    // this assertion fails against the pre-fix regex.
+    const real =
+      "\x1B[31m\u2718 \x1B[41;31m[\x1B[41;97mERROR\x1B[41;31m]\x1B[0m \x1B[1mThe specified key does not exist.\x1B[0m\n";
+    expect(isNotFoundStderr(real)).toBe(true);
+  });
+
+  it("matches the plain-text (piped/non-TTY) 'does not exist' phrasing with no ANSI codes", () => {
+    expect(isNotFoundStderr("The specified key does not exist.")).toBe(true);
+  });
+
+  it("still matches legacy NoSuchKey / 'not found' / 404 phrasings (back-compat with fake-runner tests)", () => {
+    expect(isNotFoundStderr("NoSuchKey: object not found")).toBe(true);
+    expect(isNotFoundStderr("HTTP 404 Not Found")).toBe(true);
+    expect(isNotFoundStderr("key not found")).toBe(true);
+  });
+
+  it("is case-insensitive", () => {
+    expect(isNotFoundStderr("THE SPECIFIED KEY DOES NOT EXIST.")).toBe(true);
+  });
+
+  it("returns false for empty/falsy stderr", () => {
+    expect(isNotFoundStderr("")).toBe(false);
+  });
+
+  it("returns false for unrelated transient/permanent failures -- never conflates them with absence", () => {
+    expect(isNotFoundStderr("\u2718 [ERROR] fetch failed")).toBe(false);
+    expect(isNotFoundStderr("500: Internal Server Error")).toBe(false);
+    expect(isNotFoundStderr("rate limited, code 971")).toBe(false);
+  });
+});
 
 // ── uploadObject ─────────────────────────────────────────────────────
 

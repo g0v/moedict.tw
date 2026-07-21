@@ -233,8 +233,8 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 			height: auto !important;
 			position: fixed !important;
 			box-sizing: border-box;
-			background: #fff;
-			border: 1px solid #ddd;
+			background: var(--moe-surface, #fff);
+			border: 1px solid var(--moe-border, #ddd);
 			border-radius: 4px;
 			box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 		}
@@ -321,7 +321,7 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 		/* 搜尋輸入框樣式 */
 		.query-box input.query {
 			display: block;
-			border: 1px solid #ddd;
+			border: 1px solid var(--moe-input-border, #ddd);
 			font-size: 1.2em;
 			width: 100%;
 			height: 1.8em;
@@ -336,6 +336,7 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 
 		.query-box input.query::placeholder {
 			font-size: 0.7em;
+			color: var(--moe-text-secondary, #666);
 		}
 
 		.query-box .search-form {
@@ -391,8 +392,14 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 			height: 22px;
 			padding: 0;
 			border: 0;
-			border-radius: 50%;
 			background: var(--moe-surface-alt, #bfc0c2);
+			border-radius: 50%;
+			/* Deliberately white, not --moe-text: the circular badge's own
+			   background is always a solid --moe-surface-alt (light grey in
+			   light mode, dark grey in dark mode), so a single fixed white "x"
+			   glyph reads correctly against both -- unlike the theme's base
+			   text color, which is dark-on-light in light mode and would be
+			   invisible here. */
 			color: #fff;
 			font-size: 21px;
 			font-weight: 700;

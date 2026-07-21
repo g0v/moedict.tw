@@ -1,0 +1,59 @@
+{
+  "version": 2,
+  "source_urls": {
+    "properties": "https://www.cns11643.gov.tw/opendata/Properties.zip",
+    "mapping": "https://www.cns11643.gov.tw/opendata/MapingTables.zip"
+  },
+  "source_dataset_url": "https://data.gov.tw/dataset/5961",
+  "source_archive_names": { "properties": "Properties.zip", "mapping": "MapingTables.zip" },
+  "source_sha256": {
+    "properties": {
+      "sha256": "50cad66f3fe6f3a4b6f4a7bf0431e1bfb8dabc3d8c7be4d61e1617b15a0d7a7b",
+      "bytes": 3158456,
+      "name": "Properties.zip"
+    },
+    "mapping": {
+      "sha256": "f59dacc4dbdef334d7a887c3da671af02778e2c80adb2a7fd1053f64dbf9e659",
+      "bytes": 809864,
+      "name": "MapingTables.zip"
+    }
+  },
+  "verification": {
+    "status": "source-pinned-self-hashed",
+    "verification": "source-pinned-self-hashed",
+    "reason": "data.gov.tw/dataset/5961 (全字庫) publishes direct download links under https://www.cns11643.gov.tw/opendata/{Properties,MapingTables}.zip (found via the dataset's DCAT resource list, not the pageView.jsp anchor URLs recorded in schema v1 — those never resolved to real files, hence the prior unavailable-unpinned state). Both zips were fetched 2026-07-20, confirmed HTTP 200 application/zip, and SHA-256 self-computed below. The data.gov.tw / cns11643.gov.tw platform publishes no official checksum for either archive (checked release.txt and OpenDataFilesList.csv — neither lists a hash), so this is self-hashed pinning, not upstream-verified.",
+    "source_version": "2026-05-05 per https://www.cns11643.gov.tw/opendata/release.txt (\"版本：20260505\" for both Properties.zip and MapingTables.zip; release.txt itself dated 2026-05-05).",
+    "verified_at": "2026-07-20",
+    "download_verification": {
+      "http_status": 200,
+      "content_type": "application/zip",
+      "content_length_matches_downloaded_bytes": true
+    },
+    "regeneration_attempt": {
+      "ran": true,
+      "command": "node scripts/generate-cns-data.mjs --properties=<downloaded Properties.zip> --mapping=<downloaded MapingTables.zip> --out=<scratch dir>",
+      "result": "emitted=77208, skippedPUA=20152, skippedNoMap=0 — exact count-gate match against EXPECTED_EMITTED/EXPECTED_SKIPPED_PUA/EXPECTED_SKIPPED_NOMAP; golden U+4D09 record byte-identical to the tracked fixture; run repeated twice, byte-identical both times (deterministic).",
+      "output_checksum_sha256": "2f63f85790726a2a8201f14a242167b706edd9a93c841c4991b9d85775c42cc6",
+      "matches_committed_output_checksum": false,
+      "conclusion": "Counts and the golden record match exactly, so the generator/source shapes are still contract-compatible, but the full corpus digest differs from the committed 869e3f08d89821e22b03fbb911443b912aab270a2743960fa5e51b6c0778ee1f. Cause not narrowed further (plausibly per-record content drift somewhere in the ~97k CNS_stroke universe between whenever the committed corpus was generated and the 2026-05-05 archives fetched today — release.txt shows edits as recent as 2026-05-05 — though this was not isolated to a specific diff). Per task instructions this PR does NOT regenerate or replace the committed corpus/output_checksum; both facts (source now pinned + reproduction digest mismatch) are recorded here for the next operator to investigate before ever changing output_checksum."
+    }
+  },
+  "current_source_checksum": {
+    "algorithm": "sha256",
+    "status": "self-hashed from live download 2026-07-20; platform publishes no official checksum to cross-verify against",
+    "verified_bytes": true
+  },
+  "output_checksum": {
+    "algorithm": "sha256",
+    "method": "sha256 of sorted per-file sha256 lines",
+    "sha256": "869e3f08d89821e22b03fbb911443b912aab270a2743960fa5e51b6c0778ee1f",
+    "note": "Unchanged from schema v1 — this is the committed data/dictionary/cns/by-codepoint output's digest. NOT reproduced by regenerating from the 2026-07-20 source pin above (see verification.regeneration_attempt); do not treat this field as reproducible until that gap is resolved."
+  },
+  "generator_options": {
+    "exclude_pua": true,
+    "shard_formula": "hex.length <= 4 ? hex.slice(0, 2) : hex.slice(0, 3)"
+  },
+  "expected_emitted": 77208,
+  "expected_skipped_pua": 20152,
+  "expected_skipped_nomap": 0
+}
