@@ -15,7 +15,7 @@ import { cleanTextForTTS, speakText } from "../utils/tts-utils";
 import { getAudioUrl, playAudioUrl } from "../utils/audio-utils";
 import { AUDIO_CDN_MAP } from "../utils/media-cdn";
 import { rightAngle } from "../utils/ruby2hruby";
-import { decorateRuby } from "../utils/bopomofo-pinyin-utils";
+import { decorateRuby, formatBopomofo, formatPinyin } from "../utils/bopomofo-pinyin-utils";
 import { convertPinyinByLang } from "../utils/pinyin-preference-utils";
 import {
   addStarWord,
@@ -1188,6 +1188,28 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                   </span>
                 </TitlePronunciation>
               </h1>
+              {/* 兩岸辭典大陸音（陸⃝）：rubyData.pinyin/bopomofo 此時為 decorateRuby
+                  拆出的大陸讀音，cnSpecific 標記其存在。放在 h1 之後的 div，讓遠端
+                  legacy `.result h1+div small.cn-specific:before{content:"陸"}` 標籤
+                  與 `div.cn-specific.bopomofo` 底色生效（g0v/moedict.tw#156）。 */}
+              {lang === "c" && rubyData.cnSpecific && (rubyData.pinyin || rubyData.bopomofo) && (
+                <div className="cn-specific bopomofo">
+                  <small className="alternative cn-specific">
+                    {rubyData.pinyin && (
+                      <span
+                        className="pinyin"
+                        dangerouslySetInnerHTML={{ __html: formatPinyin(rubyData.pinyin) }}
+                      />
+                    )}
+                    {rubyData.bopomofo && (
+                      <span
+                        className="bopomofo"
+                        dangerouslySetInnerHTML={{ __html: formatBopomofo(rubyData.bopomofo) }}
+                      />
+                    )}
+                  </small>
+                </div>
+              )}
               {hakkaReadings.length > 0 && (
                 <div className="bopomofo">
                   <span className="pinyin">
