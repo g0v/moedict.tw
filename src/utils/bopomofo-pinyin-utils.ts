@@ -124,6 +124,19 @@ export function decorateRuby(params: {
   let processedPinyin = rawPinyin;
   let processedBopomofo = bopomofo || trsToBpmf(LANG, rawPinyin) || "";
 
+  // The dictionary API's decodeLangPart converts the legacy 陸⃝ (陸 + U+20DD
+  // COMBINING ENCLOSING CIRCLE) Mainland-reading marker that lives inside the
+  // 兩岸辭典 b/p reading fields into its regional-label markup
+  // `<span class="regional part-of-speech">陸</span> `. The reading-splitting
+  // logic below (and the LANG==='c' block near the end) still keys off the bare
+  // 陸⃝ marker; left as a span its `/` characters trip the `陸.` and `[變|/]`
+  // regexes, emitting a mangled `span>` fragment with the Mainland tone marks
+  // floating off to the side (g0v/moedict.tw#156). Fold the span back to the
+  // X⃝ marker so every downstream rule matches the shape it was written for.
+  const regionalMarkerSpan = /<span class="regional part-of-speech">([^<]+)<\/span>\s?/g;
+  processedPinyin = processedPinyin.replace(regionalMarkerSpan, "$1⃝");
+  processedBopomofo = processedBopomofo.replace(regionalMarkerSpan, "$1⃝");
+
   if (LANG !== "c") {
     processedPinyin = processedPinyin.replace(/<[^>]*>/g, "").replace(/（.*）/, "");
     processedBopomofo = processedBopomofo.replace(/<[^>]*>/g, "");

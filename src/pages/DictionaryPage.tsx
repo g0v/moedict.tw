@@ -1188,6 +1188,24 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                   </span>
                 </TitlePronunciation>
               </h1>
+              {/* 兩岸辭典大陸音（陸⃝）：rubyData.pinyin/bopomofo 此時為 decorateRuby
+                  拆出的大陸讀音，cnSpecific 標記其存在。放在 h1 之後的 div，讓遠端
+                  legacy `.result h1+div small.cn-specific:before{content:"陸"}` 標籤
+                  與 `div.cn-specific.bopomofo` 底色生效（g0v/moedict.tw#156）。
+                  拼音／注音以純文字輸出（不套 formatPinyin/formatBopomofo 的
+                  `.tone` span）—— legacy `span .tone{float:right}` 會把聲調母音
+                  推到整條區塊最右側造成跑版，主標題台灣音本來也是純文字呈現，
+                  這裡比照辦理讓聲調留在母音上。 */}
+              {lang === "c" && rubyData.cnSpecific && (rubyData.pinyin || rubyData.bopomofo) && (
+                <div className="cn-specific bopomofo">
+                  <small className="alternative cn-specific">
+                    {rubyData.pinyin && <span className="pinyin">{rubyData.pinyin.trim()}</span>}
+                    {rubyData.bopomofo && (
+                      <span className="bopomofo">{rubyData.bopomofo.trim()}</span>
+                    )}
+                  </small>
+                </div>
+              )}
               {hakkaReadings.length > 0 && (
                 <div className="bopomofo">
                   <span className="pinyin">

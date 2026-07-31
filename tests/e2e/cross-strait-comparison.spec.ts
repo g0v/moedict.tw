@@ -1,4 +1,28 @@
 import { expect, test } from "./_fixtures";
+import { waitForAppReady } from "./readiness";
+
+test.describe("cross-strait Mainland pronunciation (兩岸辭典 大陸音)", () => {
+  // Regression for g0v/moedict.tw#156: the API rewrites the legacy 陸⃝ Mainland
+  // marker into `<span class="regional part-of-speech">陸</span>`, which used to
+  // slip past decorateRuby's reading-splitter and render a mangled `span>`
+  // fragment with the tone marks floating off to the side.
+  test("renders 測度's Mainland reading in a 陸 block without a mangled span", async ({ page }) => {
+    await page.goto("/~%E6%B8%AC%E5%BA%A6");
+    await waitForAppReady(page, "dictionary");
+
+    const cnSpecific = page.locator(".result .entry-heading small.alternative.cn-specific");
+    await expect(cnSpecific).toBeVisible();
+
+    // The clean Mainland reading is present (度 tone is ˊ / ó, vs Taiwan ˋ / ò).
+    await expect(cnSpecific.locator(".pinyin")).toContainText("cèduó");
+    await expect(cnSpecific.locator(".bopomofo")).toContainText("ㄉㄨㄛ");
+
+    // No leaked markup text anywhere in the heading (the #156 symptom).
+    const headingText = await page.locator(".result .entry-heading").innerText();
+    expect(headingText).not.toContain("span>");
+    expect(headingText).not.toContain("part-of-speech");
+  });
+});
 
 test.describe("cross-strait comparison category", () => {
   test("renders Taiwan and Mainland terms as separate table links", async ({ page }) => {

@@ -125,6 +125,33 @@ describe("decorateRuby", () => {
     expect(result.cnSpecific).toBe("cn-specific");
   });
 
+  it("normalizes the API regional-marker span in the Mainland reading (g0v/moedict.tw#156)", () => {
+    // The dictionary API's decodeLangPart rewrites the legacy 陸⃝ (陸 + U+20DD)
+    // Mainland marker in the b/p fields into `<span class="regional
+    // part-of-speech">陸</span> ` before decorateRuby sees it. Feeding that exact
+    // shape (as /api/~測度.json returns) must NOT leak a mangled `span>` fragment
+    // into any output field, and must still split out the clean Mainland reading.
+    const result = decorateRuby({
+      LANG: "c",
+      title: '<a href="./#~測">測</a><a href="./#~度">度</a>',
+      bopomofo: 'ㄘㄜˋ　ㄉㄨㄛˋ<br><span class="regional part-of-speech">陸</span> ㄘㄜˋ　ㄉㄨㄛˊ',
+      pinyin: 'cèduò<br><span class="regional part-of-speech">陸</span> cèduó',
+    });
+    expect(result.cnSpecific).toBe("cn-specific");
+    // Clean Mainland reading (the 度 tone differs: ˋ→ˊ / ò→ó).
+    expect(result.pinyin).toContain("cèduó");
+    expect(result.bopomofo).toContain("ㄉㄨㄛˊ");
+    // No mangled span fragment anywhere the UI renders it.
+    for (const field of [result.pinyin, result.bopomofo, result.bAlt, result.pAlt, result.ruby]) {
+      expect(field).not.toContain("span>");
+      expect(field).not.toContain("part-of-speech");
+    }
+    // The garbage previously landed in bAlt/pAlt (the h1 `.alternative` block);
+    // with the marker normalized the alternate-reading fields stay empty.
+    expect(result.bAlt).toBe("");
+    expect(result.pAlt).toBe("");
+  });
+
   it("computes rbspan for Taiwanese (LANG=t) hyphenated trs", () => {
     // tsia̍h has no hyphen; use a compound like "tsia̍h-pn̄g" to exercise the
     // rbspan counting branch for LANG=t.

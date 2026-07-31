@@ -394,6 +394,18 @@ export function collectDictionaryFixtures(): FixtureEntry[] {
     httpMetadata: { contentType: "text/plain; charset=utf-8" },
   });
 
+  // 兩岸辭典 bucket 44 — contains 測度 (測 = U+6E2C, 28204 % 128 = 44),
+  // a cross-strait entry carrying a Mainland (陸⃝) reading in its b/p fields.
+  // Seeded so /c/測度.json exercises the Mainland-pronunciation rendering
+  // path (g0v/moedict.tw#156).
+  const mainlandReadingKey = "pcck/44.txt";
+  entries.push({
+    bucket: "DICTIONARY",
+    key: mainlandReadingKey,
+    body: required(path.join(DATA_DICT, "pcck", "44.txt"), mainlandReadingKey),
+    httpMetadata: { contentType: "text/plain; charset=utf-8" },
+  });
+
   // CNS11643 golden fixture: 䴉 (U+4D09, CNS 4-6C51) — shard 4D, key 4D09.json
   const cnsGoldenKey = "cns/by-codepoint/4D/4D09.json";
   const cnsGoldenPath = path.join(DATA_DICT, "cns", "by-codepoint", "4D", "4D09.json");
