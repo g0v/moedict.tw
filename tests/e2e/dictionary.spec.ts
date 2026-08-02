@@ -24,6 +24,49 @@ async function waitForEntryHydration(page: Page, titleFragment: string): Promise
   await expect(page.locator("body")).toContainText(titleFragment, { timeout: 15_000 });
 }
 
+interface TitleZhuyinMetrics {
+  bopomofo: string;
+  vowelCenter: number;
+  diaoCenter: number;
+  vowelLeft: number;
+  diaoLeft: number;
+}
+
+async function measureTitleZhuyin(page: Page, annotation: string): Promise<TitleZhuyinMetrics> {
+  return page.evaluate((targetAnnotation) => {
+    const annotationRuby = Array.from(document.querySelectorAll("h1.title ru[annotation]")).find(
+      (ruby) =>
+        ruby.getAttribute("annotation") === targetAnnotation ||
+        ruby.querySelector(":scope > .romanization-selectable")?.textContent === targetAnnotation,
+    );
+    const zhuyin = annotationRuby?.querySelector("ru[zhuyin]");
+    const yin = zhuyin?.querySelector("yin");
+    const diao = zhuyin?.querySelector("diao");
+    const yinText = yin?.firstChild;
+    const diaoText = diao?.firstChild;
+    if (!(yinText instanceof Text) || !(diaoText instanceof Text)) {
+      throw new Error(`${targetAnnotation} title zhuyin text nodes not found`);
+    }
+
+    const charRect = (text: Text, index: number): DOMRect => {
+      const range = document.createRange();
+      range.setStart(text, index);
+      range.setEnd(text, index + 1);
+      return range.getBoundingClientRect();
+    };
+
+    const vowelRect = charRect(yinText, yinText.data.length - 1);
+    const diaoRect = charRect(diaoText, 0);
+    return {
+      bopomofo: `${yinText.data}${diaoText.data}`,
+      vowelCenter: vowelRect.top + vowelRect.height / 2,
+      diaoCenter: diaoRect.top + diaoRect.height / 2,
+      vowelLeft: vowelRect.left,
+      diaoLeft: diaoRect.left,
+    };
+  }, annotation);
+}
+
 async function gotoFirstTitleEntry(
   page: Page,
   candidates: Array<{ path: string; title: string }>,
@@ -84,6 +127,94 @@ test.describe("dictionary pages per language", () => {
     const response = await page.goto("/'%E9%A3%9F");
     expect(response?.status()).toBe(200);
     await waitForEntryHydration(page, "食");
+  });
+  test.describe("g0v/moedict-webkit#301", () => {
+    test.use({ viewport: { width: 545, height: 316 } });
+
+    test("Taigi lop checked final aligns with the vowel in title zhuyin", async ({ page }) => {
+      const response = await page.goto("/'%E6%A9%90");
+      expect(response?.status()).toBe(200);
+      await waitForEntryHydration(page, "橐");
+      await page.addStyleTag({ path: "data/assets/styles.css" });
+
+      const metrics = await measureTitleZhuyin(page, "lop");
+
+      expect(metrics.bopomofo).toBe("ㄌㆦㆴ");
+      expect(Math.abs(metrics.diaoCenter - metrics.vowelCenter)).toBeLessThan(3);
+    });
+
+    test("Taigi it checked final aligns in both ruby layouts", async ({ page }) => {
+      const response = await page.goto("/'%E4%B8%80");
+      expect(response?.status()).toBe(200);
+      await waitForEntryHydration(page, "一");
+      await page.addStyleTag({ path: "data/assets/styles.css" });
+
+      const metrics = await measureTitleZhuyin(page, "it");
+      expect(metrics.bopomofo).toBe("ㄧㆵ");
+      expect(Math.abs(metrics.diaoCenter - metrics.vowelCenter)).toBeLessThan(1);
+    });
+
+    test("Taigi it checked final aligns in zhuyin-only layout", async ({ page }) => {
+      await page.addInitScript(() => localStorage.setItem("phonetics", "bopomofo"));
+      const response = await page.goto("/'%E4%B8%80");
+      expect(response?.status()).toBe(200);
+      await waitForEntryHydration(page, "一");
+      await page.addStyleTag({ path: "data/assets/styles.css" });
+
+      const metrics = await measureTitleZhuyin(page, "it");
+      expect(metrics.bopomofo).toBe("ㄧㆵ");
+      expect(Math.abs(metrics.diaoCenter - metrics.vowelCenter)).toBeLessThan(1);
+    });
+
+    test("Taigi tsia̍h length-3 checked final aligns with the last zhuyin symbol", async ({
+      page,
+    }) => {
+      const response = await page.goto("/'%E9%A3%9F");
+      expect(response?.status()).toBe(200);
+      await waitForEntryHydration(page, "食");
+      await page.addStyleTag({ path: "data/assets/styles.css" });
+
+      const metrics = await measureTitleZhuyin(page, "tsia̍h");
+      expect(metrics.bopomofo).toBe("ㄐㄧㄚㆷ̇");
+      expect(Math.abs(metrics.diaoCenter - metrics.vowelCenter)).toBeLessThan(1);
+      expect(metrics.diaoLeft).toBeGreaterThan(metrics.vowelLeft);
+    });
+
+    test("Taigi tsia̍h length-3 checked final aligns in zhuyin-only layout", async ({ page }) => {
+      await page.addInitScript(() => localStorage.setItem("phonetics", "bopomofo"));
+      const response = await page.goto("/'%E9%A3%9F");
+      expect(response?.status()).toBe(200);
+      await waitForEntryHydration(page, "食");
+      await page.addStyleTag({ path: "data/assets/styles.css" });
+
+      const metrics = await measureTitleZhuyin(page, "tsia̍h");
+      expect(metrics.bopomofo).toBe("ㄐㄧㄚㆷ̇");
+      expect(Math.abs(metrics.diaoCenter - metrics.vowelCenter)).toBeLessThan(1);
+      expect(metrics.diaoLeft).toBeGreaterThan(metrics.vowelLeft);
+    });
+
+    test("Mandarin length-2 tone mark keeps its raised position", async ({ page }) => {
+      const response = await page.goto("/%E8%90%8C");
+      expect(response?.status()).toBe(200);
+      await waitForEntryHydration(page, "萌");
+      await page.addStyleTag({ path: "data/assets/styles.css" });
+
+      const metrics = await measureTitleZhuyin(page, "méng");
+      expect(metrics.bopomofo).toBe("ㄇㄥˊ");
+      expect(metrics.diaoCenter).toBeLessThan(metrics.vowelCenter - 5);
+    });
+
+    test("Mandarin length-1 tone mark keeps its zhuyin-only position", async ({ page }) => {
+      await page.addInitScript(() => localStorage.setItem("phonetics", "bopomofo"));
+      const response = await page.goto("/%E8%80%8C");
+      expect(response?.status()).toBe(200);
+      await waitForEntryHydration(page, "而");
+      await page.addStyleTag({ path: "data/assets/styles.css" });
+
+      const metrics = await measureTitleZhuyin(page, "ér");
+      expect(metrics.bopomofo).toBe("ㄦˊ");
+      expect(Math.abs(metrics.diaoCenter - metrics.vowelCenter)).toBeLessThan(3);
+    });
   });
 
   test("'蛇 (t) — reading-only siâ is labeled and has no broken audio control", async ({

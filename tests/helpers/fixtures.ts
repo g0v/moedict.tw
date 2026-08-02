@@ -200,6 +200,17 @@ export function collectDictionaryFixtures(): FixtureEntry[] {
     body: required(path.join(DATA_DICT, "pack", `${huangBucket}.txt`), huangKey),
     httpMetadata: { contentType: "text/plain; charset=utf-8" },
   });
+  // 橐 (U+6A50, ptck bucket 80) — g0v/moedict-webkit#301 title ruby
+  // regression: lop exposes a length-2 bopomofo stack plus a checked final.
+  const issue301Word = "橐";
+  const issue301Bucket = bucketOf(issue301Word, "t");
+  const issue301Key = `ptck/${issue301Bucket}.txt`;
+  entries.push({
+    bucket: "DICTIONARY",
+    key: issue301Key,
+    body: required(path.join(DATA_DICT, "ptck", `${issue301Bucket}.txt`), issue301Key),
+    httpMetadata: { contentType: "text/plain; charset=utf-8" },
+  });
 
   for (const lang of ["a", "t", "h", "c"] as const) {
     for (const name of ["index.json", "xref.json", "xref-by-id.json"]) {

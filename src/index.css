@@ -1193,13 +1193,54 @@ body[data-ruby-pref="zhuyin"] .result .entry .title hruby.rightangle ru[zhuyin][
   line-height: 1 !important;
 }
 
+/* g0v/moedict-webkit#301: checked finals belong beside the last
+   zhuyin symbol. Ordinary tone marks keep the legacy positioning. */
 body[data-ruby-pref="zhuyin"] .result .entry .title hruby.rightangle ru[zhuyin][length="1"] diao {
   top: calc(50% - 0.6em + var(--title-zhuyin-y-shift));
   margin-top: 0;
 }
 
-.result .entry .title hruby.rightangle ru[zhuyin][length="2"] diao {
-  top: calc(50% - 1.01em + var(--title-zhuyin-y-shift));
+body[data-ruby-pref] .result .entry .title hruby.rightangle ru[zhuyin][length="1"][diao^="ㆴ"] diao,
+body[data-ruby-pref] .result .entry .title hruby.rightangle ru[zhuyin][length="1"][diao^="ㆵ"] diao,
+body[data-ruby-pref] .result .entry .title hruby.rightangle ru[zhuyin][length="1"][diao^="ㆶ"] diao,
+body[data-ruby-pref]
+  .result
+  .entry
+  .title
+  hruby.rightangle
+  ru[zhuyin][length="1"][diao^="ㆷ"]
+  diao {
+  top: var(--title-zhuyin-y-shift);
+  margin-top: 0;
+}
+
+body[data-ruby-pref] .result .entry .title hruby.rightangle ru[zhuyin][length="2"][diao^="ㆴ"] diao,
+body[data-ruby-pref] .result .entry .title hruby.rightangle ru[zhuyin][length="2"][diao^="ㆵ"] diao,
+body[data-ruby-pref] .result .entry .title hruby.rightangle ru[zhuyin][length="2"][diao^="ㆶ"] diao,
+body[data-ruby-pref]
+  .result
+  .entry
+  .title
+  hruby.rightangle
+  ru[zhuyin][length="2"][diao^="ㆷ"]
+  diao {
+  top: calc(50% - 0.45em + var(--title-zhuyin-y-shift));
+  right: calc(-0.57em + var(--title-zhuyin-x-shift));
+  margin-top: 0;
+  transform: none;
+}
+
+body[data-ruby-pref] .result .entry .title hruby.rightangle ru[zhuyin][length="3"][diao^="ㆴ"] diao,
+body[data-ruby-pref] .result .entry .title hruby.rightangle ru[zhuyin][length="3"][diao^="ㆵ"] diao,
+body[data-ruby-pref] .result .entry .title hruby.rightangle ru[zhuyin][length="3"][diao^="ㆶ"] diao,
+body[data-ruby-pref]
+  .result
+  .entry
+  .title
+  hruby.rightangle
+  ru[zhuyin][length="3"][diao^="ㆷ"]
+  diao {
+  top: calc(50% + 0.45em + var(--title-zhuyin-y-shift));
   right: calc(-0.57em + var(--title-zhuyin-x-shift));
   margin-top: 0;
   transform: none;
