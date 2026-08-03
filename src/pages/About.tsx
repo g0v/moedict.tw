@@ -845,8 +845,8 @@ export function About({ assetBaseUrl }: AboutProps) {
 
         <h4>JSON 資料範例</h4>
         <p>
-          以 <code>/a/萌.json</code> 為例（節錄）。除注音、拼音、釋義外，華語詞條還會附上{" "}
-          <code>translation</code>（漢英、法、德文對照）：
+          以 <code>/萌.json</code> 為例（節錄，各陣列僅列部分項目）。除注音、拼音、釋義外，
+          華語詞條還會附上 <code>translation</code>（漢英、法、德文對照）：
         </p>
         <pre className="api-code">
           <code>{`{
@@ -873,9 +873,9 @@ export function About({ assetBaseUrl }: AboutProps) {
     }
   ],
   "translation": {
-    "English": ["to sprout; to bud", "(coll.) cute; adorable"],
-    "francais": ["germer", "bourgeonner"],
-    "Deutsch": ["keimen, sprießen, knospen (V)"]
+    "English": ["(bound form) to sprout; to bud"],
+    "francais": ["germer"],
+    "Deutsch": ["Leute, Menschen (S)"]
   }
 }`}</code>
         </pre>

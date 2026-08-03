@@ -150,12 +150,13 @@ describe("About page API documentation (#159)", () => {
     }
   });
 
-  it("uses /a/萌.json for the example so it shows the translation block (漢英/法/德)", () => {
+  it("uses the expanded /萌.json response and quotes exact source values", () => {
     const html = render();
-    expect(html).toContain("/a/萌.json");
-    // translation 區塊與三語對照鍵
-    expect(html).toContain("translation");
-    expect(html).toContain("francais");
-    expect(html).toContain("Deutsch");
+    expect(html).toContain("以 <code>/萌.json</code> 為例");
+    expect(html).not.toContain("以 <code>/a/萌.json</code> 為例");
+    expect(html).toContain("各陣列僅列部分項目");
+    for (const value of ["(bound form) to sprout; to bud", "germer", "Leute, Menschen (S)"]) {
+      expect(html).toContain(value);
+    }
   });
 });
