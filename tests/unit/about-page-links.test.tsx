@@ -149,4 +149,13 @@ describe("About page API documentation (#159)", () => {
       expect(html).toContain(field);
     }
   });
+
+  it("uses /a/萌.json for the example so it shows the translation block (漢英/法/德)", () => {
+    const html = render();
+    expect(html).toContain("/a/萌.json");
+    // translation 區塊與三語對照鍵
+    expect(html).toContain("translation");
+    expect(html).toContain("francais");
+    expect(html).toContain("Deutsch");
+  });
 });

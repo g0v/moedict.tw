@@ -845,7 +845,8 @@ export function About({ assetBaseUrl }: AboutProps) {
 
         <h4>JSON 資料範例</h4>
         <p>
-          以 <code>/uni/萌.json</code> 為例（節錄）：
+          以 <code>/a/萌.json</code> 為例（節錄）。除注音、拼音、釋義外，華語詞條還會附上{" "}
+          <code>translation</code>（漢英、法、德文對照）：
         </p>
         <pre className="api-code">
           <code>{`{
@@ -870,9 +871,19 @@ export function About({ assetBaseUrl }: AboutProps) {
         }
       ]
     }
-  ]
+  ],
+  "translation": {
+    "English": ["to sprout; to bud", "(coll.) cute; adorable"],
+    "francais": ["germer", "bourgeonner"],
+    "Deutsch": ["keimen, sprießen, knospen (V)"]
+  }
 }`}</code>
         </pre>
+        <p style={{ fontSize: "0.9em", color: "var(--moe-text-secondary, #666)" }}>
+          註：華語詞條的 <code>def</code> 等釋義欄位含站內連結的 HTML 標記（點擊可跳至相關字詞），
+          上方範例為便於閱讀已略去。若需純文字，請改用 <code>/raw/</code> 或 <code>/uni/</code>{" "}
+          端點。
+        </p>
 
         <h3>字圖 PNG</h3>
         <p>
