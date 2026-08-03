@@ -219,6 +219,82 @@
   border-color: #124959;
 }
 
+/* API 串接說明區段（#159） */
+.about-page .api-docs {
+  margin-top: 1em;
+  padding-top: 1.5em;
+  border-top: 1px solid #ddd;
+  scroll-margin-top: 80px; /* 錨點捲動時預留固定導覽列高度，避免標題被遮住 */
+}
+
+.about-page .api-docs h2 {
+  margin-bottom: 0.75em;
+}
+
+.about-page .api-docs h3 {
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+.about-page .api-docs h4 {
+  margin-top: 1em;
+  margin-bottom: 0.4em;
+}
+
+.about-page .api-docs code {
+  padding: 0.1em 0.35em;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.9em;
+  background: var(--moe-code-bg, rgba(127, 127, 127, 0.14));
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.about-page .api-table-wrap {
+  overflow-x: auto;
+  margin: 0.5em 0 1em;
+}
+
+.about-page .api-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+.about-page .api-table th,
+.about-page .api-table td {
+  padding: 0.5em 0.75em;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--moe-border, #ddd);
+}
+
+.about-page .api-table th {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.about-page .api-table code {
+  white-space: nowrap;
+}
+
+.about-page pre.api-code {
+  margin: 0.5em 0 1em;
+  padding: 1em;
+  overflow-x: auto;
+  line-height: 1.5;
+  background: var(--moe-code-bg, rgba(127, 127, 127, 0.14));
+  border-radius: 6px;
+}
+
+.about-page pre.api-code code {
+  padding: 0;
+  font-size: 0.85em;
+  white-space: pre;
+  background: none;
+  border-radius: 0;
+}
+
 /* 使用說明截圖縮圖（#95） */
 .about-page .guide-figures {
   display: flex;

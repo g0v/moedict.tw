@@ -145,6 +145,10 @@ export function About({ assetBaseUrl }: AboutProps) {
           <a href="#how-to-use" className="btn btn-info">
             <SvgIcon name="book" size={14} style={{ marginRight: 6 }} aria-hidden="true" />
             萌典功能使用說明
+          </a>{" "}
+          <a href="#api" className="btn btn-info">
+            <SvgIcon name="book" size={14} style={{ marginRight: 6 }} aria-hidden="true" />
+            API 串接說明
           </a>
         </p>
         <p>
@@ -699,6 +703,251 @@ export function About({ assetBaseUrl }: AboutProps) {
             </ul>
           </li>
         </ul>
+      </section>
+
+      {/* API 串接說明（#159）：與使用說明同頁區段，不新增路由 */}
+      <section id="api" className="content api-docs">
+        <h2>API 串接說明</h2>
+        <p>
+          萌典的辭典資料以開放 API 提供，所有端點皆支援跨來源存取（CORS 標頭{" "}
+          <code>Access-Control-Allow-Origin: *</code>），可自由用於網頁、App
+          或研究等用途。資料授權見上方說明，程式介面本身採 CC0 釋出。
+        </p>
+
+        <h3>JSON 字詞查詢</h3>
+        <p>
+          在任一字詞後面加上 <code>.json</code>
+          ，即可取得該詞條的結構化資料。預設查華語，也可用語言前綴指定其他辭典：
+        </p>
+        <div className="api-table-wrap">
+          <table className="api-table">
+            <thead>
+              <tr>
+                <th>端點</th>
+                <th>辭典 / 格式</th>
+                <th>範例</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <code>/{"{詞}"}.json</code>
+                </td>
+                <td>華語（預設，等同 /a/）</td>
+                <td>
+                  <a
+                    target="_blank"
+                    href="https://www.moedict.tw/萌.json"
+                    rel="noopener noreferrer"
+                  >
+                    /萌.json
+                  </a>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <code>/a/{"{詞}"}.json</code>
+                </td>
+                <td>華語（重編國語辭典修訂本）</td>
+                <td>
+                  <a
+                    target="_blank"
+                    href="https://www.moedict.tw/a/萌.json"
+                    rel="noopener noreferrer"
+                  >
+                    /a/萌.json
+                  </a>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <code>/t/{"{詞}"}.json</code>
+                </td>
+                <td>臺灣台語</td>
+                <td>
+                  <a
+                    target="_blank"
+                    href="https://www.moedict.tw/t/水.json"
+                    rel="noopener noreferrer"
+                  >
+                    /t/水.json
+                  </a>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <code>/h/{"{詞}"}.json</code>
+                </td>
+                <td>臺灣客語</td>
+                <td>
+                  <a
+                    target="_blank"
+                    href="https://www.moedict.tw/h/日頭.json"
+                    rel="noopener noreferrer"
+                  >
+                    /h/日頭.json
+                  </a>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <code>/c/{"{詞}"}.json</code>
+                </td>
+                <td>兩岸詞典</td>
+                <td>
+                  <a
+                    target="_blank"
+                    href="https://www.moedict.tw/c/計算機.json"
+                    rel="noopener noreferrer"
+                  >
+                    /c/計算機.json
+                  </a>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <code>/raw/{"{詞}"}.json</code>
+                </td>
+                <td>純文字華語（去除連結標記，便於程式處理）</td>
+                <td>
+                  <a
+                    target="_blank"
+                    href="https://www.moedict.tw/raw/萌.json"
+                    rel="noopener noreferrer"
+                  >
+                    /raw/萌.json
+                  </a>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <code>/uni/{"{詞}"}.json</code>
+                </td>
+                <td>純文字華語，造字改以 IDS 部件描述式表示</td>
+                <td>
+                  <a
+                    target="_blank"
+                    href="https://www.moedict.tw/uni/萌.json"
+                    rel="noopener noreferrer"
+                  >
+                    /uni/萌.json
+                  </a>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          語言前綴也可用符號別名：台語 <code>'</code>、客語 <code>:</code>、兩岸 <code>~</code>
+          ，例如 <code>/'水.json</code> 等同 <code>/t/水.json</code>
+          。查無此詞時回傳 HTTP 404，並附上可拆解的單字 <code>terms</code> 陣列。
+        </p>
+
+        <h4>JSON 資料範例</h4>
+        <p>
+          以 <code>/uni/萌.json</code> 為例（節錄）：
+        </p>
+        <pre className="api-code">
+          <code>{`{
+  "title": "萌",
+  "radical": "艸",
+  "stroke_count": 12,
+  "non_radical_stroke_count": 8,
+  "heteronyms": [
+    {
+      "bopomofo": "ㄇㄥˊ",
+      "pinyin": "méng",
+      "definitions": [
+        {
+          "type": "名",
+          "def": "草木初生的芽。",
+          "quote": ["《說文解字．艸部》：「萌，艸芽也。」"]
+        },
+        {
+          "type": "動",
+          "def": "發芽。",
+          "example": ["如：「萌芽」。"]
+        }
+      ]
+    }
+  ]
+}`}</code>
+        </pre>
+
+        <h3>字圖 PNG</h3>
+        <p>
+          把 <code>.json</code> 換成 <code>.png</code>，即可取得該字詞的字圖圖片
+          （即字典中查無的字詞會顯示的「字圖」，可用於嵌入、分享或造字缺字補圖）：
+        </p>
+        <div className="api-table-wrap">
+          <table className="api-table">
+            <thead>
+              <tr>
+                <th>參數</th>
+                <th>說明</th>
+                <th>範例</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <code>/{"{詞}"}.png</code>
+                </td>
+                <td>產生字圖（預設楷書）</td>
+                <td>
+                  <a target="_blank" href="https://www.moedict.tw/萌.png" rel="noopener noreferrer">
+                    /萌.png
+                  </a>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <code>?font=</code>
+                </td>
+                <td>
+                  書體：<code>kai</code>（楷書，預設）、<code>sung</code>（宋體）、
+                  <code>ebas</code>（e 筆）、<code>shuowen</code>（說文小篆）、
+                  <code>cwkai</code>／<code>cwming</code> 等
+                </td>
+                <td>
+                  <a
+                    target="_blank"
+                    href="https://www.moedict.tw/萌.png?font=ebas"
+                    rel="noopener noreferrer"
+                  >
+                    /萌.png?font=ebas
+                  </a>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <code>?romanize=1&amp;lang=</code>
+                </td>
+                <td>
+                  在字圖下方加註整詞羅馬拼音；<code>lang</code> 指定辭典 （<code>a</code>／
+                  <code>t</code>／<code>h</code>／<code>c</code>）
+                </td>
+                <td>
+                  <a
+                    target="_blank"
+                    href="https://www.moedict.tw/水.png?romanize=1&lang=t"
+                    rel="noopener noreferrer"
+                  >
+                    /水.png?romanize=1&amp;lang=t
+                  </a>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          更多端點、原始資料與各平台版本，請見{" "}
+          <a target="_blank" href="https://github.com/g0v/moedict.tw" rel="noopener noreferrer">
+            GitHub 專案
+          </a>
+          。
+        </p>
       </section>
 
       {/* GitHub 連結 */}

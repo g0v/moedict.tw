@@ -90,6 +90,12 @@ describe("About page usage guide (#95)", () => {
     expect(html).toContain("「di」");
   });
 
+  it("has a prominent link near the top that jumps to the #api section (#159)", () => {
+    const html = render();
+    expect(html).toContain('href="#api"');
+    expect(html).toContain("API 串接說明");
+  });
+
   it("embeds the guide screenshots as clickable thumbnails (#95)", () => {
     const html = render();
     // 每張截圖都是可點擊放大的縮圖按鈕
@@ -107,5 +113,40 @@ describe("About page usage guide (#95)", () => {
     }
     // 截圖一律走 public 靜態資產（非 R2 /assets/ 代理）
     expect(html).not.toContain("/assets/images/guide/");
+  });
+});
+
+describe("About page API documentation (#159)", () => {
+  it("renders the same-page API 串接說明 section (no extra route)", () => {
+    const html = render();
+    expect(html).toContain('id="api"');
+    expect(html).toMatch(/<h2[^>]*>\s*API 串接說明\s*<\/h2>/);
+  });
+
+  it("documents the JSON dictionary endpoints for all four dictionaries", () => {
+    const html = render();
+    // 各語系 JSON 端點的可點擊範例（華語/台語/客語/兩岸）
+    expect(html).toContain("https://www.moedict.tw/a/萌.json");
+    expect(html).toContain("https://www.moedict.tw/t/水.json");
+    expect(html).toContain("https://www.moedict.tw/h/日頭.json");
+    expect(html).toContain("https://www.moedict.tw/c/計算機.json");
+    // 純文字格式端點
+    expect(html).toContain("https://www.moedict.tw/raw/萌.json");
+    expect(html).toContain("https://www.moedict.tw/uni/萌.json");
+  });
+
+  it("documents the character-image PNG endpoint and its parameters", () => {
+    const html = render();
+    expect(html).toContain("https://www.moedict.tw/萌.png");
+    expect(html).toContain("font=ebas");
+    // romanize 參數（HTML 實體編碼後的 & 會是 &amp;）
+    expect(html).toContain("romanize=1");
+  });
+
+  it("includes a JSON data example with recognisable fields", () => {
+    const html = render();
+    for (const field of ["heteronyms", "bopomofo", "definitions", "stroke_count"]) {
+      expect(html).toContain(field);
+    }
   });
 });
