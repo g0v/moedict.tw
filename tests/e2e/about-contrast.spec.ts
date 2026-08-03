@@ -113,7 +113,11 @@ test.describe("About page CTA button contrast (.how-to-use-link .btn-info)", () 
       await page.emulateMedia({ colorScheme });
       await gotoAbout(page);
 
-      const cta = page.locator(".how-to-use-link a.btn.btn-info");
+      // #159 新增了第二顆共用 .btn-info 樣式的「API 串接說明」按鈕，故以
+      // 文字鎖定「萌典功能使用說明」這顆；兩顆樣式相同，對比保證一致。
+      const cta = page.locator(".how-to-use-link a.btn.btn-info", {
+        hasText: "萌典功能使用說明",
+      });
       await expect(cta).toHaveCount(1);
       await expect(cta).toHaveText(/萌典功能使用說明/);
 
@@ -129,7 +133,9 @@ test.describe("About page CTA button contrast (.how-to-use-link .btn-info)", () 
       await page.emulateMedia({ colorScheme });
       await gotoAbout(page);
 
-      const cta = page.locator(".how-to-use-link a.btn.btn-info");
+      const cta = page.locator(".how-to-use-link a.btn.btn-info", {
+        hasText: "萌典功能使用說明",
+      });
       await cta.hover();
 
       const { color, backgroundColor } = await ownColors(cta);
@@ -142,7 +148,9 @@ test.describe("About page CTA button contrast (.how-to-use-link .btn-info)", () 
       await page.emulateMedia({ colorScheme });
       await gotoAbout(page);
 
-      const cta = page.locator(".how-to-use-link a.btn.btn-info");
+      const cta = page.locator(".how-to-use-link a.btn.btn-info", {
+        hasText: "萌典功能使用說明",
+      });
       await cta.focus();
       await expect(cta).toBeFocused();
 
