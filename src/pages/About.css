@@ -283,6 +283,7 @@
   padding: 1em;
   overflow-x: auto;
   line-height: 1.5;
+  color: var(--moe-text, #333);
   background: var(--moe-code-bg, rgba(127, 127, 127, 0.14));
   border-radius: 6px;
 }
