@@ -1209,3 +1209,24 @@ test.describe("audit-dark-contrast K: StarredPage .lang-group-current (was undef
     expect(color).toBe("rgb(118, 118, 118)");
   });
 });
+
+test.describe("About JSON sample code contrast with real legacy CSS", () => {
+  for (const [theme, expectedColor] of [
+    ["dark", "rgb(230, 227, 223)"], // --moe-text: #e6e3df
+    ["light", "rgb(51, 51, 51)"], // original #333
+  ] as const) {
+    test(`${theme} mode: JSON code uses the expected text color`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: theme });
+      await routeStylesCss(page, readWorkingTreeStylesCss);
+      await blockCssSubresources(page);
+      const response = await page.goto("/about");
+      expect(response?.status()).toBe(200);
+      await waitForAppReady(page, "about");
+
+      const code = page.locator(".about-page pre.api-code code");
+      await expect(code).toHaveCount(1);
+      const color = await code.evaluate((el) => getComputedStyle(el).color);
+      expect(color).toBe(expectedColor);
+    });
+  }
+});
