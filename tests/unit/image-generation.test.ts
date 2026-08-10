@@ -217,10 +217,7 @@ describe("generateTextSVGWithR2Fonts", () => {
     ]);
 
     // Shards capped at MAX_SHARDS_PER_REQUEST = 2
-    expect(shards.slice(0, 2)).toEqual([
-      "fonts/TW-Kai-shard-0.ttf",
-      "fonts/TW-Kai-shard-3.ttf",
-    ]);
+    expect(shards.slice(0, 2)).toEqual(["fonts/TW-Kai-shard-0.ttf", "fonts/TW-Kai-shard-3.ttf"]);
   });
 
   it("evicts oldest LRU entry in loadTwKaiShardBuffer when cache size reaches 2", async () => {
@@ -231,7 +228,7 @@ describe("generateTextSVGWithR2Fonts", () => {
         return { arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer };
       },
     };
-    const env = { ASSETS: assets as never };
+    const env = { FONTS: {} as never, ASSETS: assets as never };
 
     await loadTwKaiShardBuffer(env, "fonts/TW-Kai-shard-0.ttf");
     await loadTwKaiShardBuffer(env, "fonts/TW-Kai-shard-1.ttf");

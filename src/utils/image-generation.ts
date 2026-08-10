@@ -455,10 +455,7 @@ const shardFontCache = new WeakMap<object, Map<string, Promise<Uint8Array | null
 /**
  * 載入 TW-Kai 補完字型分片（fontBuffers），經 per-isolate LRU 快取。
  */
-export async function loadTwKaiShardBuffer(
-  env: Env,
-  shardKey: string,
-): Promise<Uint8Array | null> {
+export async function loadTwKaiShardBuffer(env: Env, shardKey: string): Promise<Uint8Array | null> {
   const assets = env.ASSETS;
   if (!assets) return null;
   let cache = shardFontCache.get(assets);
