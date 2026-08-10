@@ -223,6 +223,7 @@ describe("dispatch — *.png fallback font wiring (Tauhu Oo via ASSETS)", () => 
       }),
       ASSETS: makeBucket({
         "fonts/TauhuOo2005-Regular.otf": { body: "fake-otf-bytes" },
+        "fonts/TW-Kai-shard-4.ttf": { body: "fake-shard-bytes" },
       }),
     });
 
@@ -232,10 +233,10 @@ describe("dispatch — *.png fallback font wiring (Tauhu Oo via ASSETS)", () => 
 
     const call = resvgCalls.at(-1);
     const options = call?.options as { font?: { fontBuffers?: Uint8Array[] } } | undefined;
-    expect(options?.font?.fontBuffers).toHaveLength(1);
+    expect(options?.font?.fontBuffers).toHaveLength(2);
     expect(new TextDecoder().decode(options!.font!.fontBuffers![0])).toBe("fake-otf-bytes");
+    expect(new TextDecoder().decode(options!.font!.fontBuffers![1])).toBe("fake-shard-bytes");
   });
-
   it("returns 503 no-store (never a year-long cacheable broken render) when the fallback font is unavailable", async () => {
     const env = makeEnv({
       FONTS: makeBucket({

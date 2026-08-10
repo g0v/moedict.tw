@@ -73,7 +73,23 @@ const WT2FONT: Record<string, string> = {
  */
 const FALLBACK_FONT_ASSET_KEY = "fonts/TauhuOo2005-Regular.otf";
 const FALLBACK_FONT_FAMILY = "Tauhu Oo 20.05";
-
+const TW_KAI_FONT_FAMILY = "TW-MOE-Std-Kai";
+const MAX_SHARDS_PER_REQUEST = 2;
+const MAX_ISOLATE_SHARD_CACHE_SIZE = 2;
+/**
+ * 依 Unicode code point 對應至 TW-Kai 8 個分片字型檔資產鍵
+ */
+export function getTwKaiShardKey(codepoint: number): string | null {
+  if (codepoint <= 0x4fff) return "fonts/TW-Kai-shard-0.ttf";
+  if (codepoint <= 0x7fff) return "fonts/TW-Kai-shard-1.ttf";
+  if (codepoint <= 0xffff) return "fonts/TW-Kai-shard-2.ttf";
+  if (codepoint >= 0x20000 && codepoint <= 0x22fff) return "fonts/TW-Kai-shard-3.ttf";
+  if (codepoint >= 0x23000 && codepoint <= 0x24fff) return "fonts/TW-Kai-shard-4.ttf";
+  if (codepoint >= 0x25000 && codepoint <= 0x27fff) return "fonts/TW-Kai-shard-5.ttf";
+  if (codepoint >= 0x28000 && codepoint <= 0x2a6df) return "fonts/TW-Kai-shard-6.ttf";
+  if (codepoint >= 0x2a700 && codepoint <= 0x2ffff) return "fonts/TW-Kai-shard-7.ttf";
+  return null;
+}
 /**
  * 解析 URL 路徑，提取語言和文字
  */
@@ -176,13 +192,8 @@ export async function handleImageGeneration(url: URL, env: Env): Promise<Respons
         : "";
 
     // 生成 SVG 圖片，使用 R2 中的字體 SVG 檔案
-    const { svg, usedFallbackGlyph, hasCaption } = await generateTextSVGWithR2Fonts(
-      displayText,
-      fontParam,
-      env,
-      romanization,
-    );
-
+    const { svg, usedFallbackGlyph, hasCaption, missingCodepoints } =
+      await generateTextSVGWithR2Fonts(displayText, fontParam, env, romanization);
     // 若有字元在 R2 找不到逐字 SVG（例如增補平面的罕見字/方言用字），必須改用內建
     // Tauhu Oo 補完字型讓 resvg 畫出真正字形；若 hasCaption，還需要額外載入 Fira
     // Sans OT 讓 caption 文字有字型可畫。resvg 在 Workers 環境沒有系統字型，兩者
@@ -205,6 +216,21 @@ export async function handleImageGeneration(url: URL, env: Env): Promise<Respons
         });
       }
       fontBuffers.push(fallbackFontBuffer);
+
+      // 載入缺字 code points 對應的 TW-Kai 分片字型（每 isolate 最多快取 2 片，單次請求最多載入 2 片）
+      const shardKeys = Array.from(
+        new Set(
+          missingCodepoints
+            .map((cp) => getTwKaiShardKey(cp))
+            .filter((key): key is string => key !== null),
+        ),
+      ).slice(0, MAX_SHARDS_PER_REQUEST);
+      for (const shardKey of shardKeys) {
+        const shardBuffer = await loadTwKaiShardBuffer(env, shardKey);
+        if (shardBuffer) {
+          fontBuffers.push(shardBuffer);
+        }
+      }
     }
     if (hasCaption) {
       const captionFontBuffer = await loadCaptionFontBuffer(env);
@@ -424,6 +450,50 @@ async function loadFallbackFontBuffer(env: Env): Promise<Uint8Array | null> {
   return loading;
 }
 
+const shardFontCache = new WeakMap<object, Map<string, Promise<Uint8Array | null>>>();
+
+/**
+ * 載入 TW-Kai 補完字型分片（fontBuffers），經 per-isolate LRU 快取。
+ */
+export async function loadTwKaiShardBuffer(
+  env: Env,
+  shardKey: string,
+): Promise<Uint8Array | null> {
+  const assets = env.ASSETS;
+  if (!assets) return null;
+  let cache = shardFontCache.get(assets);
+  if (!cache) {
+    cache = new Map();
+    shardFontCache.set(assets, cache);
+  }
+  const cached = cache.get(shardKey);
+  if (cached) return cached;
+
+  // LRU eviction: 控制每 isolate 快取上限（最多 2 個分片，維持記憶體在 ~28 MB 以內）
+  if (cache.size >= MAX_ISOLATE_SHARD_CACHE_SIZE) {
+    const firstKey = cache.keys().next().value;
+    if (firstKey !== undefined) {
+      cache.delete(firstKey);
+    }
+  }
+
+  const loading = (async (): Promise<Uint8Array | null> => {
+    try {
+      const asset = await assets.get(shardKey);
+      if (!asset) {
+        console.log(`[DEBUG] TW-Kai shard font asset not found at ${shardKey}`);
+        return null;
+      }
+      return new Uint8Array(await asset.arrayBuffer());
+    } catch (error) {
+      console.error(`[DEBUG] Failed to load TW-Kai shard font buffer ${shardKey}:`, error);
+      return null;
+    }
+  })();
+
+  cache.set(shardKey, loading);
+  return loading;
+}
 /**
  * romanize=1 字圖標註（RESCOPE #169）用的專屬字型：Fira Sans OT
  * （SIL OFL 1.1，隨附於 ASSETS R2 bucket，鍵值 fonts/FiraSansOT-Regular.otf）。
@@ -529,7 +599,12 @@ export async function generateTextSVGWithR2Fonts(
   font: string,
   env: Env,
   romanization?: string,
-): Promise<{ svg: string; usedFallbackGlyph: boolean; hasCaption: boolean }> {
+): Promise<{
+  svg: string;
+  usedFallbackGlyph: boolean;
+  hasCaption: boolean;
+  missingCodepoints: number[];
+}> {
   const chars = Array.from(text);
   const { width, height } = calculateLayout(chars.length);
   const cellSize = 375;
@@ -574,7 +649,7 @@ export async function generateTextSVGWithR2Fonts(
   // 生成文字元素 - 使用 R2 中的 SVG 檔案
   const textElements = [];
   let usedFallbackGlyph = false;
-  console.log(`[DEBUG] Processing text: "${text}", length: ${chars.length}`);
+  const missingCodepoints: number[] = [];
 
   for (let i = 0; i < chars.length && i < width * height; i++) {
     const char = chars[i];
@@ -790,16 +865,18 @@ export async function generateTextSVGWithR2Fonts(
           console.log(`[DEBUG] No path element found in SVG for ${char}`);
           // 如果找不到 path 元素，使用 fallback 文字
           usedFallbackGlyph = true;
+          missingCodepoints.push(unicode);
           textElements.push(`
-						<text x="${x}" y="${y}" dy="0.35em" font-family="${FALLBACK_FONT_FAMILY}, serif" font-size="355px" fill="#000" text-anchor="middle">${char}</text>
+						<text x="${x}" y="${y}" dy="0.35em" font-family="${FALLBACK_FONT_FAMILY}, ${TW_KAI_FONT_FAMILY}, serif" font-size="355px" fill="#000" text-anchor="middle">${char}</text>
 					`);
         }
       } else {
         console.log(`[DEBUG] SVG object not found for ${char} at path: ${svgPath}`);
         // 如果找不到 SVG 檔案，使用 fallback 文字
         usedFallbackGlyph = true;
+        missingCodepoints.push(unicode);
         textElements.push(`
-					<text x="${x}" y="${y}" dy="0.35em" font-family="${FALLBACK_FONT_FAMILY}, serif" font-size="355px" fill="#000" text-anchor="middle">${char}</text>
+					<text x="${x}" y="${y}" dy="0.35em" font-family="${FALLBACK_FONT_FAMILY}, ${TW_KAI_FONT_FAMILY}, serif" font-size="355px" fill="#000" text-anchor="middle">${char}</text>
 				`);
       }
     } catch (error) {
@@ -809,8 +886,9 @@ export async function generateTextSVGWithR2Fonts(
       );
       // 使用 fallback 文字
       usedFallbackGlyph = true;
+      missingCodepoints.push(unicode);
       textElements.push(`
-				<text x="${x}" y="${y}" dy="0.35em" font-family="${FALLBACK_FONT_FAMILY}, serif" font-size="355px" fill="#000" text-anchor="middle">${char}</text>
+				<text x="${x}" y="${y}" dy="0.35em" font-family="${FALLBACK_FONT_FAMILY}, ${TW_KAI_FONT_FAMILY}, serif" font-size="355px" fill="#000" text-anchor="middle">${char}</text>
 			`);
     }
   }
@@ -851,7 +929,7 @@ export async function generateTextSVGWithR2Fonts(
   console.log(`[DEBUG] SVG dimensions: ${svgWidth}x${finalHeight}`);
   console.log(`[DEBUG] Text element content: ${textElements[0] || "No text elements"}`);
 
-  return { svg: finalSVG, usedFallbackGlyph, hasCaption };
+  return { svg: finalSVG, usedFallbackGlyph, hasCaption, missingCodepoints };
 }
 
 /**

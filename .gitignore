@@ -91,3 +91,8 @@ tests/e2e/**/*-webkit-win32.png
 tests/e2e/**/*-firefox-darwin.png
 tests/e2e/**/*-firefox-linux.png
 tests/e2e/**/*-firefox-win32.png
+
+
+# TW-Kai R2-hosted Worker fallback font shards — hosted in R2 moedict-assets bucket
+# (fonts/TW-Kai-shard-*.ttf). Never commit untracked font binaries into git history.
+data/assets/fonts/TW-Kai-shard-*.ttf

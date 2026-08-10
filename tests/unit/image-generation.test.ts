@@ -5,6 +5,8 @@ import {
   getCORSHeaders,
   generateTextSVGWithR2Fonts,
   fetchWholeWordRomanization,
+  getTwKaiShardKey,
+  loadTwKaiShardBuffer,
 } from "../../src/utils/image-generation";
 
 interface FakeFontsEnv {
@@ -122,6 +124,40 @@ describe("getFontName", () => {
     expect(getFontName("wthc06")).toBe("HanWangGB06");
   });
 });
+describe("getTwKaiShardKey", () => {
+  it("maps codepoint boundaries correctly to TW-Kai 8-shard asset keys", () => {
+    expect(getTwKaiShardKey(0x0020)).toBe("fonts/TW-Kai-shard-0.ttf");
+    expect(getTwKaiShardKey(0x4d09)).toBe("fonts/TW-Kai-shard-0.ttf"); // 䴉
+    expect(getTwKaiShardKey(0x4fff)).toBe("fonts/TW-Kai-shard-0.ttf");
+
+    expect(getTwKaiShardKey(0x5000)).toBe("fonts/TW-Kai-shard-1.ttf");
+    expect(getTwKaiShardKey(0x7fff)).toBe("fonts/TW-Kai-shard-1.ttf");
+
+    expect(getTwKaiShardKey(0x8000)).toBe("fonts/TW-Kai-shard-2.ttf");
+    expect(getTwKaiShardKey(0x840c)).toBe("fonts/TW-Kai-shard-2.ttf"); // 萌
+    expect(getTwKaiShardKey(0xffff)).toBe("fonts/TW-Kai-shard-2.ttf");
+
+    expect(getTwKaiShardKey(0x20000)).toBe("fonts/TW-Kai-shard-3.ttf"); // 𠀀
+    expect(getTwKaiShardKey(0x22fff)).toBe("fonts/TW-Kai-shard-3.ttf");
+
+    expect(getTwKaiShardKey(0x23000)).toBe("fonts/TW-Kai-shard-4.ttf"); // 𣁳
+    expect(getTwKaiShardKey(0x24fff)).toBe("fonts/TW-Kai-shard-4.ttf");
+
+    expect(getTwKaiShardKey(0x25000)).toBe("fonts/TW-Kai-shard-5.ttf");
+    expect(getTwKaiShardKey(0x27fff)).toBe("fonts/TW-Kai-shard-5.ttf");
+
+    expect(getTwKaiShardKey(0x28000)).toBe("fonts/TW-Kai-shard-6.ttf");
+    expect(getTwKaiShardKey(0x2a6df)).toBe("fonts/TW-Kai-shard-6.ttf");
+
+    expect(getTwKaiShardKey(0x2a700)).toBe("fonts/TW-Kai-shard-7.ttf"); // 𪜀
+    expect(getTwKaiShardKey(0x2ffff)).toBe("fonts/TW-Kai-shard-7.ttf");
+  });
+
+  it("returns null for unmapped codepoints such as Ext-I (U+319E5)", () => {
+    expect(getTwKaiShardKey(0x319e5)).toBeNull(); // 𱧥 (residual 1/77208 missing point)
+    expect(getTwKaiShardKey(0x10ffff)).toBeNull();
+  });
+});
 
 describe("generateTextSVGWithR2Fonts", () => {
   it("splits by Unicode code point, not UTF-16 code unit, for a supplementary-plane headword", async () => {
@@ -162,10 +198,62 @@ describe("generateTextSVGWithR2Fonts", () => {
     // ("Tauhu Oo 20.05" — resvg matches fontBuffers by the font's own name
     // table, not any CSS @font-face alias)
     expect(usedFallbackGlyph).toBe(true);
-    expect(svg).toContain('font-family="Tauhu Oo 20.05, serif"');
+    expect(svg).toContain('font-family="Tauhu Oo 20.05, TW-MOE-Std-Kai, serif"');
     expect(svg).toContain(">𣁳</text>");
   });
 
+  it("tracks missingCodepoints and deduplicates shards for multi-codepoint headwords", async () => {
+    const env = makeFontsEnv({});
+    const { missingCodepoints } = await generateTextSVGWithR2Fonts("䴉𠀀𪜀", "kai", env as never);
+    expect(missingCodepoints).toEqual([0x4d09, 0x20000, 0x2a700]);
+
+    const shards = Array.from(
+      new Set(missingCodepoints.map((cp) => getTwKaiShardKey(cp)).filter(Boolean)),
+    );
+    expect(shards).toEqual([
+      "fonts/TW-Kai-shard-0.ttf",
+      "fonts/TW-Kai-shard-3.ttf",
+      "fonts/TW-Kai-shard-7.ttf",
+    ]);
+
+    // Shards capped at MAX_SHARDS_PER_REQUEST = 2
+    expect(shards.slice(0, 2)).toEqual([
+      "fonts/TW-Kai-shard-0.ttf",
+      "fonts/TW-Kai-shard-3.ttf",
+    ]);
+  });
+
+  it("evicts oldest LRU entry in loadTwKaiShardBuffer when cache size reaches 2", async () => {
+    const fetched: string[] = [];
+    const assets = {
+      async get(key: string) {
+        fetched.push(key);
+        return { arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer };
+      },
+    };
+    const env = { ASSETS: assets as never };
+
+    await loadTwKaiShardBuffer(env, "fonts/TW-Kai-shard-0.ttf");
+    await loadTwKaiShardBuffer(env, "fonts/TW-Kai-shard-1.ttf");
+    expect(fetched).toEqual(["fonts/TW-Kai-shard-0.ttf", "fonts/TW-Kai-shard-1.ttf"]);
+
+    // Third shard triggers LRU eviction of shard-0
+    await loadTwKaiShardBuffer(env, "fonts/TW-Kai-shard-2.ttf");
+    expect(fetched).toEqual([
+      "fonts/TW-Kai-shard-0.ttf",
+      "fonts/TW-Kai-shard-1.ttf",
+      "fonts/TW-Kai-shard-2.ttf",
+    ]);
+
+    // Requesting shard-0 again fetches from ASSETS because it was evicted
+    await loadTwKaiShardBuffer(env, "fonts/TW-Kai-shard-0.ttf");
+    expect(fetched).toEqual([
+      "fonts/TW-Kai-shard-0.ttf",
+      "fonts/TW-Kai-shard-1.ttf",
+      "fonts/TW-Kai-shard-2.ttf",
+      "fonts/TW-Kai-shard-0.ttf",
+    ]);
+  });
   it("does not flag usedFallbackGlyph when every character resolves via R2", async () => {
     const env = makeFontsEnv({ "TW-Kai/U+840C.svg": '<svg><path d="M0 0 L1 1"/></svg>' });
     const { usedFallbackGlyph, svg } = await generateTextSVGWithR2Fonts("萌", "kai", env as never);
