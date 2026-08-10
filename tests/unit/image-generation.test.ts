@@ -168,8 +168,13 @@ describe("getTwKaiShardKey", () => {
 
     expect(getTwKaiShardKey(0x2a700)).toBe("fonts/TW-Kai-shard-7.ttf"); // 𪜀
     expect(getTwKaiShardKey(0x2ffff)).toBe("fonts/TW-Kai-shard-7.ttf");
-    expect(getTwKaiShardKey(0x30000)).toBe("fonts/TW-Kai-shard-7.ttf");
-    expect(getTwKaiShardKey(0x3303c)).toBe("fonts/TW-Kai-shard-7.ttf");
+  });
+
+  it.each([
+    ["U+30000", 0x30000],
+    ["U+3303C", 0x3303c],
+  ])("maps %s to TW-Kai shard-7", (_label, codepoint) => {
+    expect(getTwKaiShardKey(codepoint)).toBe("fonts/TW-Kai-shard-7.ttf");
   });
 
   it("returns null for unmapped codepoints", () => {
