@@ -87,7 +87,7 @@ export function getTwKaiShardKey(codepoint: number): string | null {
   if (codepoint >= 0x23000 && codepoint <= 0x24fff) return "fonts/TW-Kai-shard-4.ttf";
   if (codepoint >= 0x25000 && codepoint <= 0x27fff) return "fonts/TW-Kai-shard-5.ttf";
   if (codepoint >= 0x28000 && codepoint <= 0x2a6df) return "fonts/TW-Kai-shard-6.ttf";
-  if (codepoint >= 0x2a700 && codepoint <= 0x2ffff) return "fonts/TW-Kai-shard-7.ttf";
+  if (codepoint >= 0x2a700 && codepoint <= 0x3303c) return "fonts/TW-Kai-shard-7.ttf";
   return null;
 }
 /**

@@ -163,12 +163,17 @@ describe("getTwKaiShardKey", () => {
     expect(getTwKaiShardKey(0x28000)).toBe("fonts/TW-Kai-shard-6.ttf");
     expect(getTwKaiShardKey(0x2a6df)).toBe("fonts/TW-Kai-shard-6.ttf");
 
+    expect(getTwKaiShardKey(0x2a6e0)).toBeNull();
+    expect(getTwKaiShardKey(0x2a6ff)).toBeNull();
+
     expect(getTwKaiShardKey(0x2a700)).toBe("fonts/TW-Kai-shard-7.ttf"); // 𪜀
     expect(getTwKaiShardKey(0x2ffff)).toBe("fonts/TW-Kai-shard-7.ttf");
+    expect(getTwKaiShardKey(0x30000)).toBe("fonts/TW-Kai-shard-7.ttf");
+    expect(getTwKaiShardKey(0x3303c)).toBe("fonts/TW-Kai-shard-7.ttf");
   });
 
-  it("returns null for unmapped codepoints such as Ext-I (U+319E5)", () => {
-    expect(getTwKaiShardKey(0x319e5)).toBeNull(); // 𱧥 (residual 1/77208 missing point)
+  it("returns null for unmapped codepoints", () => {
+    expect(getTwKaiShardKey(0x3303d)).toBeNull();
     expect(getTwKaiShardKey(0x10ffff)).toBeNull();
   });
 });
