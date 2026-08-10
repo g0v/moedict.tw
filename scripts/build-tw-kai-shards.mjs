@@ -42,7 +42,7 @@ const MANIFEST_PATH = path.resolve(
   args["manifest"] ?? "data/assets/fonts/tw-kai-shards.manifest.json",
 );
 const OVERWRITE = args["overwrite"] === "true" || args["overwrite"] === "";
-const VERIFY_R2 = args["verify-r2"] === "true" || args["verify-r2"] === "" || true; // Default true per instructions
+const VERIFY_R2 = args["verify-r2"] === "true" || args["verify-r2"] === "";
 const CACHE_DIR = args["cache-dir"] ?? "/tmp/cns-font-cache";
 let OUT_DIR = args["out-dir"] ? path.resolve(REPO_ROOT, args["out-dir"]) : null;
 
@@ -255,21 +255,22 @@ print(json.dumps(results))
   }
   console.log("=" .repeat(225));
 
+  if (!allMatch) {
+    console.error("\n❌ BUILD FAILED: Regenerated shards differ from manifest/disk!");
+    process.exit(1);
+  }
+
   // 5. Check R2 live URLs if requested
   if (VERIFY_R2) {
     console.log("\n🌐 Fetching live R2 shard URLs for 3-way verification...");
     const pyFetchR2 = `
-import urllib.request, ssl, hashlib, json
+import urllib.request, hashlib, json
 
 results = []
-ctx = ssl.create_default_context()
-ctx.check_hostname = False
-ctx.verify_mode = ssl.CERT_NONE
-
 for i in range(8):
     url = f"https://r2-assets.moedict.tw/fonts/TW-Kai-shard-{i}.ttf"
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, context=ctx) as resp:
+    with urllib.request.urlopen(req) as resp:
         data = resp.read()
     results.append({"index": i, "size": len(data), "sha256": hashlib.sha256(data).hexdigest()})
 print(json.dumps(results))
@@ -304,11 +305,6 @@ print(json.dumps(results))
       console.error("❌ Three-way mismatch detected on R2 live fonts!");
       process.exit(1);
     }
-  }
-
-  if (!allMatch) {
-    console.error("\n❌ BUILD FAILED: Regenerated shards differ from manifest/disk!");
-    process.exit(1);
   }
 
   console.log("\n🎉 SUCCESS: All 8 TW-Kai font shards are 100% byte-identical and deterministically reproduced!");

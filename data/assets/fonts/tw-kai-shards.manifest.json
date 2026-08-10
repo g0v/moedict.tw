@@ -52,7 +52,7 @@
       "shard-4": "0x23000 <= codepoint <= 0x24FFF",
       "shard-5": "0x25000 <= codepoint <= 0x27FFF",
       "shard-6": "0x28000 <= codepoint <= 0x2A6DF",
-      "shard-7": "0x2A700 <= codepoint <= 0x2FFFF"
+      "shard-7": "codepoint >= 0x2A700"
     }
   },
   "generator_provenance": {
