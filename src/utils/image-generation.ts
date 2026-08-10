@@ -3,7 +3,7 @@ import { CACHE_CONTROL } from "../api/cache";
 import { stripLangPrefix, tryDecodeURIComponent, type DictionaryLang } from "./dictionary-route";
 import { bucketOf } from "../api/handleDictionaryAPI";
 import { readR2JsonCached, type R2JsonSource } from "../api/r2-json-cache";
-
+import { isTauhuOoCodepoint } from "./tauhu-oo-ranges";
 interface FontSvgObject {
   size: number;
   text(): Promise<string>;
@@ -648,6 +648,15 @@ export async function generateTextSVGWithR2Fonts(
   let usedFallbackGlyph = false;
   const missingCodepoints: number[] = [];
 
+  /**
+   * Empirically derived baseline shifts for resvg SVG text rendering:
+   * - Tauhu Oo (TauhuOo2005-Regular.otf) has an elevated ascent of 1160 (116% of UPM=1000)
+   *   due to tone marks/accent characters, requiring dy="0.35em" to pull baseline to grid center.
+   * - TW-Kai (TW-Kai-shard-*.ttf) has standard CJK metrics (ascent 820 / UPM 1024), requiring
+   *   dy="0.28em" for optical vertical centering (+3.5px offset).
+   */
+  const getFallbackDy = (unicode: number): string =>
+    isTauhuOoCodepoint(unicode) ? "0.35em" : "0.28em";
   for (let i = 0; i < chars.length && i < width * height; i++) {
     const char = chars[i];
     const row = Math.floor(i / width);
@@ -863,8 +872,9 @@ export async function generateTextSVGWithR2Fonts(
           // 如果找不到 path 元素，使用 fallback 文字
           usedFallbackGlyph = true;
           missingCodepoints.push(unicode);
+          const dy = getFallbackDy(unicode);
           textElements.push(`
-						<text x="${x}" y="${y}" dy="0.35em" font-family="${FALLBACK_FONT_FAMILY}, ${TW_KAI_FONT_FAMILY}, serif" font-size="355px" fill="#000" text-anchor="middle">${char}</text>
+						<text x="${x}" y="${y}" dy="${dy}" font-family="${FALLBACK_FONT_FAMILY}, ${TW_KAI_FONT_FAMILY}, serif" font-size="355px" fill="#000" text-anchor="middle">${char}</text>
 					`);
         }
       } else {
@@ -872,8 +882,9 @@ export async function generateTextSVGWithR2Fonts(
         // 如果找不到 SVG 檔案，使用 fallback 文字
         usedFallbackGlyph = true;
         missingCodepoints.push(unicode);
+        const dy = getFallbackDy(unicode);
         textElements.push(`
-					<text x="${x}" y="${y}" dy="0.35em" font-family="${FALLBACK_FONT_FAMILY}, ${TW_KAI_FONT_FAMILY}, serif" font-size="355px" fill="#000" text-anchor="middle">${char}</text>
+					<text x="${x}" y="${y}" dy="${dy}" font-family="${FALLBACK_FONT_FAMILY}, ${TW_KAI_FONT_FAMILY}, serif" font-size="355px" fill="#000" text-anchor="middle">${char}</text>
 				`);
       }
     } catch (error) {
@@ -884,8 +895,9 @@ export async function generateTextSVGWithR2Fonts(
       // 使用 fallback 文字
       usedFallbackGlyph = true;
       missingCodepoints.push(unicode);
+      const dy = getFallbackDy(unicode);
       textElements.push(`
-				<text x="${x}" y="${y}" dy="0.35em" font-family="${FALLBACK_FONT_FAMILY}, ${TW_KAI_FONT_FAMILY}, serif" font-size="355px" fill="#000" text-anchor="middle">${char}</text>
+				<text x="${x}" y="${y}" dy="${dy}" font-family="${FALLBACK_FONT_FAMILY}, ${TW_KAI_FONT_FAMILY}, serif" font-size="355px" fill="#000" text-anchor="middle">${char}</text>
 			`);
     }
   }

@@ -1,4 +1,17 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it, vi, type Mock } from "vite-plus/test";
+import { Resvg as ResvgWasm, initWasm } from "@resvg/resvg-wasm";
+
+let resvgWasmInitPromise: Promise<void> | null = null;
+async function ensureResvgWasm() {
+  if (!resvgWasmInitPromise) {
+    const wasmPath = path.resolve(__dirname, "../../node_modules/@resvg/resvg-wasm/index_bg.wasm");
+    const wasmBuf = fs.readFileSync(wasmPath);
+    resvgWasmInitPromise = initWasm(wasmBuf);
+  }
+  await resvgWasmInitPromise;
+}
 import {
   parseTextFromUrl,
   getFontName,
@@ -8,6 +21,7 @@ import {
   getTwKaiShardKey,
   loadTwKaiShardBuffer,
 } from "../../src/utils/image-generation";
+import { isTauhuOoCodepoint } from "../../src/utils/tauhu-oo-ranges";
 
 interface FakeFontsEnv {
   FONTS: { get(key: string): Promise<{ size: number; text(): Promise<string> } | null> };
@@ -32,8 +46,8 @@ describe("parseTextFromUrl", () => {
     ["/%3A字.png", { text: ":字", lang: "h", cleanText: "字" }],
     ["/~上訴.png", { text: "~上訴", lang: "c", cleanText: "上訴" }],
     ["/!食.png", { text: "!食", lang: "t", cleanText: "食" }],
-  ])("parses %s", (path, expected) => {
-    expect(parseTextFromUrl(path)).toEqual(expected);
+  ])("parses %s", (urlPath, expected) => {
+    expect(parseTextFromUrl(urlPath)).toEqual(expected);
   });
 
   it("strips .json, .html suffixes too", () => {
@@ -199,7 +213,76 @@ describe("generateTextSVGWithR2Fonts", () => {
     // table, not any CSS @font-face alias)
     expect(usedFallbackGlyph).toBe(true);
     expect(svg).toContain('font-family="Tauhu Oo 20.05, TW-MOE-Std-Kai, serif"');
+    expect(svg).toContain('dy="0.35em"'); // 𣁳 is in Tauhu Oo, retains dy=0.35em (regression guard)
     expect(svg).toContain(">𣁳</text>");
+  });
+
+  it("uses dy=0.28em for TW-Kai fallback codepoints and dy=0.35em for Tauhu Oo codepoints", async () => {
+    const env = makeFontsEnv({});
+    const { svg: svgKai } = await generateTextSVGWithR2Fonts("䴉", "kai", env as never);
+    expect(svgKai).toContain('dy="0.28em"');
+    expect(svgKai).toContain(">䴉</text>");
+
+    const { svg: svgTauhu } = await generateTextSVGWithR2Fonts("𣁳", "kai", env as never);
+    expect(svgTauhu).toContain('dy="0.35em"');
+    expect(svgTauhu).toContain(">𣁳</text>");
+  });
+
+  it("verifies optical vertical centering of ink bounding box for TW-Kai fallback using test font fixture", async () => {
+    await ensureResvgWasm();
+    const testFontPath = path.resolve(__dirname, "../fixtures/TW-Kai-4D09-Test.ttf");
+    expect(fs.existsSync(testFontPath)).toBe(true);
+    const testFontBytes = new Uint8Array(fs.readFileSync(testFontPath));
+
+    const env = makeFontsEnv({});
+    const { svg: svgKai } = await generateTextSVGWithR2Fonts("䴉", "kai", env as never);
+    const resvgKai = new ResvgWasm(svgKai, { font: { fontBuffers: [testFontBytes] } });
+    const renderedImage = resvgKai.render();
+
+    // Helper to measure ink pixels directly from resvg rendered RGBA pixels
+    const measureResvgInk = (img: { width: number; height: number; pixels: Uint8Array }) => {
+      const { width, height, pixels } = img;
+      let minX = width,
+        minY = height,
+        maxX = 0,
+        maxY = 0;
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const idx = (y * width + x) * 4;
+          const r = pixels[idx],
+            g = pixels[idx + 1],
+            b = pixels[idx + 2],
+            a = pixels[idx + 3];
+          if (a > 200 && r < 50 && g < 50 && b < 50) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+      const inkHeight = maxY - minY + 1;
+      const topMargin = minY;
+      const bottomMargin = height - 1 - maxY;
+      const verticalOffset = minY + inkHeight / 2 - height / 2;
+      return { topMargin, bottomMargin, verticalOffset };
+    };
+
+    const metrics = measureResvgInk(renderedImage);
+    // Assert 䴉 ink bounding box top margin is normalized (40px) and vertically centered (+4px offset)
+    expect(metrics.topMargin).toBeGreaterThanOrEqual(35);
+    expect(metrics.topMargin).toBeLessThanOrEqual(45);
+    expect(metrics.bottomMargin).toBeGreaterThanOrEqual(27);
+    expect(metrics.bottomMargin).toBeLessThanOrEqual(37);
+    expect(metrics.verticalOffset).toBeGreaterThanOrEqual(0);
+    expect(metrics.verticalOffset).toBeLessThanOrEqual(8);
+  });
+  it("correctly identifies Tauhu Oo codepoints via isTauhuOoCodepoint", () => {
+    expect(isTauhuOoCodepoint(0x23073)).toBe(true); // 𣁳
+    expect(isTauhuOoCodepoint(0x840c)).toBe(true); // 萌
+    expect(isTauhuOoCodepoint(0x4d09)).toBe(false); // 䴉
+    expect(isTauhuOoCodepoint(0x20000)).toBe(false); // 𠀀
+    expect(isTauhuOoCodepoint(0x2a700)).toBe(false); // 𪜀
   });
 
   it("tracks missingCodepoints and deduplicates shards for multi-codepoint headwords", async () => {
