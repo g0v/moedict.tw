@@ -97,8 +97,8 @@ describe("expected count constants", () => {
     expect(EXPECTED_EMITTED).toBe(77208);
   });
 
-  it("EXPECTED_SKIPPED_PUA is 20152", () => {
-    expect(EXPECTED_SKIPPED_PUA).toBe(20152);
+  it("EXPECTED_SKIPPED_PUA is 20153 for the 2026-08-05 source release", () => {
+    expect(EXPECTED_SKIPPED_PUA).toBe(20153);
   });
 
   it("EXPECTED_SKIPPED_NOMAP is 0", () => {

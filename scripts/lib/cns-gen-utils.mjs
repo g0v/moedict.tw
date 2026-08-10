@@ -31,7 +31,7 @@ export const REPO_ROOT = path.resolve(__dirname, "..", "..");
 //                          EXPECTED_EMITTED because the duplicate-key detector
 //                          throws before any silent collision can occur.
 export const EXPECTED_EMITTED = 77208;
-export const EXPECTED_SKIPPED_PUA = 20152;
+export const EXPECTED_SKIPPED_PUA = 20153;
 export const EXPECTED_SKIPPED_NOMAP = 0;
 export const EXPECTED_UNIQUE_FILES = 77208;
 
