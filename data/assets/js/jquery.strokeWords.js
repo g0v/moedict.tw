@@ -687,7 +687,77 @@
     Word.prototype.init = function() {
       this.currentStroke = 0;
       this.currentTrack = 0;
-      return this.time = 0.0;
+      this.time = 0.0;
+      this.paused = false;
+      this.timerId = null;
+      this.animFrameId = null;
+      return this.time;
+    };
+    Word.prototype.pause = function() {
+      this.paused = true;
+      if (this.timerId) {
+        clearTimeout(this.timerId);
+        this.timerId = null;
+      }
+      if (this.animFrameId) {
+        cancelAnimationFrame(this.animFrameId);
+        this.animFrameId = null;
+      }
+    };
+    Word.prototype.resume = function() {
+      var _this = this;
+      if (!this.paused) return;
+      this.paused = false;
+      if (this.strokes && this.currentStroke >= this.strokes.length) return;
+      this.animFrameId = requestAnimationFrame(function() {
+        _this.animFrameId = null;
+        return _this.update();
+      });
+    };
+    Word.prototype.drawStrokeCompletely = function(strokeIndex) {
+      var ctx, p1, p2, ratio, s, size, stroke, t, vx, vy;
+      if (!this.strokes || strokeIndex >= this.strokes.length) return;
+      stroke = this.strokes[strokeIndex];
+      ctx = this.canvas.getContext("2d");
+      ctx.setTransform.apply(ctx, this.matrix);
+      ctx.save();
+      ctx.beginPath();
+      pathOutline(ctx, stroke.outline);
+      ctx.clip();
+      ctx.fillStyle = "#000";
+      for (t = 0; t < stroke.track.length - 1; t++) {
+        p1 = stroke.track[t];
+        p2 = stroke.track[t + 1];
+        vx = p2.x - p1.x;
+        vy = p2.y - p1.y;
+        size = p1.size || this.options.trackWidth;
+        for (s = 0; s <= 20; s++) {
+          ratio = s / 20;
+          ctx.beginPath();
+          ctx.arc(p1.x + vx * ratio, p1.y + vy * ratio, size * 2, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    };
+    Word.prototype.step = function() {
+      var ctx, _this = this;
+      if (!this.strokes || this.currentStroke >= this.strokes.length) return;
+      this.pause();
+      ctx = this.canvas.getContext("2d");
+      if (this.time > 0.0) {
+        ctx.restore();
+        this.time = 0.0;
+      }
+      this.drawStrokeCompletely(this.currentStroke);
+      this.currentStroke += 1;
+      this.currentTrack = 0;
+      this.time = 0.0;
+      if (this.currentStroke >= this.strokes.length) {
+        setTimeout(function() {
+          if (_this.promise) _this.promise.resolve();
+        }, this.options.delays.word * 1000);
+      }
     };
     Word.prototype.width = function() {
       return this.options.dim;
@@ -719,16 +789,24 @@
       var ctx,
         _this = this;
       this.init();
+      if (this.options && typeof this.options._setActiveStroker === "function") {
+        this.options._setActiveStroker(this);
+      }
       this.strokes = strokeJSON;
       this.canvas = canvas ? canvas : this.myCanvas;
       ctx = this.canvas.getContext("2d");
       ctx.strokeStyle = "#000";
       ctx.fillStyle = "#000";
       ctx.lineWidth = 5;
-      requestAnimationFrame(function() {
+      this.promise = $.Deferred();
+      if (this.paused) {
+        return this.promise;
+      }
+      this.animFrameId = requestAnimationFrame(function() {
+        _this.animFrameId = null;
         return _this.update();
       });
-      return this.promise = $.Deferred();
+      return this.promise;
     };
     Word.prototype.update = function() {
       var ctx, delay, i, stroke, _i, _ref,
@@ -778,16 +856,24 @@
           return _this.promise.resolve();
         }, this.options.delays.word * 1000);
       } else {
+        if (this.paused) {
+          return;
+        }
         if (delay) {
-          return setTimeout(function() {
-            return requestAnimationFrame(function() {
+          this.timerId = setTimeout(function() {
+            _this.timerId = null;
+            _this.animFrameId = requestAnimationFrame(function() {
+              _this.animFrameId = null;
               return _this.update();
             });
           }, delay * 1000);
+          return this.timerId;
         } else {
-          return requestAnimationFrame(function() {
+          this.animFrameId = requestAnimationFrame(function() {
+            _this.animFrameId = null;
             return _this.update();
           });
+          return this.animFrameId;
         }
       }
     };
@@ -941,10 +1027,44 @@
         progress: null
       }, options);
       return this.each(function() {
-        var index, load, loaded, loaders;
+        var activeStroker, controller, index, isPaused, load, loaded, loaders;
         if (options.svg) {
           return window.WordStroker.raphael.strokeWords(this, words);
         } else {
+          activeStroker = null;
+          isPaused = false;
+          options._setActiveStroker = function(s) {
+            activeStroker = s;
+            if (isPaused) {
+              s.paused = true;
+            }
+          };
+          controller = {
+            pause: function() {
+              isPaused = true;
+              if (activeStroker) activeStroker.pause();
+            },
+            resume: function() {
+              isPaused = false;
+              if (activeStroker) activeStroker.resume();
+            },
+            togglePause: function() {
+              if (isPaused) {
+                this.resume();
+              } else {
+                this.pause();
+              }
+              return isPaused;
+            },
+            step: function() {
+              isPaused = true;
+              if (activeStroker) activeStroker.step();
+            },
+            isPaused: function() {
+              return isPaused;
+            }
+          };
+          $(this).data("strokeWords", controller);
           loaders = window.WordStroker.canvas.drawElementWithWords(this, words, options);
           index = 0;
           loaded = 0;
@@ -974,8 +1094,6 @@
             };
           }, null)();
         }
-      }).data("strokeWords", {
-        play: null
       });
     }
   });

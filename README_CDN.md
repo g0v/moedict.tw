@@ -23,14 +23,14 @@
   解 CORS，ETag 經 `Access-Control-Expose-Headers` 公開；**不再**代理公開
   CDN URL，以利 staging preview 桶隔離）、`src/utils/audio-utils.ts`、
   `src/pages/DictionaryPage.tsx`（`getHakkaVariantAudioUrl`）、
-  `src/offline-api.ts`（僅 Capacitor 才啟用；stroke-json 請求直接打
-  `https://www.moedict.tw/api/stroke-json`，無本機 bundle 探測、無
-  staging→prod CDN 回退）、`vite.config.ts`（dev-time 筆畫 JSON proxy，
+  `src/offline-api.ts`（僅 Capacitor 才啟用；stroke-json GET／HEAD 與 legacy XHR
+  請求只改寫到 app 內建的 `/stroke-json/{cp}.json`，本機缺檔即 503 unavailable，
+  絕不回退任何遠端 host）、`vite.config.ts`（dev-time 筆畫 JSON proxy，
   仍走公開 CDN `STROKE_JSON_BASE_URL`——僅限本機 `vp dev` 開發用途，與
   Worker/Capacitor 的 runtime 路徑無關）
 - **單一定義點**：dev-proxy 用的 `STROKE_JSON_BASE_URL` 仍從
   `src/utils/media-cdn.ts` import；Worker 筆順路由改走 pointer/manifest +
-  `env.ASSETS`，Capacitor 離線路由改走生產環境絕對網址，兩者皆不再依賴
+  `env.ASSETS`，Capacitor 離線路由只讀 app 內建檔案，兩者皆不依賴
   `STROKE_JSON_BASE_URL`。
 
 ### 2) 前端資產（fonts / JS / CSS）

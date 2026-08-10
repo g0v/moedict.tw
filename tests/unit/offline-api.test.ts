@@ -9,11 +9,10 @@
  * dictionary-cache.test.ts / scroll-position.test.ts / xref-switch-utils.test.ts.
  *
  * Covers:
- * 1. Capacitor present → fetch('/api/stroke-json/{cp}.json') is rewritten to
- *    the absolute production URL, no local `/stroke-json/*` probe, no
- *    staging→prod CDN fallback.
- * 2. Capacitor present → the legacy XHR `.open()` patch rewrites the same
- *    way, AND a non-stroke `.open()` call still opens through untouched
+ * 1. Capacitor present → fetch('/api/stroke-json/{cp}.json') is rewritten exclusively to
+ *    the local `/stroke-json/{cp}` path, with no remote host fallback.
+ * 2. Capacitor present → the legacy XHR `.open()` patch rewrites to local `/stroke-json/{cp}`,
+ *    AND a non-stroke `.open()` call still opens through untouched
  *    (regression guard for the default-fallback branch).
  * 3. Capacitor absent → the module is a no-op: window.fetch is never
  *    patched, same-origin requests pass straight through.
@@ -54,7 +53,7 @@ describe("offline-api.ts — Capacitor present (fetch stroke routing)", () => {
     setCapacitor(true);
   });
 
-  it("rewrites /api/stroke-json/{cp}.json to the absolute production URL — no local probe, no CDN fallback", async () => {
+  it("rewrites /api/stroke-json/{cp}.json exclusively to local /stroke-json/{cp} without any remote host call (local bundle hit)", async () => {
     const calls: string[] = [];
     const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
@@ -67,11 +66,34 @@ describe("offline-api.ts — Capacitor present (fetch stroke routing)", () => {
     const res = await window.fetch("/api/stroke-json/840c.json");
 
     expect(res.status).toBe(200);
-    // Exactly one upstream fetch — straight to production, no local
-    // /stroke-json/840c probe attempt and no *.rackcdn.com/CDN fallback URL.
-    expect(calls).toEqual(["https://www.moedict.tw/api/stroke-json/840c.json"]);
-    expect(calls.some((u) => u.includes("/stroke-json/840c") && !u.includes("/api/"))).toBe(false);
-    expect(calls.some((u) => u.includes("rackcdn") || u.includes("r2-assets"))).toBe(false);
+    expect(calls).toEqual(["/stroke-json/840c.json"]);
+    expect(
+      calls.some(
+        (u) => u.includes("moedict.tw") || u.includes("rackcdn") || u.includes("r2-assets"),
+      ),
+    ).toBe(false);
+  });
+
+  it("returns 503 unavailable with res.ok === false when local stroke file is missing (local bundle miss)", async () => {
+    const calls: string[] = [];
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      calls.push(url);
+      return new Response("Not Found", { status: 404 });
+    });
+    Object.defineProperty(window, "fetch", { value: fetchSpy, configurable: true, writable: true });
+
+    await importFresh();
+    const res = await window.fetch("/api/stroke-json/6c5b.json", { method: "HEAD" });
+
+    expect(res.ok).toBe(false);
+    expect(res.status).toBe(503);
+    expect(calls).toEqual(["/stroke-json/6c5b.json"]);
+    expect(
+      calls.some(
+        (u) => u.includes("moedict.tw") || u.includes("rackcdn") || u.includes("r2-assets"),
+      ),
+    ).toBe(false);
   });
 
   it("returns 400 for an invalid codepoint without ever calling fetch", async () => {
@@ -101,7 +123,7 @@ describe("offline-api.ts — Capacitor present (legacy XHR stroke routing)", () 
     setCapacitor(true);
   });
 
-  it("rewrites XHR .open() for /api/stroke-json/{cp}.json to the absolute production URL", async () => {
+  it("rewrites XHR .open() for /api/stroke-json/{cp}.json to local /stroke-json/{cp} path", async () => {
     const openSpy = vi.fn(
       (
         _method: string,
@@ -121,7 +143,8 @@ describe("offline-api.ts — Capacitor present (legacy XHR stroke routing)", () 
 
     expect(openSpy).toHaveBeenCalledTimes(1);
     const args = openSpy.mock.calls[0];
-    expect(args[1]).toBe("https://www.moedict.tw/api/stroke-json/840c.json");
+    expect(args[1]).toBe("/stroke-json/840c.json");
+    expect(String(args[1])).not.toContain("moedict.tw");
   });
 
   it("a non-stroke XHR .open() call still opens through unmodified (regression guard)", async () => {

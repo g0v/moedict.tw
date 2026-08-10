@@ -29,7 +29,7 @@
  */
 
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -118,7 +118,7 @@ function runScript(opts: {
   const cwd = opts.cwd ?? tempRoot;
   fakeVpLog = join(tempRoot, "vp-calls.log");
   const env: Record<string, string> = {
-    PATH: `${fakeBin}:/usr/bin:/bin:/usr/local/bin`,
+    PATH: `${fakeBin}:${dirname(process.execPath)}:/usr/bin:/bin:/usr/local/bin`,
     HOME: tempRoot,
     TERM: "dumb",
     R2_REMOTE: "fake-r2",

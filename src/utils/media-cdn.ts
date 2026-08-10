@@ -10,8 +10,8 @@
  * Worker 路由 `/api/stroke-json/*` 已改為直接讀 ASSETS R2 binding（見
  * handleStrokeAPI.ts），以便 staging 的 preview 桶與 production 桶環境隔離；
  * 前端 jquery.strokeWords.js / useStrokeAvailability 走的是 Worker 代理路徑，
- * 不再依賴本常數。Capacitor 離線 fallback（offline-api.ts）與 dev Vite proxy
- * 仍引用 STROKE_JSON_BASE_URL。
+ * 不再依賴本常數。Capacitor 離線路由只讀 app 內建 `/stroke-json/*`；只有
+ * dev Vite proxy 仍引用 STROKE_JSON_BASE_URL。
  */
 export const ASSET_CDN_BASE = "https://r2-assets.moedict.tw";
 

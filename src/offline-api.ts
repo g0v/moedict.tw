@@ -91,12 +91,15 @@ if (shouldUseOfflineApi) {
       if (!cp || !/^[0-9a-f]{4,6}\.json$/i.test(cp)) {
         return Response.json({ error: "Bad Request" }, { status: 400 });
       }
-      // Capacitor apps have no same-origin Worker to proxy through, so they
-      // go straight to the production stroke-json API — no local-bundle
-      // probe (stroke-json/* is never bundled into the app) and no
-      // staging→production fallback (each build targets one environment).
+      // In Capacitor apps, stroke-json files are locally bundled under /stroke-json/{cp}.
+      // Serve stroke-json exclusively from local files without any remote network fallback.
       try {
-        return await originalFetch(`https://www.moedict.tw/api/stroke-json/${cp}`);
+        const resp = await originalFetch(`/stroke-json/${cp}`, init);
+        if (resp.ok) return resp;
+        return Response.json(
+          { error: "Offline", message: "Stroke data unavailable" },
+          { status: 503 },
+        );
       } catch {
         return Response.json(
           { error: "Offline", message: "Stroke data unavailable" },
@@ -129,15 +132,14 @@ if (shouldUseOfflineApi) {
   ) {
     const urlStr = typeof url === "string" ? url : url.href;
     if (urlStr.startsWith("/api/stroke-json/")) {
-      // Same routing as the fetch patch below: Capacitor has no
-      // same-origin Worker, so legacy jQuery.strokeWords $.ajax calls
-      // (which use XHR, not fetch) go straight to production — no local
-      // probe, no staging→prod fallback.
+      // Capacitor apps serve stroke-json exclusively from local bundled files
+      // under /stroke-json/{cp}. Legacy jQuery.strokeWords $.ajax calls
+      // (which use XHR, not fetch) rewrite to the local bundle path directly.
       const cp = urlStr.slice("/api/stroke-json/".length);
       return originalXHROpen.call(
         this,
         method,
-        `https://www.moedict.tw/api/stroke-json/${cp}`,
+        `/stroke-json/${cp}`,
         async_ ?? true,
         username,
         password,

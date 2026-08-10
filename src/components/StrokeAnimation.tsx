@@ -33,6 +33,25 @@ interface HistoricalEntry {
   char: string;
   data: CharStrokeData | null;
 }
+interface StrokeWordsController {
+  pause?: () => void;
+  resume?: () => void;
+  togglePause?: () => boolean;
+  step?: () => void;
+  isPaused?: () => boolean;
+}
+
+type JQueryWithStrokeWords = {
+  (element: HTMLElement | null): {
+    data(key: "strokeWords"): StrokeWordsController | undefined;
+    strokeWords?(words: string, options: unknown): void;
+  };
+  fn?: { strokeWords?: unknown };
+};
+
+type WindowWithJQuery = Window & {
+  jQuery?: JQueryWithStrokeWords;
+};
 
 // 歷代書體類型（依原專案順序）
 const SCRIPT_TYPES = ["楷書", "篆書", "隸書", "行書", "草書", "金文"] as const;
@@ -92,7 +111,34 @@ export function StrokeAnimation({ title, visible, lang = "a" }: StrokeAnimationP
   const [loadingHistorical, setLoadingHistorical] = useState(false);
   const [r2Endpoint, setR2Endpoint] = useState<string | null>(null);
   const [containerKey, setContainerKey] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
 
+  // 當動畫重新開始、切換詞條或變更可見度時重設 paused 狀態
+  useEffect(() => {
+    setIsPaused(false);
+  }, [containerKey, title, visible]);
+
+  const handleTogglePause = useCallback(() => {
+    if (!containerRef.current) return;
+    const $ = (window as WindowWithJQuery).jQuery;
+    if (!$) return;
+    const controller = $(containerRef.current).data("strokeWords");
+    if (controller && typeof controller.togglePause === "function") {
+      const nextPaused = controller.togglePause();
+      setIsPaused(nextPaused);
+    }
+  }, []);
+
+  const handleStepForward = useCallback(() => {
+    if (!containerRef.current) return;
+    const $ = (window as WindowWithJQuery).jQuery;
+    if (!$) return;
+    const controller = $(containerRef.current).data("strokeWords");
+    if (controller && typeof controller.step === "function") {
+      controller.step();
+      setIsPaused(true);
+    }
+  }, []);
   // 取得 R2 endpoint
   useEffect(() => {
     void fetchR2Endpoint().then(setR2Endpoint);
@@ -252,29 +298,94 @@ export function StrokeAnimation({ title, visible, lang = "a" }: StrokeAnimationP
 
   return (
     <div style={{ position: "relative" }}>
-      {/* 歷代書體按鈕（同原 #historical-scripts，紅底白字） */}
-      <a
-        id="historical-scripts"
-        className="hidden-xs part-of-speech"
-        title={"字體e筆書寫：張炳煌教授\n字體選用：郭晉銓博士"}
-        onClick={handleHistoricalClick}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            void handleHistoricalClick();
-          }
-        }}
+      <div
         style={{
-          cursor: "pointer",
-          color: "white",
-          display: "inline-block",
+          display: "flex",
+          gap: "8px",
+          alignItems: "center",
           marginBottom: "8px",
+          flexWrap: "wrap",
         }}
       >
-        {loadingHistorical ? "載入中…" : "歷代書體"}
-      </a>
+        {/* 歷代書體按鈕（同原 #historical-scripts，紅底白字） */}
+        <a
+          id="historical-scripts"
+          className="hidden-xs part-of-speech"
+          title={"字體e筆書寫：張炳煌教授\n字體選用：郭晉銓博士"}
+          onClick={handleHistoricalClick}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              void handleHistoricalClick();
+            }
+          }}
+          style={{
+            cursor: "pointer",
+            color: "white",
+            display: "inline-block",
+          }}
+        >
+          {loadingHistorical ? "載入中…" : "歷代書體"}
+        </a>
+
+        {/* 筆順動畫暫停 / 繼續按鈕 */}
+        <a
+          id="stroke-pause-resume"
+          className="part-of-speech"
+          title={isPaused ? "繼續筆順動畫" : "暫停筆順動畫"}
+          aria-label={isPaused ? "繼續筆順動畫" : "暫停筆順動畫"}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleTogglePause();
+          }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              handleTogglePause();
+            }
+          }}
+          style={{
+            cursor: "pointer",
+            color: "white",
+            display: "inline-block",
+          }}
+        >
+          {isPaused ? "繼續" : "暫停"}
+        </a>
+
+        {/* 筆順動畫下一畫按鈕 */}
+        <a
+          id="stroke-step-forward"
+          className="part-of-speech"
+          title="下一畫筆順動畫"
+          aria-label="下一畫筆順動畫"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleStepForward();
+          }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              handleStepForward();
+            }
+          }}
+          style={{
+            cursor: "pointer",
+            color: "white",
+            display: "inline-block",
+          }}
+        >
+          下一畫
+        </a>
+      </div>
 
       {/* 筆順動畫容器（同原 <div id="strokes">） */}
       <div

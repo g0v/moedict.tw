@@ -275,3 +275,141 @@ describe("StrokeAnimation stroke-speed options (issue #98)", () => {
     expect(calls[1]?.options.updatesPerStep).toBe(14);
   });
 });
+
+describe("StrokeAnimation pause and step controls", () => {
+  afterEach(() => {
+    delete (window as unknown as { jQuery?: unknown }).jQuery;
+    for (const name of ["raf.min.js", "gl-matrix-min.js", "sax.js", "jquery.strokeWords.js"]) {
+      document.head
+        .querySelectorAll(`script[src="/assets/js/${name}"]`)
+        .forEach((el) => el.remove());
+    }
+  });
+
+  it("renders pause and step control buttons with accessibility attributes", async () => {
+    renderStroke();
+    await flushAsync();
+
+    const pauseBtn = container.querySelector("#stroke-pause-resume");
+    const stepBtn = container.querySelector("#stroke-step-forward");
+
+    expect(pauseBtn).not.toBeNull();
+    expect(pauseBtn?.getAttribute("role")).toBe("button");
+    expect(pauseBtn?.getAttribute("tabindex")).toBe("0");
+    expect(pauseBtn?.getAttribute("aria-label")).toBe("暫停筆順動畫");
+    expect(pauseBtn?.textContent).toBe("暫停");
+
+    expect(stepBtn).not.toBeNull();
+    expect(stepBtn?.getAttribute("role")).toBe("button");
+    expect(stepBtn?.getAttribute("tabindex")).toBe("0");
+    expect(stepBtn?.getAttribute("aria-label")).toBe("下一畫筆順動畫");
+    expect(stepBtn?.textContent).toBe("下一畫");
+  });
+
+  it("clicking pause toggles pause state and invokes controller", async () => {
+    let togglePauseCalled = false;
+    const stubJQuery = vi.fn((_sel: unknown) => ({
+      data: (key: string) => {
+        if (key === "strokeWords") {
+          return {
+            togglePause: () => {
+              togglePauseCalled = true;
+              return true;
+            },
+            step: () => {},
+          };
+        }
+        return undefined;
+      },
+      strokeWords: () => {},
+    }));
+    (window as unknown as { jQuery?: unknown }).jQuery = stubJQuery;
+    stubStrokeScriptsAsLoaded();
+
+    renderStroke();
+    await flushAsync();
+
+    const pauseBtn = container.querySelector("#stroke-pause-resume") as HTMLElement;
+    act(() => {
+      pauseBtn.click();
+    });
+    await flushAsync();
+
+    expect(togglePauseCalled).toBe(true);
+    expect(pauseBtn.textContent).toBe("繼續");
+    expect(pauseBtn.getAttribute("aria-label")).toBe("繼續筆順動畫");
+  });
+
+  it("clicking step forward invokes step controller and sets paused state", async () => {
+    let stepCalled = false;
+    const stubJQuery = vi.fn((_sel: unknown) => ({
+      data: (key: string) => {
+        if (key === "strokeWords") {
+          return {
+            togglePause: () => false,
+            step: () => {
+              stepCalled = true;
+            },
+          };
+        }
+        return undefined;
+      },
+      strokeWords: () => {},
+    }));
+    (window as unknown as { jQuery?: unknown }).jQuery = stubJQuery;
+    stubStrokeScriptsAsLoaded();
+
+    renderStroke();
+    await flushAsync();
+
+    const stepBtn = container.querySelector("#stroke-step-forward") as HTMLElement;
+    act(() => {
+      stepBtn.click();
+    });
+    await flushAsync();
+
+    expect(stepCalled).toBe(true);
+    const pauseBtn = container.querySelector("#stroke-pause-resume") as HTMLElement;
+    expect(pauseBtn.textContent).toBe("繼續");
+  });
+
+  it("supports Enter for pause/resume and Space for next stroke", async () => {
+    let togglePauseCalls = 0;
+    let stepCalls = 0;
+    const stubJQuery = vi.fn((_sel: unknown) => ({
+      data: (key: string) => {
+        if (key !== "strokeWords") return undefined;
+        return {
+          togglePause: () => {
+            togglePauseCalls += 1;
+            return true;
+          },
+          step: () => {
+            stepCalls += 1;
+          },
+        };
+      },
+      strokeWords: () => {},
+    }));
+    (window as unknown as { jQuery?: unknown }).jQuery = stubJQuery;
+    stubStrokeScriptsAsLoaded();
+
+    renderStroke();
+    await flushAsync();
+
+    const pauseBtn = container.querySelector("#stroke-pause-resume") as HTMLElement;
+    const stepBtn = container.querySelector("#stroke-step-forward") as HTMLElement;
+    act(() => {
+      pauseBtn.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+      );
+      stepBtn.dispatchEvent(
+        new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true }),
+      );
+    });
+    await flushAsync();
+
+    expect(togglePauseCalls).toBe(1);
+    expect(stepCalls).toBe(1);
+  });
+});
