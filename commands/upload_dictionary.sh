@@ -210,6 +210,8 @@ if [ "$UPLOAD_SCOPE" = "cns" ]; then
 
     echo ""
     echo "✅ cns/ 上傳完成（$actual_count 個 JSON 檔案）"
+    echo "ℹ️  CNS edge cache is intentionally unversioned (not on dictionary digest)."
+    echo "   After this upload, purge Cache-Tag cns,cns-record if stale edge entries must drop immediately."
     echo "🔗 R2 路徑: $R2_REMOTE:$R2_BUCKET/cns"
 
     if [ -n "${CACHE_PURGE_TOKEN:-}" ]; then

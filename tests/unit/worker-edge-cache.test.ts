@@ -11,7 +11,12 @@
  * rendering).
  */
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { dispatch, isEdgeCacheable } from "../../worker/index";
+import {
+  dispatch,
+  deriveEntryEdgeCacheKey,
+  isEdgeCacheable,
+  isEntryRoutePath,
+} from "../../worker/index";
 
 type WorkerEnv = Parameters<typeof dispatch>[1];
 type WorkerCtx = NonNullable<Parameters<typeof dispatch>[2]>;
@@ -262,6 +267,69 @@ describe("dispatch edge cache layer", () => {
     expect(second.status).toBe(200);
     expect(second.headers.get("X-Moedict-Edge-Cache")).toBeNull();
     expect(controls.store.size).toBe(0);
+  });
+});
+
+describe("edge-cache namespace boundaries (dictionary vs CNS vs stroke)", () => {
+  it("CNS path cache key is unchanged when dictionary digest changes; entry path is", async () => {
+    const digestV1 = "a".repeat(64);
+    const digestV2 = "b".repeat(64);
+    const cnsUrl = "http://localhost/api/cns/%E4%B4%89.json";
+    const entryUrl = "http://localhost/api/%E9%B3%A5.json";
+
+    const envV1 = {
+      DICTIONARY: {
+        get: async (key: string) => {
+          if (key === "dictionary-corpus/current.json") {
+            return { text: async () => pointerJson(digestV1) };
+          }
+          return null;
+        },
+      },
+    } as unknown as WorkerEnv;
+    const envV2 = {
+      DICTIONARY: {
+        get: async (key: string) => {
+          if (key === "dictionary-corpus/current.json") {
+            return { text: async () => pointerJson(digestV2) };
+          }
+          return null;
+        },
+      },
+    } as unknown as WorkerEnv;
+
+    const cnsKey1 = await deriveEntryEdgeCacheKey(new Request(cnsUrl), envV1);
+    const cnsKey2 = await deriveEntryEdgeCacheKey(new Request(cnsUrl), envV2);
+    expect(cnsKey1).not.toBeNull();
+    expect(cnsKey2).not.toBeNull();
+    // Unversioned: bare request URL, no __moedict_ver param either way
+    expect(new URL(cnsKey1!.url).searchParams.has("__moedict_ver")).toBe(false);
+    expect(cnsKey1!.url).toBe(cnsKey2!.url);
+
+    const entryKey1 = await deriveEntryEdgeCacheKey(new Request(entryUrl), envV1);
+    const entryKey2 = await deriveEntryEdgeCacheKey(new Request(entryUrl), envV2);
+    expect(entryKey1).not.toBeNull();
+    expect(entryKey2).not.toBeNull();
+    expect(new URL(entryKey1!.url).searchParams.get("__moedict_ver")).toBe(digestV1);
+    expect(new URL(entryKey2!.url).searchParams.get("__moedict_ver")).toBe(digestV2);
+    expect(entryKey1!.url).not.toBe(entryKey2!.url);
+  });
+
+  it("opts out stroke-json, cns, cache/purge, and config from dictionary namespace", () => {
+    expect(isEntryRoutePath("/api/stroke-json/840c.json")).toBe(false);
+    expect(isEntryRoutePath("/api/cns/%E4%B4%89.json")).toBe(false);
+    expect(isEntryRoutePath("/api/cns")).toBe(false);
+    expect(isEntryRoutePath("/api/cache/purge")).toBe(false);
+    expect(isEntryRoutePath("/api/config")).toBe(false);
+  });
+
+  it("includes dictionary-backed API and legacy entry paths by default", () => {
+    expect(isEntryRoutePath("/api/%E9%B3%A5.json")).toBe(true);
+    expect(isEntryRoutePath("/api/search-index/a.json")).toBe(true);
+    expect(isEntryRoutePath("/api/list/a/=%E6%88%90%E8%AA%9E.json")).toBe(true);
+    expect(isEntryRoutePath("/a/%E9%B3%A5.json")).toBe(true);
+    expect(isEntryRoutePath("/embed/a/%E9%B3%A5")).toBe(true);
+    expect(isEntryRoutePath("/%E9%B3%A5.json")).toBe(true);
   });
 });
 

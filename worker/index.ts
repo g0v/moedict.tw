@@ -729,8 +729,26 @@ export function getBuildDictionaryDataVersion(
   return null;
 }
 
+/**
+ * Routes whose `caches.default` key is namespaced by the live dictionary
+ * corpus digest (`dictionary-corpus/current.json`).
+ *
+ * Default for unknown `/api/*` is **in** this set (safer: a new dictionary-
+ * backed route auto-busts with dictionary uploads). Explicit opt-outs:
+ *   - `/api/stroke-json/*` — own atomic stroke corpus digest (separate branch)
+ *   - `/api/cns/*`         — unversioned; Cache-Tag `cns,cns-record` purge only
+ *   - `/api/cache/purge`, `/api/config` — control plane, never edge-cached
+ *
+ * Do NOT add a new non-dictionary API under `/api/` without either (a) putting
+ * it in this opt-out list or (b) confirming its R2 objects are covered by the
+ * dictionary inventory digest. The 2026-08 CNS bug was exactly that trap:
+ * `/api/cns/*` rode the dictionary digest while CNS objects sat outside the
+ * manifest, so CNS could stale forever and dictionary uploads needlessly
+ * busted ~77k CNS edge keys.
+ */
 export function isEntryRoutePath(pathname: string): boolean {
   if (pathname.startsWith("/api/stroke-json/")) return false;
+  if (pathname.startsWith("/api/cns/") || pathname === "/api/cns") return false;
   if (pathname === "/api/cache/purge" || pathname === "/api/config") return false;
   if (pathname.startsWith("/api/")) return true;
   if (/^\/(?:a|t|h|c|raw|uni|pua)\//.test(pathname)) return true;
@@ -750,9 +768,11 @@ export function isEntryRoutePath(pathname: string): boolean {
  * (fail closed vs indefinitely-stale entries). Missing pointer falls back to
  * build-time `__DICTIONARY_DATA_VERSION__` for rollout only.
  *
- * Note: `/api/cns/*` currently matches `isEntryRoutePath` via the `/api/`
- * prefix, so CNS shares the dictionary digest namespace — CNS corpus changes
- * are a separate upload scope and are NOT covered by this digest (known gap).
+ * CNS is intentionally unversioned (see `isEntryRoutePath` opt-out): the
+ * corpus is a published government release regenerated rarely; freshness is
+ * via Cache-Tag purge (`cns,cns-record`) after `UPLOAD_SCOPE=cns`. A second
+ * pointer mechanism is deferred until CNS regenerations become frequent or
+ * mid-upload consistency is required.
  */
 const ENTRY_EDGE_CACHE_VERSION_PARAM = "__moedict_ver";
 
