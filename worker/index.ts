@@ -735,7 +735,7 @@ export function getBuildDictionaryDataVersion(
  *
  * Default for unknown `/api/*` is **in** this set (safer: a new dictionary-
  * backed route auto-busts with dictionary uploads). Explicit opt-outs:
- *   - `/api/stroke-json/*` — own atomic stroke corpus digest (separate branch)
+ *   - `/api/cns/*`         — unversioned bare URL; accepts up to ~1d s-maxage lag after CNS upload (tag purge ≠ caches.default)
  *   - `/api/cns/*`         — unversioned; Cache-Tag `cns,cns-record` purge only
  *   - `/api/cache/purge`, `/api/config` — control plane, never edge-cached
  *
@@ -769,10 +769,11 @@ export function isEntryRoutePath(pathname: string): boolean {
  * build-time `__DICTIONARY_DATA_VERSION__` for rollout only.
  *
  * CNS is intentionally unversioned (see `isEntryRoutePath` opt-out): the
- * corpus is a published government release regenerated rarely; freshness is
- * via Cache-Tag purge (`cns,cns-record`) after `UPLOAD_SCOPE=cns`. A second
- * pointer mechanism is deferred until CNS regenerations become frequent or
- * mid-upload consistency is required.
+ * corpus is a published government release regenerated rarely. Bare URLs mean
+ * `caches.default` entries can remain until s-maxage (~1d) after a CNS upload —
+ * Zone Cache-Tag purge does NOT clear `caches.default` (src/api/cache.ts).
+ * Acceptable only while releases stay rare; more frequent CNS releases or a
+ * hard freshness requirement should add a CNS pointer or exact-key deletes.
  */
 const ENTRY_EDGE_CACHE_VERSION_PARAM = "__moedict_ver";
 
