@@ -1,12 +1,13 @@
 /**
- * Dictionary corpus pointer/manifest schema.
+ * Dictionary corpus pointer/manifest schema for **upload-driven cache busting**.
  *
- * Mirrors the stroke-corpus atomic pointer model: uploads write a versioned
- * digest of every dictionary object, then promote `dictionary-corpus/current.json`
- * LAST. Workers read only the pointer (cheap) and namespace both
- * `caches.default` keys and the per-isolate pack memo by that digest.
+ * Unlike the stroke-corpus atomic model, dictionary uploads still overwrite
+ * flat R2 keys in place (`pack/*`, `a/*`, …). The pointer's 64-hex digest is
+ * a hash of the uploaded-object inventory used only to namespace
+ * `caches.default` keys and the per-isolate pack memo. `dictionary-corpora/<digest>/`
+ * currently stores the inventory manifest only — the Worker never reads corpus
+ * objects from that prefix. Reverting the pointer does not restore old bytes.
  */
-
 export const DICTIONARY_CORPUS_POINTER_KEY = "dictionary-corpus/current.json";
 export const DICTIONARY_CORPUS_PREFIX = "dictionary-corpora";
 

@@ -287,8 +287,8 @@ if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/n
     _dirty_count="$(printf '%s\n' "$_dirty" | grep -c . || true)"
     echo "❌ 拒絕上傳：data/dictionary 有 ${_dirty_count} 個未提交的工作樹變更。"
     echo "   請先提交（git commit -- data/dictionary），再執行上傳。"
-    echo "   上傳完成後會寫入 dictionary-corpus/current.json 指針，Worker 依此自我翻新邊緣快取；"
-    echo "   不需 redeploy Worker。若只上傳不提交，儲存庫與 R2 會再次分叉。"
+    echo "   上傳會原地覆寫 flat R2 keys，最後寫 dictionary-corpus/current.json 做 cache bust；"
+    echo "   不需 redeploy Worker，但也不能靠退回指針還原舊 bytes。"
     exit 1
   fi
 fi
@@ -425,12 +425,13 @@ echo ""
 echo "📤 正在上傳 lookup/pinyin/ (台語羅馬拼音索引)..."
 rclone_upload "$PINYIN_LOOKUP_DIR" "$R2_REMOTE:$R2_BUCKET/lookup/pinyin"
 echo "✅ lookup/pinyin/ 上傳完成"
-
-# ── Dictionary corpus pointer promotion (LAST) ───────────────────────────────
-# Compute a 64-hex SHA-256 over the deterministic manifest of every uploaded
-# object, upload the full manifest under dictionary-corpora/<digest>/, then
-# write dictionary-corpus/current.json LAST. Workers namespace caches.default
-# and the pack memo by this digest — pointer promotion is the invalidation event.
+# ── Dictionary corpus pointer (LAST) — cache bust only ───────────────────────
+# Compute a 64-hex SHA-256 over the deterministic inventory of every uploaded
+# flat object, store the inventory under dictionary-corpora/<digest>/manifest.json,
+# then write dictionary-corpus/current.json LAST. Workers use the digest only to
+# namespace caches.default + pack memo keys. Flat keys are still overwritten in
+# place during the rclone syncs above — this is NOT atomic promotion and NOT
+# rollback-capable. dictionary-corpora/<digest>/ holds the manifest only.
 echo ""
 echo "🧮 計算 dictionary corpus digest 並提升指針（最後一步）..."
 _CORPUS_OUT="$(mktemp -d "${TMPDIR:-/tmp}/moedict-dict-corpus.XXXXXX")"
@@ -459,7 +460,7 @@ rclone copyto \
   --low-level-retries 10
 rm -rf "$_CORPUS_OUT"
 echo "✅ dictionary-corpus/current.json 已提升（digest=${_DIGEST}）"
-echo "   Worker 會在下次 entry 請求時讀到新 digest，自動翻新 caches.default 與 pack memo。"
+echo "   Worker 會在下次 entry 請求時用新 digest 做 cache bust（caches.default + pack memo）；flat 物件已在上方 rclone 中原地覆寫。"
 
 
 echo ""

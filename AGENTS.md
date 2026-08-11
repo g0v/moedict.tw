@@ -189,7 +189,7 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
   req/5min）。大量上傳請控制並發（≤8）、對 429（error code 971）指數退避重試；
   上傳後的驗證 GET 同樣會被限流，驗證程式也要有重試，否則會把 429 誤判成
   內容不一致。
-- 改字典資料（`data/dictionary/**`）→ 上傳 R2（最後寫入 `dictionary-corpus/current.json` 指針）即可讓 Worker 自動依據 R2 資料摘要自我翻新邊緣快取，無需重新部署 Worker；建議同步 `git commit -- data/dictionary` 以保持儲存庫與線上資料一致。
+- 改字典資料（`data/dictionary/**`）→ 上傳 R2 時會**原地覆寫** flat keys（`pack/*`、`a/*` 等），最後寫入 `dictionary-corpus/current.json` 指針（digest = 上傳物件清單的 SHA-256）。Worker 用此 digest **只做 caches.default / pack memo 的 cache bust**——**不是** atomic corpus promotion，也**不能**靠退回舊指針還原舊 bytes（flat 物件已被覆寫；`dictionary-corpora/<digest>/` 目前只存 manifest，讀取路徑不用它）。上傳過程中讀者可能短暫看到舊新混雜。建議同步 `git commit -- data/dictionary` 保持儲存庫一致；字典 freshness **不需** redeploy Worker。
 - 改到 `src/`、`worker/` 任何程式 → 必須 `bun run deploy` 才會上線（見上方「部署」一節的安全 rollout 鏈，不要單獨呼叫 `wrangler deploy`）。
 - `data/dictionary/lookup/pinyin/**` 與 `search-index/**` 是**衍生物**，
   由 `scripts/build-pinyin-lookup.mjs`、`build-search-index.mjs` 從 pack 檔重建

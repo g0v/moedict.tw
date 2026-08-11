@@ -16,9 +16,10 @@
  * cache lifetime. Entries evict LRU beyond a small cap so a crawler walking
  * distinct buckets cannot grow isolate memory unboundedly.
  *
- * After dictionary corpus pointer promotion, memo keys are namespaced by the
- * resolved 64-hex dictionaryDigest so a warm isolate cannot re-serve old pack
- * bytes under a new edge-cache key.
+ * After dictionary pointer promotion, memo keys are namespaced by the resolved
+ * 64-hex dictionaryDigest so a warm isolate cannot re-serve old pack bytes under
+ * a new edge-cache key. Reads still use bare flat keys (`source.get(key)`); only
+ * the memo identity is versioned — this is cache busting, not atomic corpora.
  */
 
 import {

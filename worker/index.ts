@@ -743,17 +743,16 @@ export function isEntryRoutePath(pathname: string): boolean {
  * Internal query param namespacing edge-cache keys for dictionary entry routes
  * by the live R2 dictionary corpus digest (`dictionary-corpus/current.json`).
  *
- * WHY: Cloudflare Zone Cache Purges do NOT evict `caches.default` Worker Cache
- * API entries. Namespacing by the R2 pointer digest makes dictionary uploads
- * self-invalidate the moment the pointer is promoted — no Worker redeploy
- * required. The build-time `__DICTIONARY_DATA_VERSION__` is only a rollout
- * fallback when the pointer object is missing.
+ * This is **cache busting only**: dictionary uploads still overwrite flat R2
+ * keys in place. The digest changes so old `caches.default` entries stop
+ * matching; it does not version corpus object storage and cannot roll back
+ * bytes. Pointer read errors return null so dispatch bypasses edge cache
+ * (fail closed vs indefinitely-stale entries). Missing pointer falls back to
+ * build-time `__DICTIONARY_DATA_VERSION__` for rollout only.
  *
- * Three pointer states (see resolveDictionaryPointerState):
- * - valid → namespace by 64-hex digest
- * - missing → fall back to build-time version (or bare request)
- * - error → return null so dispatch BYPASSES caches.default entirely
- *   (fail closed against indefinitely-stale edge entries)
+ * Note: `/api/cns/*` currently matches `isEntryRoutePath` via the `/api/`
+ * prefix, so CNS shares the dictionary digest namespace — CNS corpus changes
+ * are a separate upload scope and are NOT covered by this digest (known gap).
  */
 const ENTRY_EDGE_CACHE_VERSION_PARAM = "__moedict_ver";
 

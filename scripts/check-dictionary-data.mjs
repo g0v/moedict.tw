@@ -281,8 +281,8 @@ try {
       `\n⚠️  [check-dictionary-data] WARNING: data/dictionary has ${dirtyCount} uncommitted working-tree change(s)!\n` +
         `   upload_dictionary.sh will REFUSE to upload while dirty.\n` +
         `   Commit first (\`git commit -- data/dictionary\`), then upload to R2.\n` +
-        `   Pointer promotion (dictionary-corpus/current.json LAST) is the cache invalidation event;\n` +
-        `   Worker redeploy is NOT required for dictionary freshness.`,
+        `   Pointer write (dictionary-corpus/current.json LAST) only cache-busts Worker edge/pack memo;\n` +
+        `   flat R2 keys are overwritten in place (not atomic; not rollback-by-pointer).`,
     );
   }
 } catch {

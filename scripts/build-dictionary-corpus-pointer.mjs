@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Build a deterministic dictionary corpus digest + pointer for R2 promotion.
+ * Build a deterministic dictionary inventory digest + pointer for R2.
  *
  * Enumerates the exact paths that `commands/upload_dictionary.sh` uploads
  * (pack/pcck/phck/ptck, a/t/h/c, search-index, translation-data, lookup/pinyin),
@@ -8,8 +8,11 @@
  *   dictionaryDigest = sha256(canonical JSON of {path,sha256,bytes}[])
  *
  * Writes:
- *   - dictionary-corpus-manifest.json  (full file list)
- *   - dictionary-corpus-current.json   (pointer to promote LAST)
+ *   - dictionary-corpus-manifest.json  (inventory only — not a versioned corpus)
+ *   - dictionary-corpus-current.json   (pointer written LAST after flat uploads)
+ *
+ * This supports upload-driven cache busting only. Flat object keys remain the
+ * read path; the versioned prefix stores the manifest, not object bytes.
  *
  * Usage:
  *   node scripts/build-dictionary-corpus-pointer.mjs [--out-dir=/tmp/...]
