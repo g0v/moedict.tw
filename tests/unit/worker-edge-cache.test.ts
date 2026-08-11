@@ -399,6 +399,7 @@ describe("zone CDN bypass (dispatch header split)", () => {
     expect(shouldBypassZoneCdn("/api/%E9%B3%A5.json")).toBe(true);
     expect(shouldBypassZoneCdn("/api/search-index/a.json")).toBe(true);
     expect(shouldBypassZoneCdn("/a/%E9%B3%A5.json")).toBe(true);
+    expect(shouldBypassZoneCdn("/a/%E9%B3%A5")).toBe(true);
     expect(shouldBypassZoneCdn("/api/stroke-json/840c.json")).toBe(true);
     expect(shouldBypassZoneCdn("/api/cns/%E4%B4%89.json")).toBe(true);
     expect(shouldBypassZoneCdn("/api/config")).toBe(false);

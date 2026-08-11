@@ -701,6 +701,9 @@ export function shouldBypassZoneCdn(
   if (pathname.startsWith("/api/")) return true;
   // Bare *.json dictionary compatibility routes (not HTML)
   if (pathname.endsWith(".json")) return true;
+  // Legacy bare dictionary paths served as JSON by dispatchCore
+  // (e.g. /a/萌, /t/食) — not HTML shells. /embed/* HTML is excluded above.
+  if (/^\/(?:a|t|h|c|raw|uni|pua)\//.test(pathname)) return true;
   return false;
 }
 
@@ -941,18 +944,18 @@ export async function dispatch(
     headers.delete("X-Moedict-Release");
   }
 
-  // storeResponse keeps full Cache-Control (incl. s-maxage) for caches.default.
-  // clientResponse is a clone; zone-CDN bypass headers apply only to the clone.
-  const storeResponse = new Response(response.body, {
+  // Network response starts as the decorated handler response (full CC).
+  // Only when we write caches.default do we clone: put(clone) keeps full
+  // s-maxage; the original is then optionally rewrapped for zone-CDN bypass.
+  let network = new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
     headers,
   });
-  const clientResponse = storeResponse.clone();
 
-  if (edgeCache && cacheKey && isEdgeCacheable(request, storeResponse)) {
-    // CRITICAL: put the FULL s-maxage clone, never the CDN-bypassed client copy.
-    const putPromise = Promise.resolve(edgeCache.put(cacheKey, storeResponse)).catch(() => {
+  if (edgeCache && cacheKey && isEdgeCacheable(request, network)) {
+    // CRITICAL: put a FULL s-maxage clone. Never put the CDN-bypassed copy.
+    const putPromise = Promise.resolve(edgeCache.put(cacheKey, network.clone())).catch(() => {
       // Best-effort: a failed put only means the next request re-renders.
     });
     if (ctx) {
@@ -962,16 +965,16 @@ export async function dispatch(
     }
   }
 
-  if (shouldBypassZoneCdn(url.pathname, clientResponse.headers.get("Content-Type"))) {
-    const clientHeaders = new Headers(clientResponse.headers);
+  if (shouldBypassZoneCdn(url.pathname, network.headers.get("Content-Type"))) {
+    const clientHeaders = new Headers(network.headers);
     applyZoneCdnBypassHeaders(clientHeaders);
-    return new Response(clientResponse.body, {
-      status: clientResponse.status,
-      statusText: clientResponse.statusText,
+    network = new Response(network.body, {
+      status: network.status,
+      statusText: network.statusText,
       headers: clientHeaders,
     });
   }
-  return clientResponse;
+  return network;
 }
 
 /**

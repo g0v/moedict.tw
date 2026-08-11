@@ -141,7 +141,9 @@ describe("dispatch — global version headers", () => {
     expect(res.headers.get("X-Moedict-Version")).toBe(metadata.id);
     expect(res.headers.get("X-Moedict-Release")).toBe(metadata.tag);
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
-    expect(res.headers.get("Cache-Control")).toContain("s-maxage=604800");
+    expect(res.headers.get("Cache-Control")).toContain("max-age=3600");
+    expect(res.headers.get("Cache-Control")).not.toMatch(/s-maxage/i);
+    expect(res.headers.get("Cloudflare-CDN-Cache-Control")).toBe("no-store");
   });
 
   it("uses unknown version and omits invalid release tags on OPTIONS", async () => {
@@ -362,7 +364,9 @@ describe("dispatch — /api/search-index/{lang}.json", () => {
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
     expect(res.headers.get("vary")).toBeNull();
     expect(res.headers.get("cache-control")).toContain("max-age=3600");
-    expect(res.headers.get("cache-control")).toContain("s-maxage=604800");
+    expect(res.headers.get("cache-control")).toContain("max-age=3600");
+    expect(res.headers.get("cache-control")).not.toMatch(/s-maxage/i);
+    expect(res.headers.get("Cloudflare-CDN-Cache-Control")).toBe("no-store");
     expect(res.headers.get("cache-tag")).toMatch(/\bsearch-index\b/);
     expect(res.headers.get("cache-tag")).toMatch(/\bsearch-index-a\b/);
   });
@@ -399,7 +403,9 @@ describe("dispatch — /api/xref/{lang}.json", () => {
     const res = await dispatch(req("/api/xref/a.json"), env);
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toContain("max-age=300");
-    expect(res.headers.get("cache-control")).toContain("s-maxage=3600");
+    expect(res.headers.get("cache-control")).toContain("max-age=300");
+    expect(res.headers.get("cache-control")).not.toMatch(/s-maxage/i);
+    expect(res.headers.get("Cloudflare-CDN-Cache-Control")).toBe("no-store");
   });
 
   it("returns empty-object JSON (not 404) when xref file is missing", async () => {
@@ -417,7 +423,9 @@ describe("dispatch — /api/xref-by-id/{lang}.json", () => {
     const res = await dispatch(req("/api/xref-by-id/t.json"), env);
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toContain("max-age=300");
-    expect(res.headers.get("cache-control")).toContain("s-maxage=3600");
+    expect(res.headers.get("cache-control")).toContain("max-age=300");
+    expect(res.headers.get("cache-control")).not.toMatch(/s-maxage/i);
+    expect(res.headers.get("Cloudflare-CDN-Cache-Control")).toBe("no-store");
     expect(res.headers.get("cache-tag")).toContain("xref");
     expect(res.headers.get("cache-tag")).toContain("xref-t");
     expect(await res.text()).toBe('{"a":{}}');
