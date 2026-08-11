@@ -735,8 +735,8 @@ export function getBuildDictionaryDataVersion(
  *
  * Default for unknown `/api/*` is **in** this set (safer: a new dictionary-
  * backed route auto-busts with dictionary uploads). Explicit opt-outs:
+ *   - `/api/stroke-json/*` — own atomic stroke corpus digest (separate branch)
  *   - `/api/cns/*`         — unversioned bare URL; accepts up to ~1d s-maxage lag after CNS upload (tag purge ≠ caches.default)
- *   - `/api/cns/*`         — unversioned; Cache-Tag `cns,cns-record` purge only
  *   - `/api/cache/purge`, `/api/config` — control plane, never edge-cached
  *
  * Do NOT add a new non-dictionary API under `/api/` without either (a) putting
