@@ -83,6 +83,13 @@ describe("resolveHeadByPath", () => {
       expect(head.title).toBe("木 部 - 台語萌典");
     });
 
+    it("uses the Hakka brand and explains CNS total-stroke grouping", () => {
+      const head = resolveHeadByPath("/:@木");
+      expect(head.title).toBe("木 部 - 客語萌典");
+      expect(head.description).toContain("CNS11643");
+      expect(head.description).toContain("總筆畫");
+    });
+
     it("decodes percent-encoded radical", () => {
       expect(resolveHeadByPath("/@%E6%9C%A8").title).toBe("木 部 - 萌典");
     });

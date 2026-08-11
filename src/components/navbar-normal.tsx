@@ -432,7 +432,10 @@ const LANG_SPECIAL_PAGES: Record<Lang, MenuItem[]> = {
     { label: "…諺語", path: "/'=諺語" },
     { label: "…部首表", path: "/'@" },
   ],
-  h: [{ label: "…諺語", path: "/:=諺語" }],
+  h: [
+    { label: "…諺語", path: "/:=諺語" },
+    { label: "…部首表", path: "/:@" },
+  ],
   c: [
     {
       label: "…分類索引",

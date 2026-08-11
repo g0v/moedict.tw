@@ -212,7 +212,19 @@ export function About({ assetBaseUrl }: AboutProps) {
           >
             CC BY-ND 3.0 臺灣
           </a>
-          ），辭典本文的著作權仍為教育部所有。
+          ），辭典本文的著作權仍為教育部所有；客語部首索引所用的部首及總筆畫資料另取自
+          <a
+            target="_blank"
+            href="https://www.cns11643.gov.tw/pageView.jsp?ID=59"
+            rel="noopener noreferrer"
+          >
+            CNS11643 全字庫
+          </a>
+          （數位發展部，
+          <a target="_blank" href="https://data.gov.tw/license" rel="noopener noreferrer">
+            政府資料開放授權條款第 1 版（OGDL-1.0）
+          </a>
+          ），不取自客語辭典本文。
         </p>
         <p>
           筆劃資料來源為教育部「

@@ -241,16 +241,14 @@ export function collectDictionaryFixtures(): FixtureEntry[] {
     }
   }
 
-  // @.json — the bare radical-table index RadicalView (routes /@, /'@, /~@)
-  // fetches on mount. Without this, /api/@.json 404s in every e2e/audit
+  // @.json — the bare radical-table index RadicalView (routes /@, /'@, /:@,
+  // /~@) fetches on mount. Without this, /api/@.json 404s in every e2e/audit
   // fixture run and the radical page is permanently stuck in its loading/
   // error state, never rendering a.stroke-char (tests/e2e/legacy-styles-
   // regression.spec.ts's "radical" entry and any test that navigates to a
-  // bare radical route). h has no radical table upstream (see
-  // radical-page-utils.ts's RadicalLang -- Hakka isn't a supported radical-
-  // page language), so it's skipped like the other @-fixtures above.
+  // bare radical route).
   const radicalIndexFixture = "@.json";
-  for (const lang of ["a", "t", "c"] as const) {
+  for (const lang of ["a", "t", "h", "c"] as const) {
     const key = `${lang}/${radicalIndexFixture}`;
     const body = optional(path.join(DATA_DICT, lang, radicalIndexFixture), key);
     if (body) {

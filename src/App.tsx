@@ -212,6 +212,7 @@ function App() {
           <Route path="/@" element={<RadicalView lang="a" />} />
           <Route path="/~@" element={<RadicalView lang="c" />} />
           <Route path="/'@" element={<RadicalView lang="t" />} />
+          <Route path="/:@" element={<RadicalView lang="h" />} />
 
           {/* 其他路由交由 MiddlePoint 分流 */}
           <Route path="*" element={<MiddlePoint />} />

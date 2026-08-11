@@ -1537,6 +1537,27 @@ test.describe("special routes", () => {
     await expect(page.locator("body")).toContainText(/[一二人入]/, { timeout: 10_000 });
   });
 
+  test("/:@ renders Hakka radicals and labels exact CNS total strokes", async ({ page }) => {
+    const tocResponse = await page.goto("/:@");
+    expect(tocResponse?.status()).toBe(200);
+    await waitForAppReady(page, "static");
+    await expect(page).toHaveTitle(/客語萌典/);
+    await expect(page.locator('a.stroke-char[href="/:@子"]')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".result .def")).toHaveCount(0);
+
+    const detailResponse = await page.goto("/:@%E5%AD%90");
+    expect(detailResponse?.status()).toBe(200);
+    await expect(page.locator("a.stroke-char").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".radical-stroke-note")).toContainText(
+      "客語字表依 CNS11643 全字庫總筆畫分組",
+    );
+    await expect(page.locator(".stroke-count").filter({ hasText: "總筆畫 3" })).toBeVisible();
+    await expect(page.locator("a.stroke-char").filter({ hasText: "子" })).toHaveAttribute(
+      "href",
+      "/:子",
+    );
+  });
+
   test("/@口 radical detail page has no duplicate a.stroke-char hrefs (g0v/moedict-webkit radical-key dedup)", async ({
     page,
   }) => {

@@ -81,9 +81,11 @@ async function buildRadicalTooltipHTML(rawId: string): Promise<string> {
     ? "~"
     : id.startsWith("'@")
       ? "'"
-      : id.startsWith("@")
-        ? ""
-        : null;
+      : id.startsWith(":@")
+        ? ":"
+        : id.startsWith("@")
+          ? ""
+          : null;
   if (langPrefix === null) return EMPTY_HTML;
 
   const bucketPrefix = `/${langPrefix}@`;
@@ -121,7 +123,8 @@ async function buildRadicalTooltipHTML(rawId: string): Promise<string> {
   for (let stroke = 0; stroke < Math.min(data.length, 8); stroke += 1) {
     const chars = data[stroke] || [];
     if (chars.length === 0) continue;
-    html += `<div><span class="stroke-count">${stroke}</span><span class="stroke-list">`;
+    const strokeLabel = langPrefix === ":" ? `總筆畫 ${stroke}` : String(stroke);
+    html += `<div><span class="stroke-count">${strokeLabel}</span><span class="stroke-list">`;
     for (const char of chars.slice(0, 15)) {
       html += `<a href="${entryPrefix}${encodeURIComponent(char)}" class="stroke-char">${escapeHtml(char)}</a>`;
     }
@@ -237,7 +240,7 @@ function resolveTooltipIdFromHref(rawHref: string | null): string {
 }
 
 function shouldUseRadicalTooltip(id: string): boolean {
-  return id.startsWith("@") || id.startsWith("~@") || id.startsWith("'@");
+  return id.startsWith("@") || id.startsWith("~@") || id.startsWith("'@") || id.startsWith(":@");
 }
 
 interface TooltipTarget {

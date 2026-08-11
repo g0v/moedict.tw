@@ -29,6 +29,16 @@ describe("About page links", () => {
     expect(html).not.toMatch(/moedict\/moedict-webkit/);
     expect(html).not.toMatch(/audreyt\/moedict-webkit/);
   });
+
+  it("credits CNS11643 OGDL next to the Hakka dictionary attribution", () => {
+    const html = render();
+    const hakkaAttribution = html.slice(html.indexOf("臺灣客語辭典"), html.indexOf("筆劃資料來源"));
+    expect(hakkaAttribution).toContain("CC BY-ND 3.0 臺灣");
+    expect(hakkaAttribution).toContain("CNS11643 全字庫");
+    expect(hakkaAttribution).toContain("OGDL-1.0");
+    expect(hakkaAttribution).toContain("數位發展部");
+    expect(hakkaAttribution).toContain("不取自客語辭典本文");
+  });
 });
 
 describe("About page title (#47)", () => {

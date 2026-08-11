@@ -63,6 +63,11 @@ describe("resolveMiddlePointTarget", () => {
       lang: "t",
       radical: "木",
     });
+    expect(resolveMiddlePointTarget("/:@木")).toEqual({
+      page: "radical",
+      lang: "h",
+      radical: "木",
+    });
   });
 
   it("maps starred routes with optional entry suffix", () => {
@@ -116,6 +121,7 @@ describe("resolveMiddlePointTarget", () => {
     expect(resolveMiddlePointTarget("/@")).toEqual({ page: "dict", lang: "a", word: "@" });
     expect(resolveMiddlePointTarget("/~@")).toEqual({ page: "dict", lang: "c", word: "@" });
     expect(resolveMiddlePointTarget("/'@")).toEqual({ page: "dict", lang: "t", word: "@" });
+    expect(resolveMiddlePointTarget("/:@")).toEqual({ page: "dict", lang: "h", word: "@" });
   });
 
   it('preserves the legacy empty-category fallback (bare = → dictionary "=")', () => {

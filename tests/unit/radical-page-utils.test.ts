@@ -48,10 +48,11 @@ describe("normalizeRadicalVariant", () => {
 });
 
 describe("getTokenByLang", () => {
-  it("prefixes ~ for c lang, ' for t lang, leaves a lang as-is", () => {
+  it("returns the canonical token prefix for every radical language", () => {
     expect(getTokenByLang("a", "@木")).toBe("@木");
     expect(getTokenByLang("c", "@木")).toBe("~@木");
     expect(getTokenByLang("t", "@木")).toBe("'@木");
+    expect(getTokenByLang("h", "@木")).toBe(":@木");
   });
 });
 
@@ -60,6 +61,7 @@ describe("getRadicalLangPrefix", () => {
     expect(getRadicalLangPrefix("a")).toBe("");
     expect(getRadicalLangPrefix("c")).toBe("~");
     expect(getRadicalLangPrefix("t")).toBe("'");
+    expect(getRadicalLangPrefix("h")).toBe(":");
   });
 });
 
@@ -213,6 +215,19 @@ describe("fetchRadicalRows", () => {
 
     await expect(fetchRadicalRows("c", "@青")).resolves.toEqual([["青", "木"]]);
     expect(fetchSpy).toHaveBeenCalledWith("/api/~%40%E9%9D%92.json", {
+      headers: { Accept: "application/json" },
+    });
+  });
+
+  it("fetches and normalizes a Hakka radical bucket with the : prefix", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue([null, [null], [null], [null], [null], [null], ["木"]]),
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await expect(fetchRadicalRows("h", "@木")).resolves.toEqual([[], [], [], [], [], [], ["木"]]);
+    expect(fetchSpy).toHaveBeenCalledWith("/api/%3A%40%E6%9C%A8.json", {
       headers: { Accept: "application/json" },
     });
   });

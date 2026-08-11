@@ -78,31 +78,34 @@ export function RadicalDetailView({ lang, radical }: RadicalDetailViewProps) {
   } else {
     resultContent = (
       <div className="entry-item list">
-        {state.rows.map((row, stroke) => (
-          <div key={stroke} style={{ margin: "8px 0" }}>
-            <span className="stroke-count" style={{ marginRight: "8px" }}>
-              {stroke}
-            </span>
-            <span className="stroke-list">
-              {row.map((char) => {
-                const to = `${charPrefix}${char}`;
-                return (
-                  <a
-                    key={`${stroke}-${char}`}
-                    className="stroke-char"
-                    href={to}
-                    data-radical-id={`entry:${to}`}
-                    style={{ marginRight: "6px" }}
-                    onClick={(event) => onNavigate(event, to)}
-                  >
-                    {char}
-                  </a>
-                );
-              })}
-            </span>
-            <hr style={{ margin: "0", padding: "0", height: "0" }} />
-          </div>
-        ))}
+        {state.rows.map((row, stroke) => {
+          if (lang === "h" && row.length === 0) return null;
+          return (
+            <div key={stroke} style={{ margin: "8px 0" }}>
+              <span className="stroke-count" style={{ marginRight: "8px" }}>
+                {lang === "h" ? `總筆畫 ${stroke}` : stroke}
+              </span>
+              <span className="stroke-list">
+                {row.map((char) => {
+                  const to = `${charPrefix}${char}`;
+                  return (
+                    <a
+                      key={`${stroke}-${char}`}
+                      className="stroke-char"
+                      href={to}
+                      data-radical-id={`entry:${to}`}
+                      style={{ marginRight: "6px" }}
+                      onClick={(event) => onNavigate(event, to)}
+                    >
+                      {char}
+                    </a>
+                  );
+                })}
+              </span>
+              <hr style={{ margin: "0", padding: "0", height: "0" }} />
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -112,6 +115,11 @@ export function RadicalDetailView({ lang, radical }: RadicalDetailViewProps) {
       <h1 className="title" style={{ marginTop: "0" }}>
         {cleanRadical} 部
       </h1>
+      {lang === "h" && (
+        <p className="radical-stroke-note">
+          客語字表依 CNS11643 全字庫總筆畫分組；其他詞典依部首外筆畫分組。
+        </p>
+      )}
       <p>
         <a
           className="xref"

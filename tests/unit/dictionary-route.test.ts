@@ -51,6 +51,7 @@ describe("parseDictionaryRoute", () => {
     expect(parseDictionaryRoute("/@部首")).toBeNull();
     expect(parseDictionaryRoute("/~@部首")).toBeNull();
     expect(parseDictionaryRoute("/'@部首")).toBeNull();
+    expect(parseDictionaryRoute("/:@部首")).toBeNull();
     expect(parseDictionaryRoute("/=成語")).toBeNull();
     expect(parseDictionaryRoute("/'=諺語")).toBeNull();
     expect(parseDictionaryRoute("/:=諺語")).toBeNull();
@@ -233,6 +234,12 @@ describe("classifyRoute", () => {
     });
     it("classifies /'@木 as radical t with 木", () => {
       expect(classifyRoute("/'@木")).toEqual({ kind: "radical", lang: "t", radical: "木" });
+    });
+    it("classifies /:@ as empty radical (h)", () => {
+      expect(classifyRoute("/:@")).toEqual({ kind: "radical", lang: "h", radical: "" });
+    });
+    it("classifies /:@木 as radical h with 木", () => {
+      expect(classifyRoute("/:@木")).toEqual({ kind: "radical", lang: "h", radical: "木" });
     });
   });
 

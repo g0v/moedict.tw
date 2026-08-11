@@ -406,7 +406,7 @@ function normalizeRadicalChar(input: string): string {
 
 function RadicalGlyph({ char, lang }: { char: string; lang: DictionaryLang }) {
   const ch = normalizeRadicalChar(char);
-  const radicalPrefix = lang === "c" ? "~" : lang === "t" ? "'" : "";
+  const radicalPrefix = lang === "c" ? "~" : lang === "t" ? "'" : lang === "h" ? ":" : "";
   const radicalToken = `${radicalPrefix}@${ch}`;
   return (
     <span className="glyph">

@@ -9,7 +9,7 @@ import { classifyRoute, type DictionaryLang } from "./dictionary-route";
 export type MiddlePointTarget =
   | { page: "home" }
   | { page: "about" }
-  | { page: "radical"; lang: "a" | "c" | "t"; radical: string }
+  | { page: "radical"; lang: DictionaryLang; radical: string }
   | { page: "starred"; lang: DictionaryLang; entry?: string }
   | { page: "list"; lang: DictionaryLang; category: string }
   | { page: "dict"; lang: DictionaryLang; word: string; idx?: number };
@@ -17,7 +17,7 @@ export type MiddlePointTarget =
 /**
  * 保留 MiddlePoint 歷來的邊界行為：
  * - 多層路徑（payload 內含 `/`，非 `/N` idx 形式）一律回首頁。
- * - 空部首（`@`、`~@`）與空分類（`=`、`'=` 等）沿用舊版行為，
+ * - 空部首（`@`、`'@`、`:@`、`~@`）與空分類（`=`、`'=` 等）沿用舊版行為，
  *   fallback 成該語言的字典頁（word 為殘餘字串）——這些是無人連結的
  *   legacy 奇例，保留只為不改變可觀察行為。
  */
@@ -33,7 +33,7 @@ export function resolveMiddlePointTarget(pathname: string): MiddlePointTarget {
     case "radical": {
       if (route.radical.includes("/")) return { page: "home" };
       if (!route.radical) {
-        // 舊版：裸 '@' / '~@' 落到字典頁（App.tsx 的靜態路由通常先攔走）
+        // 舊版：裸 '@' / 語言前綴+'@' 落到字典頁（App.tsx 靜態路由通常先攔走）
         return { page: "dict", lang: route.lang, word: "@" };
       }
       return { page: "radical", lang: route.lang, radical: route.radical };

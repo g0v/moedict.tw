@@ -105,7 +105,7 @@ export function stripLangPrefix(
  * the legacy behavior where idx never bypasses a non-word route), and the
  * ONE canonical prefix-precedence chain:
  *
- *   about (exact) → `@`/`~@` exact+prefix → `*=*` starred family →
+ *   about (exact) → `@`/`'@`/`:@`/`~@` exact+prefix → `*=*` starred family →
  *   `*=` group family → entry prefixes (`'`/`:`/`~`/bare).
  *
  * `pathname` is expected percent-encoded (e.g. `url.pathname`); the
@@ -115,7 +115,7 @@ export function stripLangPrefix(
 export type ClassifiedRoute =
   | { kind: "default" }
   | { kind: "about" }
-  | { kind: "radical"; lang: "a" | "c" | "t"; radical: string }
+  | { kind: "radical"; lang: DictionaryLang; radical: string }
   | { kind: "starred"; lang: DictionaryLang; entry: string }
   | { kind: "group"; lang: DictionaryLang; category: string }
   | { kind: "entry"; lang: DictionaryLang; text: string; idx?: number }
@@ -142,9 +142,11 @@ export function classifyRoute(pathname: string): ClassifiedRoute {
   if (decoded === "@") return { kind: "radical", lang: "a", radical: "" };
   if (decoded === "~@") return { kind: "radical", lang: "c", radical: "" };
   if (decoded === "'@") return { kind: "radical", lang: "t", radical: "" };
+  if (decoded === ":@") return { kind: "radical", lang: "h", radical: "" };
   if (decoded.startsWith("@")) return { kind: "radical", lang: "a", radical: decoded.slice(1) };
   if (decoded.startsWith("~@")) return { kind: "radical", lang: "c", radical: decoded.slice(2) };
   if (decoded.startsWith("'@")) return { kind: "radical", lang: "t", radical: decoded.slice(2) };
+  if (decoded.startsWith(":@")) return { kind: "radical", lang: "h", radical: decoded.slice(2) };
 
   if (decoded.startsWith("'=*")) return { kind: "starred", lang: "t", entry: decoded.slice(3) };
   if (decoded.startsWith(":=*")) return { kind: "starred", lang: "h", entry: decoded.slice(3) };
