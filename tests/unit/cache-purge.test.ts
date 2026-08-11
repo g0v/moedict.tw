@@ -174,4 +174,30 @@ describe("handleCachePurge", () => {
     expect(res.status).toBe(403);
     expect(purgeMock).not.toHaveBeenCalled();
   });
+
+  it("deletes supplied URLs from caches.default when present", async () => {
+    const deleteMock = vi.fn(async () => true);
+    Reflect.set(globalThis, "caches", {
+      default: {
+        delete: deleteMock,
+      },
+    });
+
+    const res = await handleCachePurge(
+      new Request("http://localhost/api/cache/purge", {
+        method: "POST",
+        headers: { "X-Cache-Purge-Token": "secret" },
+        body: JSON.stringify({ urls: ["https://www.moedict.tw/api/%E9%B3%A5.json"] }),
+      }),
+      { env: { CACHE_PURGE_TOKEN: "secret" }, purge: purgeMock },
+    );
+
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as { ok: boolean; purgedUrls?: string[] };
+    expect(data.ok).toBe(true);
+    expect(data.purgedUrls).toEqual(["https://www.moedict.tw/api/%E9%B3%A5.json"]);
+    expect(deleteMock).toHaveBeenCalled();
+
+    Reflect.deleteProperty(globalThis, "caches");
+  });
 });

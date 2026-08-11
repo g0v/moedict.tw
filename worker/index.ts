@@ -16,7 +16,9 @@ import {
   type DictionaryEntryLike,
 } from "../src/utils/dictionary-route";
 import {
+  getReleaseTag,
   getVersionHeaders,
+  getVersionId,
   renderHtmlShellWithFallback,
   serveAssetWithFallback,
 } from "../src/api/release-fallback";
@@ -400,7 +402,11 @@ async function dispatchCore(request: Request, env: Env, ctx?: ExecutionContext):
     const corsHeaders = PUBLIC_CORS_HEADERS;
     if (url.pathname === "/api/cache/purge") {
       const purge = createZoneCachePurger(env);
-      return handleCachePurge(request, { env, purge });
+      return handleCachePurge(request, {
+        env,
+        purge,
+        deriveCacheKey: (req) => deriveEntryEdgeCacheKey(req, env),
+      });
     }
 
     // 提供配置資訊 API（vars → JSON；ASSET 前端有讀取，DICTIONARY 目前僅回傳未使用）
@@ -705,6 +711,31 @@ async function deriveStrokeJsonEdgeCacheKey(request: Request, env: Env): Promise
   keyUrl.searchParams.set(STROKE_EDGE_CACHE_DIGEST_PARAM, digest);
   return new Request(keyUrl.toString(), request);
 }
+/**
+ * Internal query param namespacing edge-cache keys for all other Worker-generated
+ * GET routes (e.g. `/api/*`, `/a/*`, `/raw/*`, PNG rendering) by the deployment
+ * release tag or version ID (from `env.CF_VERSION_METADATA`).
+ *
+ * WHY: Cloudflare Zone Cache Purges (and the `/api/cache/purge` endpoint) call
+ * Cloudflare's REST API to purge CDN edge objects by tag or zone, but do NOT
+ * evict `caches.default` Worker Cache API entries. Namespacing the cache key
+ * by the deployment release tag / version ID ensures that every Worker release
+ * or dictionary data update automatically invalidates stale `caches.default`
+ * entries at zero runtime cost (reads from in-memory version metadata, zero R2 reads),
+ * making Worker edge cache invalidation 100% self-healing.
+ */
+const ENTRY_EDGE_CACHE_VERSION_PARAM = "__moedict_ver";
+
+export function deriveEntryEdgeCacheKey(request: Request, env: Env): Request {
+  const meta = env.CF_VERSION_METADATA;
+  const versionTag = getReleaseTag(meta) ?? getVersionId(meta);
+  if (!versionTag || versionTag === "unknown") {
+    return request;
+  }
+  const keyUrl = new URL(request.url);
+  keyUrl.searchParams.set(ENTRY_EDGE_CACHE_VERSION_PARAM, versionTag);
+  return new Request(keyUrl.toString(), request);
+}
 
 /**
  * Dispatch boundary: edge-cache read-through, then version-header
@@ -731,7 +762,7 @@ export async function dispatch(
   // cache miss, exactly as before this fix.
   const edgeCache = typeof caches !== "undefined" ? caches.default : undefined;
   const url = new URL(request.url);
-  let cacheKey: Request | null = request;
+  let cacheKey: Request | null = null;
   if (edgeCache && request.method === "GET") {
     if (url.pathname.startsWith("/api/stroke-json/")) {
       // deriveStrokeJsonEdgeCacheKey's only internal R2 access
@@ -740,6 +771,8 @@ export async function dispatch(
       // rather than throwing — never wrap this in a try/catch here, it
       // would be unreachable dead code.
       cacheKey = await deriveStrokeJsonEdgeCacheKey(request, env);
+    } else {
+      cacheKey = deriveEntryEdgeCacheKey(request, env);
     }
     if (cacheKey) {
       try {

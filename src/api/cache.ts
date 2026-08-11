@@ -5,9 +5,9 @@
  * (or redeploy) is not stuck behind multi-day client caches.
  * Cache-Tag values are ASCII-only (Cloudflare silently drops invalid tags).
  */
+import type { OptionalVersionMetadata } from "./release-fallback";
 
 export type DictionaryLang = "a" | "t" | "h" | "c";
-
 const LANGS: DictionaryLang[] = ["a", "t", "h", "c"];
 
 /** Coarse tags used on cacheable dictionary/static GETs. */
@@ -111,14 +111,18 @@ export function extractPurgeToken(request: Request): string | null {
 
 export interface PurgeRequestBody {
   tags?: string[];
+  /** Specific request URLs to evict from `caches.default` (Worker Cache API). */
+  urls?: string[];
   /** When true, purge the full DICTIONARY_CACHE_TAGS set (not purgeEverything). */
   allDictionaryTags?: boolean;
 }
 
 export interface HandleCachePurgeOptions {
-  env: { CACHE_PURGE_TOKEN?: string };
+  env: { CACHE_PURGE_TOKEN?: string; CF_VERSION_METADATA?: OptionalVersionMetadata };
   /** Injected purger — Worker passes ctx.cache.purge.bind(ctx.cache). */
   purge: CachePurger;
+  /** Optional function to derive the exact Request cache key used by Worker Cache API. */
+  deriveCacheKey?: (request: Request) => Request;
 }
 
 /**
@@ -211,11 +215,44 @@ export async function handleCachePurge(
     );
   }
 
-  return new Response(JSON.stringify({ ok: true, purgedTags: tags }), {
-    status: 200,
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "no-store",
+  // Note on Worker Cache API (caches.default) vs Zone Cache Purge:
+  // Cloudflare's Worker Cache API (`caches.default`) requires exact Request matching
+  // and does NOT support tag-based, wildcard, prefix, or bulk `purge_everything` operations.
+  // Zone Cache Purge (via REST API POST /zones/{zoneId}/purge_cache) evicts CDN edge objects,
+  // but does NOT purge `caches.default`.
+  // Therefore, Worker Cache API entries must be version-namespaced at key derivation time
+  // (see worker/index.ts) so release deployments self-heal, while explicit `urls` purges
+  // below provide targeted single-URL deletion from `caches.default`.
+  const purgedUrls: string[] = [];
+  if (typeof caches !== "undefined" && Array.isArray(body.urls) && body.urls.length > 0) {
+    const edgeCache = (caches as unknown as { default: { delete(req: Request): Promise<boolean> } }).default;
+    for (const urlStr of body.urls) {
+        try {
+          const u = new URL(urlStr.trim(), request.url);
+          const rawReq = new Request(u.toString());
+          await edgeCache.delete(rawReq);
+          purgedUrls.push(u.toString());
+
+          if (options.deriveCacheKey) {
+            const derived = options.deriveCacheKey(rawReq);
+            if (derived.url !== rawReq.url) {
+              await edgeCache.delete(derived);
+            }
+          }
+        } catch {
+          /* best effort */
+        }
+      }
+    }
+
+  return new Response(
+    JSON.stringify({ ok: true, purgedTags: tags, ...(purgedUrls.length > 0 ? { purgedUrls } : {}) }),
+    {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store",
+      },
     },
-  });
+  );
 }

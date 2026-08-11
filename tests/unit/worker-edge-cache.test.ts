@@ -160,6 +160,32 @@ describe("dispatch edge cache layer", () => {
     const second = await dispatch(new Request(INDEX_URL), env);
     expect(second.headers.get("X-Moedict-Edge-Cache")).toBe("hit");
   });
+
+  it("namespaces the entry cache key by release tag, invalidating stale cache on release change", async () => {
+    const controls = installFakeEdgeCache();
+    const envV1 = {
+      ...makeEnv().env,
+      CF_VERSION_METADATA: { id: "uuid-1", tag: "release-v1", timestamp: "2026-08-11T00:00:00Z" },
+    };
+    const envV2 = {
+      ...makeEnv().env,
+      CF_VERSION_METADATA: { id: "uuid-2", tag: "release-v2", timestamp: "2026-08-11T01:00:00Z" },
+    };
+
+    const first = await dispatch(new Request(INDEX_URL), envV1);
+    expect(first.status).toBe(200);
+    expect(first.headers.get("X-Moedict-Edge-Cache")).toBeNull();
+    await vi.waitFor(() => expect(controls.putCalls).toBe(1));
+
+    // Repeat request on same release -> HIT
+    const second = await dispatch(new Request(INDEX_URL), envV1);
+    expect(second.headers.get("X-Moedict-Edge-Cache")).toBe("hit");
+
+    // Request on new release -> MISS (re-renders fresh)
+    const third = await dispatch(new Request(INDEX_URL), envV2);
+    expect(third.headers.get("X-Moedict-Edge-Cache")).toBeNull();
+    await vi.waitFor(() => expect(controls.putCalls).toBe(2));
+  });
 });
 
 describe("isEdgeCacheable", () => {
