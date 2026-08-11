@@ -431,11 +431,12 @@ describe("fetchWholeWordRomanization (RESCOPE #169)", () => {
     return { DICTIONARY: { get } };
   }
 
-  it("issues exactly one R2 GET per render for lang='a'", async () => {
+  it("fetches the pack once per render for lang='a' (plus optional pointer peek)", async () => {
     const env = makeDictionaryEnv(JSON.stringify({ "%u840C": { h: [{ p: "méng" }] } }));
     const result = await fetchWholeWordRomanization("萌", "a", env as never);
     expect(result).toBe("méng");
-    expect(env.DICTIONARY.get).toHaveBeenCalledTimes(1);
+    // pointer peek (miss) + pack GET
+    expect(env.DICTIONARY.get).toHaveBeenCalledTimes(2);
     expect(env.DICTIONARY.get).toHaveBeenCalledWith("pack/12.txt");
   });
 
@@ -443,7 +444,8 @@ describe("fetchWholeWordRomanization (RESCOPE #169)", () => {
     const env = makeDictionaryEnv(JSON.stringify({ "%u98DF": { h: [{ T: "tsia̍h" }] } }));
     const result = await fetchWholeWordRomanization("食", "t", env as never);
     expect(result).toBe("tsia̍h");
-    expect(env.DICTIONARY.get).toHaveBeenCalledTimes(1);
+    // pointer peek (miss) + pack GET
+    expect(env.DICTIONARY.get).toHaveBeenCalledTimes(2);
   });
 
   it("short-circuits to '' for lang='h' before any R2 fetch (documented Hakka exclusion)", async () => {

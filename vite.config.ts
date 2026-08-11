@@ -155,10 +155,14 @@ function localDataAssetsPlugin(): Plugin {
 
 function getDictionaryDataVersion(): string {
   try {
-    return execSync("git rev-parse HEAD:data/dictionary", { encoding: "utf-8" }).trim();
-  } catch {
-    return "dev";
+    const version = execSync("git rev-parse HEAD:data/dictionary", { encoding: "utf-8" }).trim();
+    if (version && /^[0-9a-f]{40}$/.test(version)) {
+      return version;
+    }
+  } catch (err) {
+    console.warn("⚠️ [build] Could not compute git rev-parse HEAD:data/dictionary; falling back to 'unknown-data-version':", err);
   }
+  return "unknown-data-version";
 }
 
 // https://vite.dev/config/

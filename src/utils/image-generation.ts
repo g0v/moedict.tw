@@ -547,9 +547,9 @@ function escapeXmlText(text: string): string {
 
 /**
  * 讀取整詞（非逐字）羅馬拼音／台羅／拼音，供 romanize=1 字圖標註使用
- * （RESCOPE #169）。只取第一個 heteronym（h[0]），且每次 render 最多打一次
- * DICTIONARY R2 GET（readR2JsonCached 本身另有 10 分鐘 per-isolate memo，
- * 見 src/api/r2-json-cache.ts）。原始 pack 資料的欄位是單字母代碼：'p' 是
+ * （RESCOPE #169）。只取第一個 heteronym（h[0]）。pack 讀取走
+ * readR2JsonCached（含 dictionary-corpus pointer peek + 10 分鐘 memo）。
+ * 原始 pack 資料的欄位是單字母代碼：'p' 是
  * 拼音（lang a/c 皆用漢語拼音），'T' 是台羅（lang t）；用 ?? 依序嘗試兩者，
  * 三種語言共用同一段邏輯（同 src/oembed/render-embed-document.ts 的
  * `heteronym.pinyin || heteronym.trs` 慣例，只是這裡讀的是尚未經

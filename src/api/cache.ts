@@ -122,7 +122,7 @@ export interface HandleCachePurgeOptions {
   /** Injected purger — Worker passes ctx.cache.purge.bind(ctx.cache). */
   purge: CachePurger;
   /** Optional function to derive the exact Request cache key used by Worker Cache API. */
-  deriveCacheKey?: (request: Request) => Request;
+  deriveCacheKey?: (request: Request) => Request | null | Promise<Request | null>;
 }
 
 /**
@@ -225,28 +225,35 @@ export async function handleCachePurge(
   // below provide targeted single-URL deletion from `caches.default`.
   const purgedUrls: string[] = [];
   if (typeof caches !== "undefined" && Array.isArray(body.urls) && body.urls.length > 0) {
-    const edgeCache = (caches as unknown as { default: { delete(req: Request): Promise<boolean> } }).default;
+    const edgeCache = (
+      caches as unknown as { default: { delete(req: Request): Promise<boolean> } }
+    ).default;
     for (const urlStr of body.urls) {
-        try {
-          const u = new URL(urlStr.trim(), request.url);
-          const rawReq = new Request(u.toString());
-          await edgeCache.delete(rawReq);
-          purgedUrls.push(u.toString());
+      if (typeof urlStr !== "string" || !urlStr.trim()) continue;
+      try {
+        const u = new URL(urlStr.trim(), request.url);
+        const rawReq = new Request(u.toString());
+        await edgeCache.delete(rawReq);
+        purgedUrls.push(u.toString());
 
-          if (options.deriveCacheKey) {
-            const derived = options.deriveCacheKey(rawReq);
-            if (derived.url !== rawReq.url) {
-              await edgeCache.delete(derived);
-            }
+        if (options.deriveCacheKey) {
+          const derived = await options.deriveCacheKey(rawReq);
+          if (derived && derived.url !== rawReq.url) {
+            await edgeCache.delete(derived);
           }
-        } catch {
-          /* best effort */
         }
+      } catch {
+        /* best effort */
       }
     }
+  }
 
   return new Response(
-    JSON.stringify({ ok: true, purgedTags: tags, ...(purgedUrls.length > 0 ? { purgedUrls } : {}) }),
+    JSON.stringify({
+      ok: true,
+      purgedTags: tags,
+      ...(purgedUrls.length > 0 ? { purgedUrls } : {}),
+    }),
     {
       status: 200,
       headers: {

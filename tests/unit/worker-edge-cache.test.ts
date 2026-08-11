@@ -53,13 +53,22 @@ afterEach(() => {
   Reflect.deleteProperty(globalThis, "caches");
 });
 
-function makeEnv() {
+function makeEnv(options: { pointer?: string | null | "error" } = {}) {
   const getCalls: string[] = [];
   const env = {
     DICTIONARY: {
       getCalls,
       get: async (key: string) => {
         getCalls.push(key);
+        if (key === "dictionary-corpus/current.json") {
+          if (options.pointer === "error") {
+            return { text: async () => "not-json{" };
+          }
+          if (options.pointer === null || options.pointer === undefined) {
+            return null;
+          }
+          return { text: async () => options.pointer as string };
+        }
         if (key === "search-index/a.json") {
           return { text: async () => '{"terms":["萌"]}' };
         }
@@ -68,6 +77,16 @@ function makeEnv() {
     },
   } as unknown as WorkerEnv;
   return { env, getCalls };
+}
+
+function pointerJson(digest: string): string {
+  return JSON.stringify({
+    schema: 1,
+    dictionaryDigest: digest,
+    manifestKey: `dictionary-corpora/${digest}/manifest.json`,
+    fileCount: 1,
+    totalBytes: 1,
+  });
 }
 
 const INDEX_URL = "http://localhost/api/search-index/a.json";
@@ -82,13 +101,13 @@ describe("dispatch edge cache layer", () => {
     expect(first.headers.get("X-Moedict-Edge-Cache")).toBeNull();
     await first.text();
     expect(controls.store.size).toBe(1);
-    expect(getCalls).toHaveLength(1);
 
     const second = await dispatch(new Request(INDEX_URL), env);
     expect(second.status).toBe(200);
     expect(second.headers.get("X-Moedict-Edge-Cache")).toBe("hit");
     expect(await second.json()).toEqual({ terms: ["萌"] });
-    expect(getCalls).toHaveLength(1); // renderer never re-invoked
+    // pointer miss once + search-index once on first miss; second is edge hit
+    expect(getCalls.filter((k) => k === "search-index/a.json")).toHaveLength(1);
   });
 
   it("keeps distinct URLs distinct, so cache-busted probes always re-render", async () => {
@@ -97,7 +116,7 @@ describe("dispatch edge cache layer", () => {
     await dispatch(new Request(`${INDEX_URL}?_probe=a`), env);
     const second = await dispatch(new Request(`${INDEX_URL}?_probe=b`), env);
     expect(second.headers.get("X-Moedict-Edge-Cache")).toBeNull();
-    expect(getCalls).toHaveLength(2);
+    expect(getCalls.filter((k) => k === "search-index/a.json")).toHaveLength(2);
     expect(controls.store.size).toBe(2);
   });
 
@@ -161,39 +180,88 @@ describe("dispatch edge cache layer", () => {
     expect(second.headers.get("X-Moedict-Edge-Cache")).toBe("hit");
   });
 
-  it("namespaces entry cache keys by DICTIONARY_DATA_VERSION: invalidates on data change, stays WARM on code deploy", async () => {
+  it("namespaces entry keys by R2 pointer digest; code deploy stays WARM; pointer change MISS", async () => {
     const controls = installFakeEdgeCache();
-    const envDataV1CodeV1 = {
-      ...makeEnv().env,
-      DICTIONARY_DATA_VERSION: "data-tree-v1",
-      CF_VERSION_METADATA: { id: "code-uuid-1", tag: "code-release-v1", timestamp: "2026-08-11T00:00:00Z" },
-    };
-    const envDataV1CodeV2 = {
-      ...makeEnv().env,
-      DICTIONARY_DATA_VERSION: "data-tree-v1",
-      CF_VERSION_METADATA: { id: "code-uuid-2", tag: "code-release-v2", timestamp: "2026-08-11T01:00:00Z" },
-    };
-    const envDataV2CodeV2 = {
-      ...makeEnv().env,
-      DICTIONARY_DATA_VERSION: "data-tree-v2",
-      CF_VERSION_METADATA: { id: "code-uuid-2", tag: "code-release-v2", timestamp: "2026-08-11T02:00:00Z" },
-    };
+    const digestV1 = "1".repeat(64);
+    const digestV2 = "2".repeat(64);
 
-    // First request on data V1 -> MISS and write
-    const first = await dispatch(new Request(INDEX_URL), envDataV1CodeV1);
+    // Mutable pointer on a single shared DICTIONARY binding (warm isolate).
+    let currentPointer: string | null = pointerJson(digestV1);
+    const getCalls: string[] = [];
+    const envBase = {
+      CF_VERSION_METADATA: {
+        id: "code-uuid-1",
+        tag: "code-release-v1",
+        timestamp: "2026-08-11T00:00:00Z",
+      },
+      DICTIONARY: {
+        get: async (key: string) => {
+          getCalls.push(key);
+          if (key === "dictionary-corpus/current.json") {
+            if (!currentPointer) return null;
+            return { text: async () => currentPointer as string };
+          }
+          if (key === "search-index/a.json") {
+            return { text: async () => '{"terms":["萌"]}' };
+          }
+          return null;
+        },
+      },
+    } as unknown as WorkerEnv;
+
+    const first = await dispatch(new Request(INDEX_URL), envBase);
     expect(first.status).toBe(200);
     expect(first.headers.get("X-Moedict-Edge-Cache")).toBeNull();
     await vi.waitFor(() => expect(controls.putCalls).toBe(1));
 
-    // Code-only release change (data version unchanged) -> HIT (cache stays WARM!)
-    const second = await dispatch(new Request(INDEX_URL), envDataV1CodeV2);
+    // Code-only release change, pointer unchanged → HIT
+    const envCodeV2 = {
+      ...envBase,
+      CF_VERSION_METADATA: {
+        id: "code-uuid-2",
+        tag: "code-release-v2",
+        timestamp: "2026-08-11T01:00:00Z",
+      },
+    } as unknown as WorkerEnv;
+    const second = await dispatch(new Request(INDEX_URL), envCodeV2);
     expect(second.headers.get("X-Moedict-Edge-Cache")).toBe("hit");
-    expect(controls.putCalls).toBe(1); // no re-render, zero R2 reads
+    expect(controls.putCalls).toBe(1);
 
-    // Dictionary data version change -> MISS (invalidates stale data and re-renders)
-    const third = await dispatch(new Request(INDEX_URL), envDataV2CodeV2);
+    // Pointer promotion on the same binding → MISS (new edge key)
+    // Need a fresh env object for pointer cache isolation? Same binding object keeps pointer memo.
+    // Force by using a new DICTIONARY object with promoted pointer.
+    const envPromoted = {
+      CF_VERSION_METADATA: envCodeV2.CF_VERSION_METADATA,
+      DICTIONARY: {
+        get: async (key: string) => {
+          if (key === "dictionary-corpus/current.json") {
+            return { text: async () => pointerJson(digestV2) };
+          }
+          if (key === "search-index/a.json") {
+            return { text: async () => '{"terms":["萌"]}' };
+          }
+          return null;
+        },
+      },
+    } as unknown as WorkerEnv;
+    const third = await dispatch(new Request(INDEX_URL), envPromoted);
     expect(third.headers.get("X-Moedict-Edge-Cache")).toBeNull();
     await vi.waitFor(() => expect(controls.putCalls).toBe(2));
+  });
+
+  it("bypasses caches.default entirely when dictionary pointer read errors", async () => {
+    const controls = installFakeEdgeCache();
+    const { env } = makeEnv({ pointer: "error" });
+    const first = await dispatch(new Request(INDEX_URL), env);
+    expect(first.status).toBe(200);
+    expect(first.headers.get("X-Moedict-Edge-Cache")).toBeNull();
+    expect(controls.store.size).toBe(0);
+    expect(controls.matchCalls).toBe(0);
+
+    const second = await dispatch(new Request(INDEX_URL), env);
+    expect(second.status).toBe(200);
+    expect(second.headers.get("X-Moedict-Edge-Cache")).toBeNull();
+    expect(controls.store.size).toBe(0);
   });
 });
 

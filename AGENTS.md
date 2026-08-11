@@ -189,9 +189,8 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
   req/5min）。大量上傳請控制並發（≤8）、對 429（error code 971）指數退避重試；
   上傳後的驗證 GET 同樣會被限流，驗證程式也要有重試，否則會把 429 誤判成
   內容不一致。
-- 只改資料（`data/dictionary/**`）→ 上傳 R2 即可，不必重佈 Worker；
-  改到 `src/`、`worker/` 任何程式 → 必須 `bun run deploy` 才會上線（見上方
-  「部署」一節的安全 rollout 鏈，不要單獨呼叫 `wrangler deploy`）。
+- 改字典資料（`data/dictionary/**`）→ 上傳 R2（最後寫入 `dictionary-corpus/current.json` 指針）即可讓 Worker 自動依據 R2 資料摘要自我翻新邊緣快取，無需重新部署 Worker；建議同步 `git commit -- data/dictionary` 以保持儲存庫與線上資料一致。
+- 改到 `src/`、`worker/` 任何程式 → 必須 `bun run deploy` 才會上線（見上方「部署」一節的安全 rollout 鏈，不要單獨呼叫 `wrangler deploy`）。
 - `data/dictionary/lookup/pinyin/**` 與 `search-index/**` 是**衍生物**，
   由 `scripts/build-pinyin-lookup.mjs`、`build-search-index.mjs` 從 pack 檔重建
   （`predev`/`prebuild` 自動跑）。改 pack 資料後不要手改衍生檔，重建再一起上傳。

@@ -11,6 +11,9 @@ import { CACHE_CONTROL, handleCachePurge } from "../src/api/cache";
 import { handleCnsAPI } from "../src/api/handleCnsAPI";
 import type { CachePurger } from "../src/api/cache";
 import {
+  resolveDictionaryPointerState,
+} from "../src/api/r2-json-cache";
+import {
   buildDefinitionDescription,
   parseDictionaryRoute,
   type DictionaryEntryLike,
@@ -709,50 +712,79 @@ async function deriveStrokeJsonEdgeCacheKey(request: Request, env: Env): Promise
   keyUrl.searchParams.set(STROKE_EDGE_CACHE_DIGEST_PARAM, digest);
   return new Request(keyUrl.toString(), request);
 }
+
 declare const __DICTIONARY_DATA_VERSION__: string | undefined;
 
-export function getDictionaryDataVersion(env?: { DICTIONARY_DATA_VERSION?: string }): string {
-  if (env?.DICTIONARY_DATA_VERSION) return env.DICTIONARY_DATA_VERSION;
-  if (typeof __DICTIONARY_DATA_VERSION__ !== "undefined" && __DICTIONARY_DATA_VERSION__) {
-    return __DICTIONARY_DATA_VERSION__;
+/** Build-time fallback only — used when R2 pointer is missing during rollout. */
+export function getBuildDictionaryDataVersion(
+  env?: { DICTIONARY_DATA_VERSION?: string },
+): string | null {
+  if (env?.DICTIONARY_DATA_VERSION && env.DICTIONARY_DATA_VERSION !== "dev") {
+    return env.DICTIONARY_DATA_VERSION;
   }
-  return "dev";
+  if (typeof __DICTIONARY_DATA_VERSION__ !== "undefined" && __DICTIONARY_DATA_VERSION__) {
+    const v = __DICTIONARY_DATA_VERSION__;
+    if (v !== "dev" && v !== "unknown-data-version") return v;
+  }
+  return null;
 }
 
 export function isEntryRoutePath(pathname: string): boolean {
-  return /^\/(?:api\/(?!stroke-json\/)|a\/|t\/|h\/|c\/|raw\/|uni\/|pua\/|embed\/)/.test(pathname);
+  if (pathname.startsWith("/api/stroke-json/")) return false;
+  if (pathname === "/api/cache/purge" || pathname === "/api/config") return false;
+  if (pathname.startsWith("/api/")) return true;
+  if (/^\/(?:a|t|h|c|raw|uni|pua)\//.test(pathname)) return true;
+  if (pathname.startsWith("/embed/")) return true;
+  if (pathname.endsWith(".json")) return true;
+  return false;
 }
 
 /**
  * Internal query param namespacing edge-cache keys for dictionary entry routes
- * by the stable dictionary data tree SHA (computed at build time via
- * `git rev-parse HEAD:data/dictionary`).
+ * by the live R2 dictionary corpus digest (`dictionary-corpus/current.json`).
  *
- * WHY: Cloudflare Zone Cache Purges (and the `/api/cache/purge` endpoint) call
- * Cloudflare's REST API to purge CDN edge objects by tag or zone, but do NOT
- * evict `caches.default` Worker Cache API entries. Namespacing the cache key
- * by the stable `__DICTIONARY_DATA_VERSION__` ensures that dictionary data updates
- * (which change the data tree SHA) automatically invalidate stale `caches.default`
- * entries at zero runtime cost (zero R2 reads), while code-only releases leave the
- * dictionary data version unchanged and keep edge cache entries WARM.
+ * WHY: Cloudflare Zone Cache Purges do NOT evict `caches.default` Worker Cache
+ * API entries. Namespacing by the R2 pointer digest makes dictionary uploads
+ * self-invalidate the moment the pointer is promoted — no Worker redeploy
+ * required. The build-time `__DICTIONARY_DATA_VERSION__` is only a rollout
+ * fallback when the pointer object is missing.
+ *
+ * Three pointer states (see resolveDictionaryPointerState):
+ * - valid → namespace by 64-hex digest
+ * - missing → fall back to build-time version (or bare request)
+ * - error → return null so dispatch BYPASSES caches.default entirely
+ *   (fail closed against indefinitely-stale edge entries)
  */
 const ENTRY_EDGE_CACHE_VERSION_PARAM = "__moedict_ver";
 
-export function deriveEntryEdgeCacheKey(
+export async function deriveEntryEdgeCacheKey(
   request: Request,
-  env?: { DICTIONARY_DATA_VERSION?: string },
-): Request {
+  env: Env,
+): Promise<Request | null> {
   const url = new URL(request.url);
   if (!isEntryRoutePath(url.pathname)) {
     return request;
   }
-  const dataVersion = getDictionaryDataVersion(env);
-  if (!dataVersion || dataVersion === "dev") {
+
+  const pointerState = await resolveDictionaryPointerState(env.DICTIONARY);
+  let dataVersion: string | null = null;
+  if (pointerState.kind === "valid") {
+    dataVersion = pointerState.digest;
+  } else if (pointerState.kind === "error") {
+    // Fail closed: do not read or write caches.default while the pointer is unreadable.
+    return null;
+  } else {
+    // missing — rollout fallback
+    dataVersion = getBuildDictionaryDataVersion(env);
+  }
+
+  if (!dataVersion) {
     return request;
   }
   url.searchParams.set(ENTRY_EDGE_CACHE_VERSION_PARAM, dataVersion);
   return new Request(url.toString(), request);
 }
+
 
 /**
  * Dispatch boundary: edge-cache read-through, then version-header
@@ -789,7 +821,7 @@ export async function dispatch(
       // would be unreachable dead code.
       cacheKey = await deriveStrokeJsonEdgeCacheKey(request, env);
     } else {
-      cacheKey = deriveEntryEdgeCacheKey(request, env);
+      cacheKey = await deriveEntryEdgeCacheKey(request, env);
     }
     if (cacheKey) {
       try {

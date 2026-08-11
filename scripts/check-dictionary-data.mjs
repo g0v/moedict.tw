@@ -269,6 +269,25 @@ for (const lang of XREF_BY_ID_LANGS) {
   }
   xrefByIdCheckedCount++;
 }
+// --- Check 6: Warn loudly if data/dictionary has uncommitted working-tree changes.
+try {
+  const status = execFileSync("git", ["status", "--porcelain", "--", "data/dictionary"], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+  }).trim();
+  if (status) {
+    const dirtyCount = status.split("\n").filter(Boolean).length;
+    console.warn(
+      `\n⚠️  [check-dictionary-data] WARNING: data/dictionary has ${dirtyCount} uncommitted working-tree change(s)!\n` +
+        `   upload_dictionary.sh will REFUSE to upload while dirty.\n` +
+        `   Commit first (\`git commit -- data/dictionary\`), then upload to R2.\n` +
+        `   Pointer promotion (dictionary-corpus/current.json LAST) is the cache invalidation event;\n` +
+        `   Worker redeploy is NOT required for dictionary freshness.`,
+    );
+  }
+} catch {
+  /* non-fatal if git is unavailable */
+}
 
 console.log(
   `[check-dictionary-data] ${totalParsed}/${totalFiles} files parsed, ` +
