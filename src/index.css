@@ -1364,10 +1364,10 @@ body[data-ruby-pref]
   margin-top: 0.4em;
 }
 
-/* 歷代書體按鈕區 */
+/* 歷代書體按鈕：與 暫停/下一畫 同列 flex（StrokeAnimation.tsx）。
+   不可設 margin-bottom——flex align-items:center 會把有底 margin 的項目上移。 */
 #historical-scripts {
   display: inline-block;
-  margin-bottom: 8px;
 }
 .historical-scripts-area section {
   clear: both;
