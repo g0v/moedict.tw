@@ -645,16 +645,30 @@ async function dispatchCore(request: Request, env: Env, ctx?: ExecutionContext):
 }
 
 /**
- * Edge-cacheability predicate for Worker-generated responses.
+ * Edge-cacheability predicate for the Worker Cache API (`caches.default`).
  *
- * Cloudflare does NOT edge-cache Worker responses on its own — every
- * `s-maxage` in src/api/cache.ts was decorative until dispatch() started
- * writing through `caches.default` (2026-07 billing audit: bots re-rendered
- * identical PNGs and re-read identical dictionary shards on every hit).
- * Opt-in is response-driven: any GET 200 whose Cache-Control carries a
- * positive s-maxage, except HTML shells (release-fallback correctness
- * depends on fresh shell rendering) and anything no-store/private or
- * carrying Set-Cookie.
+ * Two independent edge stores exist:
+ *   1. `caches.default` (Worker Cache API) — keyed by a synthetic Request
+ *      (often digest-namespaced). Reported via `X-Moedict-Edge-Cache`.
+ *   2. Cloudflare zone CDN — keyed by the public URL. Reported via
+ *      `cf-cache-status` / `Age`.
+ *
+ * Worker responses ARE zone-CDN-cacheable when the path looks cacheable to
+ * Cloudflare (e.g. `*.json` is in the default extension set) and
+ * Cache-Control permits it (`public` + positive `s-maxage`). The older claim
+ * that "Cloudflare does NOT edge-cache Worker responses on its own" and that
+ * every `s-maxage` was decorative until `caches.default` was wrong: it is
+ * exactly why bare canonical `/api/*.json` URLs could serve 24h-stale bodies
+ * after a dictionary pointer promotion while `caches.default` was already
+ * digest-correct.
+ *
+ * This predicate only decides whether dispatch() writes a clone into
+ * `caches.default`. Zone-CDN storage of the network response is controlled
+ * separately (see `applyZoneCdnBypassHeaders`).
+ *
+ * Opt-in: GET 200 whose Cache-Control carries a positive s-maxage, except
+ * HTML shells (release-fallback correctness depends on fresh shell
+ * rendering) and anything no-store/private or carrying Set-Cookie.
  */
 export function isEdgeCacheable(request: Request, response: Response): boolean {
   if (request.method !== "GET" || response.status !== 200) return false;
@@ -664,6 +678,53 @@ export function isEdgeCacheable(request: Request, response: Response): boolean {
   if (response.headers.has("Set-Cookie")) return false;
   const contentType = response.headers.get("Content-Type") ?? "";
   return !contentType.includes("text/html");
+}
+
+/**
+ * Routes whose *data* network responses must not be retained by the zone CDN.
+ * These are URLs whose origin bytes change without the public URL changing
+ * (dictionary pointer promotion, stroke corpus promotion, CNS upload).
+ *
+ * Explicitly excluded: hashed `/assets/*`, HTML shells (including `/embed/*`
+ * HTML and bare SPA paths under `/a|t|h|c/…` without `.json`). HTML is also
+ * rejected via Content-Type when known.
+ */
+export function shouldBypassZoneCdn(
+  pathname: string,
+  contentType?: string | null,
+): boolean {
+  if (contentType && contentType.includes("text/html")) return false;
+  if (pathname.startsWith("/api/stroke-json/")) return true;
+  if (pathname.startsWith("/api/cns/") || pathname === "/api/cns") return true;
+  if (pathname === "/api/cache/purge" || pathname === "/api/config") return false;
+  // Dictionary/list/search/xref JSON APIs under /api/
+  if (pathname.startsWith("/api/")) return true;
+  // Bare *.json dictionary compatibility routes (not HTML)
+  if (pathname.endsWith(".json")) return true;
+  return false;
+}
+
+/**
+ * Strip zone-CDN storage directives from a *network* response while leaving
+ * browser max-age intact. Does not mutate any Response already stored in
+ * `caches.default` — call only on headers about to leave the Worker.
+ *
+ * - Cloudflare-CDN-Cache-Control / CDN-Cache-Control: no-store — zone CDN
+ * - Cache-Control: drop s-maxage and stale-while-revalidate so non-CF
+ *   intermediaries that ignore CDN-Cache-Control cannot hold a long copy.
+ */
+export function applyZoneCdnBypassHeaders(headers: Headers): void {
+  headers.set("Cloudflare-CDN-Cache-Control", "no-store");
+  headers.set("CDN-Cache-Control", "no-store");
+  const cc = headers.get("Cache-Control");
+  if (!cc) return;
+  const kept = cc
+    .split(",")
+    .map((d) => d.trim())
+    .filter((d) => d.length > 0)
+    .filter((d) => !/^s-maxage\s*=/i.test(d))
+    .filter((d) => !/^stale-while-revalidate\s*=/i.test(d));
+  headers.set("Cache-Control", kept.length > 0 ? kept.join(", ") : "public, max-age=0");
 }
 
 /**
@@ -736,7 +797,8 @@ export function getBuildDictionaryDataVersion(
  * Default for unknown `/api/*` is **in** this set (safer: a new dictionary-
  * backed route auto-busts with dictionary uploads). Explicit opt-outs:
  *   - `/api/stroke-json/*` — own atomic stroke corpus digest (separate branch)
- *   - `/api/cns/*`         — unversioned bare URL; accepts up to ~1d s-maxage lag after CNS upload (tag purge ≠ caches.default)
+ *   - `/api/cns/*`         — unversioned bare URL at caches.default; zone CDN
+ *                            still bypassed via shouldBypassZoneCdn
  *   - `/api/cache/purge`, `/api/config` — control plane, never edge-cached
  *
  * Do NOT add a new non-dictionary API under `/api/` without either (a) putting
@@ -761,19 +823,23 @@ export function isEntryRoutePath(pathname: string): boolean {
  * Internal query param namespacing edge-cache keys for dictionary entry routes
  * by the live R2 dictionary corpus digest (`dictionary-corpus/current.json`).
  *
- * This is **cache busting only**: dictionary uploads still overwrite flat R2
- * keys in place. The digest changes so old `caches.default` entries stop
- * matching; it does not version corpus object storage and cannot roll back
- * bytes. Pointer read errors return null so dispatch bypasses edge cache
- * (fail closed vs indefinitely-stale entries). Missing pointer falls back to
+ * This is **cache busting only** for `caches.default`: dictionary uploads
+ * still overwrite flat R2 keys in place. The digest changes so old
+ * `caches.default` entries stop matching; it does not version corpus object
+ * storage and cannot roll back bytes. Zone-CDN storage of bare public URLs is
+ * prevented separately via {@link applyZoneCdnBypassHeaders}.
+ *
+ * Pointer read errors return null so dispatch bypasses edge cache (fail
+ * closed vs indefinitely-stale entries). Missing pointer falls back to
  * build-time `__DICTIONARY_DATA_VERSION__` for rollout only.
  *
- * CNS is intentionally unversioned (see `isEntryRoutePath` opt-out): the
- * corpus is a published government release regenerated rarely. Bare URLs mean
- * `caches.default` entries can remain until s-maxage (~1d) after a CNS upload —
- * Zone Cache-Tag purge does NOT clear `caches.default` (src/api/cache.ts).
- * Acceptable only while releases stay rare; more frequent CNS releases or a
- * hard freshness requirement should add a CNS pointer or exact-key deletes.
+ * CNS is intentionally unversioned at `caches.default` (see
+ * `isEntryRoutePath` opt-out): the corpus is a published government release
+ * regenerated rarely. Bare URLs mean `caches.default` entries can remain
+ * until s-maxage (~1d) after a CNS upload — Zone Cache-Tag purge does NOT
+ * clear `caches.default` (src/api/cache.ts). Acceptable only while releases
+ * stay rare; more frequent CNS releases or a hard freshness requirement
+ * should add a CNS pointer or exact-key deletes.
  */
 const ENTRY_EDGE_CACHE_VERSION_PARAM = "__moedict_ver";
 
@@ -805,12 +871,19 @@ export async function deriveEntryEdgeCacheKey(
   return new Request(url.toString(), request);
 }
 
-
 /**
  * Dispatch boundary: edge-cache read-through, then version-header
  * decoration on every response (API, compatibility, and fallback routes all
  * expose the same metadata without per-route branching), then a best-effort
  * edge-cache write for responses that opt in via `isEdgeCacheable`.
+ *
+ * Header split (upload-driven invalidation for canonical URLs):
+ *   - `caches.default.put(clone)` keeps the handler's full Cache-Control
+ *     including s-maxage (Worker Cache API TTL).
+ *   - The Response returned toward the client/zone CDN gets
+ *     Cloudflare-CDN-Cache-Control: no-store and loses s-maxage, so the
+ *     zone CDN cannot retain a second unversioned bare-URL copy that
+ *     pointer promotion cannot bust.
  */
 export async function dispatch(
   request: Request,
@@ -824,21 +897,14 @@ export async function dispatch(
   // to a no-op there (and on *.workers.dev, where cache.put is a no-op).
   //
   // `/api/stroke-json/*` uses a digest-namespaced cache key (see
-  // deriveStrokeJsonEdgeCacheKey) instead of the bare request — every other
-  // route's cache key is the request itself, unchanged. HEAD requests never
-  // enter this layer at all (method !== "GET"), so HEAD/If-None-Match
-  // conditional semantics are handled entirely by handleStrokeAPI on a
-  // cache miss, exactly as before this fix.
+  // deriveStrokeJsonEdgeCacheKey); dictionary entry routes use
+  // deriveEntryEdgeCacheKey. HEAD never enters this layer (method !== "GET").
   const edgeCache = typeof caches !== "undefined" ? caches.default : undefined;
   const url = new URL(request.url);
   let cacheKey: Request | null = null;
   if (edgeCache && request.method === "GET") {
     if (url.pathname.startsWith("/api/stroke-json/")) {
-      // deriveStrokeJsonEdgeCacheKey's only internal R2 access
-      // (peekStrokeCorpusDigest -> resolveCorpus -> resolveCorpusUncached)
-      // already catches every failure itself and resolves to `null`
-      // rather than throwing — never wrap this in a try/catch here, it
-      // would be unreachable dead code.
+      // peekStrokeCorpusDigest already fail-closes to null — no try/catch needed.
       cacheKey = await deriveStrokeJsonEdgeCacheKey(request, env);
     } else {
       cacheKey = await deriveEntryEdgeCacheKey(request, env);
@@ -849,6 +915,9 @@ export async function dispatch(
         if (hit) {
           const headers = new Headers(hit.headers);
           headers.set("X-Moedict-Edge-Cache", "hit");
+          if (shouldBypassZoneCdn(url.pathname, headers.get("Content-Type"))) {
+            applyZoneCdnBypassHeaders(headers);
+          }
           return new Response(hit.body, {
             status: hit.status,
             statusText: hit.statusText,
@@ -860,6 +929,7 @@ export async function dispatch(
       }
     }
   }
+
   const response = await dispatchCore(request, env, ctx);
   const headers = new Headers(response.headers);
   const versionHeaders = getVersionHeaders(env.CF_VERSION_METADATA);
@@ -870,14 +940,19 @@ export async function dispatch(
   } else {
     headers.delete("X-Moedict-Release");
   }
-  const decorated = new Response(response.body, {
+
+  // storeResponse keeps full Cache-Control (incl. s-maxage) for caches.default.
+  // clientResponse is a clone; zone-CDN bypass headers apply only to the clone.
+  const storeResponse = new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
     headers,
   });
-  if (edgeCache && cacheKey && isEdgeCacheable(request, decorated)) {
-    // Promise.resolve guards non-conformant Cache stubs (tests stub put as a plain spy).
-    const putPromise = Promise.resolve(edgeCache.put(cacheKey, decorated.clone())).catch(() => {
+  const clientResponse = storeResponse.clone();
+
+  if (edgeCache && cacheKey && isEdgeCacheable(request, storeResponse)) {
+    // CRITICAL: put the FULL s-maxage clone, never the CDN-bypassed client copy.
+    const putPromise = Promise.resolve(edgeCache.put(cacheKey, storeResponse)).catch(() => {
       // Best-effort: a failed put only means the next request re-renders.
     });
     if (ctx) {
@@ -886,7 +961,17 @@ export async function dispatch(
       void putPromise;
     }
   }
-  return decorated;
+
+  if (shouldBypassZoneCdn(url.pathname, clientResponse.headers.get("Content-Type"))) {
+    const clientHeaders = new Headers(clientResponse.headers);
+    applyZoneCdnBypassHeaders(clientHeaders);
+    return new Response(clientResponse.body, {
+      status: clientResponse.status,
+      statusText: clientResponse.statusText,
+      headers: clientHeaders,
+    });
+  }
+  return clientResponse;
 }
 
 /**
@@ -900,6 +985,7 @@ export async function dispatch(
  * permission for the moedict.tw zone). The zone ID is the account's only
  * zone; we hardcode it since there is exactly one.
  */
+
 const MOEDICT_TW_ZONE_ID = "208ed37cabff643b306011964e52ad25";
 
 export function createZoneCachePurger(env: ZoneCachePurgerEnv): CachePurger {

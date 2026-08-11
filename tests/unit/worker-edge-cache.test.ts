@@ -1,21 +1,22 @@
 /**
  * Unit tests for the dispatch-boundary edge cache layer (worker/index.ts).
  *
- * Cloudflare never edge-caches Worker-generated responses on its own; the
- * 2026-07 billing audit showed bots re-rendering identical responses on
- * every hit. dispatch() now reads through `caches.default` and writes back
- * responses that opt in via `isEdgeCacheable`. These tests install a fake
- * `caches` global (absent in plain Node, so every other unit test exercises
- * the no-op path) and defend: read-through hits, opt-in criteria, probe
- * safety (unique URLs miss), and failure isolation (cache errors never break
- * rendering).
+ * Two independent edge stores: `caches.default` (Worker Cache API, digest-
+ * keyed) and the Cloudflare zone CDN (public URL). dispatch() reads through
+ * `caches.default` and writes back responses that opt in via `isEdgeCacheable`.
+ * Network responses for data routes also get zone-CDN bypass headers so the
+ * CDN cannot retain an unversioned bare-URL copy. These tests install a fake
+ * `caches` global (absent in plain Node) and defend: read-through hits, opt-in
+ * criteria, probe safety, zone-CDN bypass header split, and failure isolation.
  */
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import {
+  applyZoneCdnBypassHeaders,
   dispatch,
   deriveEntryEdgeCacheKey,
   isEdgeCacheable,
   isEntryRoutePath,
+  shouldBypassZoneCdn,
 } from "../../worker/index";
 
 type WorkerEnv = Parameters<typeof dispatch>[1];
@@ -392,6 +393,91 @@ describe("isEdgeCacheable", () => {
     expect(isEdgeCacheable(GET, noContentType)).toBe(true); // opt-in via s-maxage stands
   });
 });
+
+describe("zone CDN bypass (dispatch header split)", () => {
+  it("shouldBypassZoneCdn covers entry JSON, stroke-json, CNS; excludes HTML and config", () => {
+    expect(shouldBypassZoneCdn("/api/%E9%B3%A5.json")).toBe(true);
+    expect(shouldBypassZoneCdn("/api/search-index/a.json")).toBe(true);
+    expect(shouldBypassZoneCdn("/a/%E9%B3%A5.json")).toBe(true);
+    expect(shouldBypassZoneCdn("/api/stroke-json/840c.json")).toBe(true);
+    expect(shouldBypassZoneCdn("/api/cns/%E4%B4%89.json")).toBe(true);
+    expect(shouldBypassZoneCdn("/api/config")).toBe(false);
+    expect(shouldBypassZoneCdn("/api/cache/purge")).toBe(false);
+    expect(shouldBypassZoneCdn("/embed/a/%E9%B3%A5")).toBe(false);
+    expect(shouldBypassZoneCdn("/embed/a/%E9%B3%A5", "text/html; charset=utf-8")).toBe(false);
+    expect(shouldBypassZoneCdn("/api/x.json", "text/html")).toBe(false);
+    expect(shouldBypassZoneCdn("/assets/index-abc.js")).toBe(false);
+  });
+
+  it("applyZoneCdnBypassHeaders strips s-maxage/swr and sets CDN no-store; keeps max-age", () => {
+    const h = new Headers({
+      "Cache-Control":
+        "public, max-age=300, s-maxage=86400, stale-while-revalidate=604800",
+    });
+    applyZoneCdnBypassHeaders(h);
+    expect(h.get("Cloudflare-CDN-Cache-Control")).toBe("no-store");
+    expect(h.get("CDN-Cache-Control")).toBe("no-store");
+    const cc = h.get("Cache-Control") ?? "";
+    expect(cc).toContain("max-age=300");
+    expect(cc).toContain("public");
+    expect(cc).not.toMatch(/s-maxage/i);
+    expect(cc).not.toMatch(/stale-while-revalidate/i);
+  });
+
+  it("dispatch puts full s-maxage clone into caches.default but returns CDN-bypassed headers", async () => {
+    const putBodies: Array<{ url: string; cacheControl: string | null; cdn: string | null }> = [];
+    const controls = installFakeEdgeCache({
+      put: async (request, response) => {
+        putBodies.push({
+          url: request.url,
+          cacheControl: response.headers.get("Cache-Control"),
+          cdn: response.headers.get("Cloudflare-CDN-Cache-Control"),
+        });
+        controls.store.set(request.url, response);
+      },
+    });
+    const { env } = makeEnv();
+    const res = await dispatch(new Request(INDEX_URL), env);
+    expect(res.status).toBe(200);
+    // Network response: zone CDN must not store
+    expect(res.headers.get("Cloudflare-CDN-Cache-Control")).toBe("no-store");
+    expect(res.headers.get("CDN-Cache-Control")).toBe("no-store");
+    const netCc = res.headers.get("Cache-Control") ?? "";
+    expect(netCc).not.toMatch(/s-maxage/i);
+    expect(netCc).toMatch(/max-age=/i);
+    // Stored clone must retain s-maxage for Worker Cache API TTL
+    await vi.waitFor(() => expect(controls.putCalls).toBe(1));
+    expect(putBodies).toHaveLength(1);
+    // search-index uses CACHE_CONTROL.searchIndex which has s-maxage=604800
+    expect(putBodies[0].cacheControl).toContain("s-maxage=");
+    expect(putBodies[0].cacheControl ?? "").toMatch(/s-maxage=[1-9]/);
+    expect(putBodies[0].cdn).toBeNull();
+    // isEdgeCacheable still true for a full-s-maxage response (the put clone)
+    expect(
+      isEdgeCacheable(
+        new Request(INDEX_URL),
+        new Response("x", {
+          status: 200,
+          headers: {
+            "Cache-Control": putBodies[0].cacheControl!,
+            "Content-Type": "application/json",
+          },
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it("dispatch cache HIT also returns CDN-bypassed headers", async () => {
+    installFakeEdgeCache();
+    const { env } = makeEnv();
+    await dispatch(new Request(INDEX_URL), env);
+    const hit = await dispatch(new Request(INDEX_URL), env);
+    expect(hit.headers.get("X-Moedict-Edge-Cache")).toBe("hit");
+    expect(hit.headers.get("Cloudflare-CDN-Cache-Control")).toBe("no-store");
+    expect(hit.headers.get("Cache-Control") ?? "").not.toMatch(/s-maxage/i);
+  });
+});
+
 
 // ---------------------------------------------------------------------------
 // P1 fix: /api/stroke-json/* edge cache identity is namespaced by the
