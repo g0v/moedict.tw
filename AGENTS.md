@@ -88,9 +88,12 @@ vp run test:coverage          # 三層 coverage 合併至 coverage/combined/
 **沒有裸 `wrangler deploy` 這條路。** 標準指令一律走安全 orchestrator：
 
 ```bash
-bun run deploy:staging   # 先 staging：build → 發布 R2 → 兩階段 rollout
+bun run deploy:staging   # 只 staging：build → 發布 R2 → 兩階段 rollout
 # → 自動於 https://cf-moedict-webkit-neo-staging.audreyt.workers.dev 做 0%/100% smoke + 120 秒 probe
-bun run deploy           # staging 通過後才部署 production；同樣 build → 發布 R2 → rollout
+bun run deploy           # 只 production（須已有 staging approval）；同樣 build → 發布 R2 → rollout
+# 兩者是 package.json 裡兩條獨立 script，不會自動串。不要手寫
+# `bun run deploy:staging && bun run deploy`——staging gate 的意義就是
+# 先看 staging 證據再決定要不要上 production；串起來等於跳過人工 gate。
 ```
 
 `deploy`/`deploy:staging` 都是「同一次 build 產物」貫穿到底的三段 `&&` 鏈：
@@ -189,7 +192,7 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
   req/5min）。大量上傳請控制並發（≤8）、對 429（error code 971）指數退避重試；
   上傳後的驗證 GET 同樣會被限流，驗證程式也要有重試，否則會把 429 誤判成
   內容不一致。
-- 改字典資料（`data/dictionary/**`）→ 上傳 R2 時會**原地覆寫** flat keys（`pack/*`、`a/*` 等），最後寫入 `dictionary-corpus/current.json` 指針（digest = 上傳物件清單的 SHA-256）。Worker 用此 digest **只做 caches.default / pack memo 的 cache bust**——**不是** atomic corpus promotion，也**不能**靠退回舊指針還原舊 bytes（flat 物件已被覆寫；`dictionary-corpora/<digest>/` 目前只存 manifest，讀取路徑不用它）。上傳過程中讀者可能短暫看到舊新混雜。建議同步 `git commit -- data/dictionary` 保持儲存庫一致；字典 freshness **不需** redeploy Worker。**刻意不做 atomic versioned corpora**：每保留一版約 +226 MB、需 dual-write 遷移與 GC；混合讀窗以分鐘計且上傳不頻繁。改做 atomic 的條件：產品要求上傳中跨 entry 一致性，或上傳頻率高到混合窗不可接受。
+- 改字典資料（`data/dictionary/**`）→ 上傳 R2 時會**原地覆寫** flat keys（`pack/*`、`a/*` 等），最後寫入 `dictionary-corpus/current.json` 指針（digest = 上傳物件清單的 SHA-256）。Worker 用此 digest **只做 caches.default / pack memo 的 cache bust**——**不是** atomic corpus promotion，也**不能**靠退回舊指針還原舊 bytes（flat 物件已被覆寫；`dictionary-corpora/<digest>/` 目前只存 manifest，讀取路徑不用它）。上傳過程中讀者可能短暫看到舊新混雜。建議同步 `git commit -- data/dictionary` 保持儲存庫一致；字典 freshness **不需** redeploy Worker。**刻意不做 atomic versioned corpora**：每保留一版約 +226 MB、需 dual-write 遷移與 GC；混合讀窗以分鐘計且上傳不頻繁。改做 atomic 的條件：產品要求上傳中跨 entry 一致性，或上傳頻率高到混合窗不可接受。**Zone CDN 另層**：公開 URL 不帶 digest；資料路由靠 `applyZoneCdnBypassHeaders` 阻止 zone 存 bare-URL 副本（見「邊緣快取」雙層說明）。`X-Moedict-Edge-Cache` ≠ `cf-cache-status`。
 - **邊緣快取命名空間邊界**（`isEntryRoutePath` in `worker/index.ts`）：未知 `/api/*` 預設進 dictionary digest 命名空間（新字典路由自動 bust）。明確 opt-out：`/api/stroke-json/*`（自有 atomic stroke digest）、`/api/cns/*`（見下）、`/api/cache/purge`、`/api/config`。新增非字典 API 時必須 opt-out 或確認其 R2 物件在 dictionary inventory 內。
 - **CNS（`/api/cns/*`）刻意不版本化**：全字庫是政府釋出、少再生（`UPLOAD_SCOPE=cns`，~77k 物件、數小時上傳）。不建 `cns-corpus/current.json`；`caches.default` 用 bare URL（無 digest 參數）。**注意**：Zone Cache-Tag purge（`cns,cns-record`）**不會**清 `caches.default`（見 `src/api/cache.ts`）；CNS 上傳後 Worker edge 條目可能殘留至 `s-maxage=86400`（外加 stale-while-revalidate）。因再生極少，接受這段 TTL 為 freshness 代價。若要立即一致或再生變頻繁 → 再加 CNS pointer／exact-URL delete，不要假裝 tag purge 已解決。
 - **本機 root `data/dictionary/{=,@}*.json`（282 檔）不是 live 資料**：Worker 一律讀 `${lang}/=…` / `${lang}/@…`；upload 也只 sync `a/t/h/c`。其中 258 檔已與 `a/` 孿生內容漂移。勿當正式資料改；清理另議。
@@ -350,32 +353,35 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
 
 ## 邊緣快取（src/api/cache.ts）
 
-| 內容              | browser / edge TTL         |
-| ----------------- | -------------------------- |
-| 詞條 JSON（dict） | 300s / **86400s** + SWR 7d |
-| index / lookup    | 60s / 300s                 |
-| /api/config       | 60s / 300s（原 no-store）  |
-| search-index      | 3600s / 7d                 |
-| HTML shell        | 0 / 60s                    |
-| 字圖 PNG          | 1d / 1y                    |
+| 內容              | browser / Worker-edge TTL（`caches.default`） |
+| ----------------- | --------------------------------------------- |
+| 詞條 JSON（dict） | 300s / **86400s** + SWR 7d                    |
+| index / lookup    | 60s / 300s                                    |
+| /api/config       | 60s / 300s（原 no-store）                     |
+| search-index      | 3600s / 7d                                    |
+| HTML shell        | 0 / 60s                                       |
+| 字圖 PNG          | 1d / 1y                                       |
 
-- **edge cache 自 2026-07 起才真正生效**：Cloudflare 不會自動快取 Worker 產生的
-  回應——`dispatch()`（worker/index.ts）現在對「GET、200、s-maxage>0、非
-  text/html、非 no-store/private/Set-Cookie」的回應寫入 `caches.default`，
-  命中時帶 `X-Moedict-Edge-Cache: hit` 標頭。在此之前上表的 edge TTL 全是
-  裝飾。HTML shell 刻意不進 edge cache（release fallback 正確性依賴現渲染）。
-  deploy/rollback probe 一律帶 `_probe` cache-buster，不受影響。
+
+- **雙層邊緣快取（2026-08-11 釐清；`f280c695`）**：`X-Moedict-Edge-Cache` 與 `cf-cache-status` **報的是不同層**——搞混這件事曾讓字典上傳後公開 URL 殘留舊 `X-Moedict-Version` 數小時。
+  1. **`caches.default`（Worker Cache API）**：`dispatch()` 對「GET、200、`s-maxage>0`、非 text/html、非 no-store/private/Set-Cookie」的回應 `put(network.clone())`；字典／search／xref 以 pointer digest 命名空間 key（見上「改字典資料」）；命中回 `X-Moedict-Edge-Cache: hit`。**clone 必須保留完整 `s-maxage`**，否則 Worker 層只靠 browser `max-age` 過期、會 thrash。
+  2. **Zone CDN（公開 URL key）**：路徑像 `*.json` 時 Cloudflare **預設**會依 `Cache-Control` 快取 Worker 回應——舊註解「Cloudflare 不會自動快取 Worker 回應、`s-maxage` 只是裝飾」是**錯的**，只對非 cacheable 副檔名／明確 no-store 成立。Zone 層看 `cf-cache-status` / `Age`，**不**看 `X-Moedict-Edge-Cache`。
+- **`applyZoneCdnBypassHeaders`（資料路由網路回應）**：對 `shouldBypassZoneCdn` 路徑設 `Cloudflare-CDN-Cache-Control` + `CDN-Cache-Control: no-store`，並從外出 `Cache-Control` 拿掉 `s-maxage` / `stale-while-revalidate`（保留 browser `max-age`）。只改即將離開 Worker 的 headers；**絕不**改寫已 `put` 進 `caches.default` 的 clone。
+  - **in**：詞條／list／search／xref JSON、`/api/stroke-json/*`、`/api/cns/*`、bare `/a|t|h|c|raw|uni|pua/…` 當 JSON 出的相容路徑
+  - **out**：HTML shell（含 `/embed` HTML）、content-hashed `/assets/*`、`/api/config`；`r2-assets` 靜態物件是另一條問題
+- **upload-driven invalidation 現在涵蓋什麼**：canonical 字典／stroke／CNS **URL**——digest key 讓舊 `caches.default` 對不上 + zone CDN 不再存 bare-URL 副本。**不**涵蓋 `r2-assets` 靜態物件；字典 flat key 仍是原地覆寫，**不是** atomic corpus rollback。
+- **殘留 caveat（不要軟化）**：改動前寫進 `caches.default` 的舊條目，在其 Worker-cache `s-maxage` 到期前仍可能帶舊 `X-Moedict-Version` body；它們現在外出會帶 `cdn-cache-control: no-store`，zone CDN 不會再放大，但**不**宣稱版本標頭全球瞬間一致。
+- HTML shell 刻意不進 `caches.default`（release fallback 正確性依賴現渲染）。deploy/rollback probe 一律帶 `_probe` cache-buster。
 - **R2 讀取另有 per-isolate memo**（帳單稽核 2026-07 後新增）：
   `src/api/r2-json-cache.ts` 對 pack bucket 與 xref/xref-by-id 做 10 分鐘
   LRU memo（WeakMap 以 R2 binding 為 key，單元測試天然隔離）；
   `src/utils/image-generation.ts` 對字型 probe、逐字 glyph SVG（含 negative
   cache——R2 miss 也計費）與 Tauhu fallback 字型做同樣的 per-isolate 快取。
-  **資料上傳後**除了 edge TTL 還會多最長 10 分鐘的 memo 延遲。
-- 上傳新字典資料後，已被快取的詞條最長 **24 小時**才會自然更新。
+  **資料上傳後**除了 Worker edge TTL 還會多最長 10 分鐘的 memo 延遲。
 - 立即清除：`POST /api/cache/purge`，帶 `CACHE_PURGE_TOKEN`（Bearer 或
   `X-Cache-Purge-Token`），body 用 allowlist 內的 cache tags（如
-  `{"tags":["dict-t"]}`）。token 只存在 Worker secret，本機沒有就等 TTL。
-- 部署後 60–90 秒內看到舊回應是正常的 edge 殘留（htmlShell s-maxage=60），
+  `{"tags":["dict-t"]}`）。token 只存在 Worker secret，本機沒有就等 TTL。Zone Cache-Tag purge **不會**清 `caches.default`（見 `src/api/cache.ts`）。
+- 部署後 60–90 秒內看到舊 HTML 是正常的 edge 殘留（htmlShell s-maxage=60），
   用 cache-buster query 驗證，別急著當成部署失敗。
 
 ## 舊版樣式（data/assets/styles.css）
