@@ -15,8 +15,8 @@
  *   node scripts/build-dictionary-corpus-pointer.mjs [--out-dir=/tmp/...]
  */
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -86,7 +86,9 @@ function collectUploadPaths() {
 function main() {
   const args = parseArgs(process.argv.slice(2));
   const outDir = args["out-dir"]
-    ? join(REPO_ROOT, args["out-dir"])
+    ? isAbsolute(args["out-dir"])
+      ? args["out-dir"]
+      : join(REPO_ROOT, args["out-dir"])
     : join(REPO_ROOT, ".tmp-dictionary-corpus");
   mkdirSync(outDir, { recursive: true });
 
