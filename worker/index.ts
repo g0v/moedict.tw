@@ -16,9 +16,7 @@ import {
   type DictionaryEntryLike,
 } from "../src/utils/dictionary-route";
 import {
-  getReleaseTag,
   getVersionHeaders,
-  getVersionId,
   renderHtmlShellWithFallback,
   serveAssetWithFallback,
 } from "../src/api/release-fallback";
@@ -57,8 +55,8 @@ interface Env extends ZoneCachePurgerEnv {
    * `wrangler versions upload --tag <release>`.
    */
   CF_VERSION_METADATA?: WorkerVersionMetadata;
+  DICTIONARY_DATA_VERSION?: string;
 }
-
 async function injectHeadMetadata(html: string, pathname: string, env: Env): Promise<string> {
   const head = resolveHeadByPath(pathname);
   const dictionaryRoute = parseDictionaryRoute(pathname);
@@ -711,30 +709,49 @@ async function deriveStrokeJsonEdgeCacheKey(request: Request, env: Env): Promise
   keyUrl.searchParams.set(STROKE_EDGE_CACHE_DIGEST_PARAM, digest);
   return new Request(keyUrl.toString(), request);
 }
+declare const __DICTIONARY_DATA_VERSION__: string | undefined;
+
+export function getDictionaryDataVersion(env?: { DICTIONARY_DATA_VERSION?: string }): string {
+  if (env?.DICTIONARY_DATA_VERSION) return env.DICTIONARY_DATA_VERSION;
+  if (typeof __DICTIONARY_DATA_VERSION__ !== "undefined" && __DICTIONARY_DATA_VERSION__) {
+    return __DICTIONARY_DATA_VERSION__;
+  }
+  return "dev";
+}
+
+export function isEntryRoutePath(pathname: string): boolean {
+  return /^\/(?:api\/(?!stroke-json\/)|a\/|t\/|h\/|c\/|raw\/|uni\/|pua\/|embed\/)/.test(pathname);
+}
+
 /**
- * Internal query param namespacing edge-cache keys for all other Worker-generated
- * GET routes (e.g. `/api/*`, `/a/*`, `/raw/*`, PNG rendering) by the deployment
- * release tag or version ID (from `env.CF_VERSION_METADATA`).
+ * Internal query param namespacing edge-cache keys for dictionary entry routes
+ * by the stable dictionary data tree SHA (computed at build time via
+ * `git rev-parse HEAD:data/dictionary`).
  *
  * WHY: Cloudflare Zone Cache Purges (and the `/api/cache/purge` endpoint) call
  * Cloudflare's REST API to purge CDN edge objects by tag or zone, but do NOT
  * evict `caches.default` Worker Cache API entries. Namespacing the cache key
- * by the deployment release tag / version ID ensures that every Worker release
- * or dictionary data update automatically invalidates stale `caches.default`
- * entries at zero runtime cost (reads from in-memory version metadata, zero R2 reads),
- * making Worker edge cache invalidation 100% self-healing.
+ * by the stable `__DICTIONARY_DATA_VERSION__` ensures that dictionary data updates
+ * (which change the data tree SHA) automatically invalidate stale `caches.default`
+ * entries at zero runtime cost (zero R2 reads), while code-only releases leave the
+ * dictionary data version unchanged and keep edge cache entries WARM.
  */
 const ENTRY_EDGE_CACHE_VERSION_PARAM = "__moedict_ver";
 
-export function deriveEntryEdgeCacheKey(request: Request, env: Env): Request {
-  const meta = env.CF_VERSION_METADATA;
-  const versionTag = getReleaseTag(meta) ?? getVersionId(meta);
-  if (!versionTag || versionTag === "unknown") {
+export function deriveEntryEdgeCacheKey(
+  request: Request,
+  env?: { DICTIONARY_DATA_VERSION?: string },
+): Request {
+  const url = new URL(request.url);
+  if (!isEntryRoutePath(url.pathname)) {
     return request;
   }
-  const keyUrl = new URL(request.url);
-  keyUrl.searchParams.set(ENTRY_EDGE_CACHE_VERSION_PARAM, versionTag);
-  return new Request(keyUrl.toString(), request);
+  const dataVersion = getDictionaryDataVersion(env);
+  if (!dataVersion || dataVersion === "dev") {
+    return request;
+  }
+  url.searchParams.set(ENTRY_EDGE_CACHE_VERSION_PARAM, dataVersion);
+  return new Request(url.toString(), request);
 }
 
 /**

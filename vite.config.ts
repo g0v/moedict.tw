@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { defineConfig, type Plugin, lazyPlugins } from "vite-plus";
@@ -152,6 +153,14 @@ function localDataAssetsPlugin(): Plugin {
   };
 }
 
+function getDictionaryDataVersion(): string {
+  try {
+    return execSync("git rev-parse HEAD:data/dictionary", { encoding: "utf-8" }).trim();
+  } catch {
+    return "dev";
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ command }) => {
   const remoteDev = process.env.VITE_CLOUDFLARE_REMOTE_DEV === "1";
@@ -160,8 +169,12 @@ export default defineConfig(({ command }) => {
   // bundled Chromium V8 coverage back to src/**/*.ts. Regular `npm run
   // build` deploys ship without maps (smaller payload).
   const needsSourcemaps = process.env.E2E_COVERAGE === "1";
+  const dictionaryDataVersion = getDictionaryDataVersion();
 
   return {
+    define: {
+      __DICTIONARY_DATA_VERSION__: JSON.stringify(dictionaryDataVersion),
+    },
     staged: {
       "*": "vp check --fix",
     },
