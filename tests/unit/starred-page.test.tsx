@@ -211,23 +211,23 @@ describe("StarredPage — cross-language overview (#88)", () => {
   });
 
   it("renders @radical starred words with the correct per-language radical href shape", () => {
-    // Hakka must NOT become /:@... — only '/~ prefix the @ family, a/h use /@.
+    // Radical path prefixes match App routes / RadicalGlyph:
+    // a → /@…, t → /'@…, h → /:@…, c → /~@…
     addStarWord("h", "@木");
     addStarWord("t", "@木");
     renderPage("a");
     clickEl(container.querySelector<HTMLButtonElement>("#btn-toggle-all-langs")!);
 
-    const links = Array.from(container.querySelectorAll<HTMLAnchorElement>("#all-langs-content a"));
-    const hrefByText = new Map(links.map((a) => [a.textContent, a.getAttribute("href")]));
-    expect(hrefByText.get("@木")).toBe("/@%E6%9C%A8"); // h → no colon prefix on radical
-    // Both groups render an "@木" link; assert full set of hrefs instead since
-    // Map dedupes by textContent above — check t's link directly by group.
-    // ALL_LANGS fixed order a/t/h/c; only t and h have words, so t (index 1)
-    // sorts before h (index 2) → t is group[0].
-    const tGroupLinks = Array.from(
-      container.querySelectorAll("#all-langs-content .lang-group")[0]?.querySelectorAll("a") ?? [],
-    ).map((a) => a.getAttribute("href"));
+    // ALL_LANGS fixed order a/t/h/c; only t and h have words → t is group[0], h is group[1].
+    const groups = container.querySelectorAll("#all-langs-content .lang-group");
+    const tGroupLinks = Array.from(groups[0]?.querySelectorAll("a") ?? []).map((a) =>
+      a.getAttribute("href"),
+    );
+    const hGroupLinks = Array.from(groups[1]?.querySelectorAll("a") ?? []).map((a) =>
+      a.getAttribute("href"),
+    );
     expect(tGroupLinks).toContain("/'@%E6%9C%A8");
+    expect(hGroupLinks).toContain("/:@%E6%9C%A8");
   });
 
   it("current lang's own starred word appears in its group flagged as current", () => {
