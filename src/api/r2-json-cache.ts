@@ -133,7 +133,8 @@ type R2JsonSourceOrEnv = R2JsonSource | DictionaryObjectFetchEnv;
 
 /**
  * Read text content of a dictionary R2 object, routing through the public
- * CDN zone cache when DICTIONARY_BASE_URL is configured.
+ * CDN zone cache only when DICTIONARY_BASE_URL is configured and
+ * DICTIONARY_PUBLIC_READS is explicitly set to "1".
  *
  * WHY: Direct R2 binding GETs (`env.DICTIONARY.get()`) are billed as Class B
  * operations per isolate per colo. Requesting objects via the public custom

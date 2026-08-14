@@ -11,8 +11,9 @@ import {
 } from "./edge-object-cache";
 
 /**
- * Bump this version string whenever glyph SVG or font asset bytes are replaced in R2.
- * This invalidates the L2 colo cache keys.
+ * Bump this version string whenever glyph SVG or font asset objects are added,
+ * replaced, or removed in R2. This invalidates both positive entries and cached
+ * 404 sentinels in the L2 colo cache.
  */
 export const FONT_OBJECT_CACHE_VERSION = "1";
 
