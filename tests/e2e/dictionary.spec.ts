@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Page, Route } from "@playwright/test";
 import { expect, test } from "./_fixtures";
 import { waitForAppReady } from "./readiness";
@@ -2473,24 +2476,68 @@ test.describe("charimg-result romanize checkbox (RESCOPE #169)", () => {
   });
 });
 
-test.describe("@romanization search input font-family stack does not lead with Biaodian Pro Serif CNS", () => {
-  test("computed font-family on WebKit / Desktop Safari resolves system font before Biaodian Pro Serif CNS", async ({
+test.describe("@romanization search input font-family stack excludes Biaodian webfonts", () => {
+  test("WebKit computed font-family with real legacy CSS has no Biaodian before system CJK", async ({
     page,
   }) => {
+    const stylesCss = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "..", "..", "data", "assets", "styles.css"),
+      "utf-8",
+    );
+    const fulfillLegacyCss = (route: Route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "text/css; charset=utf-8",
+        headers: { "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" },
+        body: stylesCss,
+      });
+    await page.route("https://r2-assets.test.local/styles.css", fulfillLegacyCss);
+    await page.route("https://r2-assets.test.local/styles.css?*", fulfillLegacyCss);
+    await page.route("**/assets/styles.css", fulfillLegacyCss);
+    await page.route("**/assets/styles.css?*", fulfillLegacyCss);
+
     await page.goto("/%E8%90%8C");
     await waitForAppReady(page, "dictionary");
+    await page.waitForFunction(() => {
+      const link = document.querySelector<HTMLLinkElement>('link[data-asset-id="styles-css"]');
+      return link?.sheet != null;
+    });
 
-    const navbarSearchInput = page.locator(".fulltext-search-input").first();
-    const sidebarQueryInput = page.locator(".query-box input.query").first();
+    const assertSafeInputStack = async (
+      selector: string,
+      expected: { value: string; placeholder: string },
+    ) => {
+      const inputs = page.locator(selector);
+      const count = await inputs.count();
+      expect(count, `${selector} must exist`).toBeGreaterThan(0);
+      for (let i = 0; i < count; i += 1) {
+        const snapshot = await inputs.nth(i).evaluate((el) => {
+          const inputEl = el as HTMLInputElement;
+          return {
+            fontFamily: getComputedStyle(inputEl).fontFamily,
+            value: inputEl.value,
+            placeholder: inputEl.getAttribute("placeholder"),
+          };
+        });
+        expect(snapshot.fontFamily, `${selector}[${i}] computed font-family`).not.toMatch(
+          /Biaodian/i,
+        );
+        expect(
+          snapshot.fontFamily,
+          `${selector}[${i}] includes a CJK system face or generic`,
+        ).toMatch(/PingFang TC|Heiti TC|Microsoft JhengHei|sans-serif/i);
+        expect(snapshot.value, `${selector}[${i}] value`).toBe(expected.value);
+        expect(snapshot.placeholder, `${selector}[${i}] placeholder`).toBe(expected.placeholder);
+      }
+    };
 
-    const navbarFontFamily = await navbarSearchInput.evaluate(
-      (el) => getComputedStyle(el).fontFamily,
-    );
-    const sidebarFontFamily = await sidebarQueryInput.evaluate(
-      (el) => getComputedStyle(el).fontFamily,
-    );
+    await assertSafeInputStack("#nav-fulltext-search", { value: "", placeholder: "多語檢索" });
+    await assertSafeInputStack("#query", { value: "萌", placeholder: "請輸入欲查詢的字詞" });
 
-    expect(navbarFontFamily.trim()).not.toMatch(/^['"]?Biaodian Pro Serif CNS['"]?\s*(,|$)/);
-    expect(sidebarFontFamily.trim()).not.toMatch(/^['"]?Biaodian Pro Serif CNS['"]?\s*(,|$)/);
+    await page.evaluate(() => {
+      document.documentElement.classList.add("moe-capacitor", "moe-ios");
+    });
+    await assertSafeInputStack("#nav-fulltext-search", { value: "", placeholder: "多語檢索" });
+    await assertSafeInputStack("#query", { value: "萌", placeholder: "請輸入欲查詢的字詞" });
   });
 });
