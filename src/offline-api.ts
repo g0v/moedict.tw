@@ -11,6 +11,7 @@
 import { handleDictionaryAPI } from "./api/handleDictionaryAPI.ts";
 import { handleCnsAPI } from "./api/handleCnsAPI.ts";
 import { handleLookupAPI } from "./api/handleLookupAPI.ts";
+import { DICTIONARY_CORPUS_POINTER_KEY } from "./utils/dictionary-corpus.ts";
 
 const shouldUseOfflineApi =
   typeof window !== "undefined" && Boolean((window as Window & { Capacitor?: unknown }).Capacitor);
@@ -21,6 +22,10 @@ if (shouldUseOfflineApi) {
 
   const offlineDictionary = {
     async get(key: string): Promise<{ text(): Promise<string> } | null> {
+      // The corpus pointer lives only in R2 and is never bundled in offline apps;
+      // short-circuit before fetch to avoid "Unable to open asset URL" WebView noise.
+      if (key === DICTIONARY_CORPUS_POINTER_KEY) return null;
+
       const loadText = async (path: string): Promise<string | null> => {
         try {
           const response = await originalFetch(path);

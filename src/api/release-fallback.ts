@@ -256,6 +256,7 @@ export async function renderHtmlShellWithFallback<E extends FallbackEnv>(
           headers.set("Content-Type", "text/html; charset=utf-8");
           headers.set("Cache-Control", CACHE_CONTROL.htmlShell);
           headers.set("X-Moedict-Shell-Source", "site-assets");
+          headers.delete("content-length");
           for (const [k, v] of Object.entries(getVersionHeaders(meta))) {
             headers.set(k, v);
           }
@@ -268,6 +269,7 @@ export async function renderHtmlShellWithFallback<E extends FallbackEnv>(
         headers.set("Content-Type", "text/html; charset=utf-8");
         headers.set("Cache-Control", CACHE_CONTROL.htmlShell);
         headers.set("X-Moedict-Shell-Source", "site-assets");
+        headers.delete("content-length");
         for (const [k, v] of Object.entries(getVersionHeaders(meta))) {
           headers.set(k, v);
         }
@@ -328,9 +330,15 @@ export async function renderHtmlShellWithFallback<E extends FallbackEnv>(
         return new Response(null, { status: 304, headers });
       }
 
+      if (request.method === "HEAD") {
+        headers.delete("content-length");
+        return new Response(null, { status: 200, headers });
+      }
+
       // Only now read the body and inject head metadata.
       const html = await r2Object.text();
       const rewritten = await injectHead(html, pathname, env);
+      headers.delete("content-length");
 
       console.log(
         JSON.stringify({
@@ -349,9 +357,6 @@ export async function renderHtmlShellWithFallback<E extends FallbackEnv>(
         }),
       );
 
-      if (request.method === "HEAD") {
-        return new Response(null, { status: 200, headers });
-      }
       return new Response(rewritten, { status: 200, headers });
     }
 

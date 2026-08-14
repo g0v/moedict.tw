@@ -118,6 +118,33 @@ describe("offline-api.ts — Capacitor present (fetch stroke routing)", () => {
   });
 });
 
+describe("offline-api.ts — Capacitor present (dictionary corpus pointer short-circuit)", () => {
+  beforeEach(() => {
+    setCapacitor(true);
+  });
+
+  it("short-circuits dictionary-corpus/current.json request without calling fetch during dictionary lookup", async () => {
+    const calls: string[] = [];
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      calls.push(url);
+      return new Response("Not Found", { status: 404 });
+    });
+    Object.defineProperty(window, "fetch", { value: fetchSpy, configurable: true, writable: true });
+
+    await importFresh();
+    // A genuine dictionary lookup resolves the corpus pointer via resolveDictionaryPointerState
+    const res = await window.fetch("/api/%E8%90%8C.json");
+
+    // Because the underlying fetch returns 404 for pack files, the dictionary entry is not found
+    expect(res.status).toBe(404);
+    // Assert the corpus pointer is never fetched
+    expect(calls.some((url) => url.includes("dictionary-corpus/current.json"))).toBe(false);
+    // Positive control: verify the spy received the expected pack-file request
+    expect(calls.some((url) => url.includes("/dictionary/pack/"))).toBe(true);
+  });
+});
+
 describe("offline-api.ts — Capacitor present (legacy XHR stroke routing)", () => {
   beforeEach(() => {
     setCapacitor(true);
