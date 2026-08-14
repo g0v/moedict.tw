@@ -533,7 +533,14 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
   才能加入的窄例外**——嚴禁未逐筆核實就批次回填其餘 500+ 詞目。指令：
   `vp run twblg-pins:inject`（寫入，冪等）、`vp run twblg-pins:check`
   （唯讀驗證，已接入 `vp run check:data` 的第 4 項檢查；缺漏或內容不符
-  皆會讓 `check:data` fail-closed）。manifest 刻意放在
+  皆會讓 `check:data` fail-closed）。每個 entry 必須記載 `source_entry_url`、
+  `source_search_url`、`source_note` 及 ISO YYYY-MM-DD `verified` 日期；
+  `twblg-pins:check` 與 `check:data` 會報告 pin 筆數與最舊 pin 年齡作為資訊性輸出。
+  **上游網路驗證**：`vp run twblg-pins:verify-upstream`（或搭配 `--update-verified`）
+  會向 sutian.moe.edu.tw 逐筆核對詞目、音讀、無義項 marker 與搜尋唯一性，
+  並明確區分「主張成立 (ok)」、「上游內容漂移 (content drift)」與「頁面結構改變 (structure changed)」。
+  **規則：此網路驗證指令絕不放進 PR/push CI**，由 GitHub Actions 每週排程（`.github/workflows/verify-twblg-pins.yml`）
+  與手動 `workflow_dispatch` 觸發。manifest 刻意放在
   `data/sources/twblg-overrides/`（不在 `data/dictionary/` 底下）——
   `commands/upload_dictionary.sh` 只同步固定白名單子目錄
   （`pack/pcck/phck/ptck`、`a/c/h/t`、`search-index`、`translation-data`、

@@ -66,10 +66,24 @@ direction (deleted entry, hand-edited entry) is caught, not skipped.
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import os
+import re
 import sys
 import unicodedata
+
+ISO_DATE_RE = re.compile(r"^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$")
+
+
+def is_valid_iso_date(date_str: str) -> bool:
+    if not isinstance(date_str, str) or not ISO_DATE_RE.match(date_str):
+        return False
+    try:
+        datetime.date.fromisoformat(date_str)
+        return True
+    except ValueError:
+        return False
 
 
 def bucket_of(title: str) -> int:
@@ -119,9 +133,23 @@ def load_manifest(path: str) -> list[dict]:
         manifest = json.load(f)
     entries = manifest.get("entries", [])
     for entry in entries:
-        for required_key in ("title", "T", "source_entry_url", "source_search_url"):
-            if not entry.get(required_key):
-                raise ValueError(f"Manifest entry missing {required_key!r}: {entry!r}")
+        for required_key in (
+            "title",
+            "T",
+            "source_entry_url",
+            "source_search_url",
+            "source_note",
+            "verified",
+        ):
+            val = entry.get(required_key)
+            if not isinstance(val, str) or not val.strip():
+                raise ValueError(
+                    f"Manifest entry missing or invalid required string field {required_key!r}: {entry!r}"
+                )
+        if not is_valid_iso_date(entry["verified"]):
+            raise ValueError(
+                f"Manifest entry has invalid ISO verified date {entry['verified']!r}: {entry!r}"
+            )
     return entries
 
 
@@ -354,6 +382,17 @@ def main():
     print(f"  Already correct:   {ok_existing}")
     print(f"  Missing:           {missing}")
     print(f"  Mismatched:        {mismatched}")
+    if entries:
+        today = datetime.date.today()
+        ages = []
+        for e in entries:
+            y, m, d = map(int, e["verified"].split("-"))
+            v_date = datetime.date(y, m, d)
+            age_days = (today - v_date).days
+            ages.append((age_days, e["verified"], e["title"]))
+        ages.sort(reverse=True)
+        oldest_days, oldest_date, oldest_title = ages[0]
+        print(f"  Pin age info:      {len(entries)} pins, oldest verified on {oldest_date} ({oldest_title}, {oldest_days} days ago)")
     if args.dry_run and not args.check:
         print("\n[DRY RUN — no files written]")
 

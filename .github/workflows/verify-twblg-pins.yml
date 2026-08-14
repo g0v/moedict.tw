@@ -1,0 +1,49 @@
+name: Verify TWBLG Pins Upstream
+
+on:
+  schedule:
+    # Run weekly on Sundays at 03:00 UTC (11:00 Taiwan time)
+    - cron: "0 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      update_verified:
+        description: "Update verified dates if all pins pass"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: verify-twblg-pins-upstream
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify TWBLG Pinned Entries Against MOE
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: "24"
+          cache: true
+
+      - run: vp install --frozen-lockfile
+
+      - name: Run upstream network verifier
+        id: run-verifier
+        run: |
+          if [ "${{ inputs.update_verified }}" = "true" ]; then
+            vp run twblg-pins:verify-upstream --update-verified
+          else
+            vp run twblg-pins:verify-upstream
+          fi
+
+      - name: Failure explanation
+        if: failure()
+        run: |
+          echo "::error::Upstream TWBLG pin verification failed. Check the logs above for details."
+          echo "Outcomes guide:"
+          echo "  - (b) Content drift: Upstream MOE dictionary changed. Update or remove the pin in data/sources/twblg-overrides/pinned-no-definition.json."
+          echo "  - (c) Structure changed: Upstream page markup changed. Update parsing logic in scripts/lib/twblg-pins.mjs."
