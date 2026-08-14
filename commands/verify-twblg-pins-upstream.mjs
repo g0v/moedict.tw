@@ -22,6 +22,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   DEFAULT_PINNED_MANIFEST_PATH,
   REPO_ROOT,
@@ -233,7 +234,7 @@ async function main() {
   console.log("\nAll pinned entries successfully verified against upstream MOE dictionary.");
 }
 
-const isMain = import.meta.url === `file://${process.argv[1]}`;
+const isMain = Boolean(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
   main().catch((err) => {
     console.error(err);

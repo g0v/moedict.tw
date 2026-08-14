@@ -172,11 +172,20 @@ describe("verifyEntryHtml pure logic", () => {
     expect(result.mismatches.some((m) => m.includes("Headword mismatch"))).toBe(true);
   });
 
-  it("distinguishes page structure changes (missing <h1>)", () => {
+  it("names only the missing <h1> when <main> is present", () => {
     const html = loadFixture("entry-structure-missing-h1.html");
     const result = verifyEntryHtml(html, "長褲", "tn̂g-khòo");
     expect(result.status).toBe("structure_changed");
-    expect(result.mismatches.some((m) => m.includes("missing <main> or <h1>"))).toBe(true);
+    expect(result.mismatches.some((m) => m.includes("missing <h1> element"))).toBe(true);
+    expect(result.mismatches.some((m) => m.includes("<main>"))).toBe(false);
+  });
+
+  it("names only the missing <main> when <h1> is present", () => {
+    const html = "<html><body><h1>長褲</h1><p>page content without main</p></body></html>";
+    const result = verifyEntryHtml(html, "長褲", "tn̂g-khòo");
+    expect(result.status).toBe("structure_changed");
+    expect(result.mismatches.some((m) => m.includes("missing <main> element"))).toBe(true);
+    expect(result.mismatches.some((m) => m.includes("<h1>"))).toBe(false);
   });
 
   it("distinguishes page structure changes (missing pronunciation header list)", () => {
@@ -234,6 +243,16 @@ describe("verifySearchHtml pure logic", () => {
     const result = verifySearchHtml(html, "長褲");
     expect(result.status).toBe("structure_changed");
     expect(result.mismatches.some((m) => m.includes("could not find definition row"))).toBe(true);
+  });
+
+  it("does not classify a space-containing headword as structure_changed", () => {
+    const html = [
+      "<p>完全符合 「長 褲」 有1筆</p>",
+      "<table><tbody><tr><th>釋義</th><td><span>（臺華共同詞 ，無義項）</span></td></tr></tbody></table>",
+    ].join("");
+    const result = verifySearchHtml(html, "長 褲");
+    expect(result.status).toBe("ok");
+    expect(result.mismatches).toHaveLength(0);
   });
 });
 

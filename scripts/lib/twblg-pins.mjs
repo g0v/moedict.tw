@@ -152,9 +152,13 @@ export function verifyEntryHtml(html, expectedTitle, expectedT) {
   const hasMain = /<main\b/i.test(normHtml);
   const h1Match = /<h1\b[^>]*>([\s\S]*?)<\/h1>/i.exec(normHtml);
   if (!hasMain || !h1Match) {
+    const missing = [];
+    if (!hasMain) missing.push("<main>");
+    if (!h1Match) missing.push("<h1>");
+    const noun = missing.length === 1 ? "element" : "elements";
     return {
       status: "structure_changed",
-      mismatches: ["Entry page structure changed: missing <main> or <h1> element"],
+      mismatches: [`Entry page structure changed: missing ${missing.join(" and ")} ${noun}`],
     };
   }
 
@@ -245,7 +249,7 @@ export function verifySearchHtml(html, expectedTitle) {
   const normTitle = expectedTitle.normalize("NFC");
 
   // 1. Structure check: exact match count
-  const countMatch = normHtml.match(/完全符合\s*「?([^」"'\s]+)」?\s*有\s*(\d+)\s*筆/);
+  const countMatch = normHtml.match(/完全符合\s*「([^」]+)」\s*有\s*(\d+)\s*筆/);
   if (!countMatch) {
     return {
       status: "structure_changed",
