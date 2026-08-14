@@ -43,7 +43,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-
+import { getPinAgeSummary, validatePinnedManifest } from "./lib/twblg-pins.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..");
 const DICT_DIR = path.join(REPO_ROOT, "data", "dictionary");
@@ -185,29 +185,45 @@ if (!existsSync(PINNED_MANIFEST)) {
       `— g0v/moedict-webkit#271 provenance would silently stop being verified`,
   );
 } else {
-  let manifest;
+  let rawJson;
   try {
-    manifest = JSON.parse(readFileSync(PINNED_MANIFEST, "utf8"));
+    rawJson = JSON.parse(readFileSync(PINNED_MANIFEST, "utf8"));
   } catch (e) {
     fail(`pinned no-definition manifest is not valid JSON: ${e.message}`);
   }
-  if (manifest) {
-    pinnedCheckedCount = Array.isArray(manifest.entries) ? manifest.entries.length : 0;
-    if (pinnedCheckedCount === 0) {
+  if (rawJson) {
+    const { valid, errors, manifest } = validatePinnedManifest(rawJson);
+    if (!valid || !manifest) {
       fail(
-        "pinned no-definition manifest has zero entries — expected at least " +
-          "the 長褲 (g0v/moedict-webkit#271) pin shipped with this repo",
+        `pinned no-definition manifest schema/provenance validation failed:\n` +
+          errors.map((err) => `  - ${err}`).join("\n"),
       );
     } else {
-      try {
-        execFileSync("python3", [INJECTOR, PINNED_MANIFEST, PTCK_DIR, "--check"], {
-          cwd: REPO_ROOT,
-          stdio: "pipe",
-          encoding: "utf8",
-        });
-      } catch (e) {
-        const output = [e.stdout, e.stderr].filter(Boolean).join("\n");
-        fail(`pinned no-definition manifest check failed:\n${output || e.message}`);
+      pinnedCheckedCount = manifest.entries.length;
+      if (pinnedCheckedCount === 0) {
+        fail(
+          "pinned no-definition manifest has zero entries — expected at least " +
+            "the 長褲 (g0v/moedict-webkit#271) pin shipped with this repo",
+        );
+      } else {
+        const ageSummary = getPinAgeSummary(manifest);
+        if (ageSummary.oldestDate !== null && ageSummary.oldestAgeDays !== null) {
+          console.log(
+            `[check-dictionary-data] Pinned no-definition age info: ` +
+              `${ageSummary.count} pin(s), oldest verified on ${ageSummary.oldestDate} ` +
+              `(${ageSummary.oldestTitle}, ${ageSummary.oldestAgeDays} days ago)`,
+          );
+        }
+        try {
+          execFileSync("python3", [INJECTOR, PINNED_MANIFEST, PTCK_DIR, "--check"], {
+            cwd: REPO_ROOT,
+            stdio: "pipe",
+            encoding: "utf8",
+          });
+        } catch (e) {
+          const output = [e.stdout, e.stderr].filter(Boolean).join("\n");
+          fail(`pinned no-definition manifest check failed:\n${output || e.message}`);
+        }
       }
     }
   }

@@ -37,8 +37,14 @@ class PinnedInjectorTests(unittest.TestCase):
         return tmp, root, pack, manifest
 
     def manifest_entry(self, title):
-        return {"title": title, "T": "ā", "source_entry_url": "https://sutian.moe.edu.tw/entry", "source_search_url": "https://sutian.moe.edu.tw/tshiau/?lui=tai俗"}
-
+        return {
+            "title": title,
+            "T": "ā",
+            "source_entry_url": "https://sutian.moe.edu.tw/entry",
+            "source_search_url": "https://sutian.moe.edu.tw/tshiau/?lui=tai俗",
+            "source_note": "教育部臺灣閩南語常用詞辭典",
+            "verified": "2026-07-17",
+        }
     def test_head_insertion_is_sorted_and_exact(self):
         tmp, root, pack, manifest = self.make_fixture([("%u0041", {"t": "A"}), ("%u0043", {"t": "C"})])
         with tmp:
