@@ -21,7 +21,7 @@
  */
 
 import { execSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
@@ -99,8 +99,8 @@ async function main() {
 
   // 1. Download & Verify Upstream Zips
   const fontsZipPath = path.join(CACHE_DIR, "Fonts_Kai.zip");
-  const mappingZipPath = path.join(CACHE_DIR, "MapingTables.zip");
-  const propsZipPath = path.join(CACHE_DIR, "Properties.zip");
+  const _mappingZipPath = path.join(CACHE_DIR, "MapingTables.zip");
+  const _propsZipPath = path.join(CACHE_DIR, "Properties.zip");
 
   // Download & Verify Main Fonts Zip
   if (!existsSync(fontsZipPath)) {
@@ -135,7 +135,9 @@ async function main() {
       if (existsSync(destPath)) {
         const hash = sha256(readFileSync(destPath));
         const match = hash === info.observed_sha256;
-        console.log(`ℹ️  Supporting dataset ${key}: observed SHA-256 ${hash.slice(0, 16)}... (${match ? "matches recorded provenance" : "upstream hash drift detected, using manifest codepoint ranges"})`);
+        console.log(
+          `ℹ️  Supporting dataset ${key}: observed SHA-256 ${hash.slice(0, 16)}... (${match ? "matches recorded provenance" : "upstream hash drift detected, using manifest codepoint ranges"})`,
+        );
       }
     }
   }
@@ -150,7 +152,9 @@ with zipfile.ZipFile("${fontsZipPath}") as zf:
 
   for (const [fontName, info] of Object.entries(manifest.upstream.inner_fonts)) {
     if (fontName.endsWith(".ttf") && info.role.includes("used for shards")) {
-      const buf = execSync(`python3 -c '${pyExtract}' "${fontName}"`, { maxBuffer: 100 * 1024 * 1024 });
+      const buf = execSync(`python3 -c '${pyExtract}' "${fontName}"`, {
+        maxBuffer: 100 * 1024 * 1024,
+      });
       const hash = sha256(buf);
       if (hash !== info.sha256) {
         console.error(`❌ CHECKSUM MISMATCH for inner font ${fontName}!`);
@@ -229,11 +233,11 @@ print(json.dumps(results))
 
   // 4. Verify regenerated shards against manifest & local disk
   console.log("\n🔍 Verification & Checksum Comparison Table:");
-  console.log("=" .repeat(225));
+  console.log("=".repeat(225));
   console.log(
     `${"Filename".padEnd(20)} | ${"Manifest SHA-256".padEnd(64)} | ${"Regenerated SHA-256".padEnd(64)} | ${"Local Disk SHA-256".padEnd(64)} | ${"Status"}`,
   );
-  console.log("=" .repeat(225));
+  console.log("=".repeat(225));
 
   let allMatch = true;
   for (let i = 0; i < 8; i++) {
@@ -253,7 +257,7 @@ print(json.dumps(results))
       `${shardInfo.filename.padEnd(20)} | ${shardInfo.sha256.padEnd(64)} | ${genInfo.sha256.padEnd(64)} | ${localSha256.padEnd(64)} | ${pass ? "✅ MATCH" : "❌ MISMATCH"}`,
     );
   }
-  console.log("=" .repeat(225));
+  console.log("=".repeat(225));
 
   if (!allMatch) {
     console.error("\n❌ BUILD FAILED: Regenerated shards differ from manifest/disk!");
@@ -279,11 +283,11 @@ print(json.dumps(results))
     const r2Results = JSON.parse(r2ResBuf.toString("utf-8"));
 
     console.log("\n🌐 R2 Live vs Local Disk vs Manifest 3-Way Comparison:");
-    console.log("=" .repeat(235));
+    console.log("=".repeat(235));
     console.log(
       `${"Filename".padEnd(20)} | ${"Manifest SHA-256".padEnd(64)} | ${"Local Disk SHA-256".padEnd(64)} | ${"R2 Live SHA-256".padEnd(64)} | ${"Size (B)".padEnd(10)} | ${"Status"}`,
     );
-    console.log("=" .repeat(235));
+    console.log("=".repeat(235));
 
     let r2Match = true;
     for (let i = 0; i < 8; i++) {
@@ -293,21 +297,26 @@ print(json.dumps(results))
       const localExists = existsSync(localPath);
       const localSha256 = localExists ? sha256(readFileSync(localPath)) : "ABSENT (loss recovery)";
 
-      const pass = r2Info.sha256 === shardInfo.sha256 && (!localExists || r2Info.sha256 === localSha256) && r2Info.size === shardInfo.bytes;
+      const pass =
+        r2Info.sha256 === shardInfo.sha256 &&
+        (!localExists || r2Info.sha256 === localSha256) &&
+        r2Info.size === shardInfo.bytes;
       if (!pass) r2Match = false;
 
       console.log(
         `${shardInfo.filename.padEnd(20)} | ${shardInfo.sha256.padEnd(64)} | ${localSha256.padEnd(64)} | ${r2Info.sha256.padEnd(64)} | ${r2Info.size.toString().padEnd(10)} | ${pass ? "✅ 3-WAY MATCH" : "❌ MISMATCH"}`,
       );
     }
-    console.log("=" .repeat(235));
+    console.log("=".repeat(235));
     if (!r2Match) {
       console.error("❌ Three-way mismatch detected on R2 live fonts!");
       process.exit(1);
     }
   }
 
-  console.log("\n🎉 SUCCESS: All 8 TW-Kai font shards are 100% byte-identical and deterministically reproduced!");
+  console.log(
+    "\n🎉 SUCCESS: All 8 TW-Kai font shards are 100% byte-identical and deterministically reproduced!",
+  );
 }
 
 main().catch((err) => {

@@ -112,6 +112,99 @@ export async function peekDictionaryCorpusDigest(
   return state.kind === "valid" ? state.digest : null;
 }
 
+export interface DictionaryObjectFetchEnv {
+  DICTIONARY: R2JsonSource;
+  DICTIONARY_BASE_URL?: string;
+  /**
+   * Opt-in gate for reading dictionary objects through the PUBLIC R2 custom
+   * domain instead of the binding. Set to "1" in production vars only.
+   *
+   * `DICTIONARY_BASE_URL` alone is NOT a sufficient gate: the `staging` env in
+   * wrangler.jsonc binds the `-preview` buckets but still advertises the
+   * production `https://r2-dictionary.moedict.tw` (because /api/config echoes
+   * it), so gating on the URL would make staging silently serve PRODUCTION
+   * dictionary bytes and break the prod/staging isolation documented in
+   * AGENTS.md.
+   */
+  DICTIONARY_PUBLIC_READS?: string;
+}
+
+type R2JsonSourceOrEnv = R2JsonSource | DictionaryObjectFetchEnv;
+
+/**
+ * Read text content of a dictionary R2 object, routing through the public
+ * CDN zone cache when DICTIONARY_BASE_URL is configured.
+ *
+ * WHY: Direct R2 binding GETs (`env.DICTIONARY.get()`) are billed as Class B
+ * operations per isolate per colo. Requesting objects via the public custom
+ * domain (`DICTIONARY_BASE_URL`) with `cf: { cacheEverything: true, cacheTtl: 86400 }`
+ * and a corpus digest query parameter (`?v=<digest>`) allows Cloudflare's
+ * zone CDN to cache the response at the edge colo across isolates.
+ * When the corpus is promoted, the digest changes, busting the zone cache.
+ *
+ * A missing or unreadable pointer falls back to the binding: without a digest,
+ * a public-domain request could not be safely cache-busted after promotion.
+ *
+ * NOTE: This function provides edge caching for raw object subrequests. It does
+ * NOT replace the `caches.default` digest-namespaced dispatch response caching
+ * layer in `worker/index.ts`.
+ */
+export async function fetchDictionaryObjectText(
+  env: DictionaryObjectFetchEnv,
+  key: string,
+  knownDigest?: string | null,
+): Promise<string | null> {
+  const { DICTIONARY: binding, DICTIONARY_BASE_URL: baseUrl } = env;
+  const publicReads = env.DICTIONARY_PUBLIC_READS === "1";
+
+  const readFromBinding = async (): Promise<string | null> => {
+    if (!binding) return null;
+    const obj = await binding.get(key);
+    return obj ? await obj.text() : null;
+  };
+
+  const normalizedBaseUrl = baseUrl?.trim();
+  if (!publicReads || !normalizedBaseUrl || typeof fetch === "undefined") {
+    return readFromBinding();
+  }
+
+  let digest: string | null = null;
+  if (knownDigest !== undefined) {
+    digest = knownDigest;
+  } else {
+    const pointerState = await resolveDictionaryPointerState(binding);
+    if (pointerState.kind === "valid") {
+      digest = pointerState.digest;
+    }
+  }
+
+  if (!digest) {
+    return readFromBinding();
+  }
+
+  const cleanBase = normalizedBaseUrl.replace(/\/+$/, "");
+  const cleanKey = key.replace(/^\/+/, "");
+  const url = `${cleanBase}/${cleanKey}?v=${encodeURIComponent(digest)}`;
+  try {
+    const res = await fetch(url, {
+      cf: {
+        cacheEverything: true,
+        cacheTtl: 86400,
+      },
+    } as RequestInit);
+
+    if (res.status === 200) {
+      return await res.text();
+    }
+    if (res.status === 404) {
+      return null;
+    }
+    return readFromBinding();
+  } catch {
+    return readFromBinding();
+  }
+}
+
 /**
  * Read + JSON.parse an R2 object through the per-binding memo.
  *
@@ -124,18 +217,20 @@ export async function peekDictionaryCorpusDigest(
  * a warm old pack under the new edge-cache identity.
  */
 export async function readR2JsonCached(
-  source: R2JsonSource,
+  sourceOrEnv: R2JsonSourceOrEnv,
   key: string,
   now: () => number = Date.now,
   digestOverride?: string | null,
 ): Promise<unknown> {
-  let cache = cachesBySource.get(source);
+  const binding = "DICTIONARY" in sourceOrEnv ? sourceOrEnv.DICTIONARY : sourceOrEnv;
+
+  let cache = cachesBySource.get(binding);
   if (!cache) {
     cache = new Map();
-    cachesBySource.set(source, cache);
+    cachesBySource.set(binding, cache);
   }
   const digest =
-    digestOverride !== undefined ? digestOverride : await peekDictionaryCorpusDigest(source, now);
+    digestOverride !== undefined ? digestOverride : await peekDictionaryCorpusDigest(binding, now);
   const scopedKey = digest ? `${digest}:${key}` : key;
   const hit = cache.get(scopedKey);
   if (hit && now() - hit.storedAt < R2_JSON_CACHE_TTL_MS) {
@@ -145,8 +240,11 @@ export async function readR2JsonCached(
     cache.set(scopedKey, hit);
     return hit.value;
   }
-  const object = await source.get(key);
-  const value: unknown = object === null ? null : JSON.parse(await object.text());
+  const objectText =
+    "DICTIONARY" in sourceOrEnv
+      ? await fetchDictionaryObjectText(sourceOrEnv, key, digest)
+      : await sourceOrEnv.get(key).then((object) => (object ? object.text() : null));
+  const value: unknown = objectText === null ? null : JSON.parse(objectText);
   cache.delete(scopedKey);
   cache.set(scopedKey, { value, storedAt: now() });
   while (cache.size > R2_JSON_CACHE_MAX_ENTRIES) {

@@ -160,7 +160,10 @@ function getDictionaryDataVersion(): string {
       return version;
     }
   } catch (err) {
-    console.warn("⚠️ [build] Could not compute git rev-parse HEAD:data/dictionary; falling back to 'unknown-data-version':", err);
+    console.warn(
+      "⚠️ [build] Could not compute git rev-parse HEAD:data/dictionary; falling back to 'unknown-data-version':",
+      err,
+    );
   }
   return "unknown-data-version";
 }

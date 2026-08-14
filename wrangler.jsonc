@@ -41,8 +41,14 @@
   "vars": {
     // ASSET_BASE_URL：有使用。Worker 用於 (1) /api/config 的 assetBaseUrl (2) /assets/* 在 ASSETS 綁定找不到時代理到 R2。前端多處透過 /api/config 載入靜態資源基底路徑。
     "ASSET_BASE_URL": "https://r2-assets.moedict.tw",
-    // DICTIONARY_BASE_URL：目前僅由 /api/config 回傳 dictionaryBaseUrl；程式碼庫內尚無讀取該欄位。字典 JSON 實際由 Worker 綁定 DICTIONARY R2（/api/*.json 等）提供，非此公開 URL 直連。
+    // DICTIONARY_BASE_URL：(1) /api/config 回傳 dictionaryBaseUrl (2) 自 2026-08 起，
+    // production 會在 DICTIONARY_PUBLIC_READS="1" 時，改由這個公開 R2 自訂網域讀字典物件
+    // （帶 ?v=<corpus digest>，讓 zone CDN 可跨 isolate 快取、promotion 時自動失效）。
     "DICTIONARY_BASE_URL": "https://r2-dictionary.moedict.tw",
+    // DICTIONARY_PUBLIC_READS：只在 production 設 "1"。staging 刻意不設 —— staging 綁的是
+    // moedict-dictionary-preview，但上面那個 base URL 指向 production 桶，若只用 base URL
+    // 當開關，staging 會靜默讀到 production 字典位元組，破壞 prod/staging 隔離。
+    "DICTIONARY_PUBLIC_READS": "1",
   },
   "env": {
     // 獨立 staging 環境：獨立 Worker 名稱（只有 *.workers.dev，未綁定任何自訂網域/

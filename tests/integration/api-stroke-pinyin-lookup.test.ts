@@ -32,7 +32,9 @@ describe("/api/stroke-json/{codepoint}.json (R2 ASSETS)", () => {
     const res = await fetchFromServer("/api/stroke-json/840c.json");
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toMatch(/json/);
-    expect(res.headers.get("cache-control")).toContain("s-maxage=86400");
+    expect(res.headers.get("cache-control")).toContain("max-age=3600");
+    expect(res.headers.get("cache-control")).not.toContain("s-maxage");
+    expect(res.headers.get("cdn-cache-control")).toBe("no-store");
     expect(res.headers.get("cache-tag")).toBe("stroke");
     expect(res.headers.get("etag")).toBeTruthy();
     const body = await res.json();

@@ -76,6 +76,45 @@ describe("dictionary corpus pointer/manifest schema", () => {
     ).toBe(false);
   });
 
+  it("rejects non-object or malformed pointer inputs", () => {
+    expect(isDictionaryCorpusPointer(null)).toBe(false);
+    expect(isDictionaryCorpusPointer("string")).toBe(false);
+    expect(isDictionaryCorpusPointer({})).toBe(false);
+    expect(
+      isDictionaryCorpusPointer({
+        schema: 1,
+        dictionaryDigest: "not-a-hex-digest",
+        manifestKey: "dictionary-corpora/abc/manifest.json",
+        fileCount: 0,
+        totalBytes: 0,
+      }),
+    ).toBe(false);
+  });
+
+  it("rejects non-object, invalid-bytes, and bad-file manifest inputs", () => {
+    expect(isDictionaryCorpusManifest(null)).toBe(false);
+    expect(isDictionaryCorpusManifest(42)).toBe(false);
+    expect(isDictionaryCorpusManifest({ schema: 2 })).toBe(false);
+    expect(
+      isDictionaryCorpusManifest({
+        schema: 1,
+        dictionaryDigest: digest,
+        fileCount: 0,
+        totalBytes: -1,
+        files: [],
+      }),
+    ).toBe(false);
+    expect(
+      isDictionaryCorpusManifest({
+        schema: 1,
+        dictionaryDigest: digest,
+        fileCount: 1,
+        totalBytes: 10,
+        files: [null],
+      }),
+    ).toBe(false);
+  });
+
   it("exports the stable pointer key", () => {
     expect(DICTIONARY_CORPUS_POINTER_KEY).toBe("dictionary-corpus/current.json");
   });

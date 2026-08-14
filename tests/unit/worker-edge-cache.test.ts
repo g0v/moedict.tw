@@ -26,15 +26,22 @@ interface FakeCacheControls {
   store: Map<string, Response>;
   matchCalls: number;
   putCalls: number;
+  deleteCalls: number;
+  deletedUrls: string[];
 }
-
 function installFakeEdgeCache(
   overrides: {
     match?: (request: Request) => Promise<Response | undefined>;
     put?: (request: Request, response: Response) => Promise<void>;
   } = {},
 ): FakeCacheControls {
-  const controls: FakeCacheControls = { store: new Map(), matchCalls: 0, putCalls: 0 };
+  const controls: FakeCacheControls = {
+    store: new Map(),
+    matchCalls: 0,
+    putCalls: 0,
+    deleteCalls: 0,
+    deletedUrls: [],
+  };
   const fake = {
     default: {
       match: async (request: Request) => {
@@ -48,6 +55,11 @@ function installFakeEdgeCache(
         if (overrides.put) return overrides.put(request, response);
         controls.store.set(request.url, response);
       },
+      delete: async (request: Request) => {
+        controls.deleteCalls += 1;
+        controls.deletedUrls.push(request.url);
+        return controls.store.delete(request.url);
+      },
     },
   };
   // Test seam: the fake implements only the two Cache methods dispatch uses.
@@ -59,7 +71,7 @@ afterEach(() => {
   Reflect.deleteProperty(globalThis, "caches");
 });
 
-function makeEnv(options: { pointer?: string | null | "error" } = {}) {
+function makeEnv(options: { pointer?: string | null } = {}) {
   const getCalls: string[] = [];
   const env = {
     DICTIONARY: {
@@ -192,7 +204,7 @@ describe("dispatch edge cache layer", () => {
     const digestV2 = "2".repeat(64);
 
     // Mutable pointer on a single shared DICTIONARY binding (warm isolate).
-    let currentPointer: string | null = pointerJson(digestV1);
+    const currentPointer = pointerJson(digestV1);
     const getCalls: string[] = [];
     const envBase = {
       CF_VERSION_METADATA: {
@@ -412,8 +424,7 @@ describe("zone CDN bypass (dispatch header split)", () => {
 
   it("applyZoneCdnBypassHeaders strips s-maxage/swr and sets CDN no-store; keeps max-age", () => {
     const h = new Headers({
-      "Cache-Control":
-        "public, max-age=300, s-maxage=86400, stale-while-revalidate=604800",
+      "Cache-Control": "public, max-age=300, s-maxage=86400, stale-while-revalidate=604800",
     });
     applyZoneCdnBypassHeaders(h);
     expect(h.get("Cloudflare-CDN-Cache-Control")).toBe("no-store");
@@ -423,6 +434,16 @@ describe("zone CDN bypass (dispatch header split)", () => {
     expect(cc).toContain("public");
     expect(cc).not.toMatch(/s-maxage/i);
     expect(cc).not.toMatch(/stale-while-revalidate/i);
+  });
+
+  it("applyZoneCdnBypassHeaders falls back to 'public, max-age=0' when all directives are stripped", () => {
+    const h = new Headers({
+      "Cache-Control": "s-maxage=86400, stale-while-revalidate=604800",
+    });
+    applyZoneCdnBypassHeaders(h);
+    expect(h.get("Cloudflare-CDN-Cache-Control")).toBe("no-store");
+    expect(h.get("CDN-Cache-Control")).toBe("no-store");
+    expect(h.get("Cache-Control")).toBe("public, max-age=0");
   });
 
   it("dispatch puts full s-maxage clone into caches.default but returns CDN-bypassed headers", async () => {
@@ -477,8 +498,68 @@ describe("zone CDN bypass (dispatch header split)", () => {
     expect(hit.headers.get("Cloudflare-CDN-Cache-Control")).toBe("no-store");
     expect(hit.headers.get("Cache-Control") ?? "").not.toMatch(/s-maxage/i);
   });
-});
 
+  it("dispatch cache HIT on a non-bypassed route does not attach CDN bypass headers", async () => {
+    const controls = installFakeEdgeCache();
+    // Prime the fake cache directly with a hit for a non-bypassed path
+    const testUrl = "http://localhost/api/config";
+    controls.store.set(
+      testUrl,
+      new Response('{"assetBaseUrl":"https://r2-assets.moedict.tw"}', {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "public, max-age=60, s-maxage=300",
+        },
+      }),
+    );
+    const { env } = makeEnv();
+    const hit = await dispatch(new Request(testUrl), env);
+    expect(hit.headers.get("X-Moedict-Edge-Cache")).toBe("hit");
+    expect(hit.headers.get("Cloudflare-CDN-Cache-Control")).toBeNull();
+    expect(hit.headers.get("CDN-Cache-Control")).toBeNull();
+  });
+
+  it("dispatch handles POST /api/cache/purge and exercises deriveEntryEdgeCacheKey for purged urls", async () => {
+    const controls = installFakeEdgeCache();
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () => new Response('{"success":true}', { status: 200 }));
+
+    try {
+      const digest = "a".repeat(64);
+      const { env } = makeEnv({ pointer: pointerJson(digest) });
+      const purgeEnv = {
+        ...env,
+        CACHE_PURGE_TOKEN: "test-secret",
+        CLOUDFLARE_API_TOKEN: "cf-token",
+      };
+
+      const req = new Request("http://localhost/api/cache/purge", {
+        method: "POST",
+        headers: {
+          "X-Cache-Purge-Token": "test-secret",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          urls: ["http://localhost/api/%E8%90%8C.json"],
+        }),
+      });
+
+      const res = await dispatch(req, purgeEnv as unknown as WorkerEnv);
+      expect(res.status).toBe(200);
+      const data = (await res.json()) as { ok: boolean; purgedUrls?: string[] };
+      expect(data.ok).toBe(true);
+      // Proves line 417 in worker/index.ts (deriveEntryEdgeCacheKey callback) was executed
+      expect(controls.deleteCalls).toBe(2);
+      expect(controls.deletedUrls).toContain("http://localhost/api/%E8%90%8C.json");
+      expect(controls.deletedUrls).toContain(
+        `http://localhost/api/%E8%90%8C.json?__moedict_ver=${digest}`,
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
 
 // ---------------------------------------------------------------------------
 // P1 fix: /api/stroke-json/* edge cache identity is namespaced by the

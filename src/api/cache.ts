@@ -225,9 +225,8 @@ export async function handleCachePurge(
   // below provide targeted single-URL deletion from `caches.default`.
   const purgedUrls: string[] = [];
   if (typeof caches !== "undefined" && Array.isArray(body.urls) && body.urls.length > 0) {
-    const edgeCache = (
-      caches as unknown as { default: { delete(req: Request): Promise<boolean> } }
-    ).default;
+    const edgeCache = (caches as unknown as { default: { delete(req: Request): Promise<boolean> } })
+      .default;
     for (const urlStr of body.urls) {
       if (typeof urlStr !== "string" || !urlStr.trim()) continue;
       try {

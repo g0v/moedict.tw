@@ -10,9 +10,10 @@ describe("/api/index/{lang}.json", () => {
     // may not be seeded, in which case 404 with error shape is returned.
     if (status === 200) {
       expect(Array.isArray(body)).toBe(true);
-      // CACHE_CONTROL.index = 'public, max-age=60, s-maxage=300' (browser
-      // 60s / edge 300s split) — assert the edge TTL, the load-bearing part.
-      expect(headers.get("cache-control")).toContain("s-maxage=300");
+      // CACHE_CONTROL.index has max-age=60 with s-maxage stripped on outgoing bypass:
+      expect(headers.get("cache-control")).toContain("max-age=60");
+      expect(headers.get("cache-control")).not.toContain("s-maxage");
+      expect(headers.get("cdn-cache-control")).toBe("no-store");
     } else {
       expect(status).toBe(404);
     }
