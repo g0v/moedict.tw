@@ -2472,3 +2472,25 @@ test.describe("charimg-result romanize checkbox (RESCOPE #169)", () => {
     expect(twitterImage).toMatch(/\.png$/);
   });
 });
+
+test.describe("@romanization search input font-family stack does not lead with Biaodian Pro Serif CNS", () => {
+  test("computed font-family on WebKit / Desktop Safari resolves system font before Biaodian Pro Serif CNS", async ({
+    page,
+  }) => {
+    await page.goto("/%E8%90%8C");
+    await waitForAppReady(page, "dictionary");
+
+    const navbarSearchInput = page.locator(".fulltext-search-input").first();
+    const sidebarQueryInput = page.locator(".query-box input.query").first();
+
+    const navbarFontFamily = await navbarSearchInput.evaluate(
+      (el) => getComputedStyle(el).fontFamily,
+    );
+    const sidebarFontFamily = await sidebarQueryInput.evaluate(
+      (el) => getComputedStyle(el).fontFamily,
+    );
+
+    expect(navbarFontFamily.trim()).not.toMatch(/^['"]?Biaodian Pro Serif CNS['"]?\s*(,|$)/);
+    expect(sidebarFontFamily.trim()).not.toMatch(/^['"]?Biaodian Pro Serif CNS['"]?\s*(,|$)/);
+  });
+});
