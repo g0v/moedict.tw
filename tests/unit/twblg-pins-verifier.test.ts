@@ -6,11 +6,13 @@ import {
   calculatePinAge,
   getPinAgeSummary,
   isValidIsoDate,
+  normalizeWhitespace,
   validatePinnedManifest,
   verifyEntryHtml,
   verifySearchHtml,
 } from "../../scripts/lib/twblg-pins.mjs";
 import { verifySinglePin } from "../../commands/verify-twblg-pins-upstream.mjs";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURES_DIR = path.resolve(__dirname, "../fixtures/twblg-upstream");
 
@@ -102,33 +104,38 @@ describe("twblg-pins provenance and date validation", () => {
     expect(summary.oldestTitle).toBe("長褲");
     expect(summary.oldestAgeDays).toBe(28);
   });
+
+  it("normalizes whitespace and Unicode form cleanly", () => {
+    expect(normalizeWhitespace(" （臺華共同詞 ，無義項） ")).toBe("（臺華共同詞 ，無義項）");
+  });
 });
 
 describe("verifyEntryHtml pure logic", () => {
-  it("returns ok when headword, reading, and no-definition hold", () => {
+  it("returns ok when headword, reading, and negative no-definition hold", () => {
     const html = loadFixture("entry-valid-no-def.html");
     const result = verifyEntryHtml(html, "長褲", "tn̂g-khòo");
     expect(result.status).toBe("ok");
     expect(result.mismatches).toHaveLength(0);
   });
 
-  it("handles multi-reading alternate entries (e.g. pa-lê/pa-lé)", () => {
+  it("handles multi-reading alternate entries (e.g. NFD pa-lê/pa-lé vs NFC HTML)", () => {
     const html = loadFixture("entry-valid-multi-reading.html");
-    const result = verifyEntryHtml(html, "芭蕾", "pa-lê/pa-lé");
+    // Pass T in NFD to test normalization
+    const result = verifyEntryHtml(html, "芭蕾", "pa-le\u0302/pa-le\u0301");
     expect(result.status).toBe("ok");
     expect(result.mismatches).toHaveLength(0);
   });
 
-  it("detects content drift when a definition appears", () => {
+  it("detects content drift when a definition section appears on the entry page", () => {
     const html = loadFixture("entry-drift-with-definition.html");
     const result = verifyEntryHtml(html, "長褲", "tn̂g-khòo");
     expect(result.status).toBe("content_drift");
-    expect(result.mismatches.some((m) => m.includes("Definition appeared"))).toBe(true);
+    expect(result.mismatches.some((m) => m.includes("Definition section appeared"))).toBe(true);
   });
 
-  it("detects content drift when readings change/disappear", () => {
+  it("detects content drift when readings change or disappear", () => {
     const html = loadFixture("entry-drift-reading-changed.html");
-    const result = verifyEntryHtml(html, "芭蕾", "pa-lê/pa-lé");
+    const result = verifyEntryHtml(html, "芭蕾", "pa-le\u0302/pa-le\u0301");
     expect(result.status).toBe("content_drift");
     expect(result.mismatches.some((m) => m.includes("Reading missing"))).toBe(true);
   });
@@ -140,41 +147,68 @@ describe("verifyEntryHtml pure logic", () => {
     expect(result.mismatches.some((m) => m.includes("Headword mismatch"))).toBe(true);
   });
 
-  it("distinguishes page structure changes (e.g. missing <h1>)", () => {
+  it("distinguishes page structure changes (missing <h1>)", () => {
     const html = loadFixture("entry-structure-missing-h1.html");
     const result = verifyEntryHtml(html, "長褲", "tn̂g-khòo");
     expect(result.status).toBe("structure_changed");
-    expect(result.mismatches.some((m) => m.includes("structure changed"))).toBe(true);
+    expect(result.mismatches.some((m) => m.includes("missing <main> or <h1>"))).toBe(true);
+  });
+
+  it("distinguishes page structure changes (missing pronunciation header list)", () => {
+    const html = loadFixture("entry-structure-missing-reading-header.html");
+    const result = verifyEntryHtml(html, "長褲", "tn̂g-khòo");
+    expect(result.status).toBe("structure_changed");
+    expect(
+      result.mismatches.some((m) => m.includes("could not locate pronunciation header list")),
+    ).toBe(true);
   });
 });
 
 describe("verifySearchHtml pure logic", () => {
-  it("returns ok when exactly 1 match is found", () => {
+  it("returns ok when exactly 1 exact match and no-definition marker are found (ignoring partial match counts)", () => {
     const html = loadFixture("search-valid-one-match.html");
     const result = verifySearchHtml(html, "長褲");
     expect(result.status).toBe("ok");
     expect(result.mismatches).toHaveLength(0);
   });
 
-  it("detects content drift when 0 matches found", () => {
+  it("detects content drift when search definition row carries actual definition text instead of no-definition marker", () => {
+    const html = loadFixture("search-drift-def-appeared.html");
+    const result = verifySearchHtml(html, "長褲");
+    expect(result.status).toBe("content_drift");
+    expect(result.mismatches.some((m) => m.includes("does not carry no-definition marker"))).toBe(
+      true,
+    );
+  });
+
+  it("detects content drift when 0 exact matches are found", () => {
     const html = loadFixture("search-drift-zero-matches.html");
     const result = verifySearchHtml(html, "長褲");
     expect(result.status).toBe("content_drift");
     expect(result.mismatches.some((m) => m.includes("expected exactly 1"))).toBe(true);
   });
 
-  it("detects content drift when multiple matches found", () => {
+  it("detects content drift when multiple exact matches are found", () => {
     const html = loadFixture("search-drift-multiple-matches.html");
     const result = verifySearchHtml(html, "長褲");
     expect(result.status).toBe("content_drift");
     expect(result.mismatches.some((m) => m.includes("expected exactly 1"))).toBe(true);
   });
 
-  it("distinguishes page structure changes when summary pattern is missing", () => {
-    const html = loadFixture("search-structure-changed.html");
+  it("distinguishes page structure changes when summary count pattern is missing", () => {
+    const html = loadFixture("search-structure-missing-count.html");
     const result = verifySearchHtml(html, "長褲");
     expect(result.status).toBe("structure_changed");
-    expect(result.mismatches.some((m) => m.includes("Search page structure changed"))).toBe(true);
+    expect(result.mismatches.some((m) => m.includes("could not find '完全符合 ... 有 X 筆'"))).toBe(
+      true,
+    );
+  });
+
+  it("distinguishes page structure changes when definition row is missing from search table", () => {
+    const html = loadFixture("search-structure-missing-def-row.html");
+    const result = verifySearchHtml(html, "長褲");
+    expect(result.status).toBe("structure_changed");
+    expect(result.mismatches.some((m) => m.includes("could not find definition row"))).toBe(true);
   });
 });
 
