@@ -206,4 +206,19 @@ describe("dictionary handler memoization", () => {
     expect(res?.status).toBe(200);
     expect(second.source.getCalls).toContain("pack/12.txt");
   });
+
+  it("resolves null source to missing state without throwing", async () => {
+    const state = await resolveDictionaryPointerState(null);
+    expect(state).toEqual({ kind: "missing" });
+    const peeked = await peekDictionaryCorpusDigest(null);
+    expect(peeked).toBeNull();
+  });
+
+  it("accepts an explicit digestOverride to scope the memo key", async () => {
+    const source = makeSource({ "pack/0.txt": '{"a":1}' });
+    const res = await readR2JsonCached(source, "pack/0.txt", Date.now, "override-digest");
+    expect(res).toEqual({ a: 1 });
+    // Object was read; the digestOverride branch was taken (no pointer read).
+    expect(source.getCalls).toEqual(["pack/0.txt"]);
+  });
 });

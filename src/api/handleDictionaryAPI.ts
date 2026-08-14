@@ -19,6 +19,8 @@ interface DictionaryBucketLike {
 
 interface DictionaryEnv {
   DICTIONARY: DictionaryBucketLike;
+  DICTIONARY_BASE_URL?: string;
+  DICTIONARY_PUBLIC_READS?: string;
 }
 
 interface ErrorResponse {
@@ -392,7 +394,7 @@ async function fillBucket(
     const bucketPath = `p${lang}ck/${bucket}.txt`;
     // Memoized: bucket shards are the hottest R2 objects (billing audit
     // 2026-07) and change only on data re-upload.
-    const responseData = (await readR2JsonCached(env.DICTIONARY, bucketPath)) as Record<
+    const responseData = (await readR2JsonCached(env, bucketPath)) as Record<
       string,
       DictionaryEntry
     > | null;
@@ -875,7 +877,7 @@ async function getCrossReferences(
     const xrefPath = `${lang}/xref.json`;
     // Memoized: this sidecar is re-read on EVERY entry lookup (once here,
     // once for xref-by-id) — formerly two R2 GETs per dictionary request.
-    const xref = (await readR2JsonCached(env.DICTIONARY, xrefPath)) as XRefData | null;
+    const xref = (await readR2JsonCached(env, xrefPath)) as XRefData | null;
     if (!xref) {
       return [];
     }
@@ -908,7 +910,7 @@ async function getCrossReferencesById(
 ): Promise<Array<{ lang: DictionaryLang; byId: Record<string, string[]> }>> {
   try {
     const xrefPath = `${lang}/xref-by-id.json`;
-    const xref = (await readR2JsonCached(env.DICTIONARY, xrefPath)) as XRefByIdData | null;
+    const xref = (await readR2JsonCached(env, xrefPath)) as XRefByIdData | null;
     if (!xref) {
       return [];
     }

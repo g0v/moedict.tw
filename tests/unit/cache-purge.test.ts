@@ -200,4 +200,97 @@ describe("handleCachePurge", () => {
 
     Reflect.deleteProperty(globalThis, "caches");
   });
+
+  it("skips non-string and blank URL entries without aborting the rest of the batch", async () => {
+    const deleted: string[] = [];
+    Reflect.set(globalThis, "caches", {
+      default: {
+        delete: async (req: Request) => {
+          deleted.push(req.url);
+          return true;
+        },
+      },
+    });
+
+    const res = await handleCachePurge(
+      new Request("http://localhost/api/cache/purge", {
+        method: "POST",
+        headers: { "X-Cache-Purge-Token": "secret" },
+        body: JSON.stringify({
+          urls: [42, "   ", "https://www.moedict.tw/api/%E9%B3%A5.json"],
+        }),
+      }),
+      { env: { CACHE_PURGE_TOKEN: "secret" }, purge: purgeMock },
+    );
+
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as { purgedUrls?: string[] };
+    expect(data.purgedUrls).toEqual(["https://www.moedict.tw/api/%E9%B3%A5.json"]);
+    expect(deleted).toEqual(["https://www.moedict.tw/api/%E9%B3%A5.json"]);
+
+    Reflect.deleteProperty(globalThis, "caches");
+  });
+
+  it("also deletes the derived (version-namespaced) cache key when it differs", async () => {
+    const deleted: string[] = [];
+    Reflect.set(globalThis, "caches", {
+      default: {
+        delete: async (req: Request) => {
+          deleted.push(req.url);
+          return true;
+        },
+      },
+    });
+
+    const res = await handleCachePurge(
+      new Request("http://localhost/api/cache/purge", {
+        method: "POST",
+        headers: { "X-Cache-Purge-Token": "secret" },
+        body: JSON.stringify({ urls: ["https://www.moedict.tw/api/%E9%B3%A5.json"] }),
+      }),
+      {
+        env: { CACHE_PURGE_TOKEN: "secret" },
+        purge: purgeMock,
+        deriveCacheKey: (req) => Promise.resolve(new Request(`${req.url}?__moedict_ver=abc`)),
+      },
+    );
+
+    expect(res.status).toBe(200);
+    expect(deleted).toEqual([
+      "https://www.moedict.tw/api/%E9%B3%A5.json",
+      "https://www.moedict.tw/api/%E9%B3%A5.json?__moedict_ver=abc",
+    ]);
+
+    Reflect.deleteProperty(globalThis, "caches");
+  });
+
+  it("deletes only the raw key when the derived key is null or identical", async () => {
+    const deleted: string[] = [];
+    Reflect.set(globalThis, "caches", {
+      default: {
+        delete: async (req: Request) => {
+          deleted.push(req.url);
+          return true;
+        },
+      },
+    });
+    const call = (deriveCacheKey: (req: Request) => Promise<Request | null>) =>
+      handleCachePurge(
+        new Request("http://localhost/api/cache/purge", {
+          method: "POST",
+          headers: { "X-Cache-Purge-Token": "secret" },
+          body: JSON.stringify({ urls: ["https://www.moedict.tw/api/config"] }),
+        }),
+        { env: { CACHE_PURGE_TOKEN: "secret" }, purge: purgeMock, deriveCacheKey },
+      );
+
+    expect((await call(() => Promise.resolve(null))).status).toBe(200);
+    expect((await call((req) => Promise.resolve(new Request(req.url)))).status).toBe(200);
+    expect(deleted).toEqual([
+      "https://www.moedict.tw/api/config",
+      "https://www.moedict.tw/api/config",
+    ]);
+
+    Reflect.deleteProperty(globalThis, "caches");
+  });
 });

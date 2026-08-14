@@ -19,7 +19,7 @@
  */
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { isAbsolute, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -97,7 +97,9 @@ function main() {
 
   const files = collectUploadPaths();
   if (files.length === 0) {
-    console.error("[build-dictionary-corpus-pointer] no files found under data/dictionary upload roots");
+    console.error(
+      "[build-dictionary-corpus-pointer] no files found under data/dictionary upload roots",
+    );
     process.exit(1);
   }
 

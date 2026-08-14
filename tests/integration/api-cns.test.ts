@@ -65,10 +65,12 @@ describe("GET /api/cns/{char}.json — 200 golden 䴉", () => {
     expect(tag).not.toContain("dict,");
   });
 
-  it("Cache-Control matches dict policy (s-maxage=86400)", async () => {
+  it("Cache-Control has browser max-age and CDN bypass headers (s-maxage stripped on outgoing response)", async () => {
     const res = await fetchFromServer(`/api/cns/${IBIS_ENCODED}.json`);
     const cc = res.headers.get("cache-control") ?? "";
-    expect(cc).toContain("s-maxage=86400");
+    expect(cc).toContain("max-age=300");
+    expect(cc).not.toContain("s-maxage");
+    expect(res.headers.get("cdn-cache-control")).toBe("no-store");
   });
 
   it("Content-Type is application/json", async () => {
@@ -82,7 +84,8 @@ describe("HEAD /api/cns/{char}.json", () => {
     const res = await fetchFromServer(`/api/cns/${IBIS_ENCODED}.json`, { method: "HEAD" });
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type") ?? "").toContain("application/json");
-    expect(res.headers.get("cache-control") ?? "").toContain("s-maxage=86400");
+    expect(res.headers.get("cache-control") ?? "").toContain("max-age=300");
+    expect(res.headers.get("cdn-cache-control")).toBe("no-store");
     // Body must be null/empty for HEAD
     const text = await res.text();
     expect(text).toBe("");

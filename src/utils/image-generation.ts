@@ -4,6 +4,30 @@ import { stripLangPrefix, tryDecodeURIComponent, type DictionaryLang } from "./d
 import { bucketOf } from "../api/handleDictionaryAPI";
 import { readR2JsonCached, type R2JsonSource } from "../api/r2-json-cache";
 import { isTauhuOoCodepoint } from "./tauhu-oo-ranges";
+import {
+  cachedObjectText,
+  cachedObjectBytes,
+  type EdgeObjectCacheOptions,
+} from "./edge-object-cache";
+
+/**
+ * Bump this version string whenever glyph SVG or font asset bytes are replaced in R2.
+ * This invalidates the L2 colo cache keys.
+ */
+export const FONT_OBJECT_CACHE_VERSION = "1";
+
+const FONT_CACHE_OPTIONS: EdgeObjectCacheOptions = {
+  namespace: "fonts",
+  version: FONT_OBJECT_CACHE_VERSION,
+  sMaxAgeSeconds: 30 * 86400,
+};
+
+const ASSET_CACHE_OPTIONS: EdgeObjectCacheOptions = {
+  namespace: "assets",
+  version: FONT_OBJECT_CACHE_VERSION,
+  sMaxAgeSeconds: 30 * 86400,
+};
+
 interface FontSvgObject {
   size: number;
   text(): Promise<string>;
@@ -384,8 +408,8 @@ async function checkFontAvailability(fontName: string, env: Env): Promise<boolea
 
     console.log(`[DEBUG] Checking font availability: ${fontName}, test path: ${svgPath}`);
 
-    const svgObject = await env.FONTS.get(svgPath);
-    const isAvailable = svgObject !== null;
+    const content = await cachedObjectText(env.FONTS, svgPath, FONT_CACHE_OPTIONS);
+    const isAvailable = content !== null;
 
     console.log(`[DEBUG] Font ${fontName} availability: ${isAvailable}`);
     cache.set(fontName, isAvailable);
@@ -413,8 +437,7 @@ async function fetchGlyphSvg(fonts: Env["FONTS"], svgPath: string): Promise<stri
     cache.set(svgPath, cached);
     return cached;
   }
-  const svgObject = await fonts.get(svgPath);
-  const content = svgObject ? await svgObject.text() : null;
+  const content = await cachedObjectText(fonts, svgPath, FONT_CACHE_OPTIONS);
   cache.set(svgPath, content);
   while (cache.size > GLYPH_CACHE_MAX_ENTRIES) {
     const oldest = cache.keys().next().value;
@@ -435,12 +458,12 @@ async function loadFallbackFontBuffer(env: Env): Promise<Uint8Array | null> {
   if (cached) return cached;
   const loading = (async (): Promise<Uint8Array | null> => {
     try {
-      const asset = await assets.get(FALLBACK_FONT_ASSET_KEY);
-      if (!asset) {
+      const bytes = await cachedObjectBytes(assets, FALLBACK_FONT_ASSET_KEY, ASSET_CACHE_OPTIONS);
+      if (!bytes) {
         console.log(`[DEBUG] Fallback font asset not found at ${FALLBACK_FONT_ASSET_KEY}`);
         return null;
       }
-      return new Uint8Array(await asset.arrayBuffer());
+      return bytes;
     } catch (error) {
       console.error("[DEBUG] Failed to load fallback font buffer:", error);
       return null;
@@ -476,12 +499,12 @@ export async function loadTwKaiShardBuffer(env: Env, shardKey: string): Promise<
 
   const loading = (async (): Promise<Uint8Array | null> => {
     try {
-      const asset = await assets.get(shardKey);
-      if (!asset) {
+      const bytes = await cachedObjectBytes(assets, shardKey, ASSET_CACHE_OPTIONS);
+      if (!bytes) {
         console.log(`[DEBUG] TW-Kai shard font asset not found at ${shardKey}`);
         return null;
       }
-      return new Uint8Array(await asset.arrayBuffer());
+      return bytes;
     } catch (error) {
       console.error(`[DEBUG] Failed to load TW-Kai shard font buffer ${shardKey}:`, error);
       return null;
@@ -515,12 +538,12 @@ async function loadCaptionFontBuffer(env: Env): Promise<Uint8Array | null> {
   if (cached) return cached;
   const loading = (async (): Promise<Uint8Array | null> => {
     try {
-      const asset = await assets.get(CAPTION_FONT_ASSET_KEY);
-      if (!asset) {
+      const bytes = await cachedObjectBytes(assets, CAPTION_FONT_ASSET_KEY, ASSET_CACHE_OPTIONS);
+      if (!bytes) {
         console.log(`[DEBUG] Caption font asset not found at ${CAPTION_FONT_ASSET_KEY}`);
         return null;
       }
-      return new Uint8Array(await asset.arrayBuffer());
+      return bytes;
     } catch (error) {
       console.error("[DEBUG] Failed to load caption font buffer:", error);
       return null;

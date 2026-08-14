@@ -10,8 +10,8 @@
  * tests/unit/dictionary-route.test.ts.
  */
 
-import { describe, expect, it } from "vite-plus/test";
-import { shouldRenderHtmlShell } from "../../worker/index";
+import { describe, expect, it, vi, afterEach } from "vite-plus/test";
+import { getBuildDictionaryDataVersion, shouldRenderHtmlShell } from "../../worker/index";
 
 describe("shouldRenderHtmlShell", () => {
   const url = (pathname: string) => new URL(`http://localhost${pathname}`);
@@ -75,5 +75,38 @@ describe("shouldRenderHtmlShell", () => {
 
   it("returns true for HEAD on a shell route", () => {
     expect(shouldRenderHtmlShell(req("HEAD"), url("/about"))).toBe(true);
+  });
+});
+
+describe("getBuildDictionaryDataVersion", () => {
+  it("returns env.DICTIONARY_DATA_VERSION when set and not 'dev'", () => {
+    expect(getBuildDictionaryDataVersion({ DICTIONARY_DATA_VERSION: "2026-08" })).toBe("2026-08");
+  });
+
+  it("returns null when env.DICTIONARY_DATA_VERSION is 'dev'", () => {
+    expect(getBuildDictionaryDataVersion({ DICTIONARY_DATA_VERSION: "dev" })).toBeNull();
+  });
+
+  it("returns null when env is undefined or has no version and global is unset", () => {
+    expect(getBuildDictionaryDataVersion()).toBeNull();
+    expect(getBuildDictionaryDataVersion({})).toBeNull();
+  });
+
+  describe("when global __DICTIONARY_DATA_VERSION__ is set", () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("returns the global version when valid", () => {
+      vi.stubGlobal("__DICTIONARY_DATA_VERSION__", "build-sha-123");
+      expect(getBuildDictionaryDataVersion()).toBe("build-sha-123");
+    });
+
+    it("returns null when global version is 'dev' or 'unknown-data-version'", () => {
+      vi.stubGlobal("__DICTIONARY_DATA_VERSION__", "dev");
+      expect(getBuildDictionaryDataVersion()).toBeNull();
+      vi.stubGlobal("__DICTIONARY_DATA_VERSION__", "unknown-data-version");
+      expect(getBuildDictionaryDataVersion()).toBeNull();
+    });
   });
 });

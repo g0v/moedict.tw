@@ -10,9 +10,7 @@ import { handleImageGeneration } from "../src/utils/image-generation";
 import { CACHE_CONTROL, handleCachePurge } from "../src/api/cache";
 import { handleCnsAPI } from "../src/api/handleCnsAPI";
 import type { CachePurger } from "../src/api/cache";
-import {
-  resolveDictionaryPointerState,
-} from "../src/api/r2-json-cache";
+import { fetchDictionaryObjectText, resolveDictionaryPointerState } from "../src/api/r2-json-cache";
 import {
   buildDefinitionDescription,
   parseDictionaryRoute,
@@ -32,8 +30,18 @@ export interface ZoneCachePurgerEnv {
 interface Env extends ZoneCachePurgerEnv {
   /** wrangler vars：靜態資源公開端；見 /api/config.assetBaseUrl、/assets/* 代理 */
   ASSET_BASE_URL?: string;
-  /** wrangler vars：僅注入 /api/config.dictionaryBaseUrl；目前無前端使用 */
+  /**
+   * wrangler vars：(1) 注入 /api/config.dictionaryBaseUrl (2) 當
+   * DICTIONARY_PUBLIC_READS==="1" 時，字典物件改走這個公開 R2 自訂網域讀取
+   */
   DICTIONARY_BASE_URL?: string;
+  /**
+   * wrangler vars：只有 production 設 "1"。開啟後 fetchDictionaryObjectText 會用
+   * `${DICTIONARY_BASE_URL}/<key>?v=<corpus digest>` + cacheEverything 讓 zone CDN
+   * 跨 isolate 吸收字典讀取，取代逐 isolate 的 R2 Class B GET。
+   * staging 不設：它綁 -preview 桶，但 base URL 指向 production 桶。
+   */
+  DICTIONARY_PUBLIC_READS?: string;
   /** Secret for POST /api/cache/purge (Bearer or X-Cache-Purge-Token). */
   CACHE_PURGE_TOKEN?: string;
   DICTIONARY: R2Bucket;
@@ -426,8 +434,8 @@ async function dispatchCore(request: Request, env: Env, ctx?: ExecutionContext):
     if (searchIndexMatch) {
       const lang = searchIndexMatch[1];
       const key = `search-index/${lang}.json`;
-      const obj = await env.DICTIONARY.get(key);
-      if (!obj) {
+      const content = await fetchDictionaryObjectText(env, key);
+      if (content === null) {
         return new Response(
           JSON.stringify({ error: "Not Found", message: `找不到全文索引：${key}` }),
           {
@@ -439,7 +447,6 @@ async function dispatchCore(request: Request, env: Env, ctx?: ExecutionContext):
           },
         );
       }
-      const content = await obj.text();
       return new Response(content, {
         status: 200,
         headers: {
@@ -456,9 +463,9 @@ async function dispatchCore(request: Request, env: Env, ctx?: ExecutionContext):
     if (indexMatch) {
       const lang = indexMatch[1];
       const key = `${lang}/index.json`;
-      const obj = await env.DICTIONARY.get(key);
+      const content = await fetchDictionaryObjectText(env, key);
 
-      if (!obj) {
+      if (content === null) {
         return new Response(
           JSON.stringify({ error: "Not Found", message: `找不到索引檔：${key}` }),
           {
@@ -471,7 +478,6 @@ async function dispatchCore(request: Request, env: Env, ctx?: ExecutionContext):
         );
       }
 
-      const content = await obj.text();
       return new Response(content, {
         status: 200,
         headers: {
@@ -488,9 +494,9 @@ async function dispatchCore(request: Request, env: Env, ctx?: ExecutionContext):
     if (xrefMatch) {
       const lang = xrefMatch[1];
       const key = `${lang}/xref.json`;
-      const obj = await env.DICTIONARY.get(key);
+      const content = await fetchDictionaryObjectText(env, key);
 
-      if (!obj) {
+      if (content === null) {
         return new Response("{}", {
           status: 200,
           headers: {
@@ -502,7 +508,6 @@ async function dispatchCore(request: Request, env: Env, ctx?: ExecutionContext):
         });
       }
 
-      const content = await obj.text();
       return new Response(content, {
         status: 200,
         headers: {
@@ -519,9 +524,9 @@ async function dispatchCore(request: Request, env: Env, ctx?: ExecutionContext):
     if (xrefByIdMatch) {
       const lang = xrefByIdMatch[1];
       const key = `${lang}/xref-by-id.json`;
-      const obj = await env.DICTIONARY.get(key);
+      const content = await fetchDictionaryObjectText(env, key);
 
-      if (!obj) {
+      if (content === null) {
         return new Response("{}", {
           status: 200,
           headers: {
@@ -533,7 +538,6 @@ async function dispatchCore(request: Request, env: Env, ctx?: ExecutionContext):
         });
       }
 
-      const content = await obj.text();
       return new Response(content, {
         status: 200,
         headers: {
@@ -689,10 +693,7 @@ export function isEdgeCacheable(request: Request, response: Response): boolean {
  * HTML and bare SPA paths under `/a|t|h|c/…` without `.json`). HTML is also
  * rejected via Content-Type when known.
  */
-export function shouldBypassZoneCdn(
-  pathname: string,
-  contentType?: string | null,
-): boolean {
+export function shouldBypassZoneCdn(pathname: string, contentType?: string | null): boolean {
   if (contentType && contentType.includes("text/html")) return false;
   if (pathname.startsWith("/api/stroke-json/")) return true;
   if (pathname.startsWith("/api/cns/") || pathname === "/api/cns") return true;
@@ -780,9 +781,9 @@ async function deriveStrokeJsonEdgeCacheKey(request: Request, env: Env): Promise
 declare const __DICTIONARY_DATA_VERSION__: string | undefined;
 
 /** Build-time fallback only — used when R2 pointer is missing during rollout. */
-export function getBuildDictionaryDataVersion(
-  env?: { DICTIONARY_DATA_VERSION?: string },
-): string | null {
+export function getBuildDictionaryDataVersion(env?: {
+  DICTIONARY_DATA_VERSION?: string;
+}): string | null {
   if (env?.DICTIONARY_DATA_VERSION && env.DICTIONARY_DATA_VERSION !== "dev") {
     return env.DICTIONARY_DATA_VERSION;
   }
@@ -846,10 +847,7 @@ export function isEntryRoutePath(pathname: string): boolean {
  */
 const ENTRY_EDGE_CACHE_VERSION_PARAM = "__moedict_ver";
 
-export async function deriveEntryEdgeCacheKey(
-  request: Request,
-  env: Env,
-): Promise<Request | null> {
+export async function deriveEntryEdgeCacheKey(request: Request, env: Env): Promise<Request | null> {
   const url = new URL(request.url);
   if (!isEntryRoutePath(url.pathname)) {
     return request;

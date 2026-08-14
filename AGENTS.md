@@ -362,7 +362,6 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
 | HTML shell        | 0 / 60s                                       |
 | 字圖 PNG          | 1d / 1y                                       |
 
-
 - **雙層邊緣快取（2026-08-11 釐清；`f280c695`）**：`X-Moedict-Edge-Cache` 與 `cf-cache-status` **報的是不同層**——搞混這件事曾讓字典上傳後公開 URL 殘留舊 `X-Moedict-Version` 數小時。
   1. **`caches.default`（Worker Cache API）**：`dispatch()` 對「GET、200、`s-maxage>0`、非 text/html、非 no-store/private/Set-Cookie」的回應 `put(network.clone())`；字典／search／xref 以 pointer digest 命名空間 key（見上「改字典資料」）；命中回 `X-Moedict-Edge-Cache: hit`。**clone 必須保留完整 `s-maxage`**，否則 Worker 層只靠 browser `max-age` 過期、會 thrash。
   2. **Zone CDN（公開 URL key）**：路徑像 `*.json` 時 Cloudflare **預設**會依 `Cache-Control` 快取 Worker 回應——舊註解「Cloudflare 不會自動快取 Worker 回應、`s-maxage` 只是裝飾」是**錯的**，只對非 cacheable 副檔名／明確 no-store 成立。Zone 層看 `cf-cache-status` / `Age`，**不**看 `X-Moedict-Edge-Cache`。
@@ -378,6 +377,33 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
   `src/utils/image-generation.ts` 對字型 probe、逐字 glyph SVG（含 negative
   cache——R2 miss 也計費）與 Tauhu fallback 字型做同樣的 per-isolate 快取。
   **資料上傳後**除了 Worker edge TTL 還會多最長 10 分鐘的 memo 延遲。
+- **R2 讀取的 L2 colo 快取（2026-08-14 帳單稽核第二輪）**：per-isolate memo 只擋
+  同一 isolate 的重複讀取，冷 isolate 一律回打 R2；實測 `moedict-fonts` 每天
+  0.6–1.7M 次 GetObject（逐字 glyph SVG，共 492,900 個物件）就是這樣來的。
+  現在 `src/utils/edge-object-cache.ts` 在 R2 前面多一層 **`caches.default`
+  colo 快取**（L1 = per-isolate memo → L2 = colo → R3 = R2）：
+  - 覆蓋 `image-generation.ts` 五處讀取：字型 probe、glyph SVG、TW-Kai 分片、
+    Tauhu fallback、Fira Sans caption 字型。s-maxage 30 天。
+  - key 是合成 URL `https://edge-object-cache.moedict.invalid/<namespace>/<version>/<key>`，
+    **不會**外洩給用戶端；**唯一**失效方式是把 `FONT_OBJECT_CACHE_VERSION` 加一。
+  - 404 也會被快取（negative cache）——R2 miss 同樣計費。
+  - `typeof caches === "undefined"`（單元測試 / plain Node）或 cache 拋錯時
+    一律 fallback 直讀 R2，永不因快取層失敗而改變行為。
+  - ⚠️ 刻意**不**動 `MAX_SHARDS_PER_REQUEST=2` / `MAX_ISOLATE_SHARD_CACHE_SIZE=2`
+    與 20MB per-request 字型預算（既有記憶體安全決策）；分片 LRU 抖動改由 L2 吸收。
+- **字典物件改走公開網域 + digest 版本化（同一輪）**：
+  `fetchDictionaryObjectText`（`src/api/r2-json-cache.ts`）在 production 會用
+  `${DICTIONARY_BASE_URL}/<key>?v=<corpus digest>` + `cf:{cacheEverything:true,
+cacheTtl:86400}` 讀字典物件，讓 zone CDN 跨 isolate 吸收，promotion 換 digest
+  自動失效。涵蓋 entry pack 分片、xref/xref-by-id、`search-index/*`、`index.json`。
+  - **開關是 `DICTIONARY_PUBLIC_READS="1"`，只在 production vars 設。**
+    staging 刻意不設：它綁 `-preview` 桶，但 `DICTIONARY_BASE_URL` 指向
+    production 桶，若只拿 base URL 當開關，staging 會靜默讀到 production 位元組。
+    迴歸測試見 `tests/unit/dictionary-versioned-fetch.test.ts`「staging isolation guard」。
+  - pointer 讀不到（`kind!=="valid"`）、base URL 空、`fetch` 不存在、非 200/404
+    回應或 fetch 拋錯 → 全部 fallback 回 binding。
+  - `cfdict.xml` / `cfdict.txt` 仍走 binding：需要 `writeHttpMetadata`/`httpEtag`
+    與 body streaming。
 - 立即清除：`POST /api/cache/purge`，帶 `CACHE_PURGE_TOKEN`（Bearer 或
   `X-Cache-Purge-Token`），body 用 allowlist 內的 cache tags（如
   `{"tags":["dict-t"]}`）。token 只存在 Worker secret，本機沒有就等 TTL。Zone Cache-Tag purge **不會**清 `caches.default`（見 `src/api/cache.ts`）。
