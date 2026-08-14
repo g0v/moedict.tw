@@ -135,21 +135,20 @@ body {
   color: #333;
   font-size: 16px;
   line-height: 1.4;
+  /* System CJK before any @font-face. iOS WKWebView form controls bind to the
+     first declared webfont and do not unicode-range-fall through, so a
+     Biaodian-first (or Biaodian-before-sans-serif) stack paints BMP CJK as
+     .notdef tofu. #166 reordered to -apple-system first, but San Francisco
+     has no CJK, so Biaodian was still the first webfont asked for 萌. */
   font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Biaodian Pro Serif CNS", sans-serif,
-    MOEDICT, "TW-Kai-98_1", "標楷體", serif;
+    -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "PingFang TC", "Microsoft JhengHei",
+    "Heiti TC", sans-serif;
 }
 
 .fulltext-search-input:focus {
   outline: none;
   border-color: #74b2e2;
   box-shadow: 0 0 0 2px rgba(116, 178, 226, 0.18);
-}
-
-html.moe-capacitor .fulltext-search-input {
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Biaodian Pro Serif CNS", sans-serif,
-    "MOE EduKai Android", MOEDICT, "TW-Kai-98_1", "標楷體", serif;
 }
 
 .fulltext-search-icon {

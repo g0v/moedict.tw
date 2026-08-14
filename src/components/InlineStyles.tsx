@@ -327,11 +327,7 @@ export function InlineStyles({ r2Endpoint, onReady }: InlineStylesProps) {
 			height: 1.8em;
 			box-sizing: border-box;
 			padding: 4px 8px;
-			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Biaodian Pro Serif CNS", sans-serif, MOEDICT, "TW-Kai-98_1", "標楷體", serif;
-		}
-
-		html.moe-capacitor .query-box input.query {
-			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Biaodian Pro Serif CNS", sans-serif, "MOE EduKai Android", MOEDICT, "TW-Kai-98_1", "標楷體", serif;
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "PingFang TC", "Microsoft JhengHei", "Heiti TC", sans-serif;
 		}
 
 		.query-box input.query::placeholder {
