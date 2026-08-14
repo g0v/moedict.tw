@@ -165,9 +165,16 @@ export function verifyEntryHtml(html, expectedTitle, expectedT) {
   }
 
   // 3. Pronunciation list header structure check
-  const readingBlockMatch = normHtml.match(
-    /<header[\s\S]*?<ul\b[^>]*class="[^"]*list-inline[^"]*"[\s\S]*?<\/header>/i,
-  );
+  const mainMatch = normHtml.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i);
+  const mainHtml = mainMatch ? mainMatch[1] : normHtml;
+  const readingBlockMatch =
+    mainHtml.match(
+      /<header\b[^>]*>[\s\S]*?<ul\b[^>]*class="[^"]*list-inline[^"]*"[\s\S]*?<\/header>/i,
+    ) ||
+    normHtml.match(
+      /<header\b[^>]*>[\s\S]*?<ul\b[^>]*class="[^"]*list-inline[^"]*"[\s\S]*?<\/header>/i,
+    );
+
   if (!readingBlockMatch) {
     return {
       status: "structure_changed",
@@ -175,11 +182,37 @@ export function verifyEntryHtml(html, expectedTitle, expectedT) {
     };
   }
 
-  // 4. Check all expected readings (NFC normalized)
+  const readingBlockText = readingBlockMatch[0];
+
+  // 4. Check expected readings (NFC normalized):
+  // Main reading must reside in the pronunciation header block.
+  // Alternate readings (if any) must reside in the "又唸作" section.
   const expectedReadings = expectedT.split("/").map((r) => r.trim().normalize("NFC"));
-  for (const reading of expectedReadings) {
-    if (!normHtml.includes(reading)) {
-      mismatches.push(`Reading missing from entry page: expected reading "${reading}" not found`);
+  const [mainReading, ...alternateReadings] = expectedReadings;
+
+  if (mainReading && !readingBlockText.includes(mainReading)) {
+    mismatches.push(
+      `Main reading missing from pronunciation header: expected "${mainReading}" not found in header`,
+    );
+  }
+
+  if (alternateReadings.length > 0) {
+    const altSectionMatch =
+      normHtml.match(
+        /<section\b[^>]*>[\s\S]*?(?:id=["']又唸作["']|<h2\b[^>]*>\s*又唸作\s*<\/h2>)[\s\S]*?<\/section>/i,
+      ) || normHtml.match(/(?:<div|<section)\b[^>]*id=["']又唸作["'][\s\S]*?<\/(?:div|section)>/i);
+
+    if (!altSectionMatch) {
+      mismatches.push('Alternate reading section ("又唸作") not found on entry page');
+    } else {
+      const altSectionText = altSectionMatch[0];
+      for (const altReading of alternateReadings) {
+        if (!altSectionText.includes(altReading)) {
+          mismatches.push(
+            `Alternate reading missing from "又唸作" section: expected "${altReading}" not found`,
+          );
+        }
+      }
     }
   }
 

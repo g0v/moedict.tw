@@ -27,11 +27,11 @@ describe("twblg-pins provenance and date validation", () => {
     expect(isValidIsoDate("2026-02-29")).toBe(false); // 2026 is not a leap year
     expect(isValidIsoDate("2026-13-01")).toBe(false);
     expect(isValidIsoDate("2026-00-10")).toBe(false);
-    expect(isValidIsoDate("2026-07-32")).toBe(false);
-    expect(isValidIsoDate("invalid-date")).toBe(false);
+    expect(isValidIsoDate("2026-04-31")).toBe(false); // April has 30 days
+    expect(isValidIsoDate("not-a-date")).toBe(false);
     expect(isValidIsoDate("")).toBe(false);
     expect(isValidIsoDate(null)).toBe(false);
-    expect(isValidIsoDate(undefined)).toBe(false);
+    expect(isValidIsoDate(123)).toBe(false);
   });
 
   it("validates pinned manifest structure and required fields", () => {
@@ -40,17 +40,18 @@ describe("twblg-pins provenance and date validation", () => {
         {
           title: "長褲",
           T: "tn̂g-khòo",
-          source_entry_url: "https://sutian.moe.edu.tw/entry",
-          source_search_url: "https://sutian.moe.edu.tw/search",
-          source_note: "教育部臺灣閩南語常用詞辭典",
+          source_entry_url: "https://sutian.moe.edu.tw/zh-hant/su/25638/",
+          source_search_url:
+            "https://sutian.moe.edu.tw/zh-hant/tshiau/?lui=tai_su&tsha=%E9%95%B7%E8%A4%B2",
+          source_note: "MOE 臺灣台語常用詞辭典 su/25638",
           verified: "2026-07-17",
         },
       ],
     };
 
-    const { valid, errors } = validatePinnedManifest(validManifest);
-    expect(valid).toBe(true);
-    expect(errors).toHaveLength(0);
+    const result = validatePinnedManifest(validManifest);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
   });
 
   it("fails validation if required fields are missing or date is invalid", () => {
@@ -58,22 +59,25 @@ describe("twblg-pins provenance and date validation", () => {
       entries: [
         {
           title: "長褲",
-          T: "tn̂g-khòo",
-          // missing source_entry_url, source_search_url, source_note
+          // missing T, source_entry_url, source_search_url, source_note
           verified: "2026-99-99",
         },
       ],
     };
 
-    const { valid, errors } = validatePinnedManifest(invalidManifest);
-    expect(valid).toBe(false);
-    expect(errors.length).toBeGreaterThanOrEqual(4);
+    const result = validatePinnedManifest(invalidManifest);
+    expect(result.valid).toBe(false);
+    expect(result.errors.length).toBeGreaterThanOrEqual(4);
+    expect(result.errors.some((e) => e.includes("missing or empty required string field"))).toBe(
+      true,
+    );
+    expect(result.errors.some((e) => e.includes("is not a valid ISO YYYY-MM-DD date"))).toBe(true);
   });
 
   it("calculates pin age correctly", () => {
-    const refDate = new Date("2026-08-14T12:00:00Z");
-    const ageDays = calculatePinAge("2026-07-17", refDate);
-    expect(ageDays).toBe(28);
+    const fakeNow = new Date("2026-08-14T00:00:00Z");
+    const age = calculatePinAge("2026-07-17", fakeNow);
+    expect(age).toBe(28);
 
     const summary = getPinAgeSummary(
       {
@@ -81,28 +85,29 @@ describe("twblg-pins provenance and date validation", () => {
           {
             title: "長褲",
             T: "tn̂g-khòo",
-            source_entry_url: "url1",
-            source_search_url: "url2",
-            source_note: "note",
+            source_entry_url: "https://sutian.moe.edu.tw/zh-hant/su/25638/",
+            source_search_url:
+              "https://sutian.moe.edu.tw/zh-hant/tshiau/?lui=tai_su&tsha=%E9%95%B7%E8%A4%B2",
+            source_note: "MOE 臺灣台語常用詞辭典",
             verified: "2026-07-17",
           },
           {
             title: "芭蕾",
             T: "pa-lê",
-            source_entry_url: "url1",
-            source_search_url: "url2",
-            source_note: "note",
-            verified: "2026-08-01",
+            source_entry_url: "https://sutian.moe.edu.tw/zh-hant/su/23071/",
+            source_search_url: "https://sutian.moe.edu.tw/zh-hant/tshiau/?lui=tai_su&tsha=...",
+            source_note: "MOE 臺灣台語常用詞辭典",
+            verified: "2026-08-14",
           },
         ],
       },
-      refDate,
+      fakeNow,
     );
 
     expect(summary.count).toBe(2);
     expect(summary.oldestDate).toBe("2026-07-17");
-    expect(summary.oldestTitle).toBe("長褲");
     expect(summary.oldestAgeDays).toBe(28);
+    expect(summary.oldestTitle).toBe("長褲");
   });
 
   it("normalizes whitespace and Unicode form cleanly", () => {
@@ -126,18 +131,38 @@ describe("verifyEntryHtml pure logic", () => {
     expect(result.mismatches).toHaveLength(0);
   });
 
+  it("fails when main reading is absent from pronunciation header even if present elsewhere in document", () => {
+    const html = loadFixture("entry-drift-main-reading-only-in-body.html");
+    const result = verifyEntryHtml(html, "長褲", "tn̂g-khòo");
+    expect(result.status).toBe("content_drift");
+    expect(
+      result.mismatches.some((m) => m.includes("Main reading missing from pronunciation header")),
+    ).toBe(true);
+  });
+
+  it("detects content drift when expected alternate reading is missing because 又唸作 section is gone", () => {
+    const html = loadFixture("entry-drift-alt-reading-missing-section.html");
+    const result = verifyEntryHtml(html, "芭蕾", "pa-le\u0302/pa-le\u0301");
+    expect(result.status).toBe("content_drift");
+    expect(
+      result.mismatches.some((m) => m.includes('Alternate reading section ("又唸作") not found')),
+    ).toBe(true);
+  });
+
+  it("detects content drift when expected alternate reading in 又唸作 section does not match", () => {
+    const html = loadFixture("entry-drift-alt-reading-mismatched.html");
+    const result = verifyEntryHtml(html, "芭蕾", "pa-le\u0302/pa-le\u0301");
+    expect(result.status).toBe("content_drift");
+    expect(
+      result.mismatches.some((m) => m.includes('Alternate reading missing from "又唸作" section')),
+    ).toBe(true);
+  });
+
   it("detects content drift when a definition section appears on the entry page", () => {
     const html = loadFixture("entry-drift-with-definition.html");
     const result = verifyEntryHtml(html, "長褲", "tn̂g-khòo");
     expect(result.status).toBe("content_drift");
     expect(result.mismatches.some((m) => m.includes("Definition section appeared"))).toBe(true);
-  });
-
-  it("detects content drift when readings change or disappear", () => {
-    const html = loadFixture("entry-drift-reading-changed.html");
-    const result = verifyEntryHtml(html, "芭蕾", "pa-le\u0302/pa-le\u0301");
-    expect(result.status).toBe("content_drift");
-    expect(result.mismatches.some((m) => m.includes("Reading missing"))).toBe(true);
   });
 
   it("detects content drift when headword mismatches", () => {
