@@ -2490,7 +2490,7 @@ test.describe("@romanization search input font-family stack does not lead with B
       (el) => getComputedStyle(el).fontFamily,
     );
 
-    expect(navbarFontFamily.trim().startsWith('"Biaodian Pro Serif CNS"')).toBe(false);
-    expect(sidebarFontFamily.trim().startsWith('"Biaodian Pro Serif CNS"')).toBe(false);
+    expect(navbarFontFamily.trim()).not.toMatch(/^['"]?Biaodian Pro Serif CNS['"]?\s*(,|$)/);
+    expect(sidebarFontFamily.trim()).not.toMatch(/^['"]?Biaodian Pro Serif CNS['"]?\s*(,|$)/);
   });
 });
