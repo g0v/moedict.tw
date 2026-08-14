@@ -2476,8 +2476,11 @@ test.describe("charimg-result romanize checkbox (RESCOPE #169)", () => {
   });
 });
 
-test.describe("@romanization search input font-family stack excludes Biaodian webfonts", () => {
-  test("WebKit computed font-family with real legacy CSS has no Biaodian before system CJK", async ({
+// Guards the CSS cascade on desktop WebKit: with the real legacy stylesheet
+// injected, search/query inputs must not compute a Biaodian family. This
+// cannot detect a missing system font on a device.
+test.describe("@romanization search input font-family cascade on desktop WebKit", () => {
+  test("desktop WebKit computed font-family with real legacy CSS has no Biaodian", async ({
     page,
   }) => {
     const stylesCss = readFileSync(
