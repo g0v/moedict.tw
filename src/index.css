@@ -75,13 +75,20 @@ body {
    *before* the bare MOEDICT family in critical font stacks ensures the
    title font is resolved same-origin and is immune to that CORS cache state.
    The ?v=20260713-cors query suffix busts any old edge cache key for these
-   paths; it does not affect font bytes. */
+   paths; it does not affect font bytes.
+   Each format then lists /assets-legacy/fonts/MOEDICT.* (no query) as a
+   second src: Capacitor stages those files locally, and a query string
+   cannot match a bundled file. Web never reaches the fallback because
+   the Worker path succeeds first. No extra font bytes are copied. */
 @font-face {
   font-family: "MOEDICT Same-Origin";
   src:
     url("/assets/fonts/MOEDICT.woff2?v=20260713-cors") format("woff2"),
+    url("/assets-legacy/fonts/MOEDICT.woff2") format("woff2"),
     url("/assets/fonts/MOEDICT.otf?v=20260713-cors") format("opentype"),
-    url("/assets/fonts/MOEDICT.woff?v=20260713-cors") format("woff");
+    url("/assets-legacy/fonts/MOEDICT.otf") format("opentype"),
+    url("/assets/fonts/MOEDICT.woff?v=20260713-cors") format("woff"),
+    url("/assets-legacy/fonts/MOEDICT.woff") format("woff");
   font-display: swap;
   font-style: normal;
   font-weight: 400;
