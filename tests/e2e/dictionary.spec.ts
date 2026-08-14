@@ -2503,12 +2503,13 @@ test.describe("@romanization search input font-family stack excludes Biaodian we
       return link?.sheet != null;
     });
 
-    const assertSafeInputStack = async (selector: string, expectedValue?: string) => {
+    const assertSafeInputStack = async (
+      selector: string,
+      expected: { value: string; placeholder: string },
+    ) => {
       const inputs = page.locator(selector);
       const count = await inputs.count();
       expect(count, `${selector} must exist`).toBeGreaterThan(0);
-      const snapshots: Array<{ fontFamily: string; value: string; placeholder: string | null }> =
-        [];
       for (let i = 0; i < count; i += 1) {
         const snapshot = await inputs.nth(i).evaluate((el) => {
           const inputEl = el as HTMLInputElement;
@@ -2525,24 +2526,18 @@ test.describe("@romanization search input font-family stack excludes Biaodian we
           snapshot.fontFamily,
           `${selector}[${i}] includes a CJK system face or generic`,
         ).toMatch(/PingFang TC|Heiti TC|Microsoft JhengHei|sans-serif/i);
-        if (expectedValue !== undefined) {
-          expect(snapshot.value, `${selector}[${i}] value`).toBe(expectedValue);
-        }
-        snapshots.push(snapshot);
+        expect(snapshot.value, `${selector}[${i}] value`).toBe(expected.value);
+        expect(snapshot.placeholder, `${selector}[${i}] placeholder`).toBe(expected.placeholder);
       }
-      return snapshots[0]!;
     };
 
-    const navbar = await assertSafeInputStack("#nav-fulltext-search");
-    expect(navbar.placeholder).toBe("多語檢索");
-    expect(navbar.value).toBe("");
-    const query = await assertSafeInputStack("#query", "萌");
-    expect(query.placeholder).toBe("請輸入欲查詢的字詞");
+    await assertSafeInputStack("#nav-fulltext-search", { value: "", placeholder: "多語檢索" });
+    await assertSafeInputStack("#query", { value: "萌", placeholder: "請輸入欲查詢的字詞" });
 
     await page.evaluate(() => {
       document.documentElement.classList.add("moe-capacitor", "moe-ios");
     });
-    await assertSafeInputStack("#nav-fulltext-search");
-    await assertSafeInputStack("#query", "萌");
+    await assertSafeInputStack("#nav-fulltext-search", { value: "", placeholder: "多語檢索" });
+    await assertSafeInputStack("#query", { value: "萌", placeholder: "請輸入欲查詢的字詞" });
   });
 });
