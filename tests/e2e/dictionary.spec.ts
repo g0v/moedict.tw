@@ -2167,6 +2167,36 @@ test.describe("entry copy-explanation action (RESCOPE #258, single action-row bu
     expect(copyBox.x + copyBox.width).toBeLessThanOrEqual(variantsBox.x + 1);
     expect(variantsBox.x + variantsBox.width).toBeLessThanOrEqual(starBox.x + 1);
   });
+  test("mobile: extra action buttons wrap below the title instead of stealing heading width", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 333, height: 700 });
+    // 萌芽 is in the seeded 萌 pack bucket; 韓非子 is a production headword
+    // that the curated e2e fixtures do not load (falls through to 字卡).
+    await page.goto("/%E8%90%8C%E8%8A%BD");
+    await waitForEntryHydration(page, "萌芽");
+    const titleLocator = page.locator("h1.title").first();
+    await expect(titleLocator).toBeVisible();
+    const radical = page.locator(".radical").first();
+    const actions = page.locator(".entry-actions").first();
+    const heading = page.locator(".entry-heading").first();
+    const [titleBox, radicalBox, actionsBox, headingBox] = await Promise.all([
+      titleLocator.boundingBox(),
+      radical.boundingBox(),
+      actions.boundingBox(),
+      heading.boundingBox(),
+    ]);
+    expect(titleBox && radicalBox && actionsBox && headingBox).toBeTruthy();
+    if (!titleBox || !radicalBox || !actionsBox || !headingBox) return;
+    expect(actionsBox.y).toBeGreaterThanOrEqual(radicalBox.y + radicalBox.height - 2);
+    expect(
+      Math.abs(actionsBox.x + actionsBox.width - (radicalBox.x + radicalBox.width)),
+    ).toBeLessThanOrEqual(2);
+    // Title keeps the leftover column beside the compact radical (~37px),
+    // not beside the 8rem status + icon cluster (~180px).
+    expect(titleBox.width).toBeGreaterThan(headingBox.width * 0.7);
+    expect(radicalBox.width).toBeLessThan(80);
+  });
   test("mobile: enlarged long title reserves controls and preserves Hakka adjacency", async ({
     page,
   }) => {
@@ -2180,19 +2210,24 @@ test.describe("entry copy-explanation action (RESCOPE #258, single action-row bu
         element.setAttribute("style", "font-size: 64px; line-height: 1.2");
       });
     const heading = page.locator(".entry-heading").first();
-    const stack = page.locator(".entry-control-stack").first();
+    const radical = page.locator(".radical").first();
+    const actions = page.locator(".entry-actions").first();
     const titleLocator = page.locator("h1.title").first();
     const firstItem = page.locator(".entry-item").first();
-    const [headingBox, stackBox, titleBox, itemBox] = await Promise.all([
+    const [headingBox, radicalBox, actionsBox, titleBox, itemBox] = await Promise.all([
       heading.boundingBox(),
-      stack.boundingBox(),
+      radical.boundingBox(),
+      actions.boundingBox(),
       titleLocator.boundingBox(),
       firstItem.boundingBox(),
     ]);
-    expect(headingBox && stackBox && titleBox && itemBox).toBeTruthy();
-    if (!headingBox || !stackBox || !titleBox || !itemBox) return;
-    expect(stackBox.x).toBeGreaterThanOrEqual(0);
-    expect(stackBox.x + stackBox.width).toBeLessThanOrEqual(375 + 1);
+    expect(headingBox && radicalBox && actionsBox && titleBox && itemBox).toBeTruthy();
+    if (!headingBox || !radicalBox || !actionsBox || !titleBox || !itemBox) return;
+    expect(radicalBox.x).toBeGreaterThanOrEqual(0);
+    expect(radicalBox.x + radicalBox.width).toBeLessThanOrEqual(375 + 1);
+    expect(actionsBox.x).toBeGreaterThanOrEqual(0);
+    expect(actionsBox.x + actionsBox.width).toBeLessThanOrEqual(375 + 1);
+    expect(actionsBox.y).toBeGreaterThanOrEqual(radicalBox.y + radicalBox.height - 2);
     const titleRects = await titleLocator.evaluate((title) => {
       const range = document.createRange();
       const walker = document.createTreeWalker(title, NodeFilter.SHOW_TEXT);
@@ -2214,16 +2249,20 @@ test.describe("entry copy-explanation action (RESCOPE #258, single action-row bu
       return rects;
     });
     const tolerance = 1;
+    const separatedFrom = (
+      rect: { left: number; right: number; top: number; bottom: number },
+      box: { x: number; y: number; width: number; height: number },
+    ) =>
+      rect.right <= box.x + tolerance ||
+      rect.left >= box.x + box.width - tolerance ||
+      rect.bottom <= box.y + tolerance ||
+      rect.top >= box.y + box.height - tolerance;
     for (const rect of titleRects) {
-      const separated =
-        rect.right <= stackBox.x + tolerance ||
-        rect.left >= stackBox.x + stackBox.width - tolerance ||
-        rect.bottom <= stackBox.y + tolerance ||
-        rect.top >= stackBox.y + stackBox.height - tolerance;
-      expect(separated).toBe(true);
+      expect(separatedFrom(rect, radicalBox)).toBe(true);
+      expect(separatedFrom(rect, actionsBox)).toBe(true);
     }
     expect(itemBox.y).toBeGreaterThanOrEqual(
-      Math.max(titleBox.y + titleBox.height, stackBox.y + stackBox.height) - 1,
+      Math.max(titleBox.y + titleBox.height, actionsBox.y + actionsBox.height) - 1,
     );
     await page.goto("/%3A%E5%AD%97");
     await expect(page.locator("h1.title").first()).toContainText("字", { timeout: 15_000 });

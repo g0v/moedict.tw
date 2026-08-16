@@ -797,7 +797,9 @@ html[data-theme="dark"] .result .entry-actions .iconic-color.star:hover {
 
 /* 星號收藏／複製解釋／異體字字典連結：單一動作列，取代原先各自散落的絕對
    定位星號、逐條複製按鈕、標題旁的異體字連結圖示（UI 調整：見對應 issue）。
-   idx===0 時渲染一次；flex-wrap 讓窄螢幕自然換行，不需要另外的手機專屬版型。*/
+   idx===0 時渲染一次。寬螢幕把 radical + actions 浮在標題右側；窄螢幕只留
+   部首／筆順在標題旁，複製／異體字／星號改排到下一列，避免 8rem 狀態預留
+   把標題擠成一窄條。*/
 /* Float the controls in a BFC so the title keeps its legacy full-width
    block/ruby geometry while the heading reserves the taller control stack. */
 .result .entry-heading {
@@ -916,6 +918,52 @@ html[data-theme="dark"] .result .entry-actions .iconic-color.star:hover {
     align-items: center;
     justify-content: center;
     padding: 7px;
+  }
+
+  /* Keep only the compact radical beside the title. Copy/star/variants
+     occupy the next grid row so `.entry-copy-status { min-width: 8rem }`
+     cannot steal heading width. `display: contents` unwraps the stack
+     without changing DictionaryPage DOM (Hakka `h1.title`
+     nextElementSibling stays `.bopomofo`). Title ruby is the 1.55em MOE
+     box (rules below), so the leftover column stays wide enough. */
+  .result .entry-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) max-content;
+    align-items: start;
+    row-gap: 0.25rem;
+  }
+  .result .entry-control-stack {
+    float: none;
+    display: contents;
+    min-width: 0;
+    margin-left: 0;
+  }
+  .result .entry-heading > h1.title {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+  .result .entry-control-stack .radical {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    max-width: 4.5rem;
+    gap: 0;
+  }
+  .result .entry-heading > .bopomofo,
+  .result .entry-heading > .cn-specific {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .result .entry-actions {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    width: 100%;
+    max-width: 100%;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1050,7 +1098,11 @@ html.moe-capacitor .result .entry .title {
 
 html.moe-android .result .entry .title {
   --title-zhuyin-x-shift: 0.012em;
-  --title-zhuyin-y-shift: -0.055em;
+  /* 0: `top: calc(50% + var(--title-zhuyin-y-shift))` only applies once
+     zhuyin is `position: absolute` (this file, and styles.css in prod).
+     -0.055em consumed the 3.5px Android yin-center budget at 59.7px
+     title size once that top started applying. */
+  --title-zhuyin-y-shift: 0em;
 }
 
 html.moe-ios .result .entry .title {
@@ -1127,6 +1179,34 @@ body[data-ruby-pref="none"] hruby.rightangle ru[annotation] > .romanization-sele
   display: none !important;
 }
 
+/* Title ruby box (legacy `hruby ru[zhuyin]` in styles.css). Needed in
+   index.css because e2e blocks r2-assets.test.local/styles.css — without
+   this, length-3 yin+diao is five 1em inline cells (~300px) and cannot
+   share a heading with the radical chip. When styles.css loads, its
+   `width: 1.55em !important` and `right: .05em !important` match; the
+   zhuyin-pref rules below still win `top`/`transform` via `!important`. */
+.result .entry .title hruby ru[zhuyin] {
+  display: inline-block;
+  position: relative;
+  width: 1.55em;
+}
+.result .entry .title hruby ru[zhuyin] zhuyin {
+  position: absolute;
+  display: inline-block;
+  transform: scale(0.4);
+  right: 0.05em;
+  top: 0;
+  height: 2.7em;
+  width: 0.8em;
+  line-height: 0.9;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.result .entry .title hruby ru[zhuyin] diao {
+  position: absolute;
+  display: inline-block;
+}
+
 .result .entry .title hruby.rightangle ru[zhuyin] zhuyin,
 .result .entry .title hruby.rightangle ru[zhuyin] yin,
 .result .entry .title hruby.rightangle ru[zhuyin] diao {
@@ -1158,6 +1238,27 @@ html.moe-capacitor .result .entry .title hruby.rightangle ru[zhuyin] diao {
 .result .entry .title hruby.rightangle ru[zhuyin] diao {
   right: calc(-0.42em + var(--title-zhuyin-x-shift));
   width: 0.7em;
+}
+
+/* Android e2e has no styles.css, so zhuyin is our 2.7em transform CB.
+   Checked-final `top` (issue #301) is written for ru as CB and would
+   miss ru-center by >10px. Scope to moe-android so #301's injected
+   styles.css path keeps the length-specific tops. */
+html.moe-android body[data-ruby-pref="zhuyin"] .result .entry .title hruby.rightangle ru[zhuyin] diao {
+  top: 50% !important;
+  margin-top: 0 !important;
+  transform: translateY(-50%) !important;
+}
+
+html.moe-android
+  body[data-ruby-pref="zhuyin"]
+  .result
+  .entry
+  .title
+  hruby.rightangle
+  ru[zhuyin][length="2"]
+  diao {
+  top: calc(50% - 0.475em) !important;
 }
 
 body[data-ruby-pref="zhuyin"] .result .entry .title hruby.rightangle ru[zhuyin] zhuyin,
