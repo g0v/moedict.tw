@@ -7,6 +7,7 @@ import { defineConfig, type Plugin, type ProxyOptions, lazyPlugins } from "vite-
 import react from "@vitejs/plugin-react";
 
 import { cloudflare } from "@cloudflare/vite-plugin";
+import { tryDecodeURIComponent } from "./src/utils/dictionary-route";
 import { STROKE_JSON_BASE_URL } from "./src/utils/media-cdn";
 
 interface LocalStaticMount {
@@ -105,15 +106,28 @@ async function proxyStrokeJson(cp: string, res: import("http").ServerResponse): 
 const WORKER_PROXY_PREFIXES = ["/api", "/assets"] as const;
 const publicDir = path.resolve(projectRoot, "public");
 
-function servedFromPublicDir(requestUrl: string | undefined): boolean {
+/**
+ * True when the request maps to a real file under `public/`, which must win
+ * over the remote Worker.
+ *
+ * Exported for tests. Every failure mode answers "not a public file" rather
+ * than throwing: this runs inside Vite's proxy `bypass` hook, so an exception
+ * fails the request instead of the lookup. Percent-decoding goes through
+ * `tryDecodeURIComponent` because AGENTS.md makes that the single decode path
+ * for request paths (a bare `decodeURIComponent` raises URIError on
+ * `/assets/%`), and one `statSync` in a try/catch replaces existsSync+statSync,
+ * which had a TOCTOU window and could still throw (EACCES, ELOOP).
+ */
+export function servedFromPublicDir(requestUrl: string | undefined): boolean {
   if (!requestUrl) return false;
-  const pathname = new URL(requestUrl, "http://localhost").pathname;
-  let decoded: string;
+  let pathname: string;
   try {
-    decoded = decodeURIComponent(pathname);
+    pathname = new URL(requestUrl, "http://localhost").pathname;
   } catch {
     return false;
   }
+  const decoded = tryDecodeURIComponent(pathname);
+  if (decoded === null) return false;
   const relative = path.posix.normalize(decoded).replace(/^\/+/, "");
   if (relative.length === 0 || relative.startsWith("..") || relative.includes("\0")) return false;
   const resolved = path.resolve(publicDir, relative);
