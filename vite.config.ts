@@ -108,11 +108,21 @@ const publicDir = path.resolve(projectRoot, "public");
 function servedFromPublicDir(requestUrl: string | undefined): boolean {
   if (!requestUrl) return false;
   const pathname = new URL(requestUrl, "http://localhost").pathname;
-  const relative = path.posix.normalize(decodeURIComponent(pathname)).replace(/^\/+/, "");
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return false;
+  }
+  const relative = path.posix.normalize(decoded).replace(/^\/+/, "");
   if (relative.length === 0 || relative.startsWith("..") || relative.includes("\0")) return false;
   const resolved = path.resolve(publicDir, relative);
   if (path.relative(publicDir, resolved).startsWith("..")) return false;
-  return fs.existsSync(resolved) && fs.statSync(resolved).isFile();
+  try {
+    return fs.statSync(resolved).isFile();
+  } catch {
+    return false;
+  }
 }
 
 function workerProxyConfig(origin: string): Record<string, ProxyOptions> {
