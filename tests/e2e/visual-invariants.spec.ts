@@ -378,9 +378,9 @@ test.describe("R7: font fallback — navbar-brand stays visible when title fonts
 // R8: narrow-width stress (390 and 320) on the taigi entry (multi-heteronym,
 // longest status string).
 // ---------------------------------------------------------------------------
-test.describe("R8: narrow-width stress — entry-copy-status reserved box + no document overflow", () => {
+test.describe("R8: narrow-width stress — out-of-flow entry-copy-status + no document overflow", () => {
   for (const width of [390, 320]) {
-    test(`${width}px: .entry-copy-status count 1, reserved min-width/min-height, no horizontal overflow`, async ({
+    test(`${width}px: .entry-copy-status is out of flow, costs the icon row no width, no horizontal overflow`, async ({
       page,
     }) => {
       await page.setViewportSize({ width, height: 844 });
@@ -397,18 +397,36 @@ test.describe("R8: narrow-width stress — entry-copy-status reserved box + no d
 
       const status = page.locator(".entry-copy-status");
       await expect(status).toHaveCount(1);
-      const dims = await status.evaluate((el) => {
+      // The status region is an absolutely positioned pill anchored to
+      // .entry-actions (src/index.css). Being out of flow is what lets the
+      // icon row share the radical box's line at phone widths — an inline
+      // reservation (the previous `min-width: 8rem`) never fit beside a
+      // title. Asserted structurally, plus behaviourally below: the first
+      // visible icon must start at the row's own left edge — the reserved
+      // inline box used to sit exactly there and push the icons right.
+      const layout = await status.evaluate((el) => {
         const cs = getComputedStyle(el);
-        const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize);
-        return { minWidth: parseFloat(cs.minWidth), minHeight: parseFloat(cs.minHeight), rootPx };
+        const row = el.parentElement!;
+        const rowRect = row.getBoundingClientRect();
+        const icons = Array.from(
+          row.querySelectorAll(".entry-copy-button, a.variants-link, .star"),
+        ).map((icon) => icon.getBoundingClientRect());
+        return {
+          position: cs.position,
+          state: el.getAttribute("data-state"),
+          rowLeft: rowRect.left,
+          rowRight: rowRect.right,
+          firstIconLeft: icons.length > 0 ? icons[0].left : Number.NaN,
+          iconCount: icons.length,
+          clientWidth: document.documentElement.clientWidth,
+        };
       });
-      // src/index.css .entry-copy-status: min-width: 8rem, min-height: 1.5rem
-      // — resolved against the ROOT font-size at measurement time, which the
-      // legacy stylesheet loaded above overrides to 62.5% (10px root, not
-      // the browser-default 16px), so the expected px values are computed
-      // from the live root font-size rather than hardcoded.
-      expect(dims.minWidth).toBeGreaterThanOrEqual(8 * dims.rootPx);
-      expect(dims.minHeight).toBeGreaterThanOrEqual(1.5 * dims.rootPx);
+      expect(layout.position).toBe("absolute");
+      expect(layout.state).toBe("idle");
+      expect(layout.iconCount).toBeGreaterThan(0);
+      // Nothing reserved to the left of the icons.
+      expect(layout.firstIconLeft - layout.rowLeft).toBeLessThanOrEqual(2);
+      expect(layout.rowRight).toBeLessThanOrEqual(layout.clientWidth + 1);
 
       const overflowBefore = await page.evaluate(
         () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
@@ -416,9 +434,10 @@ test.describe("R8: narrow-width stress — entry-copy-status reserved box + no d
       expect(overflowBefore).toBe(true);
 
       // Icon-rect stability across the status-text change is already
-      // covered by dictionary.spec.ts:1929-1965 (boxesBefore/During/After
-      // toEqual across a real copy click) — not duplicated here. Only the
-      // reserved-box geometry and document-overflow invariants are new.
+      // covered by dictionary.spec.ts ("copy button activates with Space and
+      // keeps status geometry stable") — not duplicated here. What is new at
+      // narrow widths: the longest status string must stay inside the
+      // viewport and must not introduce horizontal overflow.
       const copyButton = page.locator(".entry-copy-button");
       if ((await copyButton.count()) > 0) {
         // Deny clipboard permission (cheap, deterministic) to reach the
@@ -435,6 +454,20 @@ test.describe("R8: narrow-width stress — entry-copy-status reserved box + no d
         await waitForAppReady(page, "dictionary-lang");
         await page.getByRole("button", { name: "複製解釋" }).click();
         await expect(page.locator(".entry-copy-status")).toHaveText("複製失敗，請手動選取文字");
+        await expect(page.locator(".entry-copy-status")).toHaveAttribute("data-state", "error");
+
+        const shown = await page.locator(".entry-copy-status").evaluate((el) => {
+          const rect = el.getBoundingClientRect();
+          return {
+            opacity: getComputedStyle(el).opacity,
+            left: rect.left,
+            right: rect.right,
+            clientWidth: document.documentElement.clientWidth,
+          };
+        });
+        expect(Number(shown.opacity)).toBeGreaterThan(0.99);
+        expect(shown.left).toBeGreaterThanOrEqual(-1);
+        expect(shown.right).toBeLessThanOrEqual(shown.clientWidth + 1);
 
         const overflowAfter = await page.evaluate(
           () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,

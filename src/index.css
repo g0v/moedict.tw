@@ -797,7 +797,10 @@ html[data-theme="dark"] .result .entry-actions .iconic-color.star:hover {
 
 /* 星號收藏／複製解釋／異體字字典連結：單一動作列，取代原先各自散落的絕對
    定位星號、逐條複製按鈕、標題旁的異體字連結圖示（UI 調整：見對應 issue）。
-   idx===0 時渲染一次；flex-wrap 讓窄螢幕自然換行，不需要另外的手機專屬版型。*/
+   idx===0 時渲染一次。寬螢幕（≥768px）把 radical + actions 浮在標題右側、
+   上下兩列；窄螢幕改成單一 wrapping flex 列：部首／筆順與圖示列只有在標題
+   真的需要那段寬度時才換行下移（狀態訊息改為絕對定位的浮出提示，不再預留
+   8rem 行內寬度把標題擠成一窄條）。*/
 /* Float the controls in a BFC so the title keeps its legacy full-width
    block/ruby geometry while the heading reserves the taller control stack. */
 .result .entry-heading {
@@ -822,7 +825,8 @@ html[data-theme="dark"] .result .entry-actions .iconic-color.star:hover {
 }
 
 .result .entry-actions {
-  position: static;
+  /* Anchor for the out-of-flow .entry-copy-status pill below. */
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -875,47 +879,134 @@ html[data-theme="dark"] .result .entry-actions .iconic-color.star:hover {
   transform: scale(0.94);
   transition: transform 100ms ease-out;
 }
+/* Copy feedback ("已複製" / "複製失敗，請手動選取文字").
+
+   OUT OF FLOW BY DESIGN: an absolutely positioned pill under the icon row.
+   It replaces the previous inline `min-width: 8rem` reservation, which was
+   the only reason the mobile icon row could never share a line with the
+   radical box -- 8rem of permanently reserved width plus three 44px targets
+   never fits beside a title at phone widths.
+
+   Being out of flow satisfies the same two contracts the reservation did,
+   more directly:
+     1. Toggling between the nbsp placeholder and either message cannot move
+        the icons (dictionary.spec.ts "copy button activates with Space and
+        keeps status geometry stable") -- an out-of-flow box contributes
+        nothing to its container's size.
+     2. It never grows .entry-control-stack's height, so it cannot push
+        h1.title's line box down (the RESCOPE Android ruby regression that
+        ruled out `flex-basis: 100%`).
+   The node stays mounted and keeps its text at all times -- aria-live
+   regions must exist before their content changes to be announced -- so
+   idle state is hidden with opacity, never `display: none`.
+   `right: 0` keeps it inside `.result` (which legacy styles.css clips with
+   `overflow-x: hidden`), so it can never cause horizontal overflow. */
 .entry-copy-status {
+  position: absolute;
+  top: calc(100% + 0.2rem);
+  right: 0;
+  z-index: 3;
   display: inline-flex;
   align-items: center;
-  /* Fix for the entry-heading right-alignment regression: this reserved
-     box must sit BEFORE the visible icons in DOM order (see
-     DictionaryPage.tsx), not after. .entry-actions is `justify-content:
-     flex-end`; when this element was the LAST flex child, its own
-     reserved width occupied the rightmost slot, pushing the visible
-     copy/book/star icons ~8rem+gap left of the radical-box row above
-     them. With the reservation first, the icon group is what ends up
-     flush against the right edge.
-     justify-content: flex-end (not text-align, which flex containers
-     ignore) keeps the status text hugging the icons on its right edge
-     when a message replaces the nbsp placeholder, instead of drifting to
-     this box's own left edge.
-     Still reserves a fixed box (wide enough for the longest status
-     string, "複製失敗，請手動選取文字") so toggling between the nbsp
-     placeholder and either status message never changes this element's
-     own width -- that's what keeps the icon group's geometry stable
-     (dictionary.spec.ts "copy button activates with Space and keeps
-     status geometry stable"). Do NOT force a full-row wrap (no
-     flex-basis: 100%) -- that grew .entry-control-stack's height by a
-     fixed amount on every viewport, including narrow ones where it
-     pushed h1.title's line box down (RESCOPE Android ruby layout
-     regression). */
   justify-content: flex-end;
-  min-width: 8rem;
-  min-height: 1.5rem;
+  max-width: min(80vw, 24rem);
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--moe-border, #d4d3d3);
+  border-radius: 4px;
+  /* --moe-surface-alt (the established raised-surface token, also used by
+     the star hover state and tooltips): --moe-surface equals the entry
+     card's own background in dark mode, which made the pill invisible. */
+  background: var(--moe-surface-alt, #f4f4f4);
+  color: var(--moe-text, #333);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 18%);
   white-space: nowrap;
   font-size: 0.78rem;
+  pointer-events: none;
+}
+.entry-copy-status[data-state="idle"] {
+  opacity: 0;
+  box-shadow: none;
+  border-color: transparent;
+  background: transparent;
 }
 @media (max-width: 767px) {
+  /* 44px touch targets for every control in the heading toolbar, including
+     the stroke-animation pencil (legacy sizes it 32x30 via
+     `.iconic-circle.stroke`) now that it reads as part of the same row. */
   .entry-actions .entry-copy-button,
   .entry-actions .variants-link,
-  .entry-actions .star {
+  .entry-actions .star,
+  .result .entry-control-stack .radical a.iconic-circle.stroke {
     min-width: 44px;
     min-height: 44px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     padding: 7px;
+  }
+
+  /* Mobile heading = ONE wrapping flex line, not fixed grid rows.
+
+     Items in visual order: title, radical box, action icons. Flex line
+     breaking uses each item's max-content size, so the controls stay on the
+     title's line whenever they actually fit, and drop to their own
+     right-aligned line only when the title needs that width -- which is the
+     whole point (previously `.entry-actions` was pinned to `grid-row: 3`, so
+     it dropped a row unconditionally, and `.radical` was squeezed into a
+     4.5rem column that wrapped the 部首/筆畫 badge over three lines).
+
+     h1.title grows into the leftover space so `justify-content: flex-end`
+     only ever right-aligns a controls-only line; on a shared line the title
+     keeps its left edge and the controls stay flush right.
+     `display: contents` on the stack keeps DictionaryPage's DOM intact
+     (Hakka `h1.title` nextElementSibling stays `.bopomofo`) while letting
+     the radical box and the icon row wrap independently. */
+  .result .entry-heading {
+    display: flex;
+    flex-flow: row wrap;
+    justify-content: flex-end;
+    align-items: flex-start;
+    column-gap: 0.5rem;
+    /* 0.5rem, not 0.25rem: the title's ruby annotations (`ru[annotation]`
+       tone marks) paint below h1.title's own box, so a wrapped control line
+       needs clearance or a large title's tone mark grazes the icon row. */
+    row-gap: 0.5rem;
+  }
+  .result .entry-control-stack {
+    float: none;
+    display: contents;
+    min-width: 0;
+    margin-left: 0;
+  }
+  .result .entry-heading > h1.title {
+    order: 0;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .result .entry-control-stack .radical {
+    order: 1;
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    align-items: center;
+    max-width: none;
+    white-space: nowrap;
+    /* Flex items drop their own leading whitespace, so the legacy markup's
+       " = 12" would render as "+8= 12" at gap: 0. */
+    column-gap: 0.15em;
+    row-gap: 0;
+  }
+  .result .entry-actions {
+    order: 2;
+    flex: 0 0 auto;
+    width: auto;
+    max-width: 100%;
+  }
+  .result .entry-heading > .bopomofo,
+  .result .entry-heading > .cn-specific {
+    order: 3;
+    flex: 1 1 100%;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1050,7 +1141,11 @@ html.moe-capacitor .result .entry .title {
 
 html.moe-android .result .entry .title {
   --title-zhuyin-x-shift: 0.012em;
-  --title-zhuyin-y-shift: -0.055em;
+  /* 0: `top: calc(50% + var(--title-zhuyin-y-shift))` only applies once
+     zhuyin is `position: absolute` (this file, and styles.css in prod).
+     -0.055em consumed the 3.5px Android yin-center budget at 59.7px
+     title size once that top started applying. */
+  --title-zhuyin-y-shift: 0em;
 }
 
 html.moe-ios .result .entry .title {
@@ -1127,6 +1222,34 @@ body[data-ruby-pref="none"] hruby.rightangle ru[annotation] > .romanization-sele
   display: none !important;
 }
 
+/* Title ruby box (legacy `hruby ru[zhuyin]` in styles.css). Needed in
+   index.css because e2e blocks r2-assets.test.local/styles.css — without
+   this, length-3 yin+diao is five 1em inline cells (~300px) and cannot
+   share a heading with the radical chip. When styles.css loads, its
+   `width: 1.55em !important` and `right: .05em !important` match; the
+   zhuyin-pref rules below still win `top`/`transform` via `!important`. */
+.result .entry .title hruby ru[zhuyin] {
+  display: inline-block;
+  position: relative;
+  width: 1.55em;
+}
+.result .entry .title hruby ru[zhuyin] zhuyin {
+  position: absolute;
+  display: inline-block;
+  transform: scale(0.4);
+  right: 0.05em;
+  top: 0;
+  height: 2.7em;
+  width: 0.8em;
+  line-height: 0.9;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.result .entry .title hruby ru[zhuyin] diao {
+  position: absolute;
+  display: inline-block;
+}
+
 .result .entry .title hruby.rightangle ru[zhuyin] zhuyin,
 .result .entry .title hruby.rightangle ru[zhuyin] yin,
 .result .entry .title hruby.rightangle ru[zhuyin] diao {
@@ -1158,6 +1281,34 @@ html.moe-capacitor .result .entry .title hruby.rightangle ru[zhuyin] diao {
 .result .entry .title hruby.rightangle ru[zhuyin] diao {
   right: calc(-0.42em + var(--title-zhuyin-x-shift));
   width: 0.7em;
+}
+
+/* Android e2e has no styles.css, so zhuyin is our 2.7em transform CB.
+   Checked-final `top` (issue #301) is written for ru as CB and would
+   miss ru-center by >10px. Scope to moe-android so #301's injected
+   styles.css path keeps the length-specific tops. */
+html.moe-android
+  body[data-ruby-pref="zhuyin"]
+  .result
+  .entry
+  .title
+  hruby.rightangle
+  ru[zhuyin]
+  diao {
+  top: 50% !important;
+  margin-top: 0 !important;
+  transform: translateY(-50%) !important;
+}
+
+html.moe-android
+  body[data-ruby-pref="zhuyin"]
+  .result
+  .entry
+  .title
+  hruby.rightangle
+  ru[zhuyin][length="2"]
+  diao {
+  top: calc(50% - 0.475em) !important;
 }
 
 body[data-ruby-pref="zhuyin"] .result .entry .title hruby.rightangle ru[zhuyin] zhuyin,
