@@ -63,7 +63,8 @@ memory/MEMORY.md  # 跨 session 的架構筆記（與本檔互補）
 
 ```bash
 vp install                    # 依 devEngines.packageManager 安裝相依
-vp run dev                    # predev 重建索引，再啟動 Vite + Miniflare
+vp run dev                    # predev 重建索引，再啟動 Vite（無 Worker，見下）
+bun run dev:remote            # 同上但改跑真 Worker + 遠端 R2（需 wrangler 登入）
 vp run build                  # prebuild 重建索引、tsc -b，再執行 vp build
 vp check                      # Oxfmt + type-aware Oxlint + TS diagnostics
 vp run typecheck              # canonical tsc -b --noEmit project build
@@ -82,6 +83,32 @@ vp run test:coverage          # 三層 coverage 合併至 coverage/combined/
 `vp run dev` / `vp run build`。Vitest 可直接用 `vp test`；要限定層級則用
 `vp run test:unit` / `vp run test:integration`。不要用裸 `bun test`——它不讀
 `vite.config.ts` 的 happy-dom、setup、alias 與 project 設定。
+
+### 本機 dev 的兩種模式（`vite.config.ts` 的 `plugins` 三元式）
+
+`command === "serve"` 時，只有 `VITE_CLOUDFLARE_REMOTE_DEV=1` 才會掛
+`cloudflare()`；預設掛的是 `localDataAssetsPlugin()`，**dev server 裡沒有
+Worker**（`worker/index.ts` 完全不執行）。
+
+- **預設 `vp run dev`（無需 Cloudflare 憑證）**：`/api/*` 與 `/assets/*` 由
+  `server.proxy` 轉發到 `VITE_DEV_API_ORIGIN`（預設 `https://www.moedict.tw`，
+  與既有的 `/lookup/trs` dev proxy 同一條慣例）。`public/` 底下真的存在的檔案
+  （如 `/assets/images/icon.png`）由 `bypass` 攔下走本機，不會被 proxy 蓋掉。
+  **沒有這層 proxy 時，這些路徑會落到 Vite 的 SPA fallback 回 `index.html`**，
+  瀏覽器就會出現 `取得 ASSET_BASE_URL 失敗: SyntaxError: JSON.parse ...`
+  與 `MIME 型態「text/html」不是「text/css」`——那是「沒有 Worker」的症狀，
+  不是 AssetLoader 的 bug。
+  ⚠️ 字典內容來自**正式站**，不是本機 `data/dictionary`；改資料要驗證請用
+  `dev:remote`（讀 R2）或 `vp run build && bun run serve:e2e`（Miniflare +
+  `tests/helpers/fixtures.ts` 播種的本機資料）。
+  ⚠️ 用 5173／3000／8787 以外的埠時，`r2-assets.moedict.tw` 的字型會被 CORS
+  擋（allowlist 見 `commands/r2-assets-cors.json`），CSS 仍會套用。
+- **`bun run dev:remote`**：掛 `cloudflare()`，跑真 Worker（Miniflare）+
+  `wrangler.jsonc` 裡 `remote: true` 的 R2 綁定 → **需要 wrangler 登入**
+  （`~/Library/Preferences/.wrangler/config/default.toml`），否則以
+  `Failed to start the remote proxy session` 開不起來。三個 R2 綁定都是
+  `remote: true`，所以沒有「本機空桶」模式可用；要離線跑真 Worker 只有
+  `serve:e2e` 那條（curated fixtures）。
 
 ## 部署（零停機兩階段 rollout，這是規範不是建議）
 
@@ -594,6 +621,22 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
   依 legacy `view.ls:132-158`）：由 `src/components/TitlePronunciation.tsx`
   單點持有（ruby 以 children slot 傳入），順序由
   `tests/unit/title-pronunciation.test.tsx` 鎖定。改順序＝改該元件＋測試。
+- **詞條標題列的控制項版型**（`.entry-heading` / `.entry-control-stack` /
+  `.radical` / `.entry-actions`，`src/index.css`）：桌機（≥768px）維持
+  `float: right` 的兩列堆疊（部首＋筆順一列、複製／異體字／星號一列）；
+  行動版（`@media (max-width: 767px)`）是**單一 wrapping flex 列**
+  （title `flex: 1 1 auto` + `justify-content: flex-end` + `order` 排序），
+  部首盒與圖示列**只有在標題真的需要那段寬度時才換行下移**，寬一點的手機
+  ／橫向就會排在同一列。**不要**用 `grid-row` 之類把圖示列釘死在下一列。
+  行動版 4 個控制項（含 `.radical` 裡的筆順鉛筆）都是 44px 觸控目標。
+  `.entry-copy-status`（`role="status"` aria-live 區域）是**絕對定位**的
+  浮出提示，靠 `data-state="idle|ok|error"` 控制可見度（節點永不 unmount，
+  否則 AT 不會播報）——**絕不可**改回行內 `min-width` 預留，那正是圖示列
+  在手機上永遠擠不進標題那一列的原因。守門測試在
+  `tests/e2e/dictionary.spec.ts`（三個 `mobile: controls …` 版型案例，以及
+  `copy button activates with Space …` 的零位移契約）與
+  `tests/e2e/visual-invariants.spec.ts` 的 R8（320/390px：狀態列 out-of-flow、
+  圖示列左緣不被預留、無水平溢出）。
 - **URL 前綴文法**（`'`=t、`:`=h、`~`=c、`@`/`=`/`=*` 家族、`/<數字>` idx）：
   唯一定義在 `src/utils/dictionary-route.ts` 的 `classifyRoute`（頁面/head 分類）
   與 `stripLangPrefix`（語言前綴，API 端加 `{'!': 't'}` legacy 別名）。

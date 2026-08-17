@@ -1082,6 +1082,18 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                   <div className="entry-actions">
                     <span
                       className="entry-copy-status"
+                      // Drives the visibility of the out-of-flow status pill
+                      // (src/index.css `.entry-copy-status[data-state="idle"]`).
+                      // The node itself is never unmounted or display:none'd —
+                      // an aria-live region must be present before its content
+                      // changes for AT to announce the update.
+                      data-state={
+                        hasEntryDefinitions && copyStatus
+                          ? copyStatus.ok
+                            ? "ok"
+                            : "error"
+                          : "idle"
+                      }
                       role="status"
                       aria-live="polite"
                       aria-atomic="true"

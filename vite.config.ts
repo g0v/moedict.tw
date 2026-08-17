@@ -3,10 +3,11 @@ import path from "node:path";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { defineConfig, type Plugin, lazyPlugins } from "vite-plus";
+import { defineConfig, type Plugin, type ProxyOptions, lazyPlugins } from "vite-plus";
 import react from "@vitejs/plugin-react";
 
 import { cloudflare } from "@cloudflare/vite-plugin";
+import { tryDecodeURIComponent } from "./src/utils/dictionary-route";
 import { STROKE_JSON_BASE_URL } from "./src/utils/media-cdn";
 
 interface LocalStaticMount {
@@ -85,6 +86,72 @@ async function proxyStrokeJson(cp: string, res: import("http").ServerResponse): 
     res.statusCode = 502;
     res.end("Proxy Error");
   }
+}
+
+/**
+ * Dev-only proxy for every path the Cloudflare Worker owns in production.
+ *
+ * WHY: `vp dev` (without VITE_CLOUDFLARE_REMOTE_DEV=1) runs plain Vite with no
+ * Worker at all, so `/api/*` and `/assets/*` used to fall through to Vite's SPA
+ * fallback and return `index.html` — the browser then reported
+ * `JSON.parse: unexpected character` for /api/config and refused
+ * `/assets/styles.css` because its MIME type was `text/html`.
+ *
+ * Forwarding those prefixes to a live Worker origin (default: production
+ * www.moedict.tw, override with VITE_DEV_API_ORIGIN) keeps plain `vp dev`
+ * fully functional without Cloudflare credentials, mirroring the existing
+ * `/lookup/trs` dev proxy. Files that genuinely live in `public/`
+ * (e.g. /assets/images/icon.png) are served locally and never proxied.
+ */
+const WORKER_PROXY_PREFIXES = ["/api", "/assets"] as const;
+const publicDir = path.resolve(projectRoot, "public");
+
+/**
+ * True when the request maps to a real file under `public/`, which must win
+ * over the remote Worker.
+ *
+ * Exported for tests. Every failure mode answers "not a public file" rather
+ * than throwing: this runs inside Vite's proxy `bypass` hook, so an exception
+ * fails the request instead of the lookup. Percent-decoding goes through
+ * `tryDecodeURIComponent` because AGENTS.md makes that the single decode path
+ * for request paths (a bare `decodeURIComponent` raises URIError on
+ * `/assets/%`), and one `statSync` in a try/catch replaces existsSync+statSync,
+ * which had a TOCTOU window and could still throw (EACCES, ELOOP).
+ */
+export function servedFromPublicDir(requestUrl: string | undefined): boolean {
+  if (!requestUrl) return false;
+  let pathname: string;
+  try {
+    pathname = new URL(requestUrl, "http://localhost").pathname;
+  } catch {
+    return false;
+  }
+  const decoded = tryDecodeURIComponent(pathname);
+  if (decoded === null) return false;
+  const relative = path.posix.normalize(decoded).replace(/^\/+/, "");
+  if (relative.length === 0 || relative.startsWith("..") || relative.includes("\0")) return false;
+  const resolved = path.resolve(publicDir, relative);
+  if (path.relative(publicDir, resolved).startsWith("..")) return false;
+  try {
+    return fs.statSync(resolved).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function workerProxyConfig(origin: string): Record<string, ProxyOptions> {
+  return Object.fromEntries(
+    WORKER_PROXY_PREFIXES.map((prefix): [string, ProxyOptions] => [
+      prefix,
+      {
+        target: origin,
+        changeOrigin: true,
+        // `public/` wins over the remote Worker: returning the request URL
+        // tells Vite's proxy to skip this request and continue the chain.
+        bypass: (req) => (servedFromPublicDir(req.url) ? req.url : undefined),
+      },
+    ]),
+  );
 }
 
 function localDataAssetsPlugin(): Plugin {
@@ -171,6 +238,8 @@ function getDictionaryDataVersion(): string {
 // https://vite.dev/config/
 export default defineConfig(({ command }) => {
   const remoteDev = process.env.VITE_CLOUDFLARE_REMOTE_DEV === "1";
+  // Live Worker origin backing plain `vp dev` (no Cloudflare credentials needed).
+  const devWorkerOrigin = process.env.VITE_DEV_API_ORIGIN ?? "https://www.moedict.tw";
   // Emit source maps only when explicitly building for coverage — the
   // coverage merge script (scripts/merge-coverage.mjs) reads them to map
   // bundled Chromium V8 coverage back to src/**/*.ts. Regular `npm run
@@ -312,9 +381,12 @@ export default defineConfig(({ command }) => {
     server: {
       proxy: {
         "/lookup/trs": {
-          target: "https://www.moedict.tw",
+          target: devWorkerOrigin,
           changeOrigin: true,
         },
+        // Only when the Cloudflare plugin is not mounted (plain `vp dev`);
+        // with VITE_CLOUDFLARE_REMOTE_DEV=1 the real Worker serves these.
+        ...(command === "serve" && !remoteDev ? workerProxyConfig(devWorkerOrigin) : {}),
       },
     },
     plugins: lazyPlugins(() => [
