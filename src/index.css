@@ -498,8 +498,15 @@ html .result {
   border-color: var(--moe-border, #d4d3d3);
   color: var(--moe-text, #333);
 }
+/* 詞條卡內的 `a`（自動連結的字詞、引文、又音…）在 legacy 是 `#000`——比
+   內文 `#333` 更黑，靠 hover（`background:#ddd`）而不是顏色來標示可點。深色
+   模式要維持同一個關係：吃 `--moe-text`（#e6e3df，與卡內其他文字同色），
+   不要用 `--moe-link`（#7fd0ff）——那讓詞條頁 135 處自動連結全變藍字，
+   在淺色模式是黑字的位置。`--moe-link` 仍保留給真正的外部連結（About 頁、
+   側欄搜尋結果 hover），那裡的藍色是刻意的、且有 about-contrast.spec.ts
+   與 dark-mode.spec.ts 各自把關。 */
 html .result a {
-  color: var(--moe-link, #000);
+  color: var(--moe-text, #000);
 }
 /* audit-dark-contrast J：legacy `.result a:hover, .result a:focus` /
    `.result h1 a:hover` （data/assets/styles.css）把 hover/focus 態文字設為
