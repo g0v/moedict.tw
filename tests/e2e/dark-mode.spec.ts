@@ -111,6 +111,84 @@ test.describe("system prefers-color-scheme: dark (no manual override)", () => {
   });
 });
 
+// Entry-card anchors (auto-linked headwords, citations, 又音…) are the bulk of
+// the visible text on a dictionary page — 135 text nodes on /萌 alone. Legacy
+// styles.css paints them `#000`, i.e. slightly stronger than the `#333` body
+// text, and marks them clickable on hover (`background: #ddd`) rather than by
+// colour. Dark mode must keep that relationship: they follow `--moe-text`, the
+// same white the rest of the card uses. Painting them `--moe-link` (#7fd0ff)
+// turned every one of them blue where light mode has black. `--moe-link` stays
+// in place for genuinely external links (About page, sidebar search hover),
+// guarded by about-contrast.spec.ts and the hover test further down this file.
+test.describe("entry-card links follow the themed text colour", () => {
+  const LINK_BLUE = "rgb(127, 208, 255)"; // --moe-link
+
+  async function measureEntryLinks(page: Page) {
+    await blockCssSubresources(page);
+    await routeStylesCss(page, readWorkingTreeStylesCss);
+    const response = await page.goto(ENTRY_PATH);
+    expect(response?.status()).toBe(200);
+    await waitForAppReady(page, "dictionary");
+    return page.evaluate(() => {
+      const card = document.querySelector(".result")!;
+      // Plain anchors only: .xref / .iconic-circle / .part-of-speech carry
+      // their own brand colours by design. The headword anchor inside
+      // h1.title is excluded too — `.result .entry .title
+      // .single-char-stroke-trigger a { color: inherit }` makes it track the
+      // title, so it reads #333 in light mode rather than the legacy #000.
+      const plain = Array.from(card.querySelectorAll("a")).filter(
+        (a) =>
+          (a.textContent ?? "").trim().length > 0 &&
+          !a.getAttribute("class") &&
+          a.closest("h1.title") === null,
+      );
+      const titleAnchor = card.querySelector("h1.title .single-char-stroke-trigger a");
+      return {
+        background: getComputedStyle(card).backgroundColor,
+        bodyColor: getComputedStyle(card.querySelector(".definition")!).color,
+        anchorCount: plain.length,
+        anchorColors: [...new Set(plain.map((a) => getComputedStyle(a).color))],
+        titleAnchorColor: titleAnchor ? getComputedStyle(titleAnchor).color : null,
+        blueDescendants: Array.from(card.querySelectorAll("*")).filter(
+          (el) => getComputedStyle(el).color === "rgb(127, 208, 255)",
+        ).length,
+      };
+    });
+  }
+
+  test("dark: plain anchors are the card's text colour, never the link accent", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: "dark" });
+    const measured = await measureEntryLinks(page);
+
+    expect(measured.anchorCount).toBeGreaterThan(10);
+    expect(measured.anchorColors).toEqual([measured.bodyColor]);
+    expect(measured.anchorColors).toEqual(["rgb(230, 227, 223)"]); // --moe-text
+    expect(measured.anchorColors).not.toContain(LINK_BLUE);
+    // The inheriting headword anchor lands on the same white.
+    expect(measured.titleAnchorColor).toBe("rgb(230, 227, 223)");
+    expect(measured.blueDescendants).toBe(0);
+    expect(contrastRatio(measured.anchorColors[0], measured.background)).toBeGreaterThanOrEqual(
+      4.5,
+    );
+  });
+
+  test("light: plain anchors keep the legacy black, unchanged", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "light" });
+    const measured = await measureEntryLinks(page);
+
+    expect(measured.anchorCount).toBeGreaterThan(10);
+    expect(measured.anchorColors).toEqual(["rgb(0, 0, 0)"]);
+    expect(measured.bodyColor).toBe("rgb(51, 51, 51)");
+    // Inherits the title colour, not the legacy #000 — unchanged by this fix.
+    expect(measured.titleAnchorColor).toBe("rgb(51, 51, 51)");
+    expect(contrastRatio(measured.anchorColors[0], measured.background)).toBeGreaterThanOrEqual(
+      4.5,
+    );
+  });
+});
+
 test.describe("system prefers light, no manual override", () => {
   test.use({ colorScheme: "light" });
 
