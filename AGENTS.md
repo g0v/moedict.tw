@@ -180,7 +180,7 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
   會讓爬蟲／CDN 把捏造的 shell 當內容）。只有 `false` 會改狀態：`true`
   （命中，含 NFKC 相容 fallback）維持 200，`null`（shard 讀取／解析失敗，
   資料層答不出來）刻意 fail open 也維持 200；非 entry 路徑
-  （`/`、`/about`、`@部首`、`=分類`、`'*清單`、壞編碼）根本不進這條判斷。
+  （`/`、`/about`、`/privacy`、`@部首`、`=分類`、`'*清單`、壞編碼）根本不進這條判斷。
   唯一「shell 取不到又確定查無此詞」的組合會回**無 body 的 404**
   （`Cache-Control: no-store`），而不是 recovery 503。deploy／rollback smoke
   打的 `/`、`/api/config`、`/api/<詞>.json` 都不是 entry shell 路徑，不受影響。
@@ -674,6 +674,13 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
   client 路由的 `resolveMiddlePointTarget`（`src/utils/middle-point-target.ts`，
   MiddlePoint 的純對應層）都是它的消費者。**新的 parser 一律消費這兩個
   函式，禁止自建 if-chain。**
+- **`App.tsx` 的靜態頁面路由必須在 `classifyRoute` 有自己的 kind**
+  （目前 `about`／`about.html`／`privacy`）：漏掉就會被歸成 `entry`，
+  R4 的 shell 狀態規則會拿它去查詞、查無此詞後讓一個活著的頁面回 404
+  （`/privacy` 曾因此中招，見 `tests/unit/worker-dispatch-edges.test.ts`
+  的 "keeps /privacy at 200" 迴歸測試）。新增靜態頁面時同步加 kind、
+  `resolveHeadByPath` 的 head、`resolveMiddlePointTarget` 的目標與
+  `MiddlePoint` 的 `<Navigate>`——這四處都有 TS exhaustive switch 把關。
 - **request 路徑的 percent-decode 一律用 `tryDecodeURIComponent`**
   （`dictionary-route.ts`，回 null 不丟例外）——裸呼 `decodeURIComponent`
   遇到 `/api/%` 這類壞編碼會把 URIError 冒成 500（曾在 prod 實測到）。

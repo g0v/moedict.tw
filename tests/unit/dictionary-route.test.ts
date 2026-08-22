@@ -214,6 +214,22 @@ describe("classifyRoute", () => {
     });
   });
 
+  describe("privacy", () => {
+    it("classifies /privacy as its own kind, never as an entry", () => {
+      expect(classifyRoute("/privacy")).toEqual({ kind: "privacy" });
+    });
+    it("keeps 'privacy' as a headword when it is not the whole path", () => {
+      // Only the exact page path is exempt; a lang-prefixed or longer path is
+      // still an ordinary entry route.
+      expect(classifyRoute("/'privacy")).toEqual({ kind: "entry", lang: "t", text: "privacy" });
+      expect(classifyRoute("/privacy-policy")).toEqual({
+        kind: "entry",
+        lang: "a",
+        text: "privacy-policy",
+      });
+    });
+  });
+
   describe("radical", () => {
     it("classifies /@ as empty radical (a)", () => {
       expect(classifyRoute("/@")).toEqual({ kind: "radical", lang: "a", radical: "" });

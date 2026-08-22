@@ -9,6 +9,7 @@ import { classifyRoute, type DictionaryLang } from "./dictionary-route";
 export type MiddlePointTarget =
   | { page: "home" }
   | { page: "about" }
+  | { page: "privacy" }
   | { page: "radical"; lang: DictionaryLang; radical: string }
   | { page: "starred"; lang: DictionaryLang; entry?: string }
   | { page: "list"; lang: DictionaryLang; category: string }
@@ -30,6 +31,8 @@ export function resolveMiddlePointTarget(pathname: string): MiddlePointTarget {
       return { page: "home" };
     case "about":
       return { page: "about" };
+    case "privacy":
+      return { page: "privacy" };
     case "radical": {
       if (route.radical.includes("/")) return { page: "home" };
       if (!route.radical) {

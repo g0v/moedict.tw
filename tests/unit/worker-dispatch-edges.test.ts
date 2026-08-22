@@ -510,6 +510,25 @@ describe("dispatch — HTML shell metadata injection with dictionary lookup", ()
     expect(await res.text()).toContain("<html");
   });
 
+  // Regression (R4 fallout): `/privacy` and `/about` are real client routes,
+  // not headwords. Before classifyRoute learned the `privacy` kind, /privacy
+  // classified as entry("privacy"), probed as a definitive miss, and a live
+  // page answered 404. Both must stay 200 with an EMPTY dictionary.
+  it("keeps /privacy at 200 with an empty DICTIONARY (never an entry probe)", async () => {
+    const fetcher = shellFetcher();
+    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv["SITE_ASSETS"] });
+    const res = await dispatch(req("/privacy"), env);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("<html");
+  });
+
+  it("keeps /about at 200 with an empty DICTIONARY", async () => {
+    const fetcher = shellFetcher();
+    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv["SITE_ASSETS"] });
+    const res = await dispatch(req("/about"), env);
+    expect(res.status).toBe(200);
+  });
+
   it("lang=h prefix `/:字` renders the shell, then 404s on the dictionary miss", async () => {
     const fetcher = shellFetcher();
     const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv["SITE_ASSETS"] });

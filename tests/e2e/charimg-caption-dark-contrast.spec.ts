@@ -61,7 +61,9 @@ const FALLBACK_PATH = "/%E8%90%8C%E9%BB%83";
 
 async function openCaption(page: Page): Promise<Locator> {
   const response = await page.goto(FALLBACK_PATH);
-  expect(response?.status()).toBe(200);
+  // No combined 萌黃 entry ⇒ R4 answers 404 with the SPA shell body intact,
+  // which is precisely the CharacterImageView surface this audit measures.
+  expect(response?.status()).toBe(404);
   await page.locator(".charimg-result").waitFor({ state: "visible", timeout: 15_000 });
   await page
     .locator("img.charimg-glyph-segment")

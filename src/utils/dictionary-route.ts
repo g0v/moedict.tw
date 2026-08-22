@@ -166,6 +166,7 @@ export function stripLangPrefix(
 export type ClassifiedRoute =
   | { kind: "default" }
   | { kind: "about" }
+  | { kind: "privacy" }
   | { kind: "radical"; lang: DictionaryLang; radical: string }
   | { kind: "starred"; lang: DictionaryLang; entry: string }
   | { kind: "group"; lang: DictionaryLang; category: string }
@@ -189,6 +190,11 @@ export function classifyRoute(pathname: string): ClassifiedRoute {
   }
 
   if (decoded === "about" || decoded === "about.html") return { kind: "about" };
+  // `/privacy` is a real client route (App.tsx renders <Privacy/> for it), not a
+  // headword. It must classify as its own kind: the Worker's R4 shell-status rule
+  // 404s any `entry` path whose probe is a definitive miss, so leaving /privacy as
+  // entry("privacy") made a live page answer 404.
+  if (decoded === "privacy") return { kind: "privacy" };
 
   if (decoded === "@") return { kind: "radical", lang: "a", radical: "" };
   if (decoded === "~@") return { kind: "radical", lang: "c", radical: "" };

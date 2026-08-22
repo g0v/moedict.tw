@@ -1094,7 +1094,11 @@ test.describe("mobile Android Taigi ruby layout", () => {
     let checked = 0;
     for (const sample of TAIGI_TITLE_CANDIDATES) {
       const response = await page.goto(sample.path);
-      expect(response?.status()).toBe(200);
+      // Candidates absent from the seeded fixtures fall back to the 字圖 view,
+      // which R4 now serves with a 404 status (body unchanged). This sweep is
+      // about ruby geometry, not status, so both outcomes are acceptable; the
+      // `h1.title` count check below skips the entries that did not render.
+      expect([200, 404]).toContain(response?.status());
       await waitForAppReady(page, "dictionary");
       await page.evaluate(() => document.fonts.ready);
       if ((await page.locator("h1.title").count()) === 0) {
@@ -1208,7 +1212,10 @@ test.describe("Mandarin MOE vertical zhuyin proportions", () => {
       const checkedTitles = new Set<string>();
       for (const sample of MANDARIN_VERTICAL_ZHUYIN_SAMPLES) {
         const response = await page.goto(sample.path);
-        expect(response?.status()).toBe(200);
+        // Samples with no combined entry render `.charimg-result`, which R4
+        // serves as 404 (body unchanged) — the wait below already accepts that
+        // surface, so the status must accept it too.
+        expect([200, 404]).toContain(response?.status());
         await page.waitForLoadState("domcontentloaded");
         await page
           .locator(".result .entry h1.title hruby.rightangle, .charimg-result")
@@ -1634,10 +1641,16 @@ test.describe("special routes", () => {
 });
 
 test.describe("404 / fallback paths", () => {
-  test("unknown word falls back to SPA (not worker 404)", async ({ page }) => {
-    // React router catch-all still serves index.html
+  test("unknown word answers 404 but still serves the SPA shell body", async ({ page }) => {
+    // R4 (worker/index.ts notFoundShellResponse): an entry-shaped path whose
+    // probeDictionaryEntry() is a definitive miss gets a real 404 status so
+    // crawlers/CDNs do not treat the shell as content. The BODY is unchanged —
+    // React Router still hydrates and renders the per-character 字圖 fallback.
     const response = await page.goto("/%E4%B8%8D%E5%AD%98%E5%9C%A8%E7%9A%84%E8%A9%9E");
-    expect(response?.status()).toBe(200);
+    expect(response?.status()).toBe(404);
+    expect(response?.headers()["cache-control"]).toContain("no-store");
+    await waitForAppReady(page, "dictionary");
+    await expect(page.locator(".charimg-result")).toBeVisible();
   });
 });
 
@@ -2492,7 +2505,9 @@ test.describe("charimg-result romanize checkbox (RESCOPE #169)", () => {
     page,
   }) => {
     const response = await page.goto(FALLBACK_PATH);
-    expect(response?.status()).toBe(200);
+    // FALLBACK_PATH has no combined entry, so R4 answers 404 with the shell
+    // body intact; the 字圖 view below is exactly what that body renders.
+    expect(response?.status()).toBe(404);
     await page.locator(".charimg-result").waitFor({ state: "visible", timeout: 15_000 });
 
     // Segment rows render after loadSegments() resolves — wait for the first
@@ -2554,7 +2569,7 @@ test.describe("charimg-result romanize checkbox (RESCOPE #169)", () => {
       window.localStorage.setItem("charimg-romanize", "1");
     });
     const response = await page.goto(FALLBACK_PATH);
-    expect(response?.status()).toBe(200);
+    expect(response?.status()).toBe(404);
     await page.locator(".charimg-result").waitFor({ state: "visible", timeout: 15_000 });
     await waitForAppReady(page, "dictionary");
 

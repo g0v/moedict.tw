@@ -147,7 +147,9 @@ test.describe("R4: percent-encoded route edge cases", () => {
     page,
   }) => {
     const response = await page.goto("/foo%27bar");
-    expect(response?.status()).toBe(200);
+    // Route classification (lang-a entry) is what this asserts; R4 gives the
+    // missing headword a 404 status while still serving the shell body.
+    expect(response?.status()).toBe(404);
     await waitForAppReady(page, "dictionary");
     await expect(page.locator(".result")).toBeVisible();
     expect(await page.evaluate(() => document.body.className)).toContain("lang-a");

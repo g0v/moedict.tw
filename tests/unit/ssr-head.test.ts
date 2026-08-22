@@ -47,6 +47,13 @@ describe("resolveHeadByPath", () => {
     it("returns about head for /about.html (legacy alias)", () => {
       expect(resolveHeadByPath("/about.html").title).toBe("關於本站 - 萌典");
     });
+
+    it("returns privacy head for /privacy (not a 'privacy' headword lookup)", () => {
+      const head = resolveHeadByPath("/privacy");
+      expect(head.title).toBe("隱私權政策 - 萌典");
+      expect(head.description).toContain("不蒐集任何個人資料");
+      expect(head.ogUrl).toBe("https://www.moedict.tw/privacy");
+    });
   });
 
   describe("radical routes", () => {

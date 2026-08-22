@@ -132,4 +132,8 @@ describe("resolveMiddlePointTarget", () => {
   it("routes about to the about page", () => {
     expect(resolveMiddlePointTarget("/about")).toEqual({ page: "about" });
   });
+
+  it("routes privacy to the privacy page", () => {
+    expect(resolveMiddlePointTarget("/privacy")).toEqual({ page: "privacy" });
+  });
 });
