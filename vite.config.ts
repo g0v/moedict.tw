@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -9,6 +10,8 @@ import react from "@vitejs/plugin-react";
 import { cloudflare } from "@cloudflare/vite-plugin";
 import { tryDecodeURIComponent } from "./src/utils/dictionary-route";
 import { STROKE_JSON_BASE_URL } from "./src/utils/media-cdn";
+import { handleDictionaryAPI } from "./src/api/handleDictionaryAPI";
+import { handleListAPI, isListPath } from "./src/api/handleListAPI";
 
 interface LocalStaticMount {
   prefix: string;
@@ -64,7 +67,7 @@ function contentTypeFor(filePath: string): string {
   }
 }
 
-async function proxyStrokeJson(cp: string, res: import("http").ServerResponse): Promise<void> {
+async function proxyStrokeJson(cp: string, res: ServerResponse): Promise<void> {
   if (!/^[0-9a-f]{4,6}\.json$/i.test(cp)) {
     res.statusCode = 400;
     res.end("Bad Request");
@@ -154,12 +157,133 @@ function workerProxyConfig(origin: string): Record<string, ProxyOptions> {
   );
 }
 
+/**
+ * Filesystem-backed stand-in for the production `env.DICTIONARY` R2 binding.
+ * Every key the Worker reads (`p{lang}ck/{bucket}.txt` pack shards,
+ * `{lang}/index.json`, `{lang}/xref*.json`, `{lang}/@{radical}.json`,
+ * `{lang}/={list}.json`, `search-index/{lang}.json`) maps 1:1 onto a path
+ * under data/dictionary/, so dev serve can reuse the real handlers
+ * (handleDictionaryAPI / handleListAPI) and return identical response shapes
+ * instead of re-implementing the entry conversion pipeline.
+ *
+ * One shared instance per server process: r2-json-cache memoizes parsed JSON
+ * per binding object via WeakMap, so reusing the binding keeps pack shards
+ * warm across requests exactly like a warm Worker isolate does.
+ */
+const localDictionaryRoot = path.resolve(projectRoot, "data/dictionary");
+const localDictionaryEnv = {
+  DICTIONARY: {
+    async get(key: string): Promise<{ text(): Promise<string> } | null> {
+      const normalizedKey = path.posix.normalize(key.replace(/^\/+/, ""));
+      if (
+        normalizedKey.length === 0 ||
+        normalizedKey === "." ||
+        normalizedKey.startsWith("..") ||
+        normalizedKey.includes("\0")
+      ) {
+        return null;
+      }
+      const resolvedPath = path.resolve(localDictionaryRoot, normalizedKey);
+      if (path.relative(localDictionaryRoot, resolvedPath).startsWith("..")) {
+        return null;
+      }
+      try {
+        const content = await fs.promises.readFile(resolvedPath, "utf8");
+        return { text: () => Promise.resolve(content) };
+      } catch {
+        return null;
+      }
+    },
+  },
+};
+
+/** Mirrors the production Worker's JSON routes onto local files/handlers. */
+const localApiFileRoutes: Array<{ pattern: RegExp; keyTemplate: string }> = [
+  // Sidebar 搜尋索引 API → {lang}/index.json
+  { pattern: /^\/api\/index\/([athc])\.json$/, keyTemplate: "$1/index.json" },
+  // 全文檢索索引 API → search-index/{lang}.json
+  { pattern: /^\/api\/search-index\/([athc])\.json$/, keyTemplate: "search-index/$1.json" },
+  // 跨語言 xref 索引 API → {lang}/xref.json
+  { pattern: /^\/api\/xref\/([athc])\.json$/, keyTemplate: "$1/xref.json" },
+  // ID-aware xref sidecar → {lang}/xref-by-id.json
+  { pattern: /^\/api\/xref-by-id\/([athc])\.json$/, keyTemplate: "$1/xref-by-id.json" },
+];
+
+async function pipeWebResponse(response: Response, res: ServerResponse): Promise<void> {
+  const contentType = response.headers.get("Content-Type") ?? "application/json; charset=utf-8";
+  res.statusCode = response.status;
+  res.setHeader("Content-Type", contentType);
+  // Dev server never caches; prod Cache-Control/Cache-Tag are meaningless locally.
+  res.setHeader("Cache-Control", "no-store");
+  res.end(response.status === 204 ? undefined : await response.text());
+}
+
+/**
+ * Serve /api/*.json from local data/dictionary/ during `vp run dev`,
+ * dispatching through the same handlers as worker/index.ts:
+ *   - /api/index, /api/search-index, /api/xref, /api/xref-by-id → flat file reads
+ *   - list routes (=成語、'=諺語…)                                → handleListAPI
+ *   - every other .json route (entries, @radicals, =lists, raw/uni/pua)
+ *                                                                → handleDictionaryAPI
+ * Returns false when the path is not a locally-served API route or the
+ * underlying data file is absent — the caller falls through (Vite's SPA
+ * fallback or the next middleware), matching "don't fake missing data".
+ */
+async function serveLocalDictionaryApi(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<boolean> {
+  let url: URL;
+  try {
+    url = new URL(req.url ?? "", "http://localhost");
+  } catch {
+    return false;
+  }
+  const pathname = url.pathname;
+
+  for (const { pattern, keyTemplate } of localApiFileRoutes) {
+    const match = pathname.match(pattern);
+    if (!match) continue;
+    const object = await localDictionaryEnv.DICTIONARY.get(keyTemplate.replace("$1", match[1]));
+    if (!object) return false;
+    await pipeWebResponse(
+      new Response(await object.text(), {
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+      }),
+      res,
+    );
+    return true;
+  }
+
+  if (req.method !== "GET" && req.method !== "HEAD") return false;
+
+  const request = new Request(url.href, { method: req.method });
+  // Mirror worker/index.ts dispatch order: lists gate first (`.json` optional),
+  // then the .json catch-all. stroke-json is proxied earlier in this plugin;
+  // cns/config/cache-purge/oembed have no local data and keep falling through.
+  if (pathname.startsWith("/api/") && isListPath(pathname)) {
+    await pipeWebResponse(await handleListAPI(request, url, localDictionaryEnv), res);
+    return true;
+  }
+  if (
+    pathname.endsWith(".json") &&
+    !pathname.startsWith("/api/stroke-json/") &&
+    !pathname.startsWith("/api/cns/")
+  ) {
+    const response = await handleDictionaryAPI(request, url, localDictionaryEnv);
+    if (!response) return false;
+    await pipeWebResponse(response, res);
+    return true;
+  }
+  return false;
+}
+
 function localDataAssetsPlugin(): Plugin {
   return {
     name: "moedict-local-data-assets",
     apply: "serve",
     configureServer(server) {
-      server.middlewares.use((req, res, next) => {
+      server.middlewares.use(async (req, res, next) => {
         const requestUrl = req.url;
         if (!requestUrl) {
           next();
@@ -174,6 +298,10 @@ function localDataAssetsPlugin(): Plugin {
         const strokeMatch = pathname.match(/^\/(?:api\/)?stroke-json\/([^/]+)$/);
         if (strokeMatch) {
           void proxyStrokeJson(strokeMatch[1], res);
+          return;
+        }
+
+        if (await serveLocalDictionaryApi(req, res)) {
           return;
         }
 

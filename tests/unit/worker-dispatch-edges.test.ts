@@ -422,7 +422,11 @@ describe("dispatch — HTML shell fetch returns non-OK", () => {
       fetch: vi.fn(async () => new Response("missing", { status: 404 })),
     };
     const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv["SITE_ASSETS"] });
-    const res = await dispatch(req("/deep/link"), env);
+    // "/" is a non-entry (default) route — it reaches renderHtmlShellWithFallback
+    // untouched and surfaces the recovery shell when SITE_ASSETS fails.
+    // (Entry-shaped word paths now hard-404 on a definitive dictionary miss,
+    // so they no longer exercise the recovery branch.)
+    const res = await dispatch(req("/"), env);
     expect(res.status).toBe(503);
     expect(res.headers.get("X-Moedict-Shell-Source")).toBe("recovery");
   });
@@ -493,27 +497,33 @@ describe("dispatch — HTML shell metadata injection with dictionary lookup", ()
     expect(body).toMatch(/property="og:description" content="[^"]*植物發芽/);
   });
 
-  it("handles the lang=t prefix `/'食` (parseDictionaryRoute line 45)", async () => {
+  // R4: with an empty DICTIONARY the probe finds no headword, so these bare
+  // entry-shaped paths now return 404 — but the shell render (and its
+  // injectHeadMetadata prefix-parsing branch) still ran first, and the shell
+  // BODY is preserved under the corrected status.
+  it("lang=t prefix `/'食` renders the shell, then 404s on the dictionary miss", async () => {
     const fetcher = shellFetcher();
     const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv["SITE_ASSETS"] });
-    // Missing pack is OK — the route just resolves without a rich
-    // description, but the prefix-parsing branch still runs.
     const res = await dispatch(req("/%27%E9%A3%9F"), env);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(404);
+    expect(res.headers.get("content-type")).toContain("text/html");
+    expect(await res.text()).toContain("<html");
   });
 
-  it("handles the lang=h prefix `/:字` (parseDictionaryRoute line 46)", async () => {
+  it("lang=h prefix `/:字` renders the shell, then 404s on the dictionary miss", async () => {
     const fetcher = shellFetcher();
     const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv["SITE_ASSETS"] });
     const res = await dispatch(req("/%3A%E5%AD%97"), env);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(404);
+    expect(await res.text()).toContain("<html");
   });
 
-  it("handles the lang=c prefix `/~萌` (parseDictionaryRoute line 47)", async () => {
+  it("lang=c prefix `/~萌` renders the shell, then 404s on the dictionary miss", async () => {
     const fetcher = shellFetcher();
     const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv["SITE_ASSETS"] });
     const res = await dispatch(req("/~%E8%90%8C"), env);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(404);
+    expect(await res.text()).toContain("<html");
   });
 
   it("returns null from parseDictionaryRoute for `/=成語` (line 42 — starts with =)", async () => {

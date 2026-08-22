@@ -8,7 +8,7 @@
  * without a worker → src/oembed → worker import cycle.
  */
 
-import { describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   buildDefinitionDescription,
   buildDictionaryPathname,
@@ -19,6 +19,7 @@ import {
   stripTags,
   tryDecodeURIComponent,
 } from "../../src/utils/dictionary-route";
+import { applyLegacyHashRewrite } from "../../src/utils/legacy-hash-shim";
 
 describe("stripTags", () => {
   it("coerces null/undefined to empty string", () => {
@@ -460,5 +461,87 @@ describe("resolveLegacyHashRoute (g0v/moedict-webkit#131)", () => {
   it("fails closed to null on malformed percent-encoding instead of throwing", () => {
     expect(resolveLegacyHashRoute("/", "#%")).toBeNull();
     expect(resolveLegacyHashRoute("/", "#%E8%9")).toBeNull();
+  });
+  // ---- R3 regression: 2014 moedict.org share/bookmark URL forms ----
+
+  it("maps the #a=<term> share form to the Mandarin entry path", () => {
+    expect(resolveLegacyHashRoute("/", "#a=萌")).toBe("/萌");
+  });
+
+  it("maps the #<lang>=<term> forms for every language, prefixing the term", () => {
+    expect(resolveLegacyHashRoute("/", "#t=月暗暝")).toBe("/'月暗暝");
+    expect(resolveLegacyHashRoute("/", "#h=字")).toBe("/:字");
+    expect(resolveLegacyHashRoute("/", "#c=萌")).toBe("/~萌");
+  });
+
+  it("maps the #dict/<lang><term> form, honoring an inline language prefix", () => {
+    expect(resolveLegacyHashRoute("/", "#dict/a萌")).toBe("/萌");
+    expect(resolveLegacyHashRoute("/", "#dict/t'月暗暝")).toBe("/'月暗暝");
+  });
+
+  it("maps the #dict=<lang><term> variant separator", () => {
+    expect(resolveLegacyHashRoute("/", "#dict=a萌")).toBe("/萌");
+  });
+
+  it("maps the bare #a::<term> form", () => {
+    expect(resolveLegacyHashRoute("/", "#a::萌")).toBe("/萌");
+    expect(resolveLegacyHashRoute("/", "#t::月暗暝")).toBe("/'月暗暝");
+  });
+
+  it("decodes percent-encoded structured forms", () => {
+    expect(resolveLegacyHashRoute("/", "#a=%E8%90%8C")).toBe("/萌");
+  });
+
+  it("passes non-legacy hashes through unchanged (no rewrite target)", () => {
+    expect(resolveLegacyHashRoute("/", "#foo")).toBeNull();
+    expect(resolveLegacyHashRoute("/", "#how-to-use")).toBeNull();
+    expect(resolveLegacyHashRoute("/", "#a=")).toBeNull();
+    expect(resolveLegacyHashRoute("/", "#dict/a")).toBeNull();
+    expect(resolveLegacyHashRoute("/", "#dict/x萌")).toBeNull();
+    expect(resolveLegacyHashRoute("/", "#a=萌,萌")).toBeNull();
+  });
+});
+
+describe("applyLegacyHashRewrite (boot-time shim before React Router mounts)", () => {
+  afterEach(() => {
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("rewrites /#a=萌 to /萌 via replaceState and clears the hash", () => {
+    window.history.replaceState(null, "", "/#a=萌");
+    const spy = vi.spyOn(window.history, "replaceState");
+    expect(applyLegacyHashRewrite()).toBe(true);
+    expect(spy).toHaveBeenCalledWith(null, "", "/萌");
+    expect(decodeURIComponent(window.location.pathname)).toBe("/萌");
+    expect(window.location.hash).toBe("");
+    spy.mockRestore();
+  });
+
+  it("rewrites /#'月暗暝 to /'月暗暝", () => {
+    window.history.replaceState(null, "", "/#'月暗暝");
+    const spy = vi.spyOn(window.history, "replaceState");
+    expect(applyLegacyHashRewrite()).toBe(true);
+    expect(spy).toHaveBeenCalledWith(null, "", "/'月暗暝");
+    expect(decodeURIComponent(window.location.pathname)).toBe("/'月暗暝");
+    expect(window.location.hash).toBe("");
+    spy.mockRestore();
+  });
+
+  it("leaves non-legacy hashes untouched", () => {
+    window.history.replaceState(null, "", "/#how-to-use");
+    const spy = vi.spyOn(window.history, "replaceState");
+    expect(applyLegacyHashRewrite()).toBe(false);
+    expect(spy).not.toHaveBeenCalled();
+    expect(window.location.pathname).toBe("/");
+    expect(window.location.hash).toBe("#how-to-use");
+    spy.mockRestore();
+  });
+
+  it('leaves the navbar\'s bare href="#" untouched', () => {
+    window.history.replaceState(null, "", "/#");
+    const spy = vi.spyOn(window.history, "replaceState");
+    expect(applyLegacyHashRewrite()).toBe(false);
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
   });
 });

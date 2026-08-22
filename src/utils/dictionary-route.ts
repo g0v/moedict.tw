@@ -66,6 +66,15 @@ export function tryDecodeURIComponent(input: string): string | null {
  * `href="#"`、About 頁 `#how-to-use`，這些從不落在 "/" 但仍保守排除
  * 空 hash 本身）。呼叫端（main.tsx）在 React Router 掛載前執行一次；
  * 之後的路由分類全部交回 classifyRoute，這裡不自建前綴 if-chain。
+ *
+ * 接受的舊式雜湊形式（2014 版 moedict.org 對外分享／書籤 URL，R3 回歸）：
+ *   `#<term>`、`#'<term>`、`#:term`、`#~term`、`#@字`（部首）——無前綴結構
+ *   `#a=<term>`／`#t=<term>`…——語言字母 kv 形式
+ *   `#dict/<lang><term>`／`#dict=<lang><term>`——舊 dict 前綴形式
+ *   `#a::<term>`…——裸雙冒號形式
+ * 其餘雜湊一律不改寫：詞條形狀以保守白名單把關（漢字／注音／帶聲調拉丁字
+ * ／數字／`.`／`-`／`@`），且裸詞至少要含一個非 ASCII 字元——純 ASCII 的
+ * `#foo`、`#how-to-use` 之類同頁錨點直接放行，不會被誤判成詞條。
  */
 export function resolveLegacyHashRoute(pathname: string, hash: string): string | null {
   if (pathname !== "/") return null;
@@ -73,7 +82,49 @@ export function resolveLegacyHashRoute(pathname: string, hash: string): string |
   if (!token) return null;
   const decoded = tryDecodeURIComponent(token);
   if (!decoded) return null;
+
+  const dictForm = decoded.match(/^dict[=/]([athc])(.*)$/);
+  if (dictForm) return buildLegacyEntryPath(dictForm[1] as DictionaryLang, dictForm[2]);
+
+  const kvForm = decoded.match(/^([athc])=(.+)$/);
+  if (kvForm) return buildLegacyEntryPath(kvForm[1] as DictionaryLang, kvForm[2]);
+
+  const nsForm = decoded.match(/^([athc])::(.+)$/);
+  if (nsForm) return buildLegacyEntryPath(nsForm[1] as DictionaryLang, nsForm[2]);
+
+  const head = decoded[0];
+  if (head === "'" || head === ":" || head === "~" || head === "@") {
+    if (!isLegacyEntryTerm(decoded.slice(1))) return null;
+    return `/${decoded}`;
+  }
+
+  if (!isLegacyEntryTerm(decoded) || !/\P{ASCII}/u.test(decoded)) return null;
   return `/${decoded}`;
+}
+
+/**
+ * 詞條字元白名單：漢字（含相容表意文字）、注音（含擴充）、預組聲調拉丁字
+ * （臺灣台羅／教羅）、組合附加符號、`·`／`˙`（POJ 輕聲點）、`ⁿ`、數字、
+ * `.`（heteronym idx）、`-`（連字符詞目）、`@`（部首）。刻意不含 `=`、`*`、
+ * 空白與 CJK 標點——那些不屬於任何真實路徑段。
+ */
+const LEGACY_TERM_RE =
+  /^[\p{Script=Han}\p{Script=Bopomofo}\u00C0-\u024F\p{M}\u02C7-\u02D9\u00B7\u207FA-Za-z0-9.@-]+$/u;
+
+function isLegacyEntryTerm(term: string): boolean {
+  return term.length > 0 && LEGACY_TERM_RE.test(term);
+}
+
+/**
+ * 把「明確標了語言」的舊式形式（`a=`／`dict/t'…`／`h::…`）正規化成現行
+ * 路徑：語言字母為準，其餘字元若自帶 `'`/`:`/`~` 行內前綴則剝掉，再由
+ * buildDictionaryPathname 的前綴規則補回單一正確前綴。
+ */
+function buildLegacyEntryPath(lang: DictionaryLang, remainder: string): string | null {
+  const { rest } = stripLangPrefix(remainder);
+  if (!isLegacyEntryTerm(rest)) return null;
+  const prefix = lang === "t" ? "'" : lang === "h" ? ":" : lang === "c" ? "~" : "";
+  return `/${prefix}${rest}`;
 }
 
 /**

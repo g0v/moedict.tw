@@ -57,6 +57,9 @@ interface Heteronym {
   variants?: string[];
   audio_id?: string;
   synonyms?: string[] | string;
+  /** 台語條目 heteronym 層的反義詞（對照：同義詞掛在 definitions 內）；API
+   *  回傳時已包成 autolink 的 `<a href="./#…">詞</a>`，渲染前需 sanitize。 */
+  antonyms?: string[] | string;
   /** TWBLG 文/白/俗/替讀音分類（g0v/moedict-webkit#96、#233），僅 lang='t' 有值；
    *  API 回傳時已包成 autolink 的 `<a href="...">文</a>`，渲染前需 untag。 */
   reading?: string;
@@ -183,6 +186,30 @@ function isContentLookupAnchor(anchor: HTMLAnchorElement): boolean {
 
 function untag(input: string): string {
   return input.replace(/<[^>]*>/g, "");
+}
+
+/** 同義詞/反義詞（似/反）欄位只保留 autolink 的 lookup 錨點 `<a href="./#…">`，
+ *  點擊由 .result 的 onClick 統一攔截導頁；其餘標籤一律剝掉、只留文字內容，
+ *  保留的錨點也只留 href 屬性。 */
+function sanitizeLookupHtml(input: string): string {
+  if (typeof DOMParser === "undefined") return untag(input);
+  try {
+    const doc = new DOMParser().parseFromString(`<div id="wrap">${input}</div>`, "text/html");
+    const wrap = doc.getElementById("wrap");
+    if (!wrap) return untag(input);
+    for (const el of Array.from(wrap.querySelectorAll("*"))) {
+      if (el instanceof HTMLAnchorElement && (el.getAttribute("href") || "").startsWith("./#")) {
+        for (const attr of Array.from(el.attributes)) {
+          if (attr.name !== "href") el.removeAttribute(attr.name);
+        }
+      } else {
+        el.replaceWith(...Array.from(el.childNodes));
+      }
+    }
+    return wrap.innerHTML;
+  } catch {
+    return untag(input);
+  }
 }
 
 function escapeHtml(input: string): string {
@@ -1022,6 +1049,9 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
             : [];
         const dialectSynonyms =
           lang === "t" || lang === "h" ? splitCommaSeparatedItems(heteronym.synonyms) : [];
+        // 台語條目的反義詞直接掛在 heteronym 層（對照：同義詞在 definitions 內），
+        // API 回傳時已包成 autolink 的 `<a href="./#…">詞</a>`。
+        const heteronymAntonyms = lang === "t" ? splitCommaSeparatedItems(heteronym.antonyms) : [];
         // TWBLG 文/白/俗/替讀音分類（g0v/moedict-webkit#96、#233）：資料只在
         // lang='t' 的 ptck pack 出現，其餘語言的 heteronym 沒有這個欄位。
         const definitions = Array.isArray(heteronym.definitions) ? heteronym.definitions : [];
@@ -1412,17 +1442,25 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                           {toStringArray(def.synonyms).length > 0 && (
                             <div className="synonyms">
                               <span className="part-of-speech">似</span>
-                              <span>
-                                {untag(toStringArray(def.synonyms).join("、").replace(/,/g, "、"))}
-                              </span>
+                              <span
+                                dangerouslySetInnerHTML={{
+                                  __html: sanitizeLookupHtml(
+                                    toStringArray(def.synonyms).join("、").replace(/,/g, "、"),
+                                  ),
+                                }}
+                              />
                             </div>
                           )}
                           {toStringArray(def.antonyms).length > 0 && (
                             <div className="antonyms">
                               <span className="part-of-speech">反</span>
-                              <span>
-                                {untag(toStringArray(def.antonyms).join("、").replace(/,/g, "、"))}
-                              </span>
+                              <span
+                                dangerouslySetInnerHTML={{
+                                  __html: sanitizeLookupHtml(
+                                    toStringArray(def.antonyms).join("、").replace(/,/g, "、"),
+                                  ),
+                                }}
+                              />
                             </div>
                           )}
                           {afterParallel && (
@@ -1451,6 +1489,19 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                     <span key={`t-synonym-${synIdx}`}>
                       {synIdx > 0 ? "、" : ""}
                       <span dangerouslySetInnerHTML={{ __html: item }} />
+                    </span>
+                  ))}
+                </span>
+              </div>
+            )}
+            {heteronymAntonyms.length > 0 && (
+              <div className="antonyms">
+                <span className="part-of-speech">反</span>
+                <span>
+                  {heteronymAntonyms.map((item, antIdx) => (
+                    <span key={`t-antonym-${antIdx}`}>
+                      {antIdx > 0 ? "、" : ""}
+                      <span dangerouslySetInnerHTML={{ __html: sanitizeLookupHtml(item) }} />
                     </span>
                   ))}
                 </span>

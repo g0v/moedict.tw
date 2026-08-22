@@ -21,3 +21,18 @@ describe("server smoke", () => {
     expect(res.headers.get("access-control-allow-methods")).toContain("GET");
   });
 });
+
+describe("unknown path statuses (R4)", () => {
+  it("GET /garbage returns a real 404 instead of a soft-200 SPA shell", async () => {
+    const res = await fetchFromServer("/garbage");
+    expect(res.status).toBe(404);
+  });
+
+  it("keeps non-404 shell behavior for a valid entry path (/萌)", async () => {
+    // Shell availability depends on bindings (this server has neither
+    // SITE_ASSETS nor a release tag, so the render itself recovers to 503);
+    // the R4 contract is only that a real headword is never 404'd.
+    const res = await fetchFromServer("/%E8%90%8C");
+    expect(res.status).not.toBe(404);
+  });
+});

@@ -159,6 +159,25 @@ describe("R2 shell fallback (tagged release)", () => {
     expect(await res.text()).toBe("");
   });
 
+  // R4: entry-shaped paths must keep the soft-200 SPA-shell behavior only
+  // when the word actually resolves; unknown words get a real 404 status
+  // with the same shell body so client-side fallbacks still hydrate.
+  it("serves a valid entry path (/萌) as 200 + shell", async () => {
+    const res = await fetchFromTaggedServer("/%E8%90%8C");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("X-Moedict-Shell-Source")).toBe("r2-release");
+    expect(res.headers.get("content-type")).toContain("text/html");
+  });
+
+  it("returns 404 (not soft-200) for an unknown word path like /garbage", async () => {
+    const res = await fetchFromTaggedServer("/garbage");
+    expect(res.status).toBe(404);
+    // Shell body preserved under the corrected status + no-store.
+    expect(res.headers.get("content-type")).toContain("text/html");
+    expect(await res.text()).toContain("<html");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+  });
+
   it("returns 304 when If-None-Match matches the R2 ETag", async () => {
     // First request to get the ETag
     const res1 = await fetchFromTaggedServer("/");

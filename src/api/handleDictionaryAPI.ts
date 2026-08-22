@@ -384,14 +384,18 @@ export function bucketOf(text: string, lang: DictionaryLang): string {
   return String(code % bucketSize);
 }
 
-async function fillBucket(
+type BucketShardRead =
+  | { kind: "hit"; data: DictionaryEntry }
+  | { kind: "miss" }
+  | { kind: "unavailable" };
+
+async function readBucketShard(
   id: string,
-  bucket: string,
   lang: DictionaryLang,
   env: DictionaryEnv,
-): Promise<{ data: DictionaryEntry | null; err: boolean }> {
+): Promise<BucketShardRead> {
   try {
-    const bucketPath = `p${lang}ck/${bucket}.txt`;
+    const bucketPath = `p${lang}ck/${bucketOf(id, lang)}.txt`;
     // Memoized: bucket shards are the hottest R2 objects (billing audit
     // 2026-07) and change only on data re-upload.
     const responseData = (await readR2JsonCached(env, bucketPath)) as Record<
@@ -399,23 +403,23 @@ async function fillBucket(
       DictionaryEntry
     > | null;
     if (!responseData) {
-      return { data: null, err: true };
+      // A real deployment materializes every shard, so an absent shard is
+      // positive evidence that no headword maps here (probeDictionaryEntry).
+      return { kind: "miss" };
     }
-    const key = escape(id);
-    const part = responseData[key];
-
+    const part = responseData[escape(id)];
     if (!part) {
-      return { data: null, err: true };
+      return { kind: "miss" };
     }
-
-    return { data: part, err: false };
+    return { kind: "hit", data: part };
   } catch {
-    return { data: null, err: true };
+    // Read/parse failure is transient, NOT evidence of absence.
+    return { kind: "unavailable" };
   }
 }
 
 /**
- * Wraps `fillBucket` with a Unicode-compatibility fallback for entry
+ * Wraps `readBucketShard` with a Unicode-compatibility fallback for entry
  * lookups. Many CJK compatibility characters — most notably the entire
  * Kangxi Radicals block (U+2E80–U+2EFF, U+2F00–U+2FDF, e.g. ⼴ U+2F34) —
  * carry a canonical NFKC/NFKD compatibility decomposition to their
@@ -438,9 +442,9 @@ async function fillBucketWithCompatibilityFallback(
   lang: DictionaryLang,
   env: DictionaryEnv,
 ): Promise<{ data: DictionaryEntry | null; err: boolean; resolvedText: string }> {
-  const primary = await fillBucket(text, bucketOf(text, lang), lang, env);
-  if (!primary.err && primary.data) {
-    return { ...primary, resolvedText: text };
+  const primary = await readBucketShard(text, lang, env);
+  if (primary.kind === "hit") {
+    return { data: primary.data, err: false, resolvedText: text };
   }
 
   const normalized = text.normalize("NFKC");
@@ -448,11 +452,42 @@ async function fillBucketWithCompatibilityFallback(
     return { data: null, err: true, resolvedText: text };
   }
 
-  const fallback = await fillBucket(normalized, bucketOf(normalized, lang), lang, env);
-  if (fallback.err || !fallback.data) {
+  const fallback = await readBucketShard(normalized, lang, env);
+  if (fallback.kind !== "hit") {
     return { data: null, err: true, resolvedText: text };
   }
   return { data: fallback.data, err: false, resolvedText: normalized };
+}
+
+/**
+ * Tri-state existence probe for shell-status decisions (R4): does this bare
+ * word path resolve to a dictionary headword?
+ *
+ *   true   — entry exists (exact key or NFKC compatibility fallback, #214)
+ *   false  — definitive miss (shard/key provably absent)
+ *   null   — the data layer could not answer (read/parse failure); callers
+ *            MUST fail open instead of treating this as "not found"
+ *
+ * Mirrors fillBucketWithCompatibilityFallback's resolution order without its
+ * cross-reference fan-out, so the Worker can decide an HTML route's HTTP
+ * status from the same memoized shard reads injectHeadMetadata performs.
+ */
+export async function probeDictionaryEntry(
+  text: string,
+  lang: DictionaryLang,
+  env: DictionaryEnv,
+): Promise<boolean | null> {
+  const primary = await readBucketShard(text, lang, env);
+  if (primary.kind === "hit") return true;
+  if (primary.kind === "unavailable") return null;
+
+  const normalized = text.normalize("NFKC");
+  if (normalized === text) return false;
+
+  const fallback = await readBucketShard(normalized, lang, env);
+  if (fallback.kind === "hit") return true;
+  if (fallback.kind === "unavailable") return null;
+  return false;
 }
 
 async function handleRadicalLookup(
