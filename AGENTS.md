@@ -170,8 +170,20 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
 - **release ID／R2 fallback**：`release-publish.mjs` 把 `dist/client/**` 上傳到
   `releases/<release-id>/`，hashed `assets/**` 另複製一份到全域
   `immutable/assets/`。Worker 的 HTML shell 走
-  `SITE_ASSETS → R2 releases/<tag>/index.html → 503 no-store`（絕不回 404）；
+  `SITE_ASSETS → R2 releases/<tag>/index.html → 503 no-store`（**資產取不到
+  本身絕不回 404**——404 只代表「查無此詞」，見下）；
   資產走 `SITE_ASSETS → R2 release → R2 immutable → 既有 legacy fallback`。
+- **未命中詞條的 HTTP 狀態（`notFoundShellResponse`，worker/index.ts）**：
+  `classifyRoute` 判為 `entry` 的裸詞路徑，若
+  `probeDictionaryEntry(...) === false`（明確查無此詞）就回 **404**，
+  body 仍是 SPA shell、`Cache-Control: no-store`（舊站也是硬 404，soft-200
+  會讓爬蟲／CDN 把捏造的 shell 當內容）。只有 `false` 會改狀態：`true`
+  （命中，含 NFKC 相容 fallback）維持 200，`null`（shard 讀取／解析失敗，
+  資料層答不出來）刻意 fail open 也維持 200；非 entry 路徑
+  （`/`、`/about`、`@部首`、`=分類`、`'*清單`、壞編碼）根本不進這條判斷。
+  唯一「shell 取不到又確定查無此詞」的組合會回**無 body 的 404**
+  （`Cache-Control: no-store`），而不是 recovery 503。deploy／rollback smoke
+  打的 `/`、`/api/config`、`/api/<詞>.json` 都不是 entry shell 路徑，不受影響。
 - **staging → production gate（自動）**：staging 的 `deploy:staging` 在 final
   smoke 通過「當下」自動寫入共用的 staging-approval 狀態
   （git SHA + client manifest digest）；不存在也不需要任何手動
