@@ -15,6 +15,10 @@ Cloudflare Workers 後端、R2 儲存。本檔是給 AI agent 與新進開發者
 - 裸網域 `moedict.tw` 會 301 到 `www.moedict.tw`——線上驗證一律打 `www`。
 - 舊版 `~/w/moedict-webkit` 的 `view.ls` 是 UI 行為的 ground truth：
   移植或修 UI 迴歸時先讀它，不要憑猜測（例：`h1.title` 內的 DOM 順序）。
+- `src/offline-api.ts` 在 Capacitor bridge 存在時啟用；`moedict-app` 的 Vite
+  dev/build 另以 `VITE_MOEDICT_OFFLINE_APP=1` 啟用同一套本地 API，確保瀏覽器
+  開發模式也讀 bundled `/dictionary`、`/search-index`、`/assets-legacy`，不會
+  誤打只有 Worker 才有的 `/api/*` 路由。一般 `moedict.tw` web build 不設此旗標。
 
 ## 語言代碼（四本字典）
 

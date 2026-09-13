@@ -14,8 +14,10 @@
  * 2. Capacitor present → the legacy XHR `.open()` patch rewrites to local `/stroke-json/{cp}`,
  *    AND a non-stroke `.open()` call still opens through untouched
  *    (regression guard for the default-fallback branch).
- * 3. Capacitor absent → the module is a no-op: window.fetch is never
- *    patched, same-origin requests pass straight through.
+ * 3. Offline-app build flag present without the Capacitor bridge → local API
+ *    routes are still enabled (the browser-based moedict-app dev server).
+ * 4. Capacitor and build flag both absent → the module is a no-op:
+ *    window.fetch is never patched, same-origin requests pass straight through.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -40,12 +42,44 @@ async function importFresh(): Promise<void> {
 
 afterEach(() => {
   vi.resetModules();
+  vi.unstubAllEnvs();
   delete (window as CapacitorWindow).Capacitor;
   if (originalFetchDescriptor) {
     Object.defineProperty(window, "fetch", originalFetchDescriptor);
   }
   XMLHttpRequest.prototype.open = originalXHROpen;
   vi.restoreAllMocks();
+});
+
+describe("offline-api.ts — offline app build flag without Capacitor", () => {
+  beforeEach(() => {
+    setCapacitor(false);
+    vi.stubEnv("VITE_MOEDICT_OFFLINE_APP", "1");
+  });
+
+  it("serves config locally and rewrites the autocomplete index to bundled data", async () => {
+    const calls: string[] = [];
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      calls.push(url);
+      return Response.json(["萌", "萌典"]);
+    });
+    Object.defineProperty(window, "fetch", { value: fetchSpy, configurable: true, writable: true });
+
+    await importFresh();
+
+    const configResponse = await window.fetch("/api/config");
+    expect(await configResponse.json()).toEqual({
+      assetBaseUrl: "/assets-legacy",
+      dictionaryBaseUrl: "",
+    });
+
+    const indexResponse = await window.fetch("/api/index/a.json", {
+      headers: { Accept: "application/json" },
+    });
+    expect(await indexResponse.json()).toEqual(["萌", "萌典"]);
+    expect(calls).toEqual(["/dictionary/a/index.json"]);
+  });
 });
 
 describe("offline-api.ts — Capacitor present (fetch stroke routing)", () => {
@@ -201,6 +235,7 @@ describe("offline-api.ts — Capacitor present (legacy XHR stroke routing)", () 
 describe("offline-api.ts — Capacitor absent (no-op guard)", () => {
   beforeEach(() => {
     setCapacitor(false);
+    vi.stubEnv("VITE_MOEDICT_OFFLINE_APP", "");
   });
 
   it("never patches window.fetch when Capacitor is absent", async () => {
