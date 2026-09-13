@@ -878,6 +878,16 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
     }
   }, []);
 
+  // Record every viewed entry — typed, tapped, or directly opened — so the
+  // mobile back control can return to it. Adjacent duplicates are ignored
+  // above; handleMobileBack pops until the term differs from the input.
+  useEffect(() => {
+    const term = extractTermFromPath(location.pathname);
+    if (term) {
+      rememberSearchValue(term);
+    }
+  }, [location.pathname, rememberSearchValue]);
+
   // 處理輸入變化：同步更新路由
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {

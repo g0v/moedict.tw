@@ -179,6 +179,9 @@ test.describe("mobile sidebar search toggle", () => {
   });
 
   test("does not use browser history for the left-side mobile back button", async ({ page }) => {
+    // Fresh loads reset the in-memory visit history, so arriving here by
+    // direct navigation leaves nothing to step back to. The button still
+    // never pops the browser stack itself.
     await page.goto("/%E4%B8%80");
     await page.goto("/%E8%90%8C");
 
@@ -188,6 +191,22 @@ test.describe("mobile sidebar search toggle", () => {
 
     await expect(page.locator("#query")).toHaveValue("萌");
     await expect(page).toHaveURL(/\/%E8%90%8C$/);
+  });
+
+  test("returns to the entry reached by tapping an in-content link", async ({ page }) => {
+    await page.goto("/%E8%90%8C%E8%8A%BD");
+
+    await expect(page.locator("#query")).toHaveValue("萌芽", { timeout: 15_000 });
+
+    // Tap the autolinked headword char: SPA navigation without typing.
+    await page.locator('.entry a[href="./#萌"]').first().click();
+    await expect(page).toHaveURL(/\/%E8%90%8C$/);
+    await expect(page.locator("#query")).toHaveValue("萌");
+
+    await tapWithoutClick(page.getByRole("button", { name: "回到上一個搜尋" }));
+
+    await expect(page.locator("#query")).toHaveValue("萌芽");
+    await expect(page).toHaveURL(/\/%E8%90%8C%E8%8A%BD$/);
   });
 
   test("steps back through mobile search input history before browser history", async ({
