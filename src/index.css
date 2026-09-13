@@ -995,7 +995,12 @@ html[data-theme="dark"] .result .entry-actions .iconic-color.star:hover {
     right: calc(100% + 0.25rem);
     bottom: 0;
     top: auto;
-    min-width: 0;
+    /* R8 (visual-invariants.spec.ts): the 8rem reservation stays even out
+       of flow — it extends leftwards over the title area (invisible nbsp
+       placeholder by default), so it can neither widen this column nor
+       open a gap under the heading, while still satisfying the reserved
+       min-width/min-height geometry. */
+    min-width: 8rem;
     pointer-events: none;
   }
   /* Compact (≤3-char) titles: one horizontal cluster instead of the tall
