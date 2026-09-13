@@ -20,6 +20,23 @@ async function setInputValueWithEvent(input: Locator, value: string): Promise<vo
   }, value);
 }
 
+async function tapWithoutClick(button: Locator): Promise<void> {
+  // Faithful touch-tap on engines that suppress the compatibility click
+  // after a canceled pointerdown (iOS Safari/WKWebView, mobile Chromium):
+  // pointerdown + pointerup at one spot, never a click event.
+  await button.evaluate((element) => {
+    const touchTap = {
+      bubbles: true,
+      cancelable: true,
+      pointerType: "touch",
+      clientX: 20,
+      clientY: 20,
+    };
+    element.dispatchEvent(new PointerEvent("pointerdown", touchTap));
+    element.dispatchEvent(new PointerEvent("pointerup", touchTap));
+  });
+}
+
 async function clickWithPointerEvent(button: Locator): Promise<void> {
   await button.evaluate((element) => {
     element.dispatchEvent(
@@ -233,6 +250,72 @@ test.describe("mobile sidebar search toggle", () => {
 
     await expect(input).toHaveValue("萌");
     await expect(page).toHaveURL(/\/%E8%90%8C$/);
+  });
+
+  test("fires the mobile back button on a touch tap that produces no click", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    const input = page.locator("#query");
+    await expect(input).toBeVisible({ timeout: 15_000 });
+    await input.fill("萌");
+    await expect(page).toHaveURL(/\/%E8%90%8C$/);
+
+    await input.fill("夢");
+    await expect(page).toHaveURL(/\/%E5%A4%A2$/);
+
+    await tapWithoutClick(page.getByRole("button", { name: "回到上一個搜尋" }));
+
+    await expect(input).toHaveValue("萌");
+    await expect(page).toHaveURL(/\/%E8%90%8C$/);
+  });
+
+  test("fires the mobile clear button on a touch tap that produces no click", async ({
+    page,
+  }) => {
+    await page.goto("/%E8%90%8C");
+
+    const input = page.locator("#query");
+    await expect(input).toHaveValue("萌", { timeout: 15_000 });
+
+    await tapWithoutClick(page.getByRole("button", { name: "清除搜尋字詞" }));
+
+    await expect(input).toHaveValue("");
+  });
+
+  test("ignores a scroll gesture that starts on a mobile control", async ({ page }) => {
+    await page.goto("/");
+
+    const input = page.locator("#query");
+    await expect(input).toBeVisible({ timeout: 15_000 });
+    await input.fill("萌");
+    await input.fill("夢");
+    await expect(page).toHaveURL(/\/%E5%A4%A2$/);
+
+    await page.getByRole("button", { name: "回到上一個搜尋" }).evaluate((element) => {
+      element.dispatchEvent(
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          cancelable: true,
+          pointerType: "touch",
+          clientX: 20,
+          clientY: 20,
+        }),
+      );
+      element.dispatchEvent(
+        new PointerEvent("pointerup", {
+          bubbles: true,
+          cancelable: true,
+          pointerType: "touch",
+          clientX: 20,
+          clientY: 120,
+        }),
+      );
+    });
+
+    await expect(input).toHaveValue("夢");
+    await expect(page).toHaveURL(/\/%E5%A4%A2$/);
   });
 });
 

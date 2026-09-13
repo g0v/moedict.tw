@@ -29,6 +29,9 @@ const PREFETCH_MIN_TERM_LENGTH = 2;
 const PREFETCH_DELAY_MS = 120;
 const MOBILE_BREAKPOINT_QUERY = "(max-width: 767px)";
 const MOBILE_TOGGLE_BLUR_GUARD_MS = 350;
+// A tap that starts and lifts within this radius counts as pressing a
+// search control; anything larger is a scroll that happened to start on it.
+const MOBILE_CONTROL_TAP_SLOP_PX = 12;
 const MOBILE_SEARCH_HISTORY_LIMIT = 50;
 const MOBILE_SEARCH_HAS_QUERY_CLASS = "document-mobile-search-has-query";
 const INDEX_CACHE = new Map<Lang, string[]>();
@@ -605,6 +608,8 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
   const suggestionRefs = useRef<Array<HTMLAnchorElement | null>>([]);
   const requestIdRef = useRef(0);
   const blurTimerRef = useRef<number | null>(null);
+  const controlTapStartRef = useRef<{ x: number; y: number } | null>(null);
+  const controlTapHandledRef = useRef(false);
   const mobileToggleGuardTimerRef = useRef<number | null>(null);
   const mobileToggleInteractionRef = useRef(false);
   const isComposingRef = useRef(false);
@@ -1136,9 +1141,54 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
     });
   }, [rememberSearchValue, searchValue]);
 
+  // Mobile Safari/WKWebView (and mobile Chromium) suppress the
+  // compatibility click after a canceled touch pointerdown, so onClick
+  // alone never fires for real taps while the pointerdown default must
+  // stay prevented to keep the input focused. Activate on pointerup
+  // instead, and treat a later click as the same gesture: back pops
+  // history, so it must never double-run.
   const handleMobileControlPointerDown = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
       event.preventDefault();
+      controlTapStartRef.current = { x: event.clientX, y: event.clientY };
+    },
+    [],
+  );
+  const handleMobileControlPointerCancel = useCallback(() => {
+    controlTapStartRef.current = null;
+  }, []);
+  const activateOnControlTap = useCallback(
+    (event: React.PointerEvent<HTMLButtonElement>, run: () => void) => {
+      const start = controlTapStartRef.current;
+      controlTapStartRef.current = null;
+      if (!start) return;
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      if (
+        Math.hypot(event.clientX - start.x, event.clientY - start.y) >
+        MOBILE_CONTROL_TAP_SLOP_PX
+      ) {
+        return;
+      }
+      controlTapHandledRef.current = true;
+      run();
+    },
+    [],
+  );
+  const clickAfterControlTap = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>, run: () => void) => {
+      controlTapStartRef.current = null;
+      if (event.detail === 0) {
+        // Keyboard / assistive-tech / synthetic activation: no pointer
+        // gesture precedes it, so always run (and clear any stale flag).
+        controlTapHandledRef.current = false;
+        run();
+        return;
+      }
+      if (controlTapHandledRef.current) {
+        controlTapHandledRef.current = false;
+        return;
+      }
+      run();
     },
     [],
   );
@@ -1201,7 +1251,9 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
           className="mobile-search-back"
           aria-label="回到上一個搜尋"
           onPointerDown={handleMobileControlPointerDown}
-          onClick={handleMobileBack}
+          onPointerUp={(event) => activateOnControlTap(event, handleMobileBack)}
+          onPointerCancel={handleMobileControlPointerCancel}
+          onClick={(event) => clickAfterControlTap(event, handleMobileBack)}
         >
           <span className="mobile-search-back-chevron" aria-hidden="true" />
         </button>
@@ -1226,7 +1278,9 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
                 className="mobile-search-clear"
                 aria-label="清除搜尋字詞"
                 onPointerDown={handleMobileControlPointerDown}
-                onClick={handleMobileClear}
+                onPointerUp={(event) => activateOnControlTap(event, handleMobileClear)}
+                onPointerCancel={handleMobileControlPointerCancel}
+                onClick={(event) => clickAfterControlTap(event, handleMobileClear)}
               >
                 <span aria-hidden="true">×</span>
               </button>
