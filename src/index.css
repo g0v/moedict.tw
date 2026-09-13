@@ -1290,7 +1290,14 @@ html.moe-capacitor .result .entry .title hruby.rightangle ru[zhuyin] diao {
    Checked-final `top` (issue #301) is written for ru as CB and would
    miss ru-center by >10px. Scope to moe-android so #301's injected
    styles.css path keeps the length-specific tops. */
-html.moe-android body[data-ruby-pref="zhuyin"] .result .entry .title hruby.rightangle ru[zhuyin] diao {
+html.moe-android
+  body[data-ruby-pref="zhuyin"]
+  .result
+  .entry
+  .title
+  hruby.rightangle
+  ru[zhuyin]
+  diao {
   top: 50% !important;
   margin-top: 0 !important;
   transform: translateY(-50%) !important;

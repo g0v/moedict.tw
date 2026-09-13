@@ -1174,8 +1174,7 @@ export function SearchBox({ currentLang }: SearchBoxProps) {
       if (!start) return;
       if (event.pointerType === "mouse" && event.button !== 0) return;
       if (
-        Math.hypot(event.clientX - start.x, event.clientY - start.y) >
-        MOBILE_CONTROL_TAP_SLOP_PX
+        Math.hypot(event.clientX - start.x, event.clientY - start.y) > MOBILE_CONTROL_TAP_SLOP_PX
       ) {
         return;
       }

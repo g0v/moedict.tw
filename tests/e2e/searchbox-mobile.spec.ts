@@ -271,9 +271,7 @@ test.describe("mobile sidebar search toggle", () => {
     await expect(page).toHaveURL(/\/%E8%90%8C$/);
   });
 
-  test("fires the mobile back button on a touch tap that produces no click", async ({
-    page,
-  }) => {
+  test("fires the mobile back button on a touch tap that produces no click", async ({ page }) => {
     await page.goto("/");
 
     const input = page.locator("#query");
@@ -290,9 +288,7 @@ test.describe("mobile sidebar search toggle", () => {
     await expect(page).toHaveURL(/\/%E8%90%8C$/);
   });
 
-  test("fires the mobile clear button on a touch tap that produces no click", async ({
-    page,
-  }) => {
+  test("fires the mobile clear button on a touch tap that produces no click", async ({ page }) => {
     await page.goto("/%E8%90%8C");
 
     const input = page.locator("#query");
