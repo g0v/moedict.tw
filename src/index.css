@@ -797,9 +797,10 @@ html[data-theme="dark"] .result .entry-actions .iconic-color.star:hover {
 
 /* 星號收藏／複製解釋／異體字字典連結：單一動作列，取代原先各自散落的絕對
    定位星號、逐條複製按鈕、標題旁的異體字連結圖示（UI 調整：見對應 issue）。
-   idx===0 時渲染一次。寬螢幕把 radical + actions 浮在標題右側；窄螢幕只留
-   部首／筆順在標題旁，複製／異體字／星號改排到下一列，避免 8rem 狀態預留
-   把標題擠成一窄條。*/
+   idx===0 時渲染一次。寬螢幕把 radical + actions 浮在標題右側；窄螢幕右欄
+   只佔一鍵寬：部首列（部首＋筆數＋筆順）維持一行，星號／異體字／複製由
+   上而下疊成一直欄；8rem 狀態預留移出文件流，標題不受擠壓，虛線下也不
+   會空出整列。*/
 /* Float the controls in a BFC so the title keeps its legacy full-width
    block/ruby geometry while the heading reserves the taller control stack. */
 .result .entry-heading {
@@ -920,21 +921,30 @@ html[data-theme="dark"] .result .entry-actions .iconic-color.star:hover {
     padding: 7px;
   }
 
-  /* Keep only the compact radical beside the title. Copy/star/variants
-     occupy the next grid row so `.entry-copy-status { min-width: 8rem }`
-     cannot steal heading width. `display: contents` unwraps the stack
-     without changing DictionaryPage DOM (Hakka `h1.title`
-     nextElementSibling stays `.bopomofo`). Title ruby is the 1.55em MOE
-     box (rules below), so the leftover column stays wide enough. */
+  /* Narrow rail: one slim right column sharing the title row. The
+     radical line (glyph + counts + pencil) never wraps, and star /
+     variants / copy stack vertically beneath it in a single 44px column —
+     packed right, never a full-width row, no per-button margins. The 8rem
+     status reservation is out of flow so it can neither widen this column
+     nor open a gap under the heading. CSS-only: Hakka `h1.title`
+     nextElementSibling stays `.bopomofo`. */
   .result .entry-heading {
     display: grid;
     grid-template-columns: minmax(0, 1fr) max-content;
     align-items: start;
+    column-gap: 0.5rem;
     row-gap: 0.25rem;
   }
   .result .entry-control-stack {
     float: none;
-    display: contents;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: flex-start;
+    gap: 0.15rem;
+    align-self: start;
+    grid-column: 2;
+    grid-row: 1;
     min-width: 0;
     margin-left: 0;
   }
@@ -944,15 +954,12 @@ html[data-theme="dark"] .result .entry-actions .iconic-color.star:hover {
     min-width: 0;
   }
   .result .entry-control-stack .radical {
-    grid-column: 2;
-    grid-row: 1;
-    justify-self: end;
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: flex-end;
     align-items: center;
-    max-width: 4.5rem;
-    gap: 0;
+    gap: 0.3rem;
+    max-width: none;
   }
   .result .entry-heading > .bopomofo,
   .result .entry-heading > .cn-specific {
@@ -960,10 +967,49 @@ html[data-theme="dark"] .result .entry-actions .iconic-color.star:hover {
     grid-row: 2;
   }
   .result .entry-actions {
-    grid-column: 1 / -1;
-    grid-row: 3;
-    width: 100%;
-    max-width: 100%;
+    position: relative;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: flex-end;
+    justify-content: flex-start;
+    gap: 0.25rem;
+    width: max-content;
+    max-width: none;
+    margin: 0;
+  }
+  .result .entry-actions > * {
+    margin: 0;
+    flex: none;
+  }
+  .result .entry-actions .star {
+    order: 1;
+  }
+  .result .entry-actions .variants-link {
+    order: 2;
+  }
+  .result .entry-actions .entry-copy-button {
+    order: 3;
+  }
+  .result .entry-actions .entry-copy-status {
+    position: absolute;
+    right: calc(100% + 0.25rem);
+    bottom: 0;
+    top: auto;
+    min-width: 0;
+    pointer-events: none;
+  }
+  /* Compact (≤3-char) titles: one horizontal cluster instead of the tall
+     rail — a short title beside a 3-button column would leave empty space
+     under the dotted line. DOM order (copy, variants, star) is already the
+     desired left-to-right order, so reset the column ordering. */
+  .result .entry-compact-title .entry-actions {
+    flex-direction: row;
+    align-items: center;
+  }
+  .result .entry-compact-title .entry-actions .star,
+  .result .entry-compact-title .entry-actions .variants-link,
+  .result .entry-compact-title .entry-actions .entry-copy-button {
+    order: 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {

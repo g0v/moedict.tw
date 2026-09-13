@@ -2164,6 +2164,11 @@ test.describe("entry copy-explanation action (RESCOPE #258, single action-row bu
       a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
     expect(overlaps(starBox, copyBox)).toBe(false);
     expect(overlaps(copyBox, variantsBox)).toBe(false);
+    // 萌 is a compact (≤3-char) title: one horizontal cluster, copy /
+    // variants / star left to right, sharing a row — no tall rail beside
+    // a short title.
+    await expect(page.locator(".entry.entry-compact-title").first()).toBeVisible();
+    expect(Math.abs(starBox.y - copyBox.y)).toBeLessThanOrEqual(2);
     expect(copyBox.x + copyBox.width).toBeLessThanOrEqual(variantsBox.x + 1);
     expect(variantsBox.x + variantsBox.width).toBeLessThanOrEqual(starBox.x + 1);
   });
@@ -2188,14 +2193,30 @@ test.describe("entry copy-explanation action (RESCOPE #258, single action-row bu
     ]);
     expect(titleBox && radicalBox && actionsBox && headingBox).toBeTruthy();
     if (!titleBox || !radicalBox || !actionsBox || !headingBox) return;
+    const starBox = await page.locator(".entry-actions .star").first().boundingBox();
+    const copyBox = await page.locator(".entry-actions .entry-copy-button").first().boundingBox();
+    expect(starBox && copyBox).toBeTruthy();
+    if (!starBox || !copyBox) return;
     expect(actionsBox.y).toBeGreaterThanOrEqual(radicalBox.y + radicalBox.height - 2);
     expect(
       Math.abs(actionsBox.x + actionsBox.width - (radicalBox.x + radicalBox.width)),
     ).toBeLessThanOrEqual(2);
-    // Title keeps the leftover column beside the compact radical (~37px),
-    // not beside the 8rem status + icon cluster (~180px).
-    expect(titleBox.width).toBeGreaterThan(headingBox.width * 0.7);
-    expect(radicalBox.width).toBeLessThan(80);
+    // 萌芽 is a compact (≤3-char) title: copy/star share one packed row
+    // under the radical line. The out-of-flow status reservation must not
+    // open a full-width row. (萌芽 is multi-char so no variants-link
+    // renders: copy + star = 92px.)
+    await expect(page.locator(".entry.entry-compact-title").first()).toBeVisible();
+    expect(Math.abs(starBox.y - copyBox.y)).toBeLessThanOrEqual(2);
+    expect(actionsBox.width).toBeGreaterThan(80);
+    expect(actionsBox.width).toBeLessThan(170);
+    const stackBox = await page.locator(".entry-control-stack").first().boundingBox();
+    expect(stackBox).toBeTruthy();
+    if (!stackBox) return;
+    // Title + right rail jointly fill the heading: nothing wasted on a
+    // full-width control row, nothing stolen by the status reservation.
+    expect(titleBox.width + stackBox.width).toBeGreaterThan(headingBox.width * 0.9);
+    // Radical info + pencil stay on a single line, not wrapped per item.
+    expect(radicalBox.height).toBeLessThan(60);
   });
   test("mobile: enlarged long title reserves controls and preserves Hakka adjacency", async ({
     page,
