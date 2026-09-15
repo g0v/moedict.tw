@@ -2,12 +2,13 @@
 logs
 *.log
 
-# Local documentation artifacts (except committed issue-triage outputs and scripts)
+# Local documentation artifacts. Only docs/superpowers/ (design + recovery
+# runbooks) and hand-written docs/*.mjs tooling are tracked; the 2026-07
+# docs/issue-triage/ workbench was discarded once the g0v/moedict-webkit
+# backlog it triaged was closed, so its negations are gone too.
 docs/*
 !docs/
 !docs/*.mjs
-!docs/issue-triage/
-!docs/issue-triage/**
 !docs/superpowers/
 !docs/superpowers/**
 npm-debug.log*
@@ -95,4 +96,8 @@ tests/e2e/**/*-firefox-win32.png
 
 # TW-Kai R2-hosted Worker fallback font shards — hosted in R2 moedict-assets bucket
 # (fonts/TW-Kai-shard-*.ttf). Never commit untracked font binaries into git history.
+# Both landing spots are covered: data/assets/fonts/ (the --overwrite target that
+# scripts/build-tw-kai-shards.mjs guards) and a repo-root build dir, which is what
+# `--out-dir=fonts` produces (76MB of regenerable, manifest-checksummed TTFs).
 data/assets/fonts/TW-Kai-shard-*.ttf
+/fonts/
