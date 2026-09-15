@@ -944,7 +944,11 @@ test.describe("mobile dark-mode search results & controls (490×1376, real mobil
 
 const HAKKA_PATH = "/%3A%E5%AD%97"; // :字
 const CN_XREF_PATH = "/~%E4%B8%8A%E8%A8%B4"; // ~上訴 (seeded lang-c fixture)
-const CN_API_PATTERN = /\/api\/~[^?]*\.json/;
+// Match only the primary fixture request. The rendered cross-reference labels
+// trigger follow-up `/api/~*.json` fetches; intercepting those too leaves
+// route.fetch() callbacks in flight when the test page closes and turns normal
+// teardown into "Target page, context or browser has been closed" failures.
+const CN_API_PATTERN = /\/api\/~%E4%B8%8A%E8%A8%B4\.json(?:\?.*)?$/i;
 
 /** Intercept the ~上訴 JSON API to inject a synthetic `alt` field — no seeded
  * lang-c fixture carries `A`/`alt` (簡體字), the source field
