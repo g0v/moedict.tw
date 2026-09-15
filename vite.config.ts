@@ -128,8 +128,16 @@ export function servedFromPublicDir(requestUrl: string | undefined): boolean {
   }
   const decoded = tryDecodeURIComponent(pathname);
   if (decoded === null) return false;
+
+  // Reject traversal before normalization. Encoded separators survive the
+  // WHATWG URL parser (for example `%2f`), then decoding can turn
+  // `/api/%2e%2e%2fmanifest.json` into `/api/../manifest.json`. Normalizing
+  // first would erase the `..` evidence and could incorrectly classify the
+  // request as public/manifest.json.
+  if (decoded.includes("\0") || decoded.split(/[\\/]+/).includes("..")) return false;
+
   const relative = path.posix.normalize(decoded).replace(/^\/+/, "");
-  if (relative.length === 0 || relative.startsWith("..") || relative.includes("\0")) return false;
+  if (relative.length === 0 || relative.startsWith("..")) return false;
   const resolved = path.resolve(publicDir, relative);
   if (path.relative(publicDir, resolved).startsWith("..")) return false;
   try {
