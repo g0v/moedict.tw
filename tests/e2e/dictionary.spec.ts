@@ -2164,49 +2164,15 @@ test.describe("entry copy-explanation action (RESCOPE #258, single action-row bu
       a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
     expect(overlaps(starBox, copyBox)).toBe(false);
     expect(overlaps(copyBox, variantsBox)).toBe(false);
+    // 萌 is a compact (≤3-char) title: one horizontal cluster, copy /
+    // variants / star left to right, sharing a row — no tall rail beside
+    // a short title.
+    await expect(page.locator(".entry.entry-compact-title").first()).toBeVisible();
+    expect(Math.abs(starBox.y - copyBox.y)).toBeLessThanOrEqual(2);
     expect(copyBox.x + copyBox.width).toBeLessThanOrEqual(variantsBox.x + 1);
     expect(variantsBox.x + variantsBox.width).toBeLessThanOrEqual(starBox.x + 1);
   });
-  test("mobile: controls share the radical's line when the heading still has room", async ({
-    page,
-  }) => {
-    // The mobile heading is a wrapping flex line (src/index.css
-    // `@media (max-width: 767px) .result .entry-heading`), NOT fixed grid
-    // rows: the icon row only drops below the 部首/筆畫 box when the title
-    // actually needs that width. 560px is inside the mobile breakpoint and
-    // wide enough for title + radical + icons on one line.
-    await page.setViewportSize({ width: 560, height: 812 });
-    await page.goto("/%E8%90%8C");
-    await waitForEntryHydration(page, "萌");
-    const heading = page.locator(".entry-heading").first();
-    const radical = page.locator(".radical").first();
-    const actions = page.locator(".entry-actions").first();
-    const title = page.locator("h1.title").first();
-    const [headingBox, radicalBox, actionsBox, titleBox] = await Promise.all([
-      heading.boundingBox(),
-      radical.boundingBox(),
-      actions.boundingBox(),
-      title.boundingBox(),
-    ]);
-    expect(headingBox && radicalBox && actionsBox && titleBox).toBeTruthy();
-    if (!headingBox || !radicalBox || !actionsBox || !titleBox) return;
-
-    // Same flex line as the radical box — this is the whole point.
-    expect(Math.abs(actionsBox.y - radicalBox.y)).toBeLessThanOrEqual(2);
-    // Radical box sits between the title and the icons, all flush right.
-    expect(radicalBox.x).toBeGreaterThanOrEqual(titleBox.x + titleBox.width - 2);
-    expect(actionsBox.x).toBeGreaterThanOrEqual(radicalBox.x + radicalBox.width - 2);
-    expect(
-      Math.abs(actionsBox.x + actionsBox.width - (headingBox.x + headingBox.width)),
-    ).toBeLessThanOrEqual(2);
-    // 44px touch targets survive the shared line.
-    for (const selector of [".entry-copy-button", "a.variants-link", ".star"]) {
-      const box = await actions.locator(selector).boundingBox();
-      expect(box?.width).toBe(44);
-      expect(box?.height).toBe(44);
-    }
-  });
-  test("mobile: controls wrap below a long title instead of stealing heading width", async ({
+  test("mobile: extra action buttons wrap below the title instead of stealing heading width", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 333, height: 700 });
@@ -2227,25 +2193,30 @@ test.describe("entry copy-explanation action (RESCOPE #258, single action-row bu
     ]);
     expect(titleBox && radicalBox && actionsBox && headingBox).toBeTruthy();
     if (!titleBox || !radicalBox || !actionsBox || !headingBox) return;
-    // Too narrow to share: both controls wrap onto their own line(s) BELOW
-    // the title, never squeezing it into a column.
-    expect(radicalBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height - 2);
-    expect(actionsBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height - 2);
-    // The icon row — the rightmost group on whichever line it lands on — is
-    // always flush with the heading's right edge; the radical box either
-    // shares that line immediately to its left, or is right-flush on its own.
+    const starBox = await page.locator(".entry-actions .star").first().boundingBox();
+    const copyBox = await page.locator(".entry-actions .entry-copy-button").first().boundingBox();
+    expect(starBox && copyBox).toBeTruthy();
+    if (!starBox || !copyBox) return;
+    expect(actionsBox.y).toBeGreaterThanOrEqual(radicalBox.y + radicalBox.height - 2);
     expect(
-      Math.abs(actionsBox.x + actionsBox.width - (headingBox.x + headingBox.width)),
+      Math.abs(actionsBox.x + actionsBox.width - (radicalBox.x + radicalBox.width)),
     ).toBeLessThanOrEqual(2);
-    if (Math.abs(radicalBox.y - actionsBox.y) <= 2) {
-      expect(radicalBox.x + radicalBox.width).toBeLessThanOrEqual(actionsBox.x + 2);
-    } else {
-      expect(
-        Math.abs(radicalBox.x + radicalBox.width - (headingBox.x + headingBox.width)),
-      ).toBeLessThanOrEqual(2);
-    }
-    expect(titleBox.width).toBeGreaterThan(headingBox.width * 0.7);
-    expect(radicalBox.width).toBeLessThan(80);
+    // 萌芽 is a compact (≤3-char) title: copy/star share one packed row
+    // under the radical line. The out-of-flow status reservation must not
+    // open a full-width row. (萌芽 is multi-char so no variants-link
+    // renders: copy + star = 92px.)
+    await expect(page.locator(".entry.entry-compact-title").first()).toBeVisible();
+    expect(Math.abs(starBox.y - copyBox.y)).toBeLessThanOrEqual(2);
+    expect(actionsBox.width).toBeGreaterThan(80);
+    expect(actionsBox.width).toBeLessThan(170);
+    const stackBox = await page.locator(".entry-control-stack").first().boundingBox();
+    expect(stackBox).toBeTruthy();
+    if (!stackBox) return;
+    // Title + right rail jointly fill the heading: nothing wasted on a
+    // full-width control row, nothing stolen by the status reservation.
+    expect(titleBox.width + stackBox.width).toBeGreaterThan(headingBox.width * 0.9);
+    // Radical info + pencil stay on a single line, not wrapped per item.
+    expect(radicalBox.height).toBeLessThan(60);
   });
   test("mobile: enlarged long title reserves controls and preserves Hakka adjacency", async ({
     page,
@@ -2277,11 +2248,7 @@ test.describe("entry copy-explanation action (RESCOPE #258, single action-row bu
     expect(radicalBox.x + radicalBox.width).toBeLessThanOrEqual(375 + 1);
     expect(actionsBox.x).toBeGreaterThanOrEqual(0);
     expect(actionsBox.x + actionsBox.width).toBeLessThanOrEqual(375 + 1);
-    // A 64px title consumes the whole flex line, so both control groups wrap
-    // below it (they may share that wrapped line with each other — the
-    // invariant is that they clear the title, not that they stack).
-    expect(actionsBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height - 2);
-    expect(radicalBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height - 2);
+    expect(actionsBox.y).toBeGreaterThanOrEqual(radicalBox.y + radicalBox.height - 2);
     const titleRects = await titleLocator.evaluate((title) => {
       const range = document.createRange();
       const walker = document.createTreeWalker(title, NodeFilter.SHOW_TEXT);

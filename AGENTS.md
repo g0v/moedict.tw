@@ -15,6 +15,10 @@ Cloudflare Workers 後端、R2 儲存。本檔是給 AI agent 與新進開發者
 - 裸網域 `moedict.tw` 會 301 到 `www.moedict.tw`——線上驗證一律打 `www`。
 - 舊版 `~/w/moedict-webkit` 的 `view.ls` 是 UI 行為的 ground truth：
   移植或修 UI 迴歸時先讀它，不要憑猜測（例：`h1.title` 內的 DOM 順序）。
+- `src/offline-api.ts` 在 Capacitor bridge 存在時啟用；`moedict-app` 的 Vite
+  dev/build 另以 `VITE_MOEDICT_OFFLINE_APP=1` 啟用同一套本地 API，確保瀏覽器
+  開發模式也讀 bundled `/dictionary`、`/search-index`、`/assets-legacy`，不會
+  誤打只有 Worker 才有的 `/api/*` 路由。一般 `moedict.tw` web build 不設此旗標。
 
 ## 語言代碼（四本字典）
 
@@ -624,19 +628,16 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
 - **詞條標題列的控制項版型**（`.entry-heading` / `.entry-control-stack` /
   `.radical` / `.entry-actions`，`src/index.css`）：桌機（≥768px）維持
   `float: right` 的兩列堆疊（部首＋筆順一列、複製／異體字／星號一列）；
-  行動版（`@media (max-width: 767px)`）是**單一 wrapping flex 列**
-  （title `flex: 1 1 auto` + `justify-content: flex-end` + `order` 排序），
-  部首盒與圖示列**只有在標題真的需要那段寬度時才換行下移**，寬一點的手機
-  ／橫向就會排在同一列。**不要**用 `grid-row` 之類把圖示列釘死在下一列。
-  行動版 4 個控制項（含 `.radical` 裡的筆順鉛筆）都是 44px 觸控目標。
-  `.entry-copy-status`（`role="status"` aria-live 區域）是**絕對定位**的
-  浮出提示，靠 `data-state="idle|ok|error"` 控制可見度（節點永不 unmount，
-  否則 AT 不會播報）——**絕不可**改回行內 `min-width` 預留，那正是圖示列
-  在手機上永遠擠不進標題那一列的原因。守門測試在
-  `tests/e2e/dictionary.spec.ts`（三個 `mobile: controls …` 版型案例，以及
+  行動版（`@media (max-width: 767px)`）是 **grid 窄欄**
+  （`minmax(0, 1fr) max-content`）：部首列維持一行不換行，星號／異體字／
+  複製由上而下疊成 44px 單欄靠右；≤3 字短標題（`.entry-compact-title`，
+  見 `DictionaryPage.tsx` 可見字數判斷）改為橫向一簇，避免短標題旁留空。
+  `.entry-copy-status` 保留 8rem 預留（行動版 out-of-flow 向標題區左延，
+  不撐寬窄欄）——R8 要求量到它，**不可**拿掉。守門測試在
+  `tests/e2e/dictionary.spec.ts`（`mobile: action row …`、
+  `mobile: extra action buttons …`、`mobile: enlarged long title …`，以及
   `copy button activates with Space …` 的零位移契約）與
-  `tests/e2e/visual-invariants.spec.ts` 的 R8（320/390px：狀態列 out-of-flow、
-  圖示列左緣不被預留、無水平溢出）。
+  `tests/e2e/visual-invariants.spec.ts` 的 R8（320/390px：預留盒幾何＋無水平溢出）。
 - **URL 前綴文法**（`'`=t、`:`=h、`~`=c、`@`/`=`/`=*` 家族、`/<數字>` idx）：
   唯一定義在 `src/utils/dictionary-route.ts` 的 `classifyRoute`（頁面/head 分類）
   與 `stripLangPrefix`（語言前綴，API 端加 `{'!': 't'}` legacy 別名）。

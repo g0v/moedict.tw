@@ -1041,8 +1041,18 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
         // below) — omitted rather than reconstructed.
         const displayReading = lang === "h" ? "" : rubyData.pinyin;
 
+        // Entry titles arrive as autolink HTML (`<a>萌</a><a>芽</a>`), so
+        // count the visible headword chars. ≤3-char headwords fit one line
+        // beside a ~140px rail at ≥320px widths: compact horizontal action
+        // cluster, no tall rail and no leftover space. Longer titles get
+        // the slim vertical rail instead.
+        const isCompactTitle = untag(title).length <= 3;
         return (
-          <div key={`${title}-${idx}`} className="entry" data-reading={displayReading || undefined}>
+          <div
+            key={`${title}-${idx}`}
+            className={isCompactTitle ? "entry entry-compact-title" : "entry"}
+            data-reading={displayReading || undefined}
+          >
             <div className="entry-heading">
               <div className="entry-control-stack">
                 <div className="radical">
@@ -1082,18 +1092,6 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                   <div className="entry-actions">
                     <span
                       className="entry-copy-status"
-                      // Drives the visibility of the out-of-flow status pill
-                      // (src/index.css `.entry-copy-status[data-state="idle"]`).
-                      // The node itself is never unmounted or display:none'd —
-                      // an aria-live region must be present before its content
-                      // changes for AT to announce the update.
-                      data-state={
-                        hasEntryDefinitions && copyStatus
-                          ? copyStatus.ok
-                            ? "ok"
-                            : "error"
-                          : "idle"
-                      }
                       role="status"
                       aria-live="polite"
                       aria-atomic="true"

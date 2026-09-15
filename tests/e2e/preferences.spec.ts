@@ -53,4 +53,15 @@ test.describe("user preferences (phonetics, pinyin system)", () => {
     await page.evaluate(() => window.localStorage.setItem("pinyin_h", "PFS"));
     expect(await page.evaluate(() => window.localStorage.getItem("pinyin_h"))).toBe("PFS");
   });
+
+  test("opening 偏好設定 closes the dictionary dropdown", async ({ page }) => {
+    await page.goto("/%E8%90%8C");
+    await waitForAppReady(page);
+    await expect(page.getByText("草木初生的芽").first()).toBeVisible({ timeout: 30_000 });
+    await page.locator("ul.nav.navbar-nav > li").first().locator("a").first().click();
+    const firstOption = page.locator("ul.nav.navbar-nav a.lang-option").first();
+    await expect(firstOption).toBeVisible({ timeout: 10_000 });
+    await page.locator("#btn-pref > a").click();
+    await expect(firstOption).toBeHidden({ timeout: 10_000 });
+  });
 });

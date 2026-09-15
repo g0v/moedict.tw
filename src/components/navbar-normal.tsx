@@ -614,10 +614,14 @@ export function NavbarNormal({ currentLang }: NavbarNormalProps) {
     [closeDictionaryDropdown, navigate],
   );
 
-  const handlePrefClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
-    e.preventDefault();
-    toggleUserPrefPanel();
-  }, []);
+  const handlePrefClick = useCallback(
+    (e: React.MouseEvent<HTMLAnchorElement>) => {
+      e.preventDefault();
+      closeDictionaryDropdown();
+      toggleUserPrefPanel();
+    },
+    [closeDictionaryDropdown],
+  );
 
   /**
    * 語言選項點擊：依照原 press-lang 邏輯計算目標路徑
