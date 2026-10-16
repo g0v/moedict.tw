@@ -804,10 +804,10 @@ html[data-theme="dark"] .result .entry-actions .iconic-color.star:hover {
 
 /* 星號收藏／複製解釋／異體字字典連結：單一動作列，取代原先各自散落的絕對
    定位星號、逐條複製按鈕、標題旁的異體字連結圖示（UI 調整：見對應 issue）。
-   idx===0 時渲染一次。寬螢幕（≥768px）把 radical + actions 浮在標題右側、
-   上下兩列；窄螢幕改成單一 wrapping flex 列：部首／筆順與圖示列只有在標題
-   真的需要那段寬度時才換行下移（狀態訊息改為絕對定位的浮出提示，不再預留
-   8rem 行內寬度把標題擠成一窄條）。*/
+   idx===0 時渲染一次。寬螢幕把 radical + actions 浮在標題右側；窄螢幕右欄
+   只佔一鍵寬：部首列（部首＋筆數＋筆順）維持一行，星號／異體字／複製由
+   上而下疊成一直欄；8rem 狀態預留移出文件流，標題不受擠壓，虛線下也不
+   會空出整列。*/
 /* Float the controls in a BFC so the title keeps its legacy full-width
    block/ruby geometry while the heading reserves the taller control stack. */
 .result .entry-heading {
@@ -952,68 +952,100 @@ html[data-theme="dark"] .result .entry-actions .iconic-color.star:hover {
     padding: 7px;
   }
 
-  /* Mobile heading = ONE wrapping flex line, not fixed grid rows.
-
-     Items in visual order: title, radical box, action icons. Flex line
-     breaking uses each item's max-content size, so the controls stay on the
-     title's line whenever they actually fit, and drop to their own
-     right-aligned line only when the title needs that width -- which is the
-     whole point (previously `.entry-actions` was pinned to `grid-row: 3`, so
-     it dropped a row unconditionally, and `.radical` was squeezed into a
-     4.5rem column that wrapped the 部首/筆畫 badge over three lines).
-
-     h1.title grows into the leftover space so `justify-content: flex-end`
-     only ever right-aligns a controls-only line; on a shared line the title
-     keeps its left edge and the controls stay flush right.
-     `display: contents` on the stack keeps DictionaryPage's DOM intact
-     (Hakka `h1.title` nextElementSibling stays `.bopomofo`) while letting
-     the radical box and the icon row wrap independently. */
+  /* Narrow rail: one slim right column sharing the title row. The
+     radical line (glyph + counts + pencil) never wraps, and star /
+     variants / copy stack vertically beneath it in a single 44px column —
+     packed right, never a full-width row, no per-button margins. The 8rem
+     status reservation is out of flow so it can neither widen this column
+     nor open a gap under the heading. CSS-only: Hakka `h1.title`
+     nextElementSibling stays `.bopomofo`. */
   .result .entry-heading {
-    display: flex;
-    flex-flow: row wrap;
-    justify-content: flex-end;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) max-content;
+    align-items: start;
     column-gap: 0.5rem;
-    /* 0.5rem, not 0.25rem: the title's ruby annotations (`ru[annotation]`
-       tone marks) paint below h1.title's own box, so a wrapped control line
-       needs clearance or a large title's tone mark grazes the icon row. */
-    row-gap: 0.5rem;
+    row-gap: 0.25rem;
   }
   .result .entry-control-stack {
     float: none;
-    display: contents;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: flex-start;
+    gap: 0.15rem;
+    align-self: start;
+    grid-column: 2;
+    grid-row: 1;
     min-width: 0;
     margin-left: 0;
   }
   .result .entry-heading > h1.title {
-    order: 0;
-    flex: 1 1 auto;
+    grid-column: 1;
+    grid-row: 1;
     min-width: 0;
   }
   .result .entry-control-stack .radical {
-    order: 1;
-    flex: 0 0 auto;
     display: flex;
     flex-wrap: nowrap;
     justify-content: flex-end;
     align-items: center;
+    gap: 0.3rem;
     max-width: none;
-    white-space: nowrap;
-    /* Flex items drop their own leading whitespace, so the legacy markup's
-       " = 12" would render as "+8= 12" at gap: 0. */
-    column-gap: 0.15em;
-    row-gap: 0;
-  }
-  .result .entry-actions {
-    order: 2;
-    flex: 0 0 auto;
-    width: auto;
-    max-width: 100%;
   }
   .result .entry-heading > .bopomofo,
   .result .entry-heading > .cn-specific {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .result .entry-actions {
+    position: relative;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: flex-end;
+    justify-content: flex-start;
+    gap: 0.25rem;
+    width: max-content;
+    max-width: none;
+    margin: 0;
+  }
+  .result .entry-actions > * {
+    margin: 0;
+    flex: none;
+  }
+  .result .entry-actions .star {
+    order: 1;
+  }
+  .result .entry-actions .variants-link {
+    order: 2;
+  }
+  .result .entry-actions .entry-copy-button {
     order: 3;
-    flex: 1 1 100%;
+  }
+  .result .entry-actions .entry-copy-status {
+    position: absolute;
+    right: calc(100% + 0.25rem);
+    bottom: 0;
+    top: auto;
+    /* R8 (visual-invariants.spec.ts): the 8rem reservation stays even out
+       of flow — it extends leftwards over the title area (invisible nbsp
+       placeholder by default), so it can neither widen this column nor
+       open a gap under the heading, while still satisfying the reserved
+       min-width/min-height geometry. */
+    min-width: 8rem;
+    pointer-events: none;
+  }
+  /* Compact (≤3-char) titles: one horizontal cluster instead of the tall
+     rail — a short title beside a 3-button column would leave empty space
+     under the dotted line. DOM order (copy, variants, star) is already the
+     desired left-to-right order, so reset the column ordering. */
+  .result .entry-compact-title .entry-actions {
+    flex-direction: row;
+    align-items: center;
+  }
+  .result .entry-compact-title .entry-actions .star,
+  .result .entry-compact-title .entry-actions .variants-link,
+  .result .entry-compact-title .entry-actions .entry-copy-button {
+    order: 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {

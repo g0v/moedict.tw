@@ -874,8 +874,9 @@ export function CharacterImageView({
                 </td>
               </tr>
             ) : (
-              segments.map((segment) => (
-                <tr key={segment.part}>
+              // Repeated terms need separate row, canvas and drawing-state identities (#175).
+              segments.map((segment, index) => (
+                <tr key={`${index}:${segment.part}`}>
                   <td style={{ verticalAlign: "top", padding: 4 }}>
                     <div
                       className="charimg-practice-box"
@@ -888,7 +889,7 @@ export function CharacterImageView({
                         style={{ width: SEGMENT_IMAGE_SIZE, height: SEGMENT_IMAGE_SIZE }}
                       />
                       {renderPracticeCanvas(
-                        `segment:${segment.part}`,
+                        `segment:${index}:${segment.part}`,
                         SEGMENT_IMAGE_SIZE,
                         SEGMENT_IMAGE_SIZE,
                       )}

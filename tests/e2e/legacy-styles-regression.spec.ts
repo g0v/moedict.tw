@@ -313,6 +313,35 @@ test.describe("legacy styles.css \u2014 harness self-verification (controls)", (
     ).not.toBe(blankDigest);
   });
 
+  test("pref panel rows stack vertically under the real stylesheet (narrow viewport)", async ({
+    page,
+  }) => {
+    // The React #user-pref markup nests its <ul> inside a wrapper <div>,
+    // so the legacy `#user-pref>ul ...` child-combinator rules never matched
+    // and Bootstrap's `.btn-group { display: inline-block }` tiled the rows
+    // side-by-side (labels merging into one unreadable line) wherever two
+    // rows fit. The rules are now descendant selectors; every settings row
+    // must be block-level regardless of viewport width.
+    await page.setViewportSize({ width: 375, height: 667 });
+    await blockCssSubresources(page);
+    await routeStylesCss(page, readWorkingTreeStylesCss);
+    await page.goto("/%E8%90%8C");
+    await settle(page, "dictionary-lang");
+    const displays = await page.evaluate(() => {
+      const rows = Array.from(document.querySelectorAll("#user-pref li.btn-group"));
+      return {
+        count: rows.length,
+        displays: rows.map((li) => window.getComputedStyle(li).display),
+        labelDisplays: rows.map(
+          (li) => window.getComputedStyle(li.querySelector("label")!).display,
+        ),
+      };
+    });
+    expect(displays.count).toBeGreaterThan(2);
+    expect(displays.displays).toEqual(displays.displays.map(() => "block"));
+    expect(displays.labelDisplays).toEqual(displays.labelDisplays.map(() => "block"));
+  });
+
   test("negative control: a deliberately mutated stylesheet changes both the screenshot and the computed-style digest", async ({
     page,
   }) => {

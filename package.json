@@ -83,13 +83,13 @@
     "v8-to-istanbul": "^9.3.0",
     "vite": "npm:@voidzero-dev/vite-plus-core@0.2.4",
     "vite-plus": "0.2.4",
-    "vitest": "4.1.10",
+    "vitest": "4.1.11",
     "wrangler": "^4.110.0"
   },
   "overrides": {
     "undici": "^7.24.0",
     "vite": "npm:@voidzero-dev/vite-plus-core@0.2.4",
-    "vitest": "4.1.10"
+    "vitest": "4.1.11"
   },
   "devEngines": {
     "packageManager": {

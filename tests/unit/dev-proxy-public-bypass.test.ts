@@ -15,6 +15,7 @@
  */
 
 import { describe, expect, it } from "vite-plus/test";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -54,13 +55,22 @@ describe("dev proxy public/ bypass", () => {
     expect(servedFromPublicDir("/assets/../../package.json")).toBe(false);
     expect(servedFromPublicDir("/%2e%2e/package.json")).toBe(false);
     expect(servedFromPublicDir("/assets/icon%00.png")).toBe(false);
+
+    // Encoded separators are decoded only after new URL(), so these cases
+    // exercise the explicit pre-normalization traversal guard. Without it,
+    // normalize() erases `..` and the encoded-slash requests map to the real
+    // public/manifest.json. Encoded backslash covers Windows path semantics.
+    expect(servedFromPublicDir("/api/%2e%2e%2fmanifest.json")).toBe(false);
+    expect(servedFromPublicDir("/assets/%2e%2e%2fmanifest.json")).toBe(false);
+    expect(servedFromPublicDir("/assets/%2e%2e%5cmanifest.json")).toBe(false);
   });
 
-  it("keeps the repo-root file it must never serve", () => {
-    // Positive control for the traversal assertions above: the file the
-    // traversal attempts point at really does exist on disk, so those
-    // assertions fail closed for the right reason.
-    expect(path.resolve(REPO_ROOT, "package.json").endsWith("package.json")).toBe(true);
+  it("keeps real traversal targets as positive controls", () => {
+    // Prove both targets used above exist. package.json checks attempted
+    // escape from public/; manifest.json catches traversal that normalizes
+    // back onto a real public file and could otherwise trigger the bypass.
+    expect(fs.statSync(path.resolve(REPO_ROOT, "package.json")).isFile()).toBe(true);
+    expect(fs.statSync(path.resolve(REPO_ROOT, "public", "manifest.json")).isFile()).toBe(true);
     expect(servedFromPublicDir("/package.json")).toBe(false);
   });
 });

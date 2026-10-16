@@ -4,8 +4,9 @@
  * Monkey-patches window.fetch and XMLHttpRequest.open to intercept /api/*
  * requests and serve dictionary data from locally bundled files.
  *
- * When NOT running inside Capacitor (i.e. on the web), this module is a
- * complete no-op — the guard at the top bails out immediately.
+ * The standalone offline app also enables this module at build time so its
+ * browser-based Vite dev server behaves like the eventual Capacitor WebView.
+ * Normal moedict.tw web builds remain a complete no-op.
  */
 
 import { handleDictionaryAPI } from "./api/handleDictionaryAPI.ts";
@@ -14,7 +15,9 @@ import { handleLookupAPI } from "./api/handleLookupAPI.ts";
 import { DICTIONARY_CORPUS_POINTER_KEY } from "./utils/dictionary-corpus.ts";
 
 const shouldUseOfflineApi =
-  typeof window !== "undefined" && Boolean((window as Window & { Capacitor?: unknown }).Capacitor);
+  typeof window !== "undefined" &&
+  (import.meta.env.VITE_MOEDICT_OFFLINE_APP === "1" ||
+    Boolean((window as Window & { Capacitor?: unknown }).Capacitor));
 
 if (shouldUseOfflineApi) {
   // Keep the original fetch for loading local files and external requests
