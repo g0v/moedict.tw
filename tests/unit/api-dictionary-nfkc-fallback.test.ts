@@ -15,6 +15,7 @@ import {
   bucketOf,
   handleDictionaryAPI,
   lookupDictionaryEntry,
+  probeDictionaryEntry,
 } from "../../src/api/handleDictionaryAPI";
 
 interface R2Stub {
@@ -73,6 +74,30 @@ describe("bucketOf sanity guard for ⼴ / 广", () => {
   it("confirms ⼴ NFKC-normalizes to 广 and 广 is already NFKC-idempotent", () => {
     expect(RADICAL_YEN.normalize("NFKC")).toBe(IDEOGRAPH_YAN);
     expect(IDEOGRAPH_YAN.normalize("NFKC")).toBe(IDEOGRAPH_YAN);
+  });
+});
+
+describe("probeDictionaryEntry — NFKC fallback decides the entry route's status (R4)", () => {
+  it("returns true when only the NFKC-normalized bucket holds the headword", async () => {
+    const env = makeEnv({
+      [`pack/${IDEOGRAPH_BUCKET}.txt`]: JSON.stringify({ [IDEOGRAPH_KEY]: makeYanEntry() }),
+    });
+    expect(await probeDictionaryEntry(RADICAL_YEN, "a", env)).toBe(true);
+  });
+
+  it("returns false when neither the literal nor the NFKC spelling is a headword", async () => {
+    const env = makeEnv({ [`pack/${IDEOGRAPH_BUCKET}.txt`]: JSON.stringify({}) });
+    expect(await probeDictionaryEntry(RADICAL_YEN, "a", env)).toBe(false);
+  });
+
+  it("returns null (fail open) when the literal bucket shard cannot be parsed", async () => {
+    const env = makeEnv({ [`pack/${RADICAL_BUCKET}.txt`]: "{not json" });
+    expect(await probeDictionaryEntry(RADICAL_YEN, "a", env)).toBeNull();
+  });
+
+  it("returns null (fail open) when the NFKC bucket shard cannot be parsed", async () => {
+    const env = makeEnv({ [`pack/${IDEOGRAPH_BUCKET}.txt`]: "{not json" });
+    expect(await probeDictionaryEntry(RADICAL_YEN, "a", env)).toBeNull();
   });
 });
 

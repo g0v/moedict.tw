@@ -472,6 +472,9 @@ describe("resolveLegacyHashRoute (g0v/moedict-webkit#131)", () => {
   it('does nothing for an empty or bare hash — leaves navbar `href="#"` toggles untouched', () => {
     expect(resolveLegacyHashRoute("/", "")).toBeNull();
     expect(resolveLegacyHashRoute("/", "#")).toBeNull();
+    // A bare language/radical prefix carries no term to route to.
+    expect(resolveLegacyHashRoute("/", "#'")).toBeNull();
+    expect(resolveLegacyHashRoute("/", "#:")).toBeNull();
   });
 
   it("fails closed to null on malformed percent-encoding instead of throwing", () => {
@@ -521,6 +524,15 @@ describe("resolveLegacyHashRoute (g0v/moedict-webkit#131)", () => {
 describe("applyLegacyHashRewrite (boot-time shim before React Router mounts)", () => {
   afterEach(() => {
     window.history.replaceState(null, "", "/");
+  });
+
+  it("is a no-op without a DOM (module imported outside the browser)", () => {
+    vi.stubGlobal("window", undefined);
+    try {
+      expect(applyLegacyHashRewrite()).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("rewrites /#a=萌 to /萌 via replaceState and clears the hash", () => {
