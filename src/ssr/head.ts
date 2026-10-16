@@ -30,6 +30,8 @@ const DEFAULT_DESCRIPTION = [
 const ABOUT_DESCRIPTION =
   "萌典資料來源、授權與專案協作說明。包含教育部辭典資料、字體來源與平台版本資訊。";
 
+const PRIVACY_DESCRIPTION = "萌典不蒐集任何個人資料，也不會以任何方式使用您的資料。";
+
 const SITE_ORIGIN = "https://www.moedict.tw";
 const DEFAULT_IMAGE = `${SITE_ORIGIN}/assets/images/icon.png`;
 const DEFAULT_IMAGE_TYPE = "image/png";
@@ -175,6 +177,8 @@ export function resolveHeadByPath(pathname: string): PageHead {
       return getDefaultHead(normalizedPath);
     case "about":
       return createHead("關於本站 - 萌典", ABOUT_DESCRIPTION, normalizedPath);
+    case "privacy":
+      return createHead("隱私權政策 - 萌典", PRIVACY_DESCRIPTION, normalizedPath);
     case "radical":
       return getRadicalHead(route.radical, route.lang, normalizedPath);
     case "starred":

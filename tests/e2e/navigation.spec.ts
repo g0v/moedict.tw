@@ -30,9 +30,10 @@ test.describe("navigation flows", () => {
     );
   });
 
-  test("404-style unknown route still renders SPA shell", async ({ page }) => {
+  test("404-style unknown route answers 404 and still renders the SPA shell", async ({ page }) => {
     const response = await page.goto("/totallymade-up-path-1234");
-    expect(response?.status()).toBe(200);
+    // R4: definitive headword miss ⇒ 404 status, unchanged shell body.
+    expect(response?.status()).toBe(404);
     await expect(page).toHaveTitle(/萌典|萌/);
   });
 

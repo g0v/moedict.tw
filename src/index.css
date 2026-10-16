@@ -498,8 +498,15 @@ html .result {
   border-color: var(--moe-border, #d4d3d3);
   color: var(--moe-text, #333);
 }
+/* 詞條卡內的 `a`（自動連結的字詞、引文、又音…）在 legacy 是 `#000`——比
+   內文 `#333` 更黑，靠 hover（`background:#ddd`）而不是顏色來標示可點。深色
+   模式要維持同一個關係：吃 `--moe-text`（#e6e3df，與卡內其他文字同色），
+   不要用 `--moe-link`（#7fd0ff）——那讓詞條頁 135 處自動連結全變藍字，
+   在淺色模式是黑字的位置。`--moe-link` 仍保留給真正的外部連結（About 頁、
+   側欄搜尋結果 hover），那裡的藍色是刻意的、且有 about-contrast.spec.ts
+   與 dark-mode.spec.ts 各自把關。 */
 html .result a {
-  color: var(--moe-link, #000);
+  color: var(--moe-text, #000);
 }
 /* audit-dark-contrast J：legacy `.result a:hover, .result a:focus` /
    `.result h1 a:hover` （data/assets/styles.css）把 hover/focus 態文字設為
@@ -825,7 +832,8 @@ html[data-theme="dark"] .result .entry-actions .iconic-color.star:hover {
 }
 
 .result .entry-actions {
-  position: static;
+  /* Anchor for the out-of-flow .entry-copy-status pill below. */
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -878,36 +886,55 @@ html[data-theme="dark"] .result .entry-actions .iconic-color.star:hover {
   transform: scale(0.94);
   transition: transform 100ms ease-out;
 }
+/* Copy feedback ("已複製" / "複製失敗，請手動選取文字").
+
+   OUT OF FLOW BY DESIGN: an absolutely positioned pill under the icon row.
+   It replaces the previous inline `min-width: 8rem` reservation, which was
+   the only reason the mobile icon row could never share a line with the
+   radical box -- 8rem of permanently reserved width plus three 44px targets
+   never fits beside a title at phone widths.
+
+   Being out of flow satisfies the same two contracts the reservation did,
+   more directly:
+     1. Toggling between the nbsp placeholder and either message cannot move
+        the icons (dictionary.spec.ts "copy button activates with Space and
+        keeps status geometry stable") -- an out-of-flow box contributes
+        nothing to its container's size.
+     2. It never grows .entry-control-stack's height, so it cannot push
+        h1.title's line box down (the RESCOPE Android ruby regression that
+        ruled out `flex-basis: 100%`).
+   The node stays mounted and keeps its text at all times -- aria-live
+   regions must exist before their content changes to be announced -- so
+   idle state is hidden with opacity, never `display: none`.
+   `right: 0` keeps it inside `.result` (which legacy styles.css clips with
+   `overflow-x: hidden`), so it can never cause horizontal overflow. */
 .entry-copy-status {
+  position: absolute;
+  top: calc(100% + 0.2rem);
+  right: 0;
+  z-index: 3;
   display: inline-flex;
   align-items: center;
-  /* Fix for the entry-heading right-alignment regression: this reserved
-     box must sit BEFORE the visible icons in DOM order (see
-     DictionaryPage.tsx), not after. .entry-actions is `justify-content:
-     flex-end`; when this element was the LAST flex child, its own
-     reserved width occupied the rightmost slot, pushing the visible
-     copy/book/star icons ~8rem+gap left of the radical-box row above
-     them. With the reservation first, the icon group is what ends up
-     flush against the right edge.
-     justify-content: flex-end (not text-align, which flex containers
-     ignore) keeps the status text hugging the icons on its right edge
-     when a message replaces the nbsp placeholder, instead of drifting to
-     this box's own left edge.
-     Still reserves a fixed box (wide enough for the longest status
-     string, "複製失敗，請手動選取文字") so toggling between the nbsp
-     placeholder and either status message never changes this element's
-     own width -- that's what keeps the icon group's geometry stable
-     (dictionary.spec.ts "copy button activates with Space and keeps
-     status geometry stable"). Do NOT force a full-row wrap (no
-     flex-basis: 100%) -- that grew .entry-control-stack's height by a
-     fixed amount on every viewport, including narrow ones where it
-     pushed h1.title's line box down (RESCOPE Android ruby layout
-     regression). */
   justify-content: flex-end;
-  min-width: 8rem;
-  min-height: 1.5rem;
+  max-width: min(80vw, 24rem);
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--moe-border, #d4d3d3);
+  border-radius: 4px;
+  /* --moe-surface-alt (the established raised-surface token, also used by
+     the star hover state and tooltips): --moe-surface equals the entry
+     card's own background in dark mode, which made the pill invisible. */
+  background: var(--moe-surface-alt, #f4f4f4);
+  color: var(--moe-text, #333);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 18%);
   white-space: nowrap;
   font-size: 0.78rem;
+  pointer-events: none;
+}
+.entry-copy-status[data-state="idle"] {
+  opacity: 0;
+  box-shadow: none;
+  border-color: transparent;
+  background: transparent;
 }
 @media (max-width: 767px) {
   .entry-actions .entry-copy-button,

@@ -33,6 +33,8 @@ export function MiddlePoint() {
       return <Navigate to="/" replace />;
     case "about":
       return <Navigate to="/about" replace />;
+    case "privacy":
+      return <Navigate to="/privacy" replace />;
     case "radical":
       return <RadicalDetailView lang={target.lang} radical={target.radical} />;
     case "starred":

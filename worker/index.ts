@@ -1,5 +1,8 @@
-import { handleDictionaryAPI } from "../src/api/handleDictionaryAPI";
-import { lookupDictionaryEntry } from "../src/api/handleDictionaryAPI";
+import {
+  handleDictionaryAPI,
+  lookupDictionaryEntry,
+  probeDictionaryEntry,
+} from "../src/api/handleDictionaryAPI";
 import { handleListAPI, isListPath } from "../src/api/handleListAPI";
 import { handleLookupAPI } from "../src/api/handleLookupAPI";
 import { handleStrokeAPI, peekStrokeCorpusDigest } from "../src/api/handleStrokeAPI";
@@ -13,6 +16,7 @@ import type { CachePurger } from "../src/api/cache";
 import { fetchDictionaryObjectText, resolveDictionaryPointerState } from "../src/api/r2-json-cache";
 import {
   buildDefinitionDescription,
+  classifyRoute,
   parseDictionaryRoute,
   type DictionaryEntryLike,
 } from "../src/utils/dictionary-route";
@@ -192,6 +196,26 @@ export function shouldRenderHtmlShell(request: Request, url: URL): boolean {
     return false;
   console.log("🔍 [Index] 需要渲染 HTML 殼:", pathname);
   return true;
+}
+
+/**
+ * R4 status correctness: a bare word path that resolves to no dictionary
+ * headword must not soft-200 like a real entry route — crawlers and CDNs
+ * would treat the fabricated shell as content, and the legacy site
+ * hard-404'd such paths. Keep serving the SPA shell BODY (so any client-side
+ * fallback still hydrates on hard reload); correct only the status.
+ */
+function notFoundShellResponse(request: Request, shellResponse: Response): Response {
+  if (shellResponse.status !== 200) {
+    // Shell unavailable (recovery 503 etc.) — plain status-correct 404.
+    return new Response(null, { status: 404, headers: { "Cache-Control": "no-store" } });
+  }
+  const headers = new Headers(shellResponse.headers);
+  headers.set("Cache-Control", "no-store");
+  return new Response(request.method === "HEAD" ? null : shellResponse.body, {
+    status: 404,
+    headers,
+  });
 }
 
 function getAssetsBucket(env: Env): R2Bucket | null {
@@ -585,7 +609,25 @@ async function dispatchCore(request: Request, env: Env, ctx?: ExecutionContext):
   }
 
   if (shouldRenderHtmlShell(request, url)) {
-    return await renderHtmlShellWithFallback(request, env, url.pathname, injectHeadMetadata);
+    const shellResponse = await renderHtmlShellWithFallback(
+      request,
+      env,
+      url.pathname,
+      injectHeadMetadata,
+    );
+    // R4: entry-shaped bare word paths that resolve to no headword get a
+    // real 404 (shell body preserved). Non-entry kinds (/, /about, /@部首,
+    // /=分類, /'*清單, invalid encoding) and data-layer failures (probe
+    // null) fail open to the current behavior.
+    const route = classifyRoute(url.pathname);
+    if (
+      route.kind === "entry" &&
+      route.text &&
+      (await probeDictionaryEntry(route.text, route.lang, env)) === false
+    ) {
+      return notFoundShellResponse(request, shellResponse);
+    }
+    return shellResponse;
   }
 
   const staticResponse = await serveAssetWithFallback(request, env);

@@ -216,7 +216,14 @@ test.describe("console load errors — EduKai 404 and BiauKai decode", () => {
     });
 
     await page.goto("/%E8%90%8C");
-    await waitForAppReady(page);
+    // "shell" readiness returns before the entry renders and before
+    // AssetLoader injects the legacy stylesheet (after /api/config), so both
+    // assertions below raced the page. Wait on those two contracts directly.
+    await waitForAppReady(page, "dictionary");
+    await page.waitForFunction(
+      () =>
+        document.querySelector<HTMLLinkElement>('link[data-asset-id="styles-css"]')?.sheet != null,
+    );
     await page.evaluate(() => document.fonts.ready);
 
     // Sanity: the intercepted legacy styles.css must have actually loaded —

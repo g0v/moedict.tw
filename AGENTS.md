@@ -94,19 +94,37 @@ vp run test:coverage          # 三層 coverage 合併至 coverage/combined/
 `cloudflare()`；預設掛的是 `localDataAssetsPlugin()`，**dev server 裡沒有
 Worker**（`worker/index.ts` 完全不執行）。
 
-- **預設 `vp run dev`（無需 Cloudflare 憑證）**：`/api/*` 與 `/assets/*` 由
-  `server.proxy` 轉發到 `VITE_DEV_API_ORIGIN`（預設 `https://www.moedict.tw`，
-  與既有的 `/lookup/trs` dev proxy 同一條慣例）。`public/` 底下真的存在的檔案
-  （如 `/assets/images/icon.png`）由 `bypass` 攔下走本機，不會被 proxy 蓋掉。
-  **沒有這層 proxy 時，這些路徑會落到 Vite 的 SPA fallback 回 `index.html`**，
+- **預設 `vp run dev`（無需 Cloudflare 憑證）**：`/api/*` 與 `/assets/*` 走
+  **兩層**，順序是 load-bearing——`localDataAssetsPlugin()` 的 middleware 註冊在
+  `configureServer` 裡，Vite 在裝 `proxyMiddleware` **之前**就先呼叫這個 hook
+  （`node_modules/vite/dist/vite/node/chunks/node.js` 裡
+  `getSortedPluginHooks("configureServer")` 的迴圈在
+  `middlewares.use(proxyMiddleware(...))` 之前），所以本機這層永遠先攔：
+  1. **本機 `data/dictionary`（`serveLocalDictionaryApi`）**：詞條
+     `/api/<詞>.json`、`@部首`／`=分類`／`raw|uni|pua`、list 路由，以及
+     `/api/index/{a,t,h,c}.json`、`/api/search-index/*`、`/api/xref*`，
+     透過檔案系統版的 `DICTIONARY` 綁定重用**正式的** `handleDictionaryAPI`／
+     `handleListAPI`，回應 shape 與正式站一致（`Cache-Control: no-store`）。
+     找不到對應資料檔就 `next()`，不假造內容。
+  2. **`server.proxy` 轉發到 `VITE_DEV_API_ORIGIN`**（預設
+     `https://www.moedict.tw`，與既有的 `/lookup/trs` dev proxy 同一條慣例）：
+     承接第 1 層不處理的路徑——`/api/config`、`/api/cns/*`、`/api/oembed`、
+     `/assets/styles.css` 等舊版資產。`public/` 底下真的存在的檔案
+     （如 `/assets/images/icon.png`）由 `bypass` 攔下走本機，不會被 proxy 蓋掉。
+
+  **兩層都沒有時，這些路徑會落到 Vite 的 SPA fallback 回 `index.html`**，
   瀏覽器就會出現 `取得 ASSET_BASE_URL 失敗: SyntaxError: JSON.parse ...`
   與 `MIME 型態「text/html」不是「text/css」`——那是「沒有 Worker」的症狀，
   不是 AssetLoader 的 bug。
-  ⚠️ 字典內容來自**正式站**，不是本機 `data/dictionary`；改資料要驗證請用
-  `dev:remote`（讀 R2）或 `vp run build && bun run serve:e2e`（Miniflare +
+  ⚠️ 改 `data/dictionary` 後詞條 API 會**直接反映本機資料**（不必上傳 R2）；
+  但 dev server 裡**仍然沒有 Worker**（`worker/index.ts` 完全不執行），
+  HTML shell、404 fallback、邊緣快取標頭、`/api/config` 等 Worker 層行為
+  一律測不到——要驗證那些請用 `dev:remote`（讀 R2）或
+  `vp run build && bun run serve:e2e`（Miniflare +
   `tests/helpers/fixtures.ts` 播種的本機資料）。
   ⚠️ 用 5173／3000／8787 以外的埠時，`r2-assets.moedict.tw` 的字型會被 CORS
   擋（allowlist 見 `commands/r2-assets-cors.json`），CSS 仍會套用。
+
 - **`bun run dev:remote`**：掛 `cloudflare()`，跑真 Worker（Miniflare）+
   `wrangler.jsonc` 裡 `remote: true` 的 R2 綁定 → **需要 wrangler 登入**
   （`~/Library/Preferences/.wrangler/config/default.toml`），否則以
@@ -156,8 +174,20 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
 - **release ID／R2 fallback**：`release-publish.mjs` 把 `dist/client/**` 上傳到
   `releases/<release-id>/`，hashed `assets/**` 另複製一份到全域
   `immutable/assets/`。Worker 的 HTML shell 走
-  `SITE_ASSETS → R2 releases/<tag>/index.html → 503 no-store`（絕不回 404）；
+  `SITE_ASSETS → R2 releases/<tag>/index.html → 503 no-store`（**資產取不到
+  本身絕不回 404**——404 只代表「查無此詞」，見下）；
   資產走 `SITE_ASSETS → R2 release → R2 immutable → 既有 legacy fallback`。
+- **未命中詞條的 HTTP 狀態（`notFoundShellResponse`，worker/index.ts）**：
+  `classifyRoute` 判為 `entry` 的裸詞路徑，若
+  `probeDictionaryEntry(...) === false`（明確查無此詞）就回 **404**，
+  body 仍是 SPA shell、`Cache-Control: no-store`（舊站也是硬 404，soft-200
+  會讓爬蟲／CDN 把捏造的 shell 當內容）。只有 `false` 會改狀態：`true`
+  （命中，含 NFKC 相容 fallback）維持 200，`null`（shard 讀取／解析失敗，
+  資料層答不出來）刻意 fail open 也維持 200；非 entry 路徑
+  （`/`、`/about`、`/privacy`、`@部首`、`=分類`、`'*清單`、壞編碼）根本不進這條判斷。
+  唯一「shell 取不到又確定查無此詞」的組合會回**無 body 的 404**
+  （`Cache-Control: no-store`），而不是 recovery 503。deploy／rollback smoke
+  打的 `/`、`/api/config`、`/api/<詞>.json` 都不是 entry shell 路徑，不受影響。
 - **staging → production gate（自動）**：staging 的 `deploy:staging` 在 final
   smoke 通過「當下」自動寫入共用的 staging-approval 狀態
   （git SHA + client manifest digest）；不存在也不需要任何手動
@@ -645,6 +675,13 @@ moedict-data（MOE 原始 dump）→ moedict-process（pack 產生器）
   client 路由的 `resolveMiddlePointTarget`（`src/utils/middle-point-target.ts`，
   MiddlePoint 的純對應層）都是它的消費者。**新的 parser 一律消費這兩個
   函式，禁止自建 if-chain。**
+- **`App.tsx` 的靜態頁面路由必須在 `classifyRoute` 有自己的 kind**
+  （目前 `about`／`about.html`／`privacy`）：漏掉就會被歸成 `entry`，
+  R4 的 shell 狀態規則會拿它去查詞、查無此詞後讓一個活著的頁面回 404
+  （`/privacy` 曾因此中招，見 `tests/unit/worker-dispatch-edges.test.ts`
+  的 "keeps /privacy at 200" 迴歸測試）。新增靜態頁面時同步加 kind、
+  `resolveHeadByPath` 的 head、`resolveMiddlePointTarget` 的目標與
+  `MiddlePoint` 的 `<Navigate>`——這四處都有 TS exhaustive switch 把關。
 - **request 路徑的 percent-decode 一律用 `tryDecodeURIComponent`**
   （`dictionary-route.ts`，回 null 不丟例外）——裸呼 `decodeURIComponent`
   遇到 `/api/%` 這類壞編碼會把 URIError 冒成 500（曾在 prod 實測到）。
