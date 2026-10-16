@@ -937,13 +937,9 @@ html[data-theme="dark"] .result .entry-actions .iconic-color.star:hover {
   background: transparent;
 }
 @media (max-width: 767px) {
-  /* 44px touch targets for every control in the heading toolbar, including
-     the stroke-animation pencil (legacy sizes it 32x30 via
-     `.iconic-circle.stroke`) now that it reads as part of the same row. */
   .entry-actions .entry-copy-button,
   .entry-actions .variants-link,
-  .entry-actions .star,
-  .result .entry-control-stack .radical a.iconic-circle.stroke {
+  .entry-actions .star {
     min-width: 44px;
     min-height: 44px;
     display: inline-flex;
