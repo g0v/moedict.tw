@@ -20,7 +20,7 @@ export function classifyActionFailure(failure) {
   const unavailable = new Set([
     'a.iconic-circle.stroke[title="筆順動畫"]',
     ".entry-actions",
-    ".result a[href]",
+    ".result a[href]:not(.variants-link)",
     "#btn-toggle-all-langs",
     "#btn-toggle-import",
   ]);

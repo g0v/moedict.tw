@@ -430,6 +430,20 @@ describe("dispatch — HTML shell fetch returns non-OK", () => {
     expect(res.status).toBe(503);
     expect(res.headers.get("X-Moedict-Shell-Source")).toBe("recovery");
   });
+
+  it("returns a bodyless no-store 404 (not the 503 recovery) for an entry path that misses", async () => {
+    // R4 during a shell outage: the dictionary probe still answers "no such
+    // headword", so the status stays a definitive 404 rather than a recovery
+    // page for a word that does not exist.
+    const fetcher = {
+      fetch: vi.fn(async () => new Response("upstream error", { status: 500 })),
+    };
+    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv["SITE_ASSETS"] });
+    const res = await dispatch(req("/%E8%90%8C"), env);
+    expect(res.status).toBe(404);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(await res.text()).toBe("");
+  });
 });
 
 describe("dispatch — radical 青/靑 variant fallback with neither seeded", () => {
@@ -508,6 +522,19 @@ describe("dispatch — HTML shell metadata injection with dictionary lookup", ()
     expect(res.status).toBe(404);
     expect(res.headers.get("content-type")).toContain("text/html");
     expect(await res.text()).toContain("<html");
+  });
+
+  it("HEAD on a missed entry path returns the 404 headers without a body", async () => {
+    const fetcher = shellFetcher();
+    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv["SITE_ASSETS"] });
+    const res = await dispatch(
+      new Request("http://localhost/%27%E9%A3%9F", { method: "HEAD" }),
+      env,
+    );
+    expect(res.status).toBe(404);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(res.headers.get("content-type")).toContain("text/html");
+    expect(res.body).toBeNull();
   });
 
   // Regression (R4 fallout): `/privacy` and `/about` are real client routes,
