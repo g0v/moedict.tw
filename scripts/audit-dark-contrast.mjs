@@ -47,6 +47,14 @@ const OUTPUT_PATH = process.env.CONTRAST_AUDIT_OUTPUT || "/tmp/contrast-audit.js
 
 // AGENTS.md 語言代碼: a=# (/), t=#' (/'), h=#: (/:), c=#~ (/~)
 const ROUTES = ["/萌", "/生", "/'食", "/'長褲", "/:客", "/~東西", "/=*", "/@", "/@口", "/about"];
+// CI audits the seeded Miniflare fixture server, where entry paths that match
+// no headword hard-404 (R4): every CI route must be a seeded fixture word
+// (tests/helpers/fixtures.ts — 字 is the only Hakka headword, 黃 the second
+// Mandarin one), one per language prefix the full list covers.
+const CI_FIXTURE_ROUTES = ["/萌", "/黃", "/'食", "/'長褲", "/:字"];
+// First in-dictionary link: the 異體字 icon (.variants-link) is an external link
+// with no tooltip, and on Hakka entries (no radical box) it comes first.
+const HOVER_LINK_SELECTOR = ".result a[href]:not(.variants-link)";
 
 const VIEWPORTS = [
   { name: "desktop", width: 1280, height: 800 },
@@ -55,7 +63,7 @@ const VIEWPORTS = [
 
 const THEMES = ["light", "dark"];
 const CI_MODE = process.argv.includes("--ci") || process.env.CI === "true";
-const AUDIT_ROUTES = CI_MODE ? ROUTES.slice(0, 5) : ROUTES;
+const AUDIT_ROUTES = CI_MODE ? CI_FIXTURE_ROUTES : ROUTES;
 const AUDIT_VIEWPORTS = CI_MODE ? [VIEWPORTS[0], VIEWPORTS[1]] : VIEWPORTS;
 
 // WCAG 2.x contrast thresholds. "Large text" = >=24px, or >=18.66px (14pt)
@@ -756,7 +764,7 @@ async function auditCombo(
     }),
   );
 
-  // 5. Hover first .result a[href] and wait for .ui-tooltip.
+  // 5. Hover the first in-dictionary result link and wait for .ui-tooltip.
   await withIsolatedState(
     browser,
     viewport,
@@ -767,7 +775,7 @@ async function auditCombo(
     actionFailures,
     collectOpts,
     async (page) => {
-      const link = page.locator(".result a[href]").first();
+      const link = page.locator(HOVER_LINK_SELECTOR).first();
       if ((await link.count()) === 0) {
         actionFailures.push({
           route,
@@ -775,7 +783,7 @@ async function auditCombo(
           theme,
           state: STATE_HOVER_TOOLTIP,
           kind: "element-missing",
-          selector: ".result a[href]",
+          selector: HOVER_LINK_SELECTOR,
         });
         return false;
       }
