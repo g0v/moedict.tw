@@ -798,7 +798,12 @@ test.describe("sidebar autocomplete dropdown contrast (InlineStyles.tsx .ui-auto
     // "沒有符合結果" .is-status row instead of a real suggestion.
     await input.fill("ㄅㄆㄇㄈ無此詞彙測試字串");
 
-    const status = page.locator("#sidebar-search-results .ui-menu-item.is-status").first();
+    // searchbox.tsx renders "搜尋中…" and "沒有符合結果" as two different <li>
+    // elements; measuring the first is-status row raced the swap and read a
+    // detached node (computed color ""). Wait for the settled row itself.
+    const status = page
+      .locator("#sidebar-search-results .ui-menu-item.is-status", { hasText: "沒有符合結果" })
+      .first();
     await expect(status).toBeVisible({ timeout: 10_000 });
     const { fg, bg } = await locatorContrast(status);
     // Exact expected value: --moe-text-secondary (#aaa), replacing the
