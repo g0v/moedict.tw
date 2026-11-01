@@ -81,6 +81,10 @@ async function blockCssSubresources(page: Page): Promise<void> {
 
 async function settle(page: Page, readiness?: ReadinessKind): Promise<void> {
   await waitForAppReady(page, readiness);
+  await page.waitForFunction(() => {
+    const link = document.querySelector<HTMLLinkElement>('link[data-asset-id="styles-css"]');
+    return link?.dataset.loaded === "true" && Boolean(link.sheet);
+  });
   await page.evaluate(() => document.fonts.ready);
   // Let any pending layout/RAF callbacks flush so back-to-back screenshots
   // of identical content are byte-identical.

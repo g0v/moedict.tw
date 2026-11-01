@@ -76,11 +76,12 @@ function parseSearchTerm(term: string): { lang: Lang; cleanTerm: string } {
  * 格式化字詞為完整路由路徑（包含語言前綴）
  */
 function formatSearchTerm(term: string, lang: Lang): string {
-  if (!term || !term.trim()) {
+  const cleanTerm = term.trim();
+  if (!cleanTerm || /^[\\/\\\\]/.test(cleanTerm)) {
     return "/";
   }
-  const prefix = lang === "a" ? "" : lang === "t" ? "/'" : lang === "h" ? "/:" : "/~";
-  return `${prefix}${term.trim()}`;
+  const prefix = lang === "a" ? "" : lang === "t" ? "'" : lang === "h" ? ":" : "~";
+  return `/${prefix}${cleanTerm}`;
 }
 
 /**
@@ -238,7 +239,7 @@ function resolveSearchInput(
   const { lang: parsedLang, cleanTerm } = parseSearchTerm(trimmed);
   const hasLangPrefix = cleanTerm !== trimmed;
   const term = cleanTerm.trim();
-  if (!term) return null;
+  if (!term || /^[\\/\\\\]/.test(term)) return null;
 
   return {
     lang: hasLangPrefix ? parsedLang : fallbackLang,

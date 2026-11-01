@@ -1670,6 +1670,11 @@ html[data-theme="dark"] .result .example hruby ru zhuyin {
   color: var(--moe-zhuyin-secondary, #666);
 }
 
+.ui-tooltip .tooltip-scroll {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
 /* 部首/交叉參照 hover tooltip（useRadicalTooltip.ts）— 深色模式。
    legacy `body .ui-tooltip { background: #fffcfc !important }`
    （data/assets/styles.css）在深色模式下維持亮白背景不變；InlineStyles.tsx

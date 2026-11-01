@@ -853,7 +853,7 @@ describe("dispatch — /api/lookup/pinyin/* (lookupResponse return, line 232)", 
     // Empty DICTIONARY means lookupResponse returns []; still non-null,
     // which satisfies the `if (lookupResponse)` guard and causes dispatch
     // to short-circuit at line 232 before the rest of the router runs.
-    const res = await dispatch(req("/api/lookup/pinyin/a/TL/abc.json"), makeEnv());
+    const res = await dispatch(req("/api/lookup/pinyin/a/HanYu/abc.json"), makeEnv());
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual([]);
   });

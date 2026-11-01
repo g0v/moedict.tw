@@ -268,6 +268,35 @@ describe("handleLookupAPI", () => {
     expect(await res!.json()).toEqual(["食", "蝕"]);
   });
 
+  it("rejects unsupported lookup types before reading R2", async () => {
+    const get = vi.fn(async () => null);
+    const env = { DICTIONARY: { get } };
+    const { request, url } = makeRequest("/api/lookup/pinyin/h/unknown/voi.json");
+    const res = await handleLookupAPI(request, url, env);
+    expect(res?.status).toBe(404);
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it("rejects non-read methods before reading R2", async () => {
+    const get = vi.fn(async () => null);
+    const env = { DICTIONARY: { get } };
+    const { request, url } = makeRequest("/api/lookup/pinyin/h/TH/voi.json", { method: "POST" });
+    const res = await handleLookupAPI(request, url, env);
+    expect(res?.status).toBe(405);
+    expect(res?.headers.get("allow")).toBe("GET, HEAD");
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it("serves HEAD without a body", async () => {
+    const env = { DICTIONARY: makeR2({ "lookup/pinyin/a/HanYu/meng.json": '["萌"]' }) };
+    const { request, url } = makeRequest("/api/lookup/pinyin/a/HanYu/meng.json", {
+      method: "HEAD",
+    });
+    const res = await handleLookupAPI(request, url, env);
+    expect(res?.status).toBe(200);
+    expect(await res?.text()).toBe("");
+  });
+
   it("unions Taiwanese whole-word and syllable matches without duplicates", async () => {
     const env = {
       DICTIONARY: makeR2({
@@ -298,6 +327,7 @@ describe("handleLookupAPI", () => {
       }),
     };
     const request = {
+      method: "GET",
       headers: {
         get(name: string) {
           return name === "Origin" ? "https://moedict.tw" : null;
@@ -342,10 +372,10 @@ describe("handleLookupAPI", () => {
     expect(await res!.json()).toEqual([]);
   });
 
-  it("returns null when a pinyin term normalises to empty", async () => {
+  it("returns 404 when a pinyin term normalises to empty", async () => {
     const env = { DICTIONARY: makeR2({}) };
     const { request, url } = makeRequest("/api/lookup/pinyin/t/TL/1234.json");
-    expect(await handleLookupAPI(request, url, env)).toBeNull();
+    expect((await handleLookupAPI(request, url, env))?.status).toBe(404);
   });
 
   it("serves /api/lookup/trs/<term> as pipe-joined text", async () => {
@@ -361,6 +391,15 @@ describe("handleLookupAPI", () => {
     expect(await res!.text()).toBe("食|蝕");
   });
 
+  it("serves a TRS HEAD request with its headers and no body", async () => {
+    const env = { DICTIONARY: makeR2({ "lookup/pinyin/t/TL/tsiah.json": '["食"]' }) };
+    const { request, url } = makeRequest("/api/lookup/trs/tsiah", { method: "HEAD" });
+    const res = await handleLookupAPI(request, url, env);
+    expect(res?.status).toBe(200);
+    expect(res?.headers.get("content-type")).toMatch(/text\/plain/);
+    expect(await res?.text()).toBe("");
+  });
+
   it("also serves the legacy /lookup/trs/<term> (no /api prefix)", async () => {
     const env = {
       DICTIONARY: makeR2({
@@ -373,10 +412,10 @@ describe("handleLookupAPI", () => {
     expect(await res!.text()).toBe("食");
   });
 
-  it("returns null when a legacy TRS term normalises to empty", async () => {
+  it("returns 404 when a legacy TRS term normalises to empty", async () => {
     const env = { DICTIONARY: makeR2({}) };
     const { request, url } = makeRequest("/lookup/trs/1234");
-    expect(await handleLookupAPI(request, url, env)).toBeNull();
+    expect((await handleLookupAPI(request, url, env))?.status).toBe(404);
   });
 
   it("falls back to the h-language title map when per-term JSON is missing", async () => {
@@ -393,7 +432,7 @@ describe("handleLookupAPI", () => {
 
   it("returns empty array when the h-language title map is missing", async () => {
     const env = { DICTIONARY: makeR2({}) };
-    const { request, url } = makeRequest("/api/lookup/pinyin/h/TM/voi.json");
+    const { request, url } = makeRequest("/api/lookup/pinyin/h/TH/voi.json");
     const res = await handleLookupAPI(request, url, env);
     expect(res!.status).toBe(200);
     expect(await res!.json()).toEqual([]);
@@ -402,10 +441,10 @@ describe("handleLookupAPI", () => {
   it("returns empty array when the h-language title map payload is not an object", async () => {
     const env = {
       DICTIONARY: makeR2({
-        "lookup/pinyin/h/TN.json": JSON.stringify([]),
+        "lookup/pinyin/h/TH.json": JSON.stringify([]),
       }),
     };
-    const { request, url } = makeRequest("/api/lookup/pinyin/h/TN/voi.json");
+    const { request, url } = makeRequest("/api/lookup/pinyin/h/TH/voi.json");
     const res = await handleLookupAPI(request, url, env);
     expect(res!.status).toBe(200);
     expect(await res!.json()).toEqual([]);
@@ -414,10 +453,10 @@ describe("handleLookupAPI", () => {
   it("returns empty array when the h-language title map JSON is malformed", async () => {
     const env = {
       DICTIONARY: makeR2({
-        "lookup/pinyin/h/TO.json": "not valid JSON",
+        "lookup/pinyin/h/TH.json": "not valid JSON",
       }),
     };
-    const { request, url } = makeRequest("/api/lookup/pinyin/h/TO/voi.json");
+    const { request, url } = makeRequest("/api/lookup/pinyin/h/TH/voi.json");
     const res = await handleLookupAPI(request, url, env);
     expect(res!.status).toBe(200);
     expect(await res!.json()).toEqual([]);
@@ -426,13 +465,13 @@ describe("handleLookupAPI", () => {
   it("skips non-array entries in the h-language title map", async () => {
     const env = {
       DICTIONARY: makeR2({
-        "lookup/pinyin/h/TP.json": JSON.stringify({
+        "lookup/pinyin/h/TH.json": JSON.stringify({
           voi: ["會"],
           ignore: "not-an-array",
         }),
       }),
     };
-    const { request, url } = makeRequest("/api/lookup/pinyin/h/TP/voi.json");
+    const { request, url } = makeRequest("/api/lookup/pinyin/h/TH/voi.json");
     const res = await handleLookupAPI(request, url, env);
     expect(res!.status).toBe(200);
     expect(await res!.json()).toEqual(["會"]);
@@ -465,7 +504,7 @@ describe("handleLookupAPI", () => {
       },
     };
     const lookup = () => {
-      const { request, url } = makeRequest("/api/lookup/pinyin/h/TQ/voi.json");
+      const { request, url } = makeRequest("/api/lookup/pinyin/h/TH/voi.json");
       return handleLookupAPI(request, url, env);
     };
     expect(await (await lookup())!.json()).toEqual(["舊"]);
@@ -473,6 +512,34 @@ describe("handleLookupAPI", () => {
     vi.advanceTimersByTime(300_001);
     expect(await (await lookup())!.json()).toEqual(["新"]);
     vi.useRealTimers();
+  });
+
+  it("retires an expired map when another supported type is read", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-07-11T00:00:00Z"));
+      const reads: string[] = [];
+      const env = {
+        DICTIONARY: {
+          async get(key: string) {
+            reads.push(key);
+            if (key.endsWith("/voi.json")) return null;
+            return { text: async () => JSON.stringify({ voi: [key] }) };
+          },
+        },
+      };
+      const lookup = async (type: "TH" | "PFS") => {
+        const { request, url } = makeRequest(`/api/lookup/pinyin/h/${type}/voi.json`);
+        return (await (await handleLookupAPI(request, url, env))!.json()) as string[];
+      };
+      expect(await lookup("TH")).toEqual(["lookup/pinyin/h/TH.json"]);
+      vi.advanceTimersByTime(300_001);
+      expect(await lookup("PFS")).toEqual(["lookup/pinyin/h/PFS.json"]);
+      expect(await lookup("TH")).toEqual(["lookup/pinyin/h/TH.json"]);
+      expect(reads.filter((key) => key === "lookup/pinyin/h/TH.json")).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("evicts a rejected title-map load so the next request can retry", async () => {
@@ -487,11 +554,11 @@ describe("handleLookupAPI", () => {
         },
       },
     };
-    const first = makeRequest("/api/lookup/pinyin/h/TR/voi.json");
+    const first = makeRequest("/api/lookup/pinyin/h/TH/voi.json");
     await expect(handleLookupAPI(first.request, first.url, env)).rejects.toThrow(
       "temporary R2 failure",
     );
-    const second = makeRequest("/api/lookup/pinyin/h/TR/voi.json");
+    const second = makeRequest("/api/lookup/pinyin/h/TH/voi.json");
     const response = await handleLookupAPI(second.request, second.url, env);
     expect(await response!.json()).toEqual(["會"]);
   });

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { formatBopomofo, formatPinyin } from "../utils/bopomofo-pinyin-utils";
 import { READING_TYPE_LABELS } from "../utils/reading-type-labels";
 import { SvgIcon } from "./SvgIcon";
+import { sanitizeDictionaryHtml } from "../utils/sanitize-dictionary-html";
 
 /**
  * 順序不變量（order invariant）
@@ -96,10 +97,16 @@ export function TitlePronunciation({
       {(bAlt || pAlt) && (
         <small className="alternative">
           {lang !== "h" && pAlt && (
-            <span className="pinyin" dangerouslySetInnerHTML={{ __html: formatPinyin(pAlt) }} />
+            <span
+              className="pinyin"
+              dangerouslySetInnerHTML={{ __html: sanitizeDictionaryHtml(formatPinyin(pAlt)) }}
+            />
           )}
           {bAlt && (
-            <span className="bopomofo" dangerouslySetInnerHTML={{ __html: formatBopomofo(bAlt) }} />
+            <span
+              className="bopomofo"
+              dangerouslySetInnerHTML={{ __html: sanitizeDictionaryHtml(formatBopomofo(bAlt)) }}
+            />
           )}
         </small>
       )}

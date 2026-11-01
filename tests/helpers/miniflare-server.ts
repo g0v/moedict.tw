@@ -110,13 +110,12 @@ export async function startTestServer(options: StartOptions = {}): Promise<TestS
   // chance to seed any R2 fixture data, so there is an inherent window
   // where a request can race ahead of seeding. Playwright's webServer
   // readiness probe (playwright.config.ts) polls `/api/<word>.json`, which
-  // only resolves once the DICTIONARY bucket is seeded -- so DICTIONARY is
-  // seeded LAST here, after ASSETS and FONTS, so that a 200 from the probe
-  // is a reliable proxy for "every fixture bucket is seeded", not just
-  // DICTIONARY. Do not reorder without updating the readiness probe target.
+  // checks a font in ASSETS. Seed DICTIONARY first, then ASSETS/FONTS, so the
+  // font probe cannot turn 200 before the dictionary is ready. Probing a
+  // dictionary path itself would memoize an early miss in the Worker.
   const fixtures = collectAllFixtures();
-  await Promise.all([seedBucket(mf, "ASSETS", fixtures), seedBucket(mf, "FONTS", fixtures)]);
   await seedBucket(mf, "DICTIONARY", fixtures);
+  await Promise.all([seedBucket(mf, "ASSETS", fixtures), seedBucket(mf, "FONTS", fixtures)]);
 
   const stop = async () => {
     await mf.dispose();

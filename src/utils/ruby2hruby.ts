@@ -101,8 +101,8 @@ export function ruby2hruby(html: string): string {
         const yinEl = doc.createElement("yin");
         const diaoEl = doc.createElement("diao");
 
-        yinEl.innerHTML = yin;
-        diaoEl.innerHTML = diao;
+        yinEl.textContent = yin;
+        diaoEl.textContent = diao;
         zhuyinEl.appendChild(yinEl);
         zhuyinEl.appendChild(diaoEl);
         ru.appendChild(rbClone);
@@ -187,7 +187,7 @@ export function ruby2hruby(html: string): string {
         sel.setAttribute("style", "text-indent: -9999px; color: transparent");
         sel.setAttribute("aria-hidden", "true");
 
-        ru.innerHTML = baseNodes.map((node) => node.outerHTML).join("");
+        ru.append(...baseNodes.map((node) => node.cloneNode(true)));
         ru.appendChild(sel);
         ru.setAttribute("span", String(span));
         ru.setAttribute("order", String(order));

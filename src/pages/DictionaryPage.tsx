@@ -35,6 +35,7 @@ import { SvgIcon } from "../components/SvgIcon";
 import { TitlePronunciation } from "../components/TitlePronunciation";
 import { dedupeHeteronyms } from "../utils/heteronym-dedup";
 import { sortHeteronymsBySubstitutionReading } from "../utils/heteronym-order";
+import { sanitizeDictionaryHtml } from "../utils/sanitize-dictionary-html";
 
 export type DictionaryLang = "a" | "t" | "h" | "c";
 
@@ -192,24 +193,7 @@ function untag(input: string): string {
  *  點擊由 .result 的 onClick 統一攔截導頁；其餘標籤一律剝掉、只留文字內容，
  *  保留的錨點也只留 href 屬性。 */
 function sanitizeLookupHtml(input: string): string {
-  if (typeof DOMParser === "undefined") return untag(input);
-  try {
-    const doc = new DOMParser().parseFromString(`<div id="wrap">${input}</div>`, "text/html");
-    const wrap = doc.getElementById("wrap");
-    if (!wrap) return untag(input);
-    for (const el of Array.from(wrap.querySelectorAll("*"))) {
-      if (el instanceof HTMLAnchorElement && (el.getAttribute("href") || "").startsWith("./#")) {
-        for (const attr of Array.from(el.attributes)) {
-          if (attr.name !== "href") el.removeAttribute(attr.name);
-        }
-      } else {
-        el.replaceWith(...Array.from(el.childNodes));
-      }
-    }
-    return wrap.innerHTML;
-  } catch {
-    return untag(input);
-  }
+  return sanitizeDictionaryHtml(input, true);
 }
 
 function escapeHtml(input: string): string {
@@ -1231,11 +1215,23 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                     }
                   >
                     {(() => {
-                      if (lang === "h") return <span dangerouslySetInnerHTML={{ __html: title }} />;
+                      if (lang === "h")
+                        return (
+                          <span
+                            dangerouslySetInnerHTML={{ __html: sanitizeDictionaryHtml(title) }}
+                          />
+                        );
                       const htmlRuby = rubyData.ruby || "";
-                      if (!htmlRuby) return <span dangerouslySetInnerHTML={{ __html: title }} />;
+                      if (!htmlRuby)
+                        return (
+                          <span
+                            dangerouslySetInnerHTML={{ __html: sanitizeDictionaryHtml(title) }}
+                          />
+                        );
                       const hruby = rightAngle(htmlRuby);
-                      return <span dangerouslySetInnerHTML={{ __html: hruby }} />;
+                      return (
+                        <span dangerouslySetInnerHTML={{ __html: sanitizeDictionaryHtml(hruby) }} />
+                      );
                     })()}
                   </span>
                 </TitlePronunciation>
@@ -1308,7 +1304,11 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                               {item.dialect}
                             </span>
                           </span>
-                          <span dangerouslySetInnerHTML={{ __html: item.readingHtml }} />
+                          <span
+                            dangerouslySetInnerHTML={{
+                              __html: sanitizeDictionaryHtml(item.readingHtml),
+                            }}
+                          />
                         </span>
                       );
                     })}
@@ -1356,7 +1356,12 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                         >
                           {mainDef ? (
                             <p className="definition">
-                              <span className="def" dangerouslySetInnerHTML={{ __html: mainDef }} />
+                              <span
+                                className="def"
+                                dangerouslySetInnerHTML={{
+                                  __html: sanitizeDictionaryHtml(mainDef),
+                                }}
+                              />
                             </p>
                           ) : null}
                           {toStringArray(def.example).map((text, exampleIdx) =>
@@ -1369,7 +1374,9 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                                   <div
                                     key={`example-${exampleIdx}`}
                                     className="example"
-                                    dangerouslySetInnerHTML={{ __html: html }}
+                                    dangerouslySetInnerHTML={{
+                                      __html: sanitizeDictionaryHtml(html),
+                                    }}
                                   />
                                 );
                               }
@@ -1377,13 +1384,15 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                                 <div key={`example-${exampleIdx}`} className="example">
                                   <span
                                     className="h1"
-                                    dangerouslySetInnerHTML={{ __html: parsedRubyLine.headingHtml }}
+                                    dangerouslySetInnerHTML={{
+                                      __html: sanitizeDictionaryHtml(parsedRubyLine.headingHtml),
+                                    }}
                                   />
                                   {parsedRubyLine.mandarinHtml && (
                                     <span
                                       className="mandarin"
                                       dangerouslySetInnerHTML={{
-                                        __html: parsedRubyLine.mandarinHtml,
+                                        __html: sanitizeDictionaryHtml(parsedRubyLine.mandarinHtml),
                                       }}
                                     />
                                   )}
@@ -1399,7 +1408,7 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                                 <div
                                   key={`quote-${quoteIdx}`}
                                   className="quote"
-                                  dangerouslySetInnerHTML={{ __html: text }}
+                                  dangerouslySetInnerHTML={{ __html: sanitizeDictionaryHtml(text) }}
                                 />
                               );
                             }
@@ -1407,13 +1416,15 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                               <div key={`quote-${quoteIdx}`} className="quote">
                                 <span
                                   className="h1"
-                                  dangerouslySetInnerHTML={{ __html: parsedRubyLine.headingHtml }}
+                                  dangerouslySetInnerHTML={{
+                                    __html: sanitizeDictionaryHtml(parsedRubyLine.headingHtml),
+                                  }}
                                 />
                                 {parsedRubyLine.mandarinHtml && (
                                   <span
                                     className="mandarin"
                                     dangerouslySetInnerHTML={{
-                                      __html: parsedRubyLine.mandarinHtml,
+                                      __html: sanitizeDictionaryHtml(parsedRubyLine.mandarinHtml),
                                     }}
                                   />
                                 )}
@@ -1428,7 +1439,7 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                                 <div
                                   key={`link-${linkIdx}`}
                                   className="link"
-                                  dangerouslySetInnerHTML={{ __html: text }}
+                                  dangerouslySetInnerHTML={{ __html: sanitizeDictionaryHtml(text) }}
                                 />
                               );
                             }
@@ -1436,13 +1447,15 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                               <div key={`link-${linkIdx}`} className="link">
                                 <span
                                   className="h1"
-                                  dangerouslySetInnerHTML={{ __html: parsedRubyLine.headingHtml }}
+                                  dangerouslySetInnerHTML={{
+                                    __html: sanitizeDictionaryHtml(parsedRubyLine.headingHtml),
+                                  }}
                                 />
                                 {parsedRubyLine.mandarinHtml && (
                                   <span
                                     className="mandarin"
                                     dangerouslySetInnerHTML={{
-                                      __html: parsedRubyLine.mandarinHtml,
+                                      __html: sanitizeDictionaryHtml(parsedRubyLine.mandarinHtml),
                                     }}
                                   />
                                 )}
@@ -1476,7 +1489,9 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                           {afterParallel && (
                             <div
                               style={{ margin: "0 0 22px -44px" }}
-                              dangerouslySetInnerHTML={{ __html: afterParallel }}
+                              dangerouslySetInnerHTML={{
+                                __html: sanitizeDictionaryHtml(afterParallel),
+                              }}
                             />
                           )}
                         </li>
@@ -1498,7 +1513,7 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
                   {dialectSynonyms.map((item, synIdx) => (
                     <span key={`t-synonym-${synIdx}`}>
                       {synIdx > 0 ? "、" : ""}
-                      <span dangerouslySetInnerHTML={{ __html: item }} />
+                      <span dangerouslySetInnerHTML={{ __html: sanitizeLookupHtml(item) }} />
                     </span>
                   ))}
                 </span>
