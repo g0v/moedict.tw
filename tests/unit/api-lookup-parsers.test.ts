@@ -46,8 +46,13 @@ describe("parsePinyinLookupPath", () => {
   });
 
   it("decodes percent-encoded type", () => {
-    const res = parsePinyinLookupPath("/api/lookup/pinyin/t/TL-DT/tsiah.json");
-    expect(res?.type).toBe("TL-DT");
+    const res = parsePinyinLookupPath("/api/lookup/pinyin/t/T%4C/tsiah.json");
+    expect(res?.type).toBe("TL");
+  });
+
+  it("rejects types that have no generated index for the language", () => {
+    expect(parsePinyinLookupPath("/api/lookup/pinyin/h/unknown/voi.json")).toBeNull();
+    expect(parsePinyinLookupPath("/api/lookup/pinyin/a/TL/meng.json")).toBeNull();
   });
 
   it("rejects unknown lang", () => {

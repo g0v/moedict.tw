@@ -10,6 +10,7 @@ import {
 } from "../utils/radical-page-utils";
 import { rightAngle } from "../utils/ruby2hruby";
 import { decorateRuby, formatBopomofo, formatPinyin } from "../utils/bopomofo-pinyin-utils";
+import { sanitizeDictionaryHtml } from "../utils/sanitize-dictionary-html";
 
 const ATTR = "data-radical-id";
 const RESULT_LINK_SELECTOR = ".result a[href]:not(.xref)";
@@ -95,7 +96,7 @@ async function buildRadicalTooltipHTML(rawId: string): Promise<string> {
     const data = normalizeRows(await fetchJsonByToken<unknown>(id));
     if (data.length === 0) return EMPTY_HTML;
 
-    let html = `${buildTitleSection("部首表", bucketPrefix)}<div class="entry"><div class="entry-item"><div style="max-height: 300px; overflow-y: auto;">`;
+    let html = `${buildTitleSection("部首表", bucketPrefix)}<div class="entry"><div class="entry-item"><div class="tooltip-scroll">`;
     for (let stroke = 0; stroke < data.length; stroke += 1) {
       const radicals = data[stroke] || [];
       if (radicals.length === 0) continue;
@@ -119,7 +120,7 @@ async function buildRadicalTooltipHTML(rawId: string): Promise<string> {
 
   const entryPrefix = `/${langPrefix}`;
   const bucketHref = `${bucketPrefix}${encodeURIComponent(radical)}`;
-  let html = `${buildTitleSection(`${radical} 部`, bucketHref)}<div class="entry"><div class="entry-item"><div style="max-height: 300px; overflow-y: auto;">`;
+  let html = `${buildTitleSection(`${radical} 部`, bucketHref)}<div class="entry"><div class="entry-item"><div class="tooltip-scroll">`;
   for (let stroke = 0; stroke < Math.min(data.length, 8); stroke += 1) {
     const chars = data[stroke] || [];
     if (chars.length === 0) continue;
@@ -449,7 +450,7 @@ export function useRadicalTooltip(): void {
       }
 
       if (!tooltipEl || currentId !== id) return;
-      tooltipEl.innerHTML = html || EMPTY_HTML;
+      tooltipEl.innerHTML = sanitizeDictionaryHtml(html || EMPTY_HTML);
       tooltipEl.style.display = "block";
       if (currentAnchor) {
         positionTooltip(currentAnchor, { preferredPlacement: loadingPlacement });

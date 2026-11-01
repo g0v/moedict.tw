@@ -15,6 +15,12 @@ interface LookupEnv {
 }
 
 const LOOKUP_LANG_SET = new Set<LookupLang>(["a", "t", "h", "c"]);
+const PINYIN_TYPES: Record<LookupLang, ReadonlySet<string>> = {
+  a: new Set(["HanYu"]),
+  t: new Set(["TL", "DT", "POJ"]),
+  h: new Set(["TH", "PFS"]),
+  c: new Set(["HanYu"]),
+};
 const LOOKUP_CORS_ALLOWLIST = new Set([
   "https://moedict.tw",
   "https://old.moedict.tw",
@@ -47,7 +53,7 @@ function buildLookupCORSHeaders(request: Request): Record<string, string> {
 }
 
 function createJsonResponse(request: Request, payload: unknown, cacheControl: string): Response {
-  return new Response(JSON.stringify(payload), {
+  return new Response(request.method === "HEAD" ? null : JSON.stringify(payload), {
     status: 200,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
@@ -58,7 +64,7 @@ function createJsonResponse(request: Request, payload: unknown, cacheControl: st
 }
 
 function createTextResponse(request: Request, payload: string, cacheControl: string): Response {
-  return new Response(payload, {
+  return new Response(request.method === "HEAD" ? null : payload, {
     status: 200,
     headers: {
       "Content-Type": "text/plain; charset=utf-8",
@@ -86,7 +92,8 @@ export function parsePinyinLookupPath(
   const [, lang, rawType, rawTerm] = match;
   const type = tryDecodeURIComponent(rawType) ?? "";
   const term = normalizeLookupTerm(tryDecodeURIComponent(rawTerm) ?? "");
-  if (!type || !term || !LOOKUP_LANG_SET.has(lang as LookupLang)) return null;
+  if (!term || !LOOKUP_LANG_SET.has(lang as LookupLang)) return null;
+  if (!PINYIN_TYPES[lang as LookupLang].has(type)) return null;
   return {
     lang: lang as LookupLang,
     type,
@@ -162,7 +169,11 @@ async function readLookupTitleMap(
   }
   const cached = envCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.pending;
-  if (cached) envCache.delete(cacheKey);
+  // This set is bounded by PINYIN_TYPES; also retire expired maps from other
+  // supported types instead of retaining them until each key is revisited.
+  for (const [key, entry] of envCache) {
+    if (entry.expiresAt <= Date.now()) envCache.delete(key);
+  }
 
   const pending = (async () => {
     const key = `lookup/pinyin/${lang}/${type}.json`;
@@ -203,6 +214,18 @@ export async function handleLookupAPI(
   url: URL,
   env: LookupEnv,
 ): Promise<Response | null> {
+  const isLookupRoute =
+    url.pathname.startsWith("/api/lookup/pinyin/") ||
+    url.pathname.startsWith("/api/lookup/trs/") ||
+    url.pathname.startsWith("/lookup/trs/");
+  if (!isLookupRoute) return null;
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return new Response(null, {
+      status: 405,
+      headers: { Allow: "GET, HEAD", "Cache-Control": "no-store" },
+    });
+  }
+
   const pinyinPath = parsePinyinLookupPath(url.pathname);
   if (pinyinPath) {
     const titles = await readLookupTitles(env, pinyinPath.lang, pinyinPath.type, pinyinPath.term);
@@ -216,5 +239,5 @@ export async function handleLookupAPI(
     return createTextResponse(request, payload, TRS_CACHE_CONTROL);
   }
 
-  return null;
+  return new Response(null, { status: 404, headers: { "Cache-Control": "no-store" } });
 }

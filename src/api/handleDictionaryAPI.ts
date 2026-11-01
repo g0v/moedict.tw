@@ -1,6 +1,7 @@
 import { CACHE_CONTROL, dictTagsForLang } from "./cache";
 import { readR2JsonCached } from "./r2-json-cache";
 import { dedupeHeteronyms } from "../utils/heteronym-dedup";
+import { sanitizeDictionaryHtml } from "../utils/sanitize-dictionary-html";
 import {
   stripLangPrefix,
   tryDecodeURIComponent,
@@ -576,16 +577,47 @@ function processDictionaryEntry(
     result.English = parsedEntry.English || parsedEntry.english;
   if (parsedEntry.francais) result.francais = parsedEntry.francais;
   if (Array.isArray(parsedEntry.heteronyms)) {
-    result.heteronyms = dedupeHeteronyms(parsedEntry.heteronyms as Array<Record<string, unknown>>);
+    result.heteronyms = dedupeHeteronyms(
+      parsedEntry.heteronyms as Array<Record<string, unknown>>,
+    ).map(sanitizeHeteronymHtml);
   }
   if (parsedEntry.radical) result.radical = parsedEntry.radical;
   if (parsedEntry.stroke_count) result.stroke_count = parsedEntry.stroke_count;
   if (parsedEntry.non_radical_stroke_count)
     result.non_radical_stroke_count = parsedEntry.non_radical_stroke_count;
-  if (parsedEntry.title) result.title = parsedEntry.title;
+  if (typeof parsedEntry.title === "string") {
+    result.title = sanitizeDictionaryHtml(parsedEntry.title);
+  }
   if (parsedEntry.translation) result.translation = parsedEntry.translation;
 
   return result;
+}
+
+function sanitizeHtmlField(value: unknown): unknown {
+  if (typeof value === "string") return sanitizeDictionaryHtml(value);
+  if (Array.isArray(value)) return value.map(sanitizeHtmlField);
+  return value;
+}
+
+function sanitizeHeteronymHtml(heteronym: Record<string, unknown>): Record<string, unknown> {
+  const safe = { ...heteronym };
+  for (const field of ["reading", "synonyms", "antonyms", "bopomofo", "pinyin", "trs", "alt"]) {
+    if (field in safe) safe[field] = sanitizeHtmlField(safe[field]);
+  }
+  if (Array.isArray(safe.definitions)) {
+    safe.definitions = safe.definitions.map((definition: unknown) => {
+      if (!definition || typeof definition !== "object" || Array.isArray(definition)) {
+        return definition;
+      }
+      const safeDefinition = { ...(definition as Record<string, unknown>) };
+      for (const field of ["def", "example", "quote", "link", "synonyms", "antonyms"]) {
+        if (field in safeDefinition)
+          safeDefinition[field] = sanitizeHtmlField(safeDefinition[field]);
+      }
+      return safeDefinition;
+    });
+  }
+  return safe;
 }
 
 function decodeLangPart(lang: DictionaryLang, part = ""): string {
@@ -602,19 +634,41 @@ function decodeLangPart(lang: DictionaryLang, part = ""): string {
   const HASH_OF: Record<DictionaryLang, string> = { a: "#", t: "#'", h: "#:", c: "#~" };
   const h = `./#${HASH_OF[lang]}`;
 
+  const escapeHtml = (value: string): string =>
+    value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  const autolink = (rawTerm: string, opening = "", closing = "", punct = false): string => {
+    // The source is JSON.stringify(entry), so decode the captured JSON string
+    // fragment before HTML escaping, then encode the complete markup for JSON.
+    let term: string;
+    try {
+      term = JSON.parse(`"${rawTerm}"`) as string;
+    } catch {
+      return `${opening}\`${rawTerm}~${closing}`;
+    }
+    const safeTerm = escapeHtml(term);
+    const link = `<a href="${escapeHtml(h + term)}">${safeTerm}</a>`;
+    const html = punct ? `<span class="punct">${opening}${link}${closing}</span>` : link;
+    return JSON.stringify(html).slice(1, -1);
+  };
+
   part = part.replace(
     /([「【『（《])`([^~]+)~([。，、；：？！─…．·－」』》〉]+)/g,
-    '<span class=\\"punct\\">$1<a href=\\"' + h + '$2\\">$2</a>$3</span>',
+    (_match, opening: string, term: string, closing: string) =>
+      autolink(term, opening, closing, true),
   );
-  part = part.replace(
-    /([「【『（《])`([^~]+)~/g,
-    '<span class=\\"punct\\">$1<a href=\\"' + h + '$2\\">$2</a></span>',
+  part = part.replace(/([「【『（《])`([^~]+)~/g, (_match, opening: string, term: string) =>
+    autolink(term, opening, "", true),
   );
   part = part.replace(
     /`([^~]+)~([。，、；：？！─…．·－」』》〉]+)/g,
-    '<span class=\\"punct\\"><a href=\\"' + h + '$1\\">$1</a>$2</span>',
+    (_match, term: string, closing: string) => autolink(term, "", closing, true),
   );
-  part = part.replace(/`([^~]+)~/g, '<a href=\\"' + h + '$1\\">$1</a>');
+  part = part.replace(/`([^~]+)~/g, (_match, term: string) => autolink(term));
 
   part = part.replace(
     /([\u4e00-\u9fff])\u20DD/g,

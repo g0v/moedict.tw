@@ -885,6 +885,37 @@ describe("handleDictionaryAPI — top-level catch non-Error branch (line 119)", 
   });
 });
 
+describe("dictionary HTML output", () => {
+  it("escapes generated links and sanitizes formatted definition fields", async () => {
+    const target = '字" onmouseover="alert(1)<img src=x onerror=alert(2)>';
+    const entry = makePackEntry([
+      {
+        d: [
+          {
+            f: `參見\`${target}~。`,
+            e: ['<img src=x onerror="alert(3)">例子'],
+          },
+        ],
+      },
+    ]);
+    const env = makeEnv({ [BUCKET_PATH]: makeBucketJson(entry) });
+    const { request, url } = makeRequest("/api/%E8%90%8C.json");
+    const response = await handleDictionaryAPI(request, url, env);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      heteronyms: Array<{ definitions: Array<{ def: string; example: string[] }> }>;
+    };
+    const definition = body.heteronyms[0].definitions[0];
+    const doc = new DOMParser().parseFromString(definition.def, "text/html");
+    const anchor = doc.querySelector("a");
+    expect(anchor?.textContent).toContain("字");
+    expect(anchor?.attributes.length).toBe(1);
+    expect(anchor?.getAttribute("onmouseover")).toBeNull();
+    expect(doc.querySelector("img")).toBeNull();
+    expect(definition.example).toEqual(["例子"]);
+  });
+});
+
 describe("decodeLangPart — 辨/似 pattern recursion", () => {
   // The while-loop at lines 443-447 fires when the stored definition contains
   // the 「`辨`似」 inline marker paired with an `f`-keyed follow-up. Feed the
