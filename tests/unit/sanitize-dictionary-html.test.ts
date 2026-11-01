@@ -65,4 +65,24 @@ describe("sanitizeDictionaryHtml", () => {
     expect(safe).not.toContain('href="/丙"');
     expect(safe).not.toContain("class=");
   });
+
+  it("drops empty, missing, and malformed link targets", () => {
+    const safe = sanitizeDictionaryHtml(
+      '<a href="">空</a><a>缺</a><a href="http://[broken">錯</a>',
+    );
+    expect(safe).toBe("空缺錯");
+  });
+
+  it("drops comments and content beyond the nesting limit", () => {
+    const deeplyNested = `${"<div>".repeat(51)}底${"</div>".repeat(51)}`;
+    const safe = sanitizeDictionaryHtml(`<!--source note-->${deeplyNested}`);
+    expect(safe).not.toContain("source note");
+    expect(safe).not.toContain("底");
+    expect((safe.match(/<div>/g) || []).length).toBe(50);
+  });
+
+  it("drops unsupported accessibility attributes while keeping text", () => {
+    const safe = sanitizeDictionaryHtml('<span aria-hidden="false">可見</span>');
+    expect(safe).toBe("<span>可見</span>");
+  });
 });

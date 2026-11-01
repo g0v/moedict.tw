@@ -391,6 +391,15 @@ describe("handleLookupAPI", () => {
     expect(await res!.text()).toBe("食|蝕");
   });
 
+  it("serves a TRS HEAD request with its headers and no body", async () => {
+    const env = { DICTIONARY: makeR2({ "lookup/pinyin/t/TL/tsiah.json": '["食"]' }) };
+    const { request, url } = makeRequest("/api/lookup/trs/tsiah", { method: "HEAD" });
+    const res = await handleLookupAPI(request, url, env);
+    expect(res?.status).toBe(200);
+    expect(res?.headers.get("content-type")).toMatch(/text\/plain/);
+    expect(await res?.text()).toBe("");
+  });
+
   it("also serves the legacy /lookup/trs/<term> (no /api prefix)", async () => {
     const env = {
       DICTIONARY: makeR2({
@@ -503,6 +512,34 @@ describe("handleLookupAPI", () => {
     vi.advanceTimersByTime(300_001);
     expect(await (await lookup())!.json()).toEqual(["新"]);
     vi.useRealTimers();
+  });
+
+  it("retires an expired map when another supported type is read", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-07-11T00:00:00Z"));
+      const reads: string[] = [];
+      const env = {
+        DICTIONARY: {
+          async get(key: string) {
+            reads.push(key);
+            if (key.endsWith("/voi.json")) return null;
+            return { text: async () => JSON.stringify({ voi: [key] }) };
+          },
+        },
+      };
+      const lookup = async (type: "TH" | "PFS") => {
+        const { request, url } = makeRequest(`/api/lookup/pinyin/h/${type}/voi.json`);
+        return (await (await handleLookupAPI(request, url, env))!.json()) as string[];
+      };
+      expect(await lookup("TH")).toEqual(["lookup/pinyin/h/TH.json"]);
+      vi.advanceTimersByTime(300_001);
+      expect(await lookup("PFS")).toEqual(["lookup/pinyin/h/PFS.json"]);
+      expect(await lookup("TH")).toEqual(["lookup/pinyin/h/TH.json"]);
+      expect(reads.filter((key) => key === "lookup/pinyin/h/TH.json")).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("evicts a rejected title-map load so the next request can retry", async () => {

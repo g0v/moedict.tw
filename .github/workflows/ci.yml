@@ -74,7 +74,7 @@ jobs:
 
   e2e:
     name: E2E (Chromium + focused WebKit)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
       E2E_SKIP_BUILD: "1"
@@ -118,7 +118,7 @@ jobs:
 
   contrast:
     name: Dark/light contrast audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
@@ -232,7 +232,7 @@ jobs:
 
   visual:
     name: Visual regression (playwright)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     # Visual tests are opt-in: they require committed linux baselines in
     # tests/e2e/visual-snapshots.spec.ts-snapshots/*-chromium-linux.png. If the
