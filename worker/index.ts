@@ -159,6 +159,18 @@ async function injectHeadMetadata(html: string, pathname: string, env: Env): Pro
     .replace("</head>", oembedLink);
 }
 
+/**
+ * Head for a definitive headword miss (R4 404). The requested text must not
+ * reach <title>/og:*: spam campaigns mint moedict.tw/<keyword string> URLs so
+ * the echoed text and its 字圖 og:image get indexed, and takedown bots then
+ * file copyright notices against those URLs. Serve the site's default head
+ * plus noindex instead; the client still hydrates the 字圖 fallback.
+ */
+async function injectMissHeadMetadata(html: string, _pathname: string, env: Env): Promise<string> {
+  const head = await injectHeadMetadata(html, "/", env);
+  return head.replace("</head>", '<meta name="robots" content="noindex" />\n  </head>');
+}
+
 function isViteInternalRequest(url: URL): boolean {
   const { pathname, searchParams } = url;
   // Real Vite dev-server internal paths are always namespaced
@@ -208,10 +220,14 @@ export function shouldRenderHtmlShell(request: Request, url: URL): boolean {
 function notFoundShellResponse(request: Request, shellResponse: Response): Response {
   if (shellResponse.status !== 200) {
     // Shell unavailable (recovery 503 etc.) — plain status-correct 404.
-    return new Response(null, { status: 404, headers: { "Cache-Control": "no-store" } });
+    return new Response(null, {
+      status: 404,
+      headers: { "Cache-Control": "no-store", "X-Robots-Tag": "noindex" },
+    });
   }
   const headers = new Headers(shellResponse.headers);
   headers.set("Cache-Control", "no-store");
+  headers.set("X-Robots-Tag", "noindex");
   return new Response(request.method === "HEAD" ? null : shellResponse.body, {
     status: 404,
     headers,
@@ -609,25 +625,22 @@ async function dispatchCore(request: Request, env: Env, ctx?: ExecutionContext):
   }
 
   if (shouldRenderHtmlShell(request, url)) {
+    // R4: entry-shaped bare word paths that resolve to no headword get a
+    // real 404 with a neutral, noindex head (shell body otherwise intact).
+    // Non-entry kinds (/, /about, /@部首, /=分類, /'*清單, invalid encoding)
+    // and data-layer failures (probe null) fail open to the current behavior.
+    const route = classifyRoute(url.pathname);
+    const isMiss =
+      route.kind === "entry" && route.text
+        ? (await probeDictionaryEntry(route.text, route.lang, env)) === false
+        : false;
     const shellResponse = await renderHtmlShellWithFallback(
       request,
       env,
       url.pathname,
-      injectHeadMetadata,
+      isMiss ? injectMissHeadMetadata : injectHeadMetadata,
     );
-    // R4: entry-shaped bare word paths that resolve to no headword get a
-    // real 404 (shell body preserved). Non-entry kinds (/, /about, /@部首,
-    // /=分類, /'*清單, invalid encoding) and data-layer failures (probe
-    // null) fail open to the current behavior.
-    const route = classifyRoute(url.pathname);
-    if (
-      route.kind === "entry" &&
-      route.text &&
-      (await probeDictionaryEntry(route.text, route.lang, env)) === false
-    ) {
-      return notFoundShellResponse(request, shellResponse);
-    }
-    return shellResponse;
+    return isMiss ? notFoundShellResponse(request, shellResponse) : shellResponse;
   }
 
   const staticResponse = await serveAssetWithFallback(request, env);

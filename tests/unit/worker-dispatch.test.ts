@@ -714,6 +714,34 @@ describe("dispatch — HTML shell rendering", () => {
     expect(res.headers.get("content-type")).toMatch(/text\/html/);
   });
 
+  it("serves a definitive headword miss as 404 with a neutral, noindex head", async () => {
+    // Spam campaigns mint /<keyword string> URLs so the echoed text ranks;
+    // the miss shell must not carry that text into <title>/og:*.
+    const shellHtml =
+      '<html><head><title>old</title><meta property="og:image" content="old" /></head><body>shell</body></html>';
+    const fetcher = {
+      fetch: vi.fn(
+        async () => new Response(shellHtml, { headers: { "Content-Type": "text/html" } }),
+      ),
+    };
+    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv["SITE_ASSETS"] });
+    const res = await dispatch(req("/%E5%B0%8FQ%E5%B0%8FK%E7%A6%8F%E5%88%A9"), env); // 小Q小K福利
+    expect(res.status).toBe(404);
+    expect(res.headers.get("x-robots-tag")).toBe("noindex");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    const body = await res.text();
+    expect(body).toContain('<meta name="robots" content="noindex" />');
+    expect(body).not.toContain("小Q小K");
+    expect(body).toContain("shell");
+  });
+
+  it("marks the body-less miss 404 (shell unavailable) noindex too", async () => {
+    const res = await dispatch(req("/%E5%B0%8FQ%E5%B0%8FK%E7%A6%8F%E5%88%A9"), makeEnv());
+    expect(res.status).toBe(404);
+    expect(res.headers.get("x-robots-tag")).toBe("noindex");
+    expect(await res.text()).toBe("");
+  });
+
   it("HEAD on an HTML route returns empty body but same headers", async () => {
     const fetcher = {
       fetch: vi.fn(

@@ -167,6 +167,8 @@ describe("R2 shell fallback (tagged release)", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("X-Moedict-Shell-Source")).toBe("r2-release");
     expect(res.headers.get("content-type")).toContain("text/html");
+    expect(res.headers.get("x-robots-tag")).toBeNull();
+    expect(await res.text()).not.toContain('name="robots"');
   });
 
   it("returns 404 (not soft-200) for an unknown word path like /garbage", async () => {
@@ -174,8 +176,13 @@ describe("R2 shell fallback (tagged release)", () => {
     expect(res.status).toBe(404);
     // Shell body preserved under the corrected status + no-store.
     expect(res.headers.get("content-type")).toContain("text/html");
-    expect(await res.text()).toContain("<html");
+    const body = await res.text();
+    expect(body).toContain("<html");
     expect(res.headers.get("cache-control")).toBe("no-store");
+    // Neutral, noindex head: the requested text never reaches <title>/og:*.
+    expect(res.headers.get("x-robots-tag")).toBe("noindex");
+    expect(body).toContain('<meta name="robots" content="noindex" />');
+    expect(body).not.toContain("garbage");
   });
 
   it("returns 304 when If-None-Match matches the R2 ETag", async () => {

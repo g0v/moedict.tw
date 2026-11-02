@@ -181,12 +181,16 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
   `classifyRoute` 判為 `entry` 的裸詞路徑，若
   `probeDictionaryEntry(...) === false`（明確查無此詞）就回 **404**，
   body 仍是 SPA shell、`Cache-Control: no-store`（舊站也是硬 404，soft-200
-  會讓爬蟲／CDN 把捏造的 shell 當內容）。只有 `false` 會改狀態：`true`
+  會讓爬蟲／CDN 把捏造的 shell 當內容）。這條路徑的 head 改用站台預設
+  （`injectMissHeadMetadata`：`/` 的 head 加 `<meta name="robots" content="noindex" />`），
+  回應另帶 `X-Robots-Tag: noindex`；查詢字串絕不進 `<title>`／`og:*`——spam 會鑄造
+  `/<關鍵字串>` 網址，讓回顯文字與字圖 og:image 被索引，再引來版權下架通知
+  （2026-11 Erasa.ai 對 moedict.tw 的 DMCA 即此例）。只有 `false` 會改狀態：`true`
   （命中，含 NFKC 相容 fallback）維持 200，`null`（shard 讀取／解析失敗，
   資料層答不出來）刻意 fail open 也維持 200；非 entry 路徑
   （`/`、`/about`、`/privacy`、`@部首`、`=分類`、`'*清單`、壞編碼）根本不進這條判斷。
   唯一「shell 取不到又確定查無此詞」的組合會回**無 body 的 404**
-  （`Cache-Control: no-store`），而不是 recovery 503。deploy／rollback smoke
+  （`Cache-Control: no-store`、`X-Robots-Tag: noindex`），而不是 recovery 503。deploy／rollback smoke
   打的 `/`、`/api/config`、`/api/<詞>.json` 都不是 entry shell 路徑，不受影響。
 - **staging → production gate（自動）**：staging 的 `deploy:staging` 在 final
   smoke 通過「當下」自動寫入共用的 staging-approval 狀態
