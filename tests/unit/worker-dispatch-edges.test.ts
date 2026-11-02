@@ -682,8 +682,16 @@ describe("dispatch — GET /api/oembed (tokenless oEmbed API)", () => {
 describe("dispatch — oEmbed discovery <link> in the HTML shell", () => {
   it('adds a discovery <link rel="alternate" type="application/json+oembed"> for a dictionary entry route', async () => {
     const fetcher = shellFetcher();
-    const env = makeEnv({ SITE_ASSETS: fetcher as unknown as AnyEnv["SITE_ASSETS"] });
+    // 萌 must resolve: a headword miss gets the neutral noindex head (R4),
+    // which deliberately carries no oEmbed discovery link.
+    const env = makeEnv({
+      SITE_ASSETS: fetcher as unknown as AnyEnv["SITE_ASSETS"],
+      DICTIONARY: makeBucket({
+        "pack/12.txt": { body: JSON.stringify(DICT_ENTRY_FOR_MENG) },
+      }),
+    });
     const res = await dispatch(req("/%E8%90%8C"), env);
+    expect(res.status).toBe(200);
     const body = await res.text();
     expect(body).toContain('rel="alternate" type="application/json+oembed"');
     expect(body).toContain("/api/oembed?url=");

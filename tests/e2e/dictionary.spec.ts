@@ -1649,6 +1649,7 @@ test.describe("404 / fallback paths", () => {
     const response = await page.goto("/%E4%B8%8D%E5%AD%98%E5%9C%A8%E7%9A%84%E8%A9%9E");
     expect(response?.status()).toBe(404);
     expect(response?.headers()["cache-control"]).toContain("no-store");
+    expect(response?.headers()["x-robots-tag"]).toBe("noindex");
     await waitForAppReady(page, "dictionary");
     await expect(page.locator(".charimg-result")).toBeVisible();
   });
