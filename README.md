@@ -2,6 +2,8 @@
 
 萌典（moedict）前端重構專案，使用 React + TypeScript + Vite，部署於 Cloudflare Workers。
 
+專案的 g0v 社群資訊收錄於根目錄 [`g0v.json`](./g0v.json)，依 [g0v.json v1 schema](https://github.com/g0v/g0v.json/blob/master/schemas/v1.json) 維護。該檔的 `licenses` 描述程式碼授權（CC0-1.0）；辭典內容另依教育部 CC BY-ND 3.0 TW 授權。
+
 ## 社群協作（最需要）
 
 目前最需要的協助是幫忙實測、發現 bug、提出 issue。  
