@@ -251,7 +251,26 @@ export function applyHeadToDocument(head: PageHead): void {
   setMetaByName("twitter:creator", head.twitterCreator);
 }
 
+/**
+ * Remove the R4 miss shell's `<meta name="robots" content="noindex" />`. The
+ * Worker renders it only for a definitive headword miss; client-side
+ * navigation reuses that document, so the tag must go as soon as the app
+ * shows a route that is not a miss.
+ */
+export function clearMissRobotsMeta(): void {
+  const doc = (
+    globalThis as {
+      document?: {
+        head?: { querySelector: (selector: string) => { remove: () => void } | null };
+      };
+    }
+  ).document;
+  doc?.head?.querySelector('meta[name="robots"][content="noindex"]')?.remove();
+}
+
 export function applyHeadByPath(pathname: string): void {
+  // Only entry routes can be R4 misses; every other route kind is indexable.
+  if (classifyRoute(pathname).kind !== "entry") clearMissRobotsMeta();
   applyHeadToDocument(resolveHeadByPath(pathname));
 }
 

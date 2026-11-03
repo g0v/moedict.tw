@@ -29,7 +29,7 @@ import { fetchDictionaryEntry, readCachedDictionaryEntry } from "../utils/dictio
 import { writeTextToClipboard } from "../utils/clipboard";
 import { setCurrentXrefs } from "../utils/xref-switch-utils";
 import { StrokeAnimation } from "../components/StrokeAnimation";
-import { applyHeadToDocument, getDictionaryHead } from "../ssr/head";
+import { applyHeadToDocument, clearMissRobotsMeta, getDictionaryHead } from "../ssr/head";
 import { CharacterImageView } from "../components/CharacterImageView";
 import { SvgIcon } from "../components/SvgIcon";
 import { TitlePronunciation } from "../components/TitlePronunciation";
@@ -723,10 +723,14 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
     };
   }, [lang]);
 
+  const hasEntry = state.entry != null;
   useEffect(() => {
     const titleWord = state.entry?.title || queryWord;
     applyHeadToDocument(getDictionaryHead(titleWord, lang));
-  }, [state.entry?.title, queryWord, lang]);
+    // A resolved entry is not an R4 miss: drop the miss shell's noindex, which
+    // otherwise survives client-side navigation from a miss page.
+    if (hasEntry) clearMissRobotsMeta();
+  }, [state.entry?.title, queryWord, lang, hasEntry]);
 
   useRadicalTooltip();
 

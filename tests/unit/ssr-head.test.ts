@@ -3,6 +3,7 @@ import {
   resolveHeadByPath,
   applyHeadToDocument,
   applyHeadByPath,
+  clearMissRobotsMeta,
   getDictionaryHead,
   escapeHeadContent,
 } from "../../src/ssr/head";
@@ -330,6 +331,32 @@ describe("applyHeadToDocument / applyHeadByPath", () => {
     const descriptions = document.head.querySelectorAll('meta[name="description"]');
     expect(descriptions.length).toBe(1);
     expect(descriptions[0].getAttribute("content")).toContain("萌典資料來源");
+  });
+
+  it("drops the miss shell's noindex meta when the app shows a non-entry route", () => {
+    resetDocument();
+    document.head.insertAdjacentHTML("beforeend", '<meta name="robots" content="noindex" />');
+    applyHeadByPath("/about");
+    expect(document.head.querySelector('meta[name="robots"]')).toBeNull();
+  });
+
+  it("keeps the noindex meta on entry routes until an entry resolves", () => {
+    resetDocument();
+    document.head.insertAdjacentHTML("beforeend", '<meta name="robots" content="noindex" />');
+    applyHeadByPath("/不存在的詞");
+    expect(document.head.querySelector('meta[name="robots"]')).not.toBeNull();
+    clearMissRobotsMeta(); // DictionaryPage calls this once an entry loads
+    expect(document.head.querySelector('meta[name="robots"]')).toBeNull();
+  });
+
+  it("clearMissRobotsMeta is a no-op without a document or head", () => {
+    const saved = globalThis.document;
+    // @ts-expect-error – deliberately deleting document for test
+    delete globalThis.document;
+    expect(() => clearMissRobotsMeta()).not.toThrow();
+    globalThis.document = { title: "" } as unknown as Document;
+    expect(() => clearMissRobotsMeta()).not.toThrow();
+    globalThis.document = saved;
   });
 
   it("applyHeadToDocument does nothing when document is missing", () => {

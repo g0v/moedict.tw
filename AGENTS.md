@@ -185,7 +185,9 @@ release manifest／digest 與剛剛實際發布到 R2 的那份不一致。完�
   （`injectMissHeadMetadata`：`/` 的 head 加 `<meta name="robots" content="noindex" />`），
   回應另帶 `X-Robots-Tag: noindex`；查詢字串絕不進 `<title>`／`og:*`——spam 會鑄造
   `/<關鍵字串>` 網址，讓回顯文字與字圖 og:image 被索引，再引來版權下架通知
-  （2026-11 Erasa.ai 對 moedict.tw 的 DMCA 即此例）。只有 `false` 會改狀態：`true`
+  （2026-11 Erasa.ai 對 moedict.tw 的 DMCA 即此例）。SPA 導覽沿用同一份 document，所以 client 端的
+  `clearMissRobotsMeta()`（`src/ssr/head.ts`）會在非 entry 路由（`applyHeadByPath`）或
+  DictionaryPage 取得詞條時移除這個 meta，避免從 miss 頁導覽到真詞條後仍帶 noindex。只有 `false` 會改狀態：`true`
   （命中，含 NFKC 相容 fallback）維持 200，`null`（shard 讀取／解析失敗，
   資料層答不出來）刻意 fail open 也維持 200；非 entry 路徑
   （`/`、`/about`、`/privacy`、`@部首`、`=分類`、`'*清單`、壞編碼）根本不進這條判斷。

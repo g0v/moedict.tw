@@ -1653,6 +1653,29 @@ test.describe("404 / fallback paths", () => {
     await waitForAppReady(page, "dictionary");
     await expect(page.locator(".charimg-result")).toBeVisible();
   });
+
+  test("client-side navigation from a miss to an entry drops the miss-only noindex meta", async ({
+    page,
+  }) => {
+    // The miss shell carries <meta name="robots" content="noindex">; the SPA
+    // reuses that document on navigation, so the tag must not leak onto 萌.
+    await page.goto("/%E4%B8%8D%E5%AD%98%E5%9C%A8%E7%9A%84%E8%A9%9E");
+    await waitForAppReady(page, "dictionary");
+    const noindex = page.locator('head meta[name="robots"][content="noindex"]');
+    await expect(noindex).toHaveCount(1);
+    await page.evaluate(() => {
+      (window as Window & { __sameDocument?: boolean }).__sameDocument = true;
+    });
+    const query = page.locator("#query");
+    await query.fill("萌");
+    await query.press("Enter");
+    await page.waitForURL(/%E8%90%8C|萌/);
+    await waitForEntryHydration(page, "萌");
+    expect(
+      await page.evaluate(() => (window as Window & { __sameDocument?: boolean }).__sameDocument),
+    ).toBe(true);
+    await expect(noindex).toHaveCount(0);
+  });
 });
 
 test.describe("definition-index permalink (/word/N, g0v/moedict.tw#131)", () => {
