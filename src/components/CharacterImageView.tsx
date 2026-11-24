@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { SvgIcon } from "./SvgIcon";
 import { fetchDictionaryEntry, type DictionaryLang } from "../utils/dictionary-cache";
 import { formatBopomofo, formatPinyin } from "../utils/bopomofo-pinyin-utils";
+import { isOfflineApp } from "../utils/offline-app";
 
 // eslint-disable-next-line react-refresh/only-export-components
 export function renderFormattedPhonetics(markup: string) {
@@ -384,7 +385,9 @@ export function CharacterImageView({
   }, [mergedTerms, lang, langTokenPrefix]);
 
   const handleShare = useCallback(async () => {
-    const url = window.location.href;
+    const url = isOfflineApp()
+      ? `https://www.moedict.tw${window.location.pathname}`
+      : window.location.href;
     const cleanWord = queryWord.replace(/^['!~:]/, "");
     const title = `${cleanWord} - 萌典`;
 
