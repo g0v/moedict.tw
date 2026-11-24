@@ -32,13 +32,6 @@ export function RadicalDetailView({ lang, radical }: RadicalDetailViewProps) {
   useRadicalTooltip();
 
   useEffect(() => {
-    if (!cleanRadical) return;
-    // `/@玉` is a radical cross-ref, not a headword token. Store 玉
-    // (靑 → 青) so 字詞紀錄簿 lists the character the user looked up.
-    addToLRU(normalizeRadicalVariant(cleanRadical), lang);
-  }, [cleanRadical, lang]);
-
-  useEffect(() => {
     if (!cleanRadical) {
       setState({ loading: false, rows: [], error: "未提供部首" });
       return;
@@ -50,6 +43,10 @@ export function RadicalDetailView({ lang, radical }: RadicalDetailViewProps) {
     fetchRadicalRows(lang, `@${cleanRadical}`)
       .then((rows) => {
         if (!active) return;
+        // `/@玉` is a radical cross-ref, not a headword token. Store 玉
+        // (靑 → 青) only when the radical actually has rows, so `/@不` and
+        // `/@abc` do not put junk into 字詞紀錄簿.
+        if (rows.length > 0) addToLRU(normalizeRadicalVariant(cleanRadical), lang);
         setState({ loading: false, rows, error: null });
       })
       .catch((error: unknown) => {
