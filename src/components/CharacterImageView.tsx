@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { SvgIcon } from "./SvgIcon";
 import { fetchDictionaryEntry, type DictionaryLang } from "../utils/dictionary-cache";
 import { formatBopomofo, formatPinyin } from "../utils/bopomofo-pinyin-utils";
+import { isOfflineApp } from "../utils/offline-app";
 
 // eslint-disable-next-line react-refresh/only-export-components
 export function renderFormattedPhonetics(markup: string) {
@@ -319,6 +320,63 @@ function extractBopomofo(data: unknown): string {
   return typeof bopomofo === "string" ? bopomofo : "";
 }
 
+export function GlyphImage({
+  className,
+  src,
+  alt,
+  text,
+  size,
+}: {
+  className: string;
+  src: string;
+  alt: string;
+  text: string;
+  size: number;
+}) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  // Only the packaged app replaces a failed PNG. The website keeps the
+  // <img> (romanize=1 lives on its src) even when www.moedict.tw 404s,
+  // which is also what the e2e suite asserts.
+  const offline = isOfflineApp();
+  if (offline && failedSrc === src) {
+    // An empty caption must not divide the font size by zero.
+    const chars = Math.max(1, Array.from(text).length);
+    const fontSize = Math.floor((size * 0.8) / Math.min(chars, 4));
+    return (
+      <div
+        role="img"
+        aria-label={alt}
+        className={`${className} charimg-glyph-fallback`}
+        style={{
+          width: size,
+          height: size,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize,
+          lineHeight: 1,
+          fontFamily: '"TW-Kai", "BiauKai", "Kaiti TC", "STKaiti", serif',
+          color: "#000",
+          backgroundColor: "#fff",
+          overflow: "hidden",
+        }}
+      >
+        {text}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      className={className}
+      src={src}
+      alt={alt}
+      style={{ width: size, height: size }}
+      onError={offline ? () => setFailedSrc(src) : undefined}
+    />
+  );
+}
+
 export function CharacterImageView({
   queryWord,
   terms,
@@ -384,7 +442,9 @@ export function CharacterImageView({
   }, [mergedTerms, lang, langTokenPrefix]);
 
   const handleShare = useCallback(async () => {
-    const url = window.location.href;
+    const url = isOfflineApp()
+      ? `https://www.moedict.tw${window.location.pathname}`
+      : window.location.href;
     const cleanWord = queryWord.replace(/^['!~:]/, "");
     const title = `${cleanWord} - 萌典`;
 
@@ -759,11 +819,12 @@ export function CharacterImageView({
           className="charimg-practice-box"
           style={{ width: mainImageSize, height: mainImageSize }}
         >
-          <img
+          <GlyphImage
             className="charimg-glyph charimg-glyph-main"
             src={charImgUrl(queryWord, font, lang, romanizeActive)}
             alt={queryWord}
-            style={{ width: mainImageSize, height: mainImageSize }}
+            text={queryWord.replace(/^['!~:]/, "")}
+            size={mainImageSize}
           />
           {renderPracticeCanvas(`main:${queryWord}`, mainImageSize, mainImageSize)}
         </div>
@@ -793,14 +854,17 @@ export function CharacterImageView({
             <SvgIcon name="share" size={16} aria-hidden="true" />
             {shareSupported ? "分享" : "複製連結"}
           </button>
-          <button
-            className="btn btn-default charimg-print-btn"
-            title="列印目前字圖"
-            onClick={handlePrint}
-          >
-            <SvgIcon name="print" size={16} aria-hidden="true" />
-            列印字卡
-          </button>
+          {/* window.print() does nothing in the Android WebView or iOS WKWebView. */}
+          {!isOfflineApp() && (
+            <button
+              className="btn btn-default charimg-print-btn"
+              title="列印目前字圖"
+              onClick={handlePrint}
+            >
+              <SvgIcon name="print" size={16} aria-hidden="true" />
+              列印字卡
+            </button>
+          )}
           <button
             className="btn btn-default charimg-clear-btn"
             title="清空描寫筆跡"
@@ -882,11 +946,12 @@ export function CharacterImageView({
                       className="charimg-practice-box"
                       style={{ width: SEGMENT_IMAGE_SIZE, height: SEGMENT_IMAGE_SIZE }}
                     >
-                      <img
+                      <GlyphImage
                         className="charimg-glyph charimg-glyph-segment"
                         src={charImgUrl(segment.part, font, lang, romanizeActive)}
                         alt={segment.pinyin ? `${segment.part} ${segment.pinyin}` : segment.part}
-                        style={{ width: SEGMENT_IMAGE_SIZE, height: SEGMENT_IMAGE_SIZE }}
+                        text={segment.part}
+                        size={SEGMENT_IMAGE_SIZE}
                       />
                       {renderPracticeCanvas(
                         `segment:${index}:${segment.part}`,

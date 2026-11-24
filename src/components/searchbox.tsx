@@ -40,7 +40,10 @@ const TAIWANESE_PINYIN_CACHE = new Map<string, string[]>();
 const TAIWANESE_PINYIN_PROMISE_CACHE = new Map<string, Promise<string[]>>();
 const TAIWANESE_PINYIN_CACHE_MAX_ENTRIES = 400;
 const TAIWANESE_PINYIN_TYPES = new Set(["TL", "DT", "POJ"]);
-const TAIWANESE_ROMAN_INPUT_RE = /^(?=.*[A-Za-z])[A-Za-z0-9\s\-']+$/;
+// 聲調符號（tsia̍h、pn̄g、chhiū）是拉丁字母加組合附加符號。
+// normalizeTaiwaneseLookupTerm strips the marks before the pinyin lookup.
+export const TAIWANESE_ROMAN_INPUT_RE =
+  /^(?=.*\p{Script=Latin})[\p{Script=Latin}\p{Mark}0-9\s\-']+$/u;
 const HAKKA_PINYIN_CACHE = new Map<string, string[]>();
 const HAKKA_PINYIN_PROMISE_CACHE = new Map<string, Promise<string[]>>();
 const HAKKA_PINYIN_CACHE_MAX_ENTRIES = 400;
