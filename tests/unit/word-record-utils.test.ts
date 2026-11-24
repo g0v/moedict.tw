@@ -310,6 +310,18 @@ describe("recorded headwords", () => {
     expect(readLRUWords("c")).toEqual(["萌"]);
   });
 
+  it("records a headword when the loaded entry has no title to compare", () => {
+    expect(lookupHeadwordForHistory("理")).toBe("理");
+    expect(lookupHeadwordForHistory("理", "   ")).toBe("理");
+  });
+
+  it("does not record a loaded title that is not a headword", () => {
+    expect(lookupHeadwordForHistory("about", "about")).toBeNull();
+    expect(lookupHeadwordForHistory("萌.png", "`萌.png~")).toBeNull();
+    expect(lookupHeadwordForHistory("a/b", "a/b")).toBeNull();
+    expect(lookupHeadwordForHistory("#", "#")).toBeNull();
+  });
+
   it("does not record a query against a different entry's title", () => {
     // Stale「萌」still on screen while the box holds「萌理」.
     expect(lookupHeadwordForHistory("萌理", "`萌~")).toBeNull();

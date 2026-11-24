@@ -179,7 +179,8 @@ export function parseLRUWords(raw: string): string[] {
   let match: RegExpExecArray | null;
   while ((match = re.exec(raw))) {
     const word = match[1];
-    if (!word) continue;
+    // `[^"]+` never captures an empty token. pushSanitizedHeadword still
+    // drops a blank after normalization.
     pushSanitizedHeadword(list, seen, word);
   }
   return list;
