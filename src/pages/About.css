@@ -247,7 +247,8 @@
   font-size: 0.9em;
   background: var(--moe-code-bg, rgba(127, 127, 127, 0.14));
   border-radius: 4px;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .about-page .api-table-wrap {
