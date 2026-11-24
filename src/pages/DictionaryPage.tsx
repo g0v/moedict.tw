@@ -22,6 +22,7 @@ import {
   addToLRU,
   getStarredStorageKey,
   hasStarWord,
+  lookupHeadwordForHistory,
   removeStarWord,
   writeLastLookup,
 } from "../utils/word-record-utils";
@@ -830,11 +831,17 @@ export function DictionaryPage({ word, lang, idx: targetDefIdx }: DictionaryPage
   }, [queryWord, state.entry, state.error, state.terms.length, state.loading]);
 
   useEffect(() => {
-    if (!state.entry) return;
-    addToLRU(queryWord, lang);
-    writeLastLookup(queryWord, lang);
-    setCurrentXrefs(queryWord, lang, state.entry.xrefs ?? []);
-  }, [state.entry, queryWord, lang]);
+    // Record only after this query's own entry is on screen. A route change
+    // keeps the previous entry until the next response lands; writing
+    // `queryWord` in that window stored `@玉`, bare `@`, and concatenations
+    // such as「萌理」(the search box still held「萌」when「理」was typed).
+    if (state.loading || !state.entry) return;
+    const headword = lookupHeadwordForHistory(queryWord, state.entry.title);
+    if (!headword) return;
+    addToLRU(headword, lang);
+    writeLastLookup(headword, lang);
+    setCurrentXrefs(headword, lang, state.entry.xrefs ?? []);
+  }, [state.entry, state.loading, queryWord, lang]);
 
   useEffect(() => {
     if (!state.entry || !storageWord) {

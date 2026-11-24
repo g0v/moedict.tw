@@ -5,7 +5,8 @@
  */
 
 import { useEffect, useState } from "react";
-import { LEGACY_STYLESHEET_VERSION } from "../utils/media-cdn";
+import { legacyStylesheetUrl } from "../utils/media-cdn";
+import { isOfflineApp } from "../utils/offline-app";
 
 interface AssetLoaderProps {
   r2Endpoint?: string;
@@ -131,11 +132,14 @@ export function AssetLoader({ r2Endpoint, onCriticalStylesReady }: AssetLoaderPr
         }
       }
 
-      const basePath = endpoint || "/assets";
+      const offline = isOfflineApp();
+      // Offline packages do not ship the legacy sheet under Vite's `/assets`.
+      // prepare-data copies it to `/assets-legacy`; never request the 404 path.
+      const basePath = endpoint || (offline ? "/assets-legacy" : "/assets");
 
       // 載入 CSS 檔案
       await Promise.all([
-        loadCSS(`${basePath}/styles.css?v=${LEGACY_STYLESHEET_VERSION}`, "styles-css"),
+        loadCSS(legacyStylesheetUrl(basePath, offline), "styles-css"),
         loadCSS(`${basePath}/css/cupertino/jquery-ui-1.10.4.custom.css`, "jquery-ui-css"),
       ]);
       if (!criticalStylesNotified) {

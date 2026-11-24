@@ -4,6 +4,7 @@ import { useRadicalTooltip } from "../hooks/useRadicalTooltip";
 import {
   fetchRadicalRows,
   getRadicalLangPrefix,
+  normalizeRadicalVariant,
   type RadicalLang,
 } from "../utils/radical-page-utils";
 import { addToLRU } from "../utils/word-record-utils";
@@ -32,7 +33,9 @@ export function RadicalDetailView({ lang, radical }: RadicalDetailViewProps) {
 
   useEffect(() => {
     if (!cleanRadical) return;
-    addToLRU(`@${cleanRadical}`, lang);
+    // `/@玉` is a radical cross-ref, not a headword token. Store 玉
+    // (靑 → 青) so 字詞紀錄簿 lists the character the user looked up.
+    addToLRU(normalizeRadicalVariant(cleanRadical), lang);
   }, [cleanRadical, lang]);
 
   useEffect(() => {

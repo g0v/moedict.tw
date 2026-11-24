@@ -29,6 +29,25 @@ export const ASSET_CDN_BASE = "https://r2-assets.moedict.tw";
  */
 export const LEGACY_STYLESHEET_VERSION = "20260914";
 
+/**
+ * Capacitor / moedict-app stages `data/assets/` at `/assets-legacy`
+ * (`scripts/prepare-data.sh`). `/assets/` in that build is Vite's hashed
+ * bundle directory and does not contain `styles.css`.
+ */
+export const OFFLINE_LEGACY_ASSET_BASE = "/assets-legacy";
+
+/**
+ * URL for the legacy stylesheet. An empty base on the offline app must not
+ * fall back to `/assets/styles.css` — that request 404s in the packaged
+ * WebView (`https://localhost/assets/styles.css?v=…`) while layout already
+ * comes from `src/index.css`.
+ */
+export function legacyStylesheetUrl(assetBase: string | undefined, offline: boolean): string {
+  const trimmed = (assetBase || "").replace(/\/$/, "");
+  const base = trimmed || (offline ? OFFLINE_LEGACY_ASSET_BASE : "/assets");
+  return `${base}/styles.css?v=${LEGACY_STYLESHEET_VERSION}`;
+}
+
 /** 筆畫 JSON：`${STROKE_JSON_BASE_URL}/{codepoint-hex}.json` */
 export const STROKE_JSON_BASE_URL = `${ASSET_CDN_BASE}/stroke-json`;
 

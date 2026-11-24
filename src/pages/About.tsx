@@ -7,12 +7,15 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { SvgIcon } from "../components/SvgIcon";
 import { applyHeadByPath, applyHeadToDocument, resolveHeadByPath } from "../ssr/head";
-import { LEGACY_STYLESHEET_VERSION } from "../utils/media-cdn";
+import { legacyStylesheetUrl } from "../utils/media-cdn";
+import { isOfflineApp } from "../utils/offline-app";
 import "./About.css";
 
-// 動態載入外部樣式
+// 動態載入外部樣式。網站走 Worker 代理的 `/assets/styles.css`。
+// 離線 App 的同一路徑 404（檔案在 `/assets-legacy`，且 AssetLoader 已載入），
+// 這裡不再插第二條會 404 的 `<link>`。
 function loadExternalStyles(r2Endpoint: string) {
-  if (!r2Endpoint) return;
+  if (!r2Endpoint || isOfflineApp()) return;
 
   // 檢查是否已經載入過
   const existingLink = document.querySelector(`link[data-r2-styles]`);
@@ -21,8 +24,7 @@ function loadExternalStyles(r2Endpoint: string) {
   // 載入原專案的樣式（通過 Worker 代理）
   const link = document.createElement("link");
   link.rel = "stylesheet";
-  // 使用 /assets/ 路徑，讓 Worker 代理請求
-  link.href = `/assets/styles.css?v=${LEGACY_STYLESHEET_VERSION}`;
+  link.href = legacyStylesheetUrl(undefined, false);
   link.setAttribute("data-r2-styles", "true");
   document.head.appendChild(link);
 }
