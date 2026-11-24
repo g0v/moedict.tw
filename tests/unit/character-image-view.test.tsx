@@ -6,6 +6,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   CharacterImageView,
+  GlyphImage,
   renderFormattedPhonetics,
 } from "../../src/components/CharacterImageView";
 
@@ -149,5 +150,140 @@ describe("CharacterImage print button", () => {
     vi.stubEnv("VITE_MOEDICT_OFFLINE_APP", "");
     await renderCard();
     expect(container.querySelector(".charimg-print-btn")?.textContent).toContain("列印字卡");
+  });
+});
+
+describe("GlyphImage offline fallback", () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    vi.spyOn(console, "error").mockImplementation((msg: unknown, ...rest: unknown[]) => {
+      if (typeof msg === "string" && msg.includes("not wrapped in act")) return;
+      console.warn(msg, ...rest);
+    });
+  });
+
+  afterEach(() => {
+    root.unmount();
+    container.remove();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  function renderGlyph(
+    text: string,
+    size: number,
+    src = "data:image/gif;base64,R0lGODlhAQABAAAAACw=",
+  ): void {
+    act(() => {
+      flushSync(() => {
+        root.render(
+          <GlyphImage
+            className="charimg-glyph charimg-glyph-main"
+            src={src}
+            alt={text}
+            text={text}
+            size={size}
+          />,
+        );
+      });
+    });
+  }
+
+  async function failImage(): Promise<void> {
+    const img = container.querySelector("img");
+    expect(img).not.toBeNull();
+    await act(async () => {
+      img?.dispatchEvent(new Event("error"));
+    });
+  }
+
+  it("shows the image until it fails, then a sized text glyph", async () => {
+    renderGlyph("測試詞條", 160);
+    expect(container.querySelector("img")?.getAttribute("src")).toContain("data:image/gif");
+
+    await failImage();
+
+    const fallback = container.querySelector<HTMLElement>(".charimg-glyph-fallback");
+    expect(container.querySelector("img")).toBeNull();
+    expect(fallback?.getAttribute("role")).toBe("img");
+    expect(fallback?.getAttribute("aria-label")).toBe("測試詞條");
+    expect(fallback?.className).toContain("charimg-glyph charimg-glyph-main");
+    expect(fallback?.textContent).toBe("測試詞條");
+    expect(fallback?.style.fontSize).toBe("32px");
+    expect(fallback?.style.lineHeight).toBe("1");
+    expect(fallback?.style.fontFamily).toContain("TW-Kai");
+    expect(fallback?.style.color).toBe("#000");
+    expect(fallback?.style.backgroundColor).toBe("#fff");
+    expect(fallback?.style.overflow).toBe("hidden");
+    expect(fallback?.style.width).toBe("160px");
+    expect(fallback?.style.height).toBe("160px");
+  });
+
+  it("caps the divisor at four characters and keeps a single-character glyph large", async () => {
+    renderGlyph("萌", 240);
+    await failImage();
+    expect(container.querySelector<HTMLElement>(".charimg-glyph-fallback")?.style.fontSize).toBe(
+      "192px",
+    );
+
+    renderGlyph(
+      "萌典測試字",
+      160,
+      "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
+    );
+    await failImage();
+    expect(container.querySelector<HTMLElement>(".charimg-glyph-fallback")?.style.fontSize).toBe(
+      "32px",
+    );
+  });
+
+  it("uses the headword without a route prefix, and the segment text, in the card", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("offline");
+      }),
+    );
+    vi.spyOn(console, "error").mockImplementation((msg: unknown, ...rest: unknown[]) => {
+      if (typeof msg === "string" && msg.includes("not wrapped in act")) return;
+      console.warn(msg, ...rest);
+    });
+
+    await act(async () => {
+      flushSync(() => {
+        root.render(
+          <MemoryRouter>
+            <CharacterImageView lang="t" langTokenPrefix="'" queryWord="'水" terms={["玉"]} />
+          </MemoryRouter>,
+        );
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const main = container.querySelector<HTMLImageElement>("img.charimg-glyph-main");
+    const segment = container.querySelector<HTMLImageElement>("img.charimg-glyph-segment");
+    expect(main).not.toBeNull();
+    expect(segment).not.toBeNull();
+
+    await act(async () => {
+      main?.dispatchEvent(new Event("error"));
+      segment?.dispatchEvent(new Event("error"));
+    });
+
+    const mainFallback = container.querySelector<HTMLElement>(
+      ".charimg-glyph-main.charimg-glyph-fallback",
+    );
+    const segmentFallback = container.querySelector<HTMLElement>(
+      ".charimg-glyph-segment.charimg-glyph-fallback",
+    );
+    expect(mainFallback?.textContent).toBe("水");
+    expect(mainFallback?.getAttribute("aria-label")).toBe("'水");
+    expect(segmentFallback?.textContent).toBe("玉");
   });
 });

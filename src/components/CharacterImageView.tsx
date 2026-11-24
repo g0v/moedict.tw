@@ -320,6 +320,59 @@ function extractBopomofo(data: unknown): string {
   return typeof bopomofo === "string" ? bopomofo : "";
 }
 
+export function GlyphImage({
+  className,
+  src,
+  alt,
+  text,
+  size,
+}: {
+  className: string;
+  src: string;
+  alt: string;
+  text: string;
+  size: number;
+}) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  if (failedSrc === src) {
+    // An empty caption must not divide the font size by zero.
+    const chars = Math.max(1, Array.from(text).length);
+    const fontSize = Math.floor((size * 0.8) / Math.min(chars, 4));
+    return (
+      <div
+        role="img"
+        aria-label={alt}
+        className={`${className} charimg-glyph-fallback`}
+        style={{
+          width: size,
+          height: size,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize,
+          lineHeight: 1,
+          fontFamily: '"TW-Kai", "BiauKai", "Kaiti TC", "STKaiti", serif',
+          color: "#000",
+          backgroundColor: "#fff",
+          overflow: "hidden",
+        }}
+      >
+        {text}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      className={className}
+      src={src}
+      alt={alt}
+      style={{ width: size, height: size }}
+      onError={() => setFailedSrc(src)}
+    />
+  );
+}
+
 export function CharacterImageView({
   queryWord,
   terms,
@@ -762,11 +815,12 @@ export function CharacterImageView({
           className="charimg-practice-box"
           style={{ width: mainImageSize, height: mainImageSize }}
         >
-          <img
+          <GlyphImage
             className="charimg-glyph charimg-glyph-main"
             src={charImgUrl(queryWord, font, lang, romanizeActive)}
             alt={queryWord}
-            style={{ width: mainImageSize, height: mainImageSize }}
+            text={queryWord.replace(/^['!~:]/, "")}
+            size={mainImageSize}
           />
           {renderPracticeCanvas(`main:${queryWord}`, mainImageSize, mainImageSize)}
         </div>
@@ -888,11 +942,12 @@ export function CharacterImageView({
                       className="charimg-practice-box"
                       style={{ width: SEGMENT_IMAGE_SIZE, height: SEGMENT_IMAGE_SIZE }}
                     >
-                      <img
+                      <GlyphImage
                         className="charimg-glyph charimg-glyph-segment"
                         src={charImgUrl(segment.part, font, lang, romanizeActive)}
                         alt={segment.pinyin ? `${segment.part} ${segment.pinyin}` : segment.part}
-                        style={{ width: SEGMENT_IMAGE_SIZE, height: SEGMENT_IMAGE_SIZE }}
+                        text={segment.part}
+                        size={SEGMENT_IMAGE_SIZE}
                       />
                       {renderPracticeCanvas(
                         `segment:${index}:${segment.part}`,
