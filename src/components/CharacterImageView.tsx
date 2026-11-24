@@ -796,14 +796,17 @@ export function CharacterImageView({
             <SvgIcon name="share" size={16} aria-hidden="true" />
             {shareSupported ? "分享" : "複製連結"}
           </button>
-          <button
-            className="btn btn-default charimg-print-btn"
-            title="列印目前字圖"
-            onClick={handlePrint}
-          >
-            <SvgIcon name="print" size={16} aria-hidden="true" />
-            列印字卡
-          </button>
+          {/* window.print() does nothing in the Android WebView or iOS WKWebView. */}
+          {!isOfflineApp() && (
+            <button
+              className="btn btn-default charimg-print-btn"
+              title="列印目前字圖"
+              onClick={handlePrint}
+            >
+              <SvgIcon name="print" size={16} aria-hidden="true" />
+              列印字卡
+            </button>
+          )}
           <button
             className="btn btn-default charimg-clear-btn"
             title="清空描寫筆跡"

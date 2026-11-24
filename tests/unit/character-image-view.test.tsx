@@ -104,3 +104,50 @@ describe("CharacterImage share permalink", () => {
     expect(share).toHaveBeenCalledWith(expect.objectContaining({ url: window.location.href }));
   });
 });
+
+describe("CharacterImage print button", () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    vi.spyOn(console, "error").mockImplementation((msg: unknown, ...rest: unknown[]) => {
+      if (typeof msg === "string" && msg.includes("not wrapped in act")) return;
+      console.warn(msg, ...rest);
+    });
+  });
+
+  afterEach(() => {
+    root.unmount();
+    container.remove();
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  async function renderCard(): Promise<void> {
+    await act(async () => {
+      flushSync(() => {
+        root.render(
+          <MemoryRouter>
+            <CharacterImageView lang="a" langTokenPrefix="" queryWord="萌" terms={[]} />
+          </MemoryRouter>,
+        );
+      });
+    });
+  }
+
+  it("hides 列印字卡 in the offline app", async () => {
+    vi.stubEnv("VITE_MOEDICT_OFFLINE_APP", "1");
+    await renderCard();
+    expect(container.querySelector(".charimg-print-btn")).toBeNull();
+    expect(container.textContent).not.toContain("列印字卡");
+  });
+
+  it("keeps 列印字卡 on the website", async () => {
+    vi.stubEnv("VITE_MOEDICT_OFFLINE_APP", "");
+    await renderCard();
+    expect(container.querySelector(".charimg-print-btn")?.textContent).toContain("列印字卡");
+  });
+});
