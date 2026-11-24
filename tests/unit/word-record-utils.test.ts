@@ -10,6 +10,8 @@ import {
   getStarredStorageKey,
   hasStarWord,
   importStarredWords,
+  lookupHeadwordForHistory,
+  normalizeRecordedWord,
   parseImportedWords,
   parseLRUWords,
   parseStarredWords,
@@ -260,6 +262,77 @@ describe("LRU list", () => {
 
   it("parseLRUWords filters non-string entries", () => {
     expect(parseLRUWords(JSON.stringify(["a", null, 42, "b"]))).toEqual(["a", "b"]);
+  });
+
+  it("drops bare route prefixes and normalizes @/'/: /~ /! forms on read", () => {
+    expect(
+      parseLRUWords(JSON.stringify(["@", "@玉", "萌", "'水", ":理", "~萌", "!台", "玉"])),
+    ).toEqual(["玉", "萌", "水", "理", "台"]);
+  });
+
+  it("normalizes a stored radical cross-ref when a real headword is added", () => {
+    window.localStorage.setItem(getLRUStorageKey("a"), JSON.stringify(["@", "@玉", "萌"]));
+    addToLRU("理", "a");
+    expect(readLRUWords("a")).toEqual(["理", "玉", "萌"]);
+  });
+});
+
+describe("recorded headwords", () => {
+  it("strips route prefixes and corpus title markup", () => {
+    expect(normalizeRecordedWord("@玉")).toBe("玉");
+    expect(normalizeRecordedWord("'@玉")).toBe("玉");
+    expect(normalizeRecordedWord(":@理")).toBe("理");
+    expect(normalizeRecordedWord("~水")).toBe("水");
+    expect(normalizeRecordedWord("!台")).toBe("台");
+    expect(normalizeRecordedWord("`萌~")).toBe("萌");
+    expect(normalizeRecordedWord("@")).toBe("");
+    expect(normalizeRecordedWord("'")).toBe("");
+  });
+
+  it("records /@玉 as 玉 and never a bare prefix", () => {
+    addToLRU("@玉", "a");
+    addToLRU("@", "a");
+    addToLRU("'", "t");
+    addToLRU(":", "h");
+    addToLRU("~", "c");
+    expect(readLRUWords("a")).toEqual(["玉"]);
+    expect(readLRUWords("t")).toEqual([]);
+    expect(readLRUWords("h")).toEqual([]);
+    expect(readLRUWords("c")).toEqual([]);
+  });
+
+  it("stores the per-language headword without the route prefix", () => {
+    addToLRU("'水", "t");
+    addToLRU(":理", "h");
+    addToLRU("~萌", "c");
+    expect(readLRUWords("t")).toEqual(["水"]);
+    expect(readLRUWords("h")).toEqual(["理"]);
+    expect(readLRUWords("c")).toEqual(["萌"]);
+  });
+
+  it("does not record a query against a different entry's title", () => {
+    // Stale「萌」still on screen while the box holds「萌理」.
+    expect(lookupHeadwordForHistory("萌理", "`萌~")).toBeNull();
+    expect(lookupHeadwordForHistory("萌理", "<a>萌</a>")).toBeNull();
+    expect(lookupHeadwordForHistory("@", "@")).toBeNull();
+    expect(lookupHeadwordForHistory("@玉", "`玉~")).toBe("玉");
+    expect(lookupHeadwordForHistory("理", "`理~")).toBe("理");
+    expect(lookupHeadwordForHistory("'水", "`水~")).toBe("水");
+  });
+
+  it("normalizes last-lookup away from route tokens", () => {
+    writeLastLookup("@玉", "a");
+    expect(readLastLookup()).toEqual({ word: "玉", lang: "a" });
+    writeLastLookup("@", "a");
+    expect(readLastLookup()).toEqual({ word: "玉", lang: "a" });
+  });
+
+  it("rejects route junk in shouldRecordWord", () => {
+    expect(shouldRecordWord("@")).toBe(false);
+    expect(shouldRecordWord("'")).toBe(false);
+    expect(shouldRecordWord(":@")).toBe(false);
+    expect(shouldRecordWord("@玉")).toBe(true);
+    expect(shouldRecordWord("理")).toBe(true);
   });
 });
 

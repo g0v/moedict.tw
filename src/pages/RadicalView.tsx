@@ -6,7 +6,6 @@ import {
   getRadicalLangPrefix,
   type RadicalLang,
 } from "../utils/radical-page-utils";
-import { addToLRU } from "../utils/word-record-utils";
 
 interface RadicalViewProps {
   lang: RadicalLang;
@@ -27,10 +26,6 @@ export function RadicalView({ lang }: RadicalViewProps) {
   });
 
   useRadicalTooltip();
-
-  useEffect(() => {
-    addToLRU("@", lang);
-  }, [lang]);
 
   useEffect(() => {
     let active = true;
