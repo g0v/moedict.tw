@@ -161,6 +161,7 @@ describe("GlyphImage offline fallback", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
+    vi.stubEnv("VITE_MOEDICT_OFFLINE_APP", "1");
     vi.spyOn(console, "error").mockImplementation((msg: unknown, ...rest: unknown[]) => {
       if (typeof msg === "string" && msg.includes("not wrapped in act")) return;
       console.warn(msg, ...rest);
@@ -170,6 +171,7 @@ describe("GlyphImage offline fallback", () => {
   afterEach(() => {
     root.unmount();
     container.remove();
+    vi.unstubAllEnvs();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -240,6 +242,15 @@ describe("GlyphImage offline fallback", () => {
     expect(container.querySelector<HTMLElement>(".charimg-glyph-fallback")?.style.fontSize).toBe(
       "32px",
     );
+  });
+
+  it("keeps the website img when the PNG fails", async () => {
+    vi.stubEnv("VITE_MOEDICT_OFFLINE_APP", "");
+    renderGlyph("萌", 240);
+    await failImage();
+    const img = container.querySelector("img.charimg-glyph-main");
+    expect(img).not.toBeNull();
+    expect(container.querySelector(".charimg-glyph-fallback")).toBeNull();
   });
 
   it("uses the headword without a route prefix, and the segment text, in the card", async () => {

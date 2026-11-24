@@ -334,7 +334,11 @@ export function GlyphImage({
   size: number;
 }) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
-  if (failedSrc === src) {
+  // Only the packaged app replaces a failed PNG. The website keeps the
+  // <img> (romanize=1 lives on its src) even when www.moedict.tw 404s,
+  // which is also what the e2e suite asserts.
+  const offline = isOfflineApp();
+  if (offline && failedSrc === src) {
     // An empty caption must not divide the font size by zero.
     const chars = Math.max(1, Array.from(text).length);
     const fontSize = Math.floor((size * 0.8) / Math.min(chars, 4));
@@ -368,7 +372,7 @@ export function GlyphImage({
       src={src}
       alt={alt}
       style={{ width: size, height: size }}
-      onError={() => setFailedSrc(src)}
+      onError={offline ? () => setFailedSrc(src) : undefined}
     />
   );
 }
