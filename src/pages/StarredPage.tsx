@@ -25,6 +25,7 @@ import {
   type ImportStarredWordsResult,
 } from "../utils/word-record-utils";
 import { useRadicalTooltip } from "../hooks/useRadicalTooltip";
+import { isOfflineApp } from "../utils/offline-app";
 
 type Lang = "a" | "t" | "h" | "c";
 
@@ -407,16 +408,26 @@ export function StarredPage({ lang }: StarredPageProps) {
         <div className="export-import-section">
           <h4>匯出／匯入</h4>
           <div className="export-import-controls">
-            <button
-              type="button"
-              id="btn-download-starred"
-              className="btn-default btn btn-tiny"
-              disabled={starredWords.length === 0}
-              onClick={handleDownloadExport}
-            >
-              <SvgIcon name="download" size="0.9em" style={{ marginRight: 4 }} aria-hidden="true" />
-              下載文字檔
-            </button>
+            {/* Android WebView has no DownloadListener and WKWebView ignores
+                blob <a download>, so this button was dead offline. 複製到剪貼簿
+                still covers export. */}
+            {!isOfflineApp() && (
+              <button
+                type="button"
+                id="btn-download-starred"
+                className="btn-default btn btn-tiny"
+                disabled={starredWords.length === 0}
+                onClick={handleDownloadExport}
+              >
+                <SvgIcon
+                  name="download"
+                  size="0.9em"
+                  style={{ marginRight: 4 }}
+                  aria-hidden="true"
+                />
+                下載文字檔
+              </button>
+            )}
             <button
               type="button"
               id="btn-copy-starred"

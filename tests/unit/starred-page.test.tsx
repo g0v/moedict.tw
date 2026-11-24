@@ -31,6 +31,7 @@ beforeEach(() => {
 afterEach(() => {
   root.unmount();
   container.remove();
+  vi.unstubAllEnvs();
 });
 
 function renderPage(lang: "a" | "t" | "h" | "c" = "a"): void {
@@ -271,6 +272,17 @@ describe("StarredPage — export/import panel (#219)", () => {
       el.dispatchEvent(new Event("input", { bubbles: true }));
     });
   }
+
+  it("hides the dead download button in the offline app and keeps copy", () => {
+    vi.stubEnv("VITE_MOEDICT_OFFLINE_APP", "1");
+    addStarWord("a", "萌");
+    renderPage("a");
+
+    expect(container.querySelector("#btn-download-starred")).toBeNull();
+    const copy = container.querySelector<HTMLButtonElement>("#btn-copy-starred");
+    expect(copy).not.toBeNull();
+    expect(copy?.disabled).toBe(false);
+  });
 
   it("download/copy buttons are disabled when there are no starred words", () => {
     renderPage("a");
